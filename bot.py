@@ -1,4 +1,4 @@
-"""ASMAN Agent test bot. Python 3.11+, standard library only."""
+"""Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
@@ -15,7 +15,7 @@ def stop_signal(*_):
 TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
-DB_PATH=os.getenv('DB_PATH','data/asman.sqlite3')
+DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','📍 Агентлар':'tracking','➕ Ходим':'user','🚚 Агентга товар':'load','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📈 Ҳафталик таҳлил':'weekly'})
@@ -211,7 +211,7 @@ def handle(db,update):
             if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
     if text in ('/start','/cancel','❌ Бекор қилиш'):
-        db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'ASMAN Агент • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
+        db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
     if text.startswith('/accept ') or text.startswith('/reject '):
         accept(db,u,int(text.split()[1]),text.startswith('/accept'));send(u,'✅ Қайд қилинди.',menu(db,u));return
     action=BTN.get(text)
@@ -386,7 +386,7 @@ def serve_webhook(db,base_url):
         def do_GET(self):
             path=urlparse(self.path).path
             if path in ('/','/health'):
-                self._reply(200,b'ASMAN Agent OK');return
+                self._reply(200,b'Internal Agent Bot OK');return
             m=re.fullmatch(r'/map/overall/([0-9a-f]{32})',path)
             if m:
                 if not hmac.compare_digest(m.group(1),_map_sig('overall')):self._reply(403,b'Forbidden');return
@@ -443,7 +443,7 @@ def run():
             db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'agent',f'Агент {u}'))
     db.commit()
     api('getMe')
-    print('ASMAN Agent test bot started',flush=True)
+    print('Internal Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
     signal.signal(signal.SIGINT,stop_signal)
     try:
