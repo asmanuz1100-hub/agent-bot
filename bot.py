@@ -429,6 +429,7 @@ def serve_webhook(db,base_url):
 
 def run():
     if not TOKEN or not ADMINS:raise SystemExit('BOT_TOKEN ва ADMIN_IDS муҳит ўзгарувчиларини белгиланг.')
+    logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s',force=True)
     dsn=os.getenv('DATABASE_URL') or DB_PATH
     if not str(dsn).startswith(('postgres://','postgresql://')):
         os.makedirs(os.path.dirname(os.path.abspath(dsn)),exist_ok=True)
@@ -441,7 +442,6 @@ def run():
         if u not in ADMINS:
             db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'agent',f'Агент {u}'))
     db.commit()
-    logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
     api('getMe')
     print('ASMAN Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
