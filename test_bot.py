@@ -299,6 +299,24 @@ class Tests(unittest.TestCase):
    self.assertEqual(before,after)
    self.assertIn('ЖОНЛИ ЛОКАЦИЯ БЎЙИЧА ЁРДАМ',send.call_args.args[1])
 
+ def test_end_shift_sends_daily_summary_to_agent_and_admin(self):
+  now=int(time.time());start=now-120
+  self.db.execute('INSERT INTO shifts(agent,start,live_id) VALUES(2,?,55)',(start,))
+  shift=self.db.execute('SELECT id FROM shifts WHERE agent=2 AND end IS NULL').fetchone()[0]
+  self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
+   (shift,start+5,40.0,71.0,10),(shift,now-5,40.01,71.01,10)
+  ])
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,address,created_ts) VALUES(20,2,'Today','+998900000020','Today address',?)",(start+10,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,20,'sold',1,2,3000000,?)",(now-20,))
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send') as send,patch.object(bot,'send_inline'),patch.object(bot,'map_link',return_value='https://example.test/map'):
+   bot.handle(self.db,msg(900,'⏹ Ишни тугатиш'))
+  closed=self.db.execute('SELECT end FROM shifts WHERE id=?',(shift,)).fetchone()[0]
+  self.assertEqual(closed,now)
+  messages=[call.args for call in send.call_args_list]
+  self.assertTrue(any(args[0]==2 and 'КУНЛИК ФАОЛИЯТ' in args[1] for args in messages))
+  self.assertTrue(any(args[0]==1 and 'Агент ишни тугатди' in args[1] for args in messages))
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
