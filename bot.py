@@ -16,7 +16,7 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/asman.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','📍 Агентлар':'tracking','➕ Ходим':'user','🚚 Агентга товар':'load','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','📍 Агентлар':'tracking','➕ Ходим':'user','🚚 Агентга товар':'load','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📈 Ҳафталик таҳлил':'weekly'})
 FLOW={
  'reconcile':[('client','Мижозни танланг:'),('start','Давр боши: ЙЙЙЙ-ОО-КК'),('end','Давр охири: ЙЙЙЙ-ОО-КК')],
@@ -64,7 +64,7 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    return (r=='admin' and action in ('user','load','tracking','summary','clients','reconcile','weekly')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
+    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','weekly')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a)]
@@ -151,10 +151,13 @@ def tracking(db,u,a):
     else:text+='\n⚠️ Координаталар келмаган.'
     for x,y in r['gaps']:text+=f'\nУзилиш: {stamp(x)} — {stamp(y)}'
     for x,y,lat,lon in r['stops']:text+=f'\nТўхташ: {stamp(x)} — {stamp(y)} ({round((y-x)/60)} дақ.)'
-    send(u,text+'\nМасофа ва тўхташлар тахминий; тўхташ ташриф дегани эмас.')
+    map_html,map_stats,active_points=reports.route_map_html(db,u,a)
+    text+=f'\nФаол савдо нуқталари: {active_points}'
+    send(u,text+'\nМасофа ва тўхташлар GPS маълумоти бўйича тахминий. Харитада маршрут чизиғи ва савдо нуқталари белгиланган.')
     out=io.StringIO(); w=csv.writer(out); w.writerow(['Tashkent time','latitude','longitude','accuracy_m'])
     for p in ps:w.writerow([datetime.fromtimestamp(p['ts'],TZ).isoformat(),p['lat'],p['lon'],p['accuracy']])
     document(u,f'route-{a}-{s["id"]}.csv',out.getvalue().encode('utf-8-sig'))
+    document(u,f'route-map-{a}-{s["id"]}.html',map_html)
 
 def finish(db,u,s,source):
     a=s['action']; v=s['values']
@@ -221,6 +224,11 @@ def handle(db,update):
         if action=='cashbox':
             rows=db.execute("SELECT * FROM handovers WHERE status='pending'").fetchall()
             send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount'])} сўм\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
+        if action=='analytics':
+            text,map_html=reports.overall(db,u)
+            send(u,text)
+            document(u,'asman-umumiy-tahlil-map.html',map_html)
+            return
         if action=='summary':
             for row in db.execute("SELECT * FROM users WHERE role='agent'"):
                 a=row['id'];send(u,f"{row['name']} ({a})\nҚўлида: {fmt(cash(db,a))} сўм\n"+'\n'.join(f'{p} кг: {agent_stock(db,a,p)} дона' for p in (1,3,5)))
