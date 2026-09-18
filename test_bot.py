@@ -244,6 +244,61 @@ class Tests(unittest.TestCase):
    document.assert_called_once()
    self.assertIn('akt-sverka-1-',document.call_args.args[1])
 
+ def test_back_button_preserves_previous_client_data(self):
+  self.rec('load',12,actor=1)
+  now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':800,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,text=None,loc=None):
+   m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
+   if text is not None:m['text']=text
+   if loc is not None:m['location']=loc
+   return {'update_id':i,'message':m}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(801,'🏪 Мижоз қўшиш'))
+   bot.handle(self.db,msg(802,loc={'latitude':40.5,'longitude':71.5}))
+   bot.handle(self.db,msg(803,'Алишер'))
+   self.assertEqual(bot.state(self.db,2)['step'],2)
+   bot.handle(self.db,msg(804,'⬅️ Орқага'))
+   s=bot.state(self.db,2)
+   self.assertEqual(s['step'],1)
+   self.assertNotIn('name',s['values'])
+   self.assertEqual(s['values']['lat'],40.5);self.assertEqual(s['values']['lon'],71.5)
+   self.assertIn('Мижоз исми',send.call_args.args[1])
+
+ def test_validation_error_repeats_current_question(self):
+  self.rec('load',12,actor=1)
+  now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':810,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,text=None,loc=None):
+   m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
+   if text is not None:m['text']=text
+   if loc is not None:m['location']=loc
+   return {'update_id':i,'message':m}
+  with patch.object(bot,'send') as send:
+   bot.process_update(self.db,msg(811,'🏪 Мижоз қўшиш'))
+   bot.process_update(self.db,msg(812,loc={'latitude':40.5,'longitude':71.5}))
+   bot.process_update(self.db,msg(813,'Алишер'))
+   bot.process_update(self.db,msg(814,'Дўкон'))
+   send.reset_mock()
+   bot.process_update(self.db,msg(815,'123'))
+   texts=[call.args[1] for call in send.call_args_list]
+   self.assertTrue(any('Телефонни +998' in x for x in texts))
+   self.assertTrue(any('Мижоз телефон рақами' in x for x in texts))
+   self.assertEqual(bot.state(self.db,2)['step'],3)
+
+ def test_location_help_does_not_cancel_current_wizard(self):
+  self.rec('load',12,actor=1)
+  now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':820,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(821,'📦 Товар бериш'))
+   before=bot.state(self.db,2)
+   bot.handle(self.db,msg(822,'ℹ️ Локация ёрдами'))
+   after=bot.state(self.db,2)
+   self.assertEqual(before,after)
+   self.assertIn('ЖОНЛИ ЛОКАЦИЯ БЎЙИЧА ЁРДАМ',send.call_args.args[1])
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
