@@ -21,7 +21,7 @@ BTN.update({'📄 Акт сверка':'reconcile','📈 Ҳафталик таҳ
 FLOW={
  'reconcile':[('client','Мижозни танланг:'),('start','Давр боши: ЙЙЙЙ-ОО-КК'),('end','Давр охири: ЙЙЙЙ-ОО-КК')],
  'weekly':[('agent','Агентни танланг:')],
- 'client':[('location','1) Дўкон локациясини юборинг (📎 → Локация).'),('name','2) Мижоз исми:'),('shop_name','3) Дўкон номи:'),('address','4) Дўкон манзили:'),('pack','5) Берилган товар — Грунтовка 7/1 қадоғи (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
+ 'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('name','2) 👤 Мижоз исми:'),('shop_name','3) 🏪 Дўкон номи:'),('phone','4) 📞 Мижоз телефон рақами: +998XXXXXXXXX'),('address','5) 🏠 Дўкон манзили:'),('photo','6) 📷 Дўкон/витрина расмини юборинг:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товар — Грунтовка 7/1 қадоғи (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'sold':[('client','Мижозни танланг:'),('pack','Қайси қадоқ сотилди (кг)?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?'),('amount','Шу сотилган товарнинг ЖАМИ суммаси (сўм):')],
@@ -47,7 +47,7 @@ def api(method,**data):
 def send(uid,text,keys=None):
     for start in range(0,len(text) or 1,3500):
         data={'chat_id':uid,'text':text[start:start+3500] or '—'}
-        if keys is not None:data['reply_markup']={'keyboard':[[{'text':x} for x in row] for row in keys],'resize_keyboard':True}
+        if keys is not None:data['reply_markup']={'keyboard':[[x if isinstance(x,dict) else {'text':x} for x in row] for row in keys],'resize_keyboard':True,'one_time_keyboard':False}
         api('sendMessage',**data)
 
 def document(uid,filename,content):
@@ -95,14 +95,17 @@ def prompt(db,u,s):
     if i>=len(fields):
         s['confirm']=True; save(db,u,s)
         names=dict(fields); lines=[f'{names.get(k,k).rstrip(":")} {v}' for k,v in s['values'].items() if k not in ('photo','lat','lon')]
+        if s['action']=='client' and s['values'].get('photo'):lines.append('📷 Фото: бириктирилди')
         if 'qty' in s['values']:
             n=s['values']['qty']*(4 if s['values'].get('unit')=='Блок' else 1)
             lines.append(f'Ҳисобга: {n} дона')
         send(u,'Текширинг:\n'+'\n'.join(lines),[['✅ Тасдиқлаш','✏️ Қайта киритиш'],['❌ Бекор қилиш']]);return
     key,msg=fields[i]; keys=[]
+    if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if key=='pack':keys=[['1','3','5']]
     if key=='unit':keys=[['Дона','Блок']]
     if key=='role':keys=[['agent','cashier']]
+    if key=='payment_due':keys=[['Аниқ эмас']]
     if key in ('client','agent'):
         if key=='client':
             rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 50',(u,) if role(db,u)=='agent' else ()).fetchall()
@@ -134,7 +137,7 @@ def report_clients(db,u):
     for c in rows:
         a=c['agent']; cid=c['id']; debt=amount(db,a,['sold'],cid,field='amount')-amount(db,a,['payment'],cid,field='amount')
         stocks=', '.join(f'{p} кг: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
-        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📍 {c['address']}\nРеализацияда: {stocks}\nСотилган товар бўйича баланс: {fmt(debt)} сўм (манфий — аванс)\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
+        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nРеализацияда: {stocks}\nСотилган товар бўйича баланс: {fmt(debt)} сўм (манфий — аванс)\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
 
 def tracking(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -165,9 +168,9 @@ def finish(db,u,s,source):
     elif a=='client':
         q=v['qty']*(4 if v.get('unit')=='Блок' else 1)
         if agent_stock(db,u,v['pack'])<q:raise ValueError('Агентда бу товардан етарли миқдор йўқ. Админ аввал агентга товар берсин.')
-        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],None,v['address'],v['lat'],v['lon'],v.get('photo'),v['shop_name']))
+        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due']))
         cid=cur.fetchone()[0]
-        record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']}",source)
+        record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",source)
     elif a=='user':
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():raise ValueError('Бу ходим аввал қўшилган.')
         db.execute('INSERT INTO users VALUES(?,?,?)',(v['id'],v['role'],v['name']))
@@ -237,13 +240,18 @@ def handle(db,update):
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
     if s['action']=='client' and m.get('photo'):
-        photo=m['photo'][-1]['file_id'];s['values']['photo']=photo
+        current_key=FLOW[s['action']][s['step']][0] if s['step']<len(FLOW[s['action']]) else None
+        photo=m['photo'][-1]['file_id']
+        if current_key=='photo':
+            s['values']['photo']=photo;s['step']+=1
+            save(db,u,s);send(u,'✅ Фото автомат мижоз карточкасига бириктирилди.')
+            prompt(db,u,s);return
         try:data=ocr(photo)
         except Exception:data=None
         if data:
             s['suggestion']=data;save(db,u,s)
-            send(u,'Расмдан ўқилди (ҳали сақланмади):\n'+ '\n'.join(f'{k}: {v or "топилмади"}' for k,v in data.items())+'\nМайдонларни текширинг. Тўғри бўлса «Ўқилганини олиш», бўлмаса қўлда киритинг.');
-        else:save(db,u,s);send(u,'Расм бириктирилди. Автомат ўқиш уланмаган ёки ўқилмади; майдонларни қўлда киритинг.')
+            send(u,'Расмдан маълумот ўқилди (ҳали сақланмади):\n'+ '\n'.join(f'{k}: {v or "топилмади"}' for k,v in data.items()))
+        else:send(u,'Фото қабул қилинди. Ҳозирги босқич учун сўралган маълумотни киритинг.')
         prompt(db,u,s);return
     if s.get('confirm'):
         if text=='✅ Тасдиқлаш':finish(db,u,s,update['update_id']);return
@@ -264,6 +272,14 @@ def handle(db,update):
         if len(digits)==9:digits='998'+digits
         if not re.fullmatch(r'998\d{9}',digits):raise ValueError('Телефонни +998XXXXXXXXX кўринишида киритинг.')
         v='+'+digits
+    elif key=='photo':
+        raise ValueError('📷 Расмни фото сифатида юборинг.')
+    elif key=='payment_due':
+        if text=='Аниқ эмас':v=text
+        else:
+            try:datetime.strptime(text,'%Y-%m-%d')
+            except ValueError:raise ValueError('Тўлов санасини YYYY-MM-DD форматда киритинг ёки «Аниқ эмас»ни танланг.')
+            v=text
     elif key in ('client','agent','id'):
         v=int(text.split(' · ')[0])
         if v<=0:raise ValueError('ID нотўғри.')
