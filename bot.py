@@ -19,7 +19,7 @@ DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
@@ -90,7 +90,7 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS]
@@ -164,14 +164,29 @@ def report_prices(db,u):
         lines.append(f"\n{product_name(p)}\nНарх: {fmt(price)+' сўм / дона' if price else 'киритилмаган'}")
     send(u,'\n'.join(lines),[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
 
+def location_help_text():
+    return (
+        "ЖОНЛИ ЛОКАЦИЯ БЎЙИЧА ЁРДАМ\n"
+        "1) Telegram чатда 📎 ни босинг.\n"
+        "2) «Локация»ни танланг.\n"
+        "3) «Жонли локацияни улашиш»ни босинг ва вақтни танланг.\n"
+        "4) Телефонда GPS/Location ва мобил интернет ёқилган бўлсин.\n\n"
+        "Агар локация янгиланмай қолса:\n"
+        "• Telegramда жонли улашиш ҳали активлигини текширинг;\n"
+        "• батарея тежаш режими Telegramни фонда тўхтатмаганини текширинг;\n"
+        "• Telegramга фон ишлаши ва локация рухсатлари берилганини текширинг.\n\n"
+        "Локация 5 дақиқадан ортиқ янгиланмаса, савдо амаллари вақтинча блокланади. "
+        "Маршрутни фақат админ кўради."
+    )
+
 def live_ready(db,u,max_age=300):
     s=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone()
     if not s:return False,'Аввал «Ишни бошлаш»ни босинг.'
-    if s['live_id'] is None:return False,'Иш бошланган. Энди Telegram жонли локациясини юборинг.'
+    if s['live_id'] is None:return False,'Иш бошланган, лекин жонли локация ҳали уланмаган. «ℹ️ Локация ёрдами»ни босиб қадамларни кўринг.'
     p=db.execute('SELECT ts FROM points WHERE shift=? ORDER BY ts DESC LIMIT 1',(s['id'],)).fetchone()
-    if not p:return False,'Жонли локация нуқтаси ҳали келмаган.'
+    if not p:return False,'Жонли локация уланган, лекин координата ҳали келмаган. GPS ва интернетни текширинг ёки «ℹ️ Локация ёрдами»ни очинг.'
     age=max(0,int(time.time())-int(p[0]))
-    if age>max_age:return False,f'Жонли локация {age//60} дақиқадан бери янгиланмаган. Давом этиш учун локацияни қайта ёқинг.'
+    if age>max_age:return False,f'Жонли локация {age//60} дақиқадан бери янгиланмаган. Telegramда live-location активлигини, GPS/интернетни ва батарея тежаш Telegramни фонда тўхтатмаганини текширинг. «ℹ️ Локация ёрдами»ни босинг.'
     return True,''
 
 def save(db,u,s):db.execute('INSERT INTO sessions(agent,data) VALUES(?,?) ON CONFLICT(agent) DO UPDATE SET data=excluded.data',(u,json.dumps(s)))
@@ -195,7 +210,7 @@ def prompt(db,u,s):
         if 'qty' in s['values']:
             n=s['values']['qty']*(4 if s['values'].get('unit')=='Блок' else 1)
             lines.append(f'Ҳисобга: {n} дона')
-        send(u,'Текширинг:\n'+'\n'.join(lines),[['✅ Тасдиқлаш','✏️ Қайта киритиш'],['❌ Бекор қилиш']]);return
+        send(u,'Текширинг:\n'+'\n'.join(lines),[['✅ Тасдиқлаш','⬅️ Орқага'],['✏️ Бошидан киритиш','❌ Бекор қилиш']]);return
     key,msg=fields[i]; keys=[]
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if key=='pack':keys=[[product_name(p)] for p in (1,3,5)]
@@ -224,6 +239,7 @@ def prompt(db,u,s):
     if key in ('name','address') and s.get('suggestion',{}).get(key):
         msg+='\nРасмдан: '+s['suggestion'][key]
         keys.append(['Ўқилганини олиш'])
+    if i>0:keys.append(['⬅️ Орқага'])
     keys.append(['❌ Бекор қилиш']); save(db,u,s); send(u,msg,keys)
 
 def ocr(photo):
@@ -311,7 +327,7 @@ def handle(db,update):
             ok=point(db,u,m,True)
             if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
-    if text in ('/start','/cancel','❌ Бекор қилиш'):
+    if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
     if text.startswith('/accept ') or text.startswith('/reject '):
         accept(db,u,int(text.split()[1]),text.startswith('/accept'));send(u,'✅ Қайд қилинди.',menu(db,u));return
@@ -321,7 +337,7 @@ def handle(db,update):
         if r=='agent' and action in AGENT_WORK_ACTIONS:
             ok,msg=live_ready(db,u)
             if not ok:
-                send(u,'⚠️ '+msg,menu(db,u));return
+                send(u,'⚠️ '+msg,[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         db.execute('DELETE FROM sessions WHERE agent=?',(u,))
         if action=='agent_admin':
             send(u,'Агентларни бошқариш бўлими:',admin_agent_menu());return
@@ -334,10 +350,12 @@ def handle(db,update):
         if action in FLOW:
             s={'action':action,'step':0,'values':{}}
             prompt(db,u,s);return
+        if action=='location_help':
+            send(u,location_help_text(),[['▶️ Ишни бошлаш','⏹ Ишни тугатиш'],['⬅️ Меню']]);return
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди. Энди 📎 → Локация → «Жонли локацияни улашиш»ни юборинг.\nБир сменада биринчи жонли локация асосий ҳисобланади ва бошқасига алмаштирилмайди.\nЛокация 5 дақиқадан ортиқ янгиланмаса, савдо амаллари вақтинча блокланади. Маршрутни фақат админ кўради.');return
+            send(u,'Иш бошланди ✅\n\nЭнди 3 қадам:\n1) 📎 ни босинг\n2) «Локация»ни танланг\n3) «Жонли локацияни улашиш»ни босинг\n\nАгар тушунарсиз бўлса, «ℹ️ Локация ёрдами»ни босинг. Бир сменада биринчи live-location асосий ҳисобланади.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             n=db.execute('UPDATE shifts SET end=? WHERE agent=? AND end IS NULL',(m['date'],u)).rowcount
             send(u,'Иш тугади. Бот координаталарни сақлашни тўхтатди. Telegramда жонли улашишни ҳам ўчиринг.' if n else 'Очиқ смена йўқ.',menu(db,u));return
@@ -373,6 +391,18 @@ def handle(db,update):
         return
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
+    if s.get('action') in FLOW and text=='⬅️ Орқага':
+        fields=FLOW[s['action']]
+        s.pop('confirm',None)
+        if s['step']>0:
+            prev_key=fields[s['step']-1][0]
+            s['step']-=1
+            s['values'].pop(prev_key,None)
+            if prev_key=='location':
+                s['values'].pop('lat',None);s['values'].pop('lon',None)
+            if prev_key=='photo':
+                s.get('suggestion',{}).pop('photo',None)
+        save(db,u,s);prompt(db,u,s);return
     if s.get('action')=='agent_profile_view':
         if r!='admin':raise ValueError('Фақат админ.')
         if text=='⬅️ Агентлар бошқаруви':
@@ -404,7 +434,7 @@ def handle(db,update):
         prompt(db,u,s);return
     if s.get('confirm'):
         if text=='✅ Тасдиқлаш':finish(db,u,s,update['update_id']);return
-        if text=='✏️ Қайта киритиш':s={'action':s['action'],'step':0,'values':{}};prompt(db,u,s);return
+        if text=='✏️ Бошидан киритиш':s={'action':s['action'],'step':0,'values':{}};prompt(db,u,s);return
         send(u,'Тасдиқланг ёки қайта киритинг.');return
     key=FLOW[s['action']][s['step']][0]
     if text=='Ўқилганини олиш' and key in ('name','address'):text=s.get('suggestion',{}).get(key,'')
@@ -535,7 +565,12 @@ def process_update(db,up,save_offset=False):
         msg='Бу телефон аввал киритилган ёки ёзув такрорий.' if is_integrity_error(e) else str(e)
         m=up.get('message') or up.get('edited_message') or {}
         if m.get('chat',{}).get('type')=='private':
-            try:send(m['chat']['id'],'⚠️ '+msg)
+            chat_id=m['chat']['id']
+            try:
+                send(chat_id,'⚠️ '+msg)
+                s=state(db,chat_id)
+                if isinstance(e,ValueError) and s and s.get('action') in FLOW and not s.get('confirm'):
+                    prompt(db,chat_id,s)
             except Exception:pass
         with db:_mark_processed(db,update_id,save_offset)
 
