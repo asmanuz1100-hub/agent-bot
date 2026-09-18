@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS agent_features(agent INTEGER NOT NULL, feature TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,feature));
+CREATE INDEX IF NOT EXISTS idx_clients_agent ON clients(agent);
+CREATE INDEX IF NOT EXISTS idx_events_agent_kind_pack ON events(agent,kind,pack);
+CREATE INDEX IF NOT EXISTS idx_events_agent_ts ON events(agent,ts);
+CREATE INDEX IF NOT EXISTS idx_events_client_ts ON events(client,ts);
+CREATE INDEX IF NOT EXISTS idx_points_shift_ts ON points(shift,ts);
+CREATE INDEX IF NOT EXISTS idx_shifts_agent_start ON shifts(agent,start);
+CREATE INDEX IF NOT EXISTS idx_handovers_agent_status ON handovers(agent,status);
 '''
 
 PG_SCHEMA = '''
@@ -40,6 +47,13 @@ CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS agent_features(agent BIGINT NOT NULL, feature TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,feature));
+CREATE INDEX IF NOT EXISTS idx_clients_agent ON clients(agent);
+CREATE INDEX IF NOT EXISTS idx_events_agent_kind_pack ON events(agent,kind,pack);
+CREATE INDEX IF NOT EXISTS idx_events_agent_ts ON events(agent,ts);
+CREATE INDEX IF NOT EXISTS idx_events_client_ts ON events(client,ts);
+CREATE INDEX IF NOT EXISTS idx_points_shift_ts ON points(shift,ts);
+CREATE INDEX IF NOT EXISTS idx_shifts_agent_start ON shifts(agent,start);
+CREATE INDEX IF NOT EXISTS idx_handovers_agent_status ON handovers(agent,status);
 '''
 
 class HybridRow:
