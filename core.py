@@ -7,6 +7,11 @@ PRODUCTS={
     5:'Грунтовка 7/1 — 5 кг',
 }
 
+AGENT_FEATURES=(
+    'client','clients','delivery','order','sold',
+    'payment','return','visit','handover','balance'
+)
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT);
@@ -19,6 +24,7 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS agent_features(agent INTEGER NOT NULL, feature TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,feature));
 '''
 
 PG_SCHEMA = '''
@@ -33,6 +39,7 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS agent_features(agent BIGINT NOT NULL, feature TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,feature));
 '''
 
 class HybridRow:
@@ -116,6 +123,23 @@ def connect(path):
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
     db.execute('PRAGMA journal_mode=WAL')
     return db
+
+def feature_enabled(db,agent,feature):
+    if feature not in AGENT_FEATURES:return True
+    row=db.execute('SELECT enabled FROM agent_features WHERE agent=? AND feature=?',(agent,feature)).fetchone()
+    return True if row is None else bool(row[0])
+
+def set_agent_feature(db,actor,agent,feature,enabled):
+    r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not r or r[0]!='admin':raise ValueError('Фақат админ хизматларни бошқаради.')
+    a=db.execute("SELECT role FROM users WHERE id=?",(agent,)).fetchone()
+    if not a or a[0]!='agent':raise ValueError('Агент топилмади.')
+    if feature not in AGENT_FEATURES:raise ValueError('Хизмат топилмади.')
+    db.execute(
+        'INSERT INTO agent_features(agent,feature,enabled) VALUES(?,?,?) '
+        'ON CONFLICT(agent,feature) DO UPDATE SET enabled=excluded.enabled',
+        (agent,feature,1 if enabled else 0)
+    )
 
 def product_name(pack):
     return PRODUCTS.get(int(pack),f'Товар {pack}')
