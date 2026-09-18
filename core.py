@@ -1,4 +1,4 @@
-import sqlite3, json, time, math
+import sqlite3, json, time, math, re, os
 from decimal import Decimal, InvalidOperation
 
 SCHEMA = '''
@@ -14,12 +14,83 @@ CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 '''
 
+PG_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS users(id BIGINT PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT);
+CREATE TABLE IF NOT EXISTS sessions(agent BIGINT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS shifts(id BIGSERIAL PRIMARY KEY, agent BIGINT, start BIGINT, end BIGINT, live_id BIGINT);
+CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
+CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIGINT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, accuracy DOUBLE PRECISION, UNIQUE(shift,ts));
+CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent BIGINT, client BIGINT, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount BIGINT DEFAULT 0, note TEXT DEFAULT '', ts BIGINT, source BIGINT UNIQUE);
+CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
+CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+'''
+
+class HybridRow:
+    __slots__=('columns','values','data')
+    def __init__(self, columns, values):
+        self.columns=columns
+        self.values=tuple(values)
+        self.data=dict(zip(columns,self.values))
+    def __getitem__(self,key):
+        return self.values[key] if isinstance(key,(int,slice)) else self.data[key]
+    def __iter__(self): return iter(self.values)
+    def __len__(self): return len(self.values)
+    def keys(self): return self.data.keys()
+
+def _hybrid_row(cursor):
+    cols=[c.name for c in cursor.description]
+    return lambda values: HybridRow(cols,values)
+
+def _pg_sql(sql):
+    return sql.replace('?','%s')
+
+class PostgresDB:
+    def __init__(self,conn): self.conn=conn
+    def execute(self,sql,params=()):
+        return self.conn.execute(_pg_sql(sql),params)
+    def executemany(self,sql,params):
+        cur=self.conn.cursor()
+        cur.executemany(_pg_sql(sql),params)
+        return cur
+    def commit(self): self.conn.commit()
+    def rollback(self): self.conn.rollback()
+    def close(self): self.conn.close()
+    def __enter__(self): return self
+    def __exit__(self,typ,val,tb):
+        if typ is None:self.conn.commit()
+        else:self.conn.rollback()
+        return False
+
+def is_integrity_error(exc):
+    if isinstance(exc,sqlite3.IntegrityError):return True
+    return exc.__class__.__name__ in ('IntegrityError','UniqueViolation','ForeignKeyViolation','NotNullViolation','CheckViolation')
+
 def connect(path):
-    db=sqlite3.connect(path); db.row_factory=sqlite3.Row
+    if str(path).startswith(('postgres://','postgresql://')):
+        try:
+            import psycopg
+        except ImportError as e:
+            raise RuntimeError('PostgreSQL учун psycopg ўрнатилмаган.') from e
+        conn=psycopg.connect(path,row_factory=_hybrid_row)
+        db=PostgresDB(conn)
+        schema=(os.getenv('DB_SCHEMA','agentbot') or 'agentbot').strip()
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',schema):
+            raise ValueError('DB_SCHEMA нотўғри.')
+        db.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+        db.execute(f'SET search_path TO "{schema}"')
+        for stmt in PG_SCHEMA.split(';'):
+            if stmt.strip():db.execute(stmt)
+        db.commit()
+        return db
+    db=sqlite3.connect(path)
+    db.row_factory=sqlite3.Row
     db.executescript(SCHEMA)
     if 'accepted_ts' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN accepted_ts INTEGER')
-    db.execute('PRAGMA journal_mode=WAL'); return db
+    db.execute('PRAGMA journal_mode=WAL')
+    return db
 
 def money(value):
     try:
@@ -95,7 +166,7 @@ def point(db,agent,message,edited=False):
         db.execute('UPDATE shifts SET live_id=? WHERE id=?',(mid,s['id']))
     if not loc.get('live_period'):return False
     if not (-90<=loc['latitude']<=90 and -180<=loc['longitude']<=180): return False
-    db.execute('INSERT OR IGNORE INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',(s['id'],ts,loc['latitude'],loc['longitude'],loc.get('horizontal_accuracy')))
+    db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?) ON CONFLICT(shift,ts) DO NOTHING',(s['id'],ts,loc['latitude'],loc['longitude'],loc.get('horizontal_accuracy')))
     return True
 
 def distance(a,b):
