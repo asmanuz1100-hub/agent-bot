@@ -2,6 +2,7 @@
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from core import *
 import reports
@@ -49,6 +50,17 @@ def send(uid,text,keys=None):
         data={'chat_id':uid,'text':text[start:start+3500] or '—'}
         if keys is not None:data['reply_markup']={'keyboard':[[x if isinstance(x,dict) else {'text':x} for x in row] for row in keys],'resize_keyboard':True,'one_time_keyboard':False}
         api('sendMessage',**data)
+
+def send_inline(uid,text,buttons):
+    api('sendMessage',chat_id=uid,text=text,reply_markup={'inline_keyboard':[[{'text':label,'url':url}] for label,url in buttons]})
+
+def _map_sig(scope):
+    return hmac.new(hashlib.sha256(TOKEN.encode()).digest(),scope.encode(),hashlib.sha256).hexdigest()[:32]
+
+def map_link(scope):
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    return f"{base}/map/{scope}/{_map_sig(scope)}"
 
 def document(uid,filename,content):
     mime="text/html" if filename.endswith(".html") else "text/csv"
@@ -152,12 +164,13 @@ def tracking(db,u,a):
     for x,y in r['gaps']:text+=f'\nУзилиш: {stamp(x)} — {stamp(y)}'
     for x,y,lat,lon in r['stops']:text+=f'\nТўхташ: {stamp(x)} — {stamp(y)} ({round((y-x)/60)} дақ.)'
     map_html,map_stats,active_points=reports.route_map_html(db,u,a)
-    text+=f'\nФаол савдо нуқталари: {active_points}'
-    send(u,text+'\nМасофа ва тўхташлар GPS маълумоти бўйича тахминий. Харитада маршрут чизиғи ва савдо нуқталари белгиланган.')
+    text+=f'\nGPS нуқталари: {len(ps)}\nФаол савдо нуқталари: {active_points}'
+    send(u,text+'\nМасофа ва тўхташлар GPS маълумоти бўйича тахминий.')
+    link=map_link(f'agent/{a}')
+    if link:send_inline(u,'🗺 Маршрут чизиғи ва савдо нуқталарини интерактив харитада очинг:',[('🗺 Харитада очиш',link)])
     out=io.StringIO(); w=csv.writer(out); w.writerow(['Tashkent time','latitude','longitude','accuracy_m'])
     for p in ps:w.writerow([datetime.fromtimestamp(p['ts'],TZ).isoformat(),p['lat'],p['lon'],p['accuracy']])
     document(u,f'route-{a}-{s["id"]}.csv',out.getvalue().encode('utf-8-sig'))
-    document(u,f'route-map-{a}-{s["id"]}.html',map_html)
 
 def finish(db,u,s,source):
     a=s['action']; v=s['values']
@@ -193,7 +206,9 @@ def handle(db,update):
         if 'edited_message' not in update:send(u,f'Сизнинг Telegram ID: {u}\nАдминга шу рақамни юборинг. Кириш ҳали очилмаган.')
         return
     if 'edited_message' in update:
-        if r=='agent' and 'location' in m:point(db,u,m,True)
+        if r=='agent' and 'location' in m:
+            ok=point(db,u,m,True)
+            if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
     if text in ('/start','/cancel','❌ Бекор қилиш'):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'ASMAN Агент • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
@@ -225,9 +240,11 @@ def handle(db,update):
             rows=db.execute("SELECT * FROM handovers WHERE status='pending'").fetchall()
             send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount'])} сўм\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
         if action=='analytics':
+            logging.info('Overall analytics requested by admin=%s',u)
             text,map_html=reports.overall(db,u)
             send(u,text)
-            document(u,'asman-umumiy-tahlil-map.html',map_html)
+            link=map_link('overall')
+            if link:send_inline(u,'🗺 Барча агентлар маршрути ва савдо нуқталари:',[('🗺 Умумий харитани очиш',link)])
             return
         if action=='summary':
             for row in db.execute("SELECT * FROM users WHERE role='agent'"):
@@ -237,6 +254,7 @@ def handle(db,update):
     if 'location' in m and m['location'].get('live_period'):
         if r!='agent':raise ValueError('Жонли локация агент учун.')
         if point(db,u,m):
+            logging.info('Live point saved agent=%s message=%s edited=0',u,m.get('message_id'))
             send(u,'📍 Жонли локация қабул қилинди. Энди иш менюси фаол. Янгиланишлар иш тугагунча қайд этилади.',menu(db,u))
         else:
             s0=db.execute('SELECT live_id FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone()
@@ -366,8 +384,29 @@ def serve_webhook(db,base_url):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8'):
             self.send_response(code);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
         def do_GET(self):
-            if self.path in ('/','/health'):self._reply(200,b'ASMAN Agent OK')
-            else:self._reply(404,b'Not found')
+            path=urlparse(self.path).path
+            if path in ('/','/health'):
+                self._reply(200,b'ASMAN Agent OK');return
+            m=re.fullmatch(r'/map/overall/([0-9a-f]{32})',path)
+            if m:
+                if not hmac.compare_digest(m.group(1),_map_sig('overall')):self._reply(403,b'Forbidden');return
+                try:
+                    actor=next(iter(ADMINS));_,html=reports.overall(db,actor)
+                    self._reply(200,html,'text/html; charset=utf-8')
+                except Exception:
+                    logging.exception('Overall map failed');self._reply(500,b'Map error')
+                return
+            m=re.fullmatch(r'/map/agent/(\d+)/([0-9a-f]{32})',path)
+            if m:
+                agent=int(m.group(1));scope=f'agent/{agent}'
+                if not hmac.compare_digest(m.group(2),_map_sig(scope)):self._reply(403,b'Forbidden');return
+                try:
+                    actor=next(iter(ADMINS));html,_,_=reports.route_map_html(db,actor,agent)
+                    self._reply(200,html,'text/html; charset=utf-8')
+                except Exception:
+                    logging.exception('Agent map failed');self._reply(500,b'Map error')
+                return
+            self._reply(404,b'Not found')
         def do_POST(self):
             supplied=self.headers.get('X-Telegram-Bot-Api-Secret-Token','')
             if self.path!=path or not hmac.compare_digest(supplied,secret):
@@ -394,6 +433,8 @@ def run():
     if not str(dsn).startswith(('postgres://','postgresql://')):
         os.makedirs(os.path.dirname(os.path.abspath(dsn)),exist_ok=True)
     db=connect(dsn)
+    backend='postgres' if str(dsn).startswith(('postgres://','postgresql://')) else 'sqlite'
+    logging.warning('Database backend: %s%s',backend,' (Render local files are ephemeral)' if backend=='sqlite' and os.getenv('RENDER_EXTERNAL_URL') else '')
     for u in ADMINS:
         db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
     for u in TEST_AGENTS:
