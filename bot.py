@@ -13,6 +13,7 @@ def stop_signal(*_):
 
 TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
+TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/asman.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','📍 Агентлар':'tracking','➕ Ходим':'user','🚚 Агентга товар':'load','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary'}
@@ -367,6 +368,9 @@ def run():
     db=connect(dsn)
     for u in ADMINS:
         db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
+    for u in TEST_AGENTS:
+        if u not in ADMINS:
+            db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'agent',f'Агент {u}'))
     db.commit()
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
     api('getMe')
