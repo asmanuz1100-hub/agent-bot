@@ -60,7 +60,7 @@ def overall(db,actor,now=None):
     start=now.replace(hour=0,minute=0,second=0,microsecond=0)
     a=int(start.timestamp());b=int(now.timestamp())+1
     agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
-    routes=[];all_shops=[];seen_shops=set();total_km=0;stops=gaps=0
+    routes=[];all_shops=[];seen_shops=set();total_km=0;stops=gaps=0;gps_points=0
     details=[]
     for ag in agents:
         aid=ag[0]
@@ -68,7 +68,7 @@ def overall(db,actor,now=None):
         akm=0;astops=agaps=0
         for sh in shifts:
             route,shops,stats,_=shift_route_data(db,aid,sh)
-            route['agent']=ag[1] or str(aid);routes.append(route);akm+=stats['km'];astops+=len(stats['stops']);agaps+=len(stats['gaps'])
+            route['agent']=ag[1] or str(aid);routes.append(route);akm+=stats['km'];astops+=len(stats['stops']);agaps+=len(stats['gaps']);gps_points+=len(route['points'])
             for s in shops:
                 if s['id'] not in seen_shops:all_shops.append(s);seen_shops.add(s['id'])
         ev=db.execute('SELECT * FROM events WHERE agent=? AND ts>=? AND ts<?',(aid,a,b)).fetchall()
@@ -81,10 +81,11 @@ def overall(db,actor,now=None):
     sold_qty=sum(x['qty'] for x in events if x['kind']=='sold');sold=sum(x['amount'] for x in events if x['kind']=='sold')
     delivered=sum(x['qty'] for x in events if x['kind']=='delivery');paid=sum(x['amount'] for x in events if x['kind']=='payment')
     text=(f"УМУМИЙ ТАҲЛИЛ · {now:%d.%m.%Y %H:%M}\n"
-          f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\n"
+          f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\nGPS нуқталари: {gps_points}\n"
           f"Фаол савдо нуқталари: {len(active_all)}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
           f"Берилган товар: {delivered} дона\nСотилган: {sold_qty} дона / {m(sold)} сўм\nОлинган пул: {m(paid)} сўм\n\n"
           +"Агентлар:\n"+("\n".join(details) if details else "Агент йўқ"))
+    if gps_points==0:text+='\n\n⚠️ Бугун GPS нуқталари сақланмаган. Агент сменани бошлаб Telegram жонли локациясини юбориши керак.'
     summary=f"{round(total_km,2)} км · {len(active_all)} фаол нуқта · {m(sold)} сўм сотув"
     return text,_map_html(f'ASMAN · умумий маршрут · {now:%d.%m.%Y}',routes,all_shops,summary)
 
