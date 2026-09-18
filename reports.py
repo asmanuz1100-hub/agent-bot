@@ -84,6 +84,77 @@ def shift_route_data(db,agent,shift):
     route={'agent':str(agent),'shift':shift['id'],'km':stats['km'],'points':[{'lat':p['lat'],'lon':p['lon'],'ts':p['ts']} for p in points]}
     return route,shops,stats,len(active)
 
+
+def shift_summary(db,agent,shift_id):
+    shift=db.execute('SELECT * FROM shifts WHERE id=? AND agent=?',(shift_id,agent)).fetchone()
+    if not shift:raise ValueError('Смена топилмади.')
+    end=int(shift['end'] or time.time());start=int(shift['start'])
+    user=db.execute('SELECT name FROM users WHERE id=?',(agent,)).fetchone()
+    name=(user[0] if user else str(agent)) or str(agent)
+    points=db.execute('SELECT * FROM points WHERE shift=? ORDER BY ts',(shift_id,)).fetchall()
+    stats=route_stats(points,start,end)
+    metric=db.execute("""SELECT
+        COUNT(DISTINCT client),
+        COALESCE(SUM(CASE WHEN kind='visit' THEN 1 ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='order' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0)
+        FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,start,end)).fetchone()
+    new_clients=db.execute(
+        'SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts IS NOT NULL AND created_ts>=? AND created_ts<=?',
+        (agent,start,end)
+    ).fetchone()[0]
+    active_clients=int(metric[0] or 0);visits=int(metric[1] or 0)
+    sold_qty=int(metric[2] or 0);sold_amount=int(metric[3] or 0)
+    payments=int(metric[4] or 0);delivered=int(metric[5] or 0)
+    orders=int(metric[6] or 0);returns=int(metric[7] or 0)
+    duration=max(0,end-start);hours=duration//3600;minutes=(duration%3600)//60
+    first=points[0] if points else None;last=points[-1] if points else None
+    start_loc=(f"{first['lat']:.6f}, {first['lon']:.6f}" if first else 'GPS нуқтаси келмаган')
+    end_loc=(f"{last['lat']:.6f}, {last['lon']:.6f}" if last else 'GPS нуқтаси келмаган')
+    start_link=(f"https://www.google.com/maps?q={first['lat']},{first['lon']}" if first else '')
+    end_link=(f"https://www.google.com/maps?q={last['lat']},{last['lon']}" if last else '')
+    if sold_qty and new_clients:
+        note=f"Кунда {new_clients} та янги мижоз қўшилди ва {sold_qty} дона товар сотилди."
+    elif sold_qty:
+        note=f"Кунда {sold_qty} дона товар сотилди; янги мижоз қайд этилмади."
+    elif new_clients:
+        note=f"{new_clients} та янги мижоз қўшилди, лекин сотув қайд этилмади."
+    else:
+        note="Янги мижоз ва сотув қайд этилмади."
+    if len(stats['gaps']):
+        note+=f" GPSда {len(stats['gaps'])} та 5 дақиқадан ортиқ узилиш бор."
+    text=(
+        f"📊 КУНЛИК ФАОЛИЯТ · {datetime.fromtimestamp(end,TZ):%d.%m.%Y}\n"
+        f"👤 Агент: {name} ({agent})\n"
+        f"🟢 Иш бошланди: {datetime.fromtimestamp(start,TZ):%H:%M}\n"
+        f"🔴 Иш тугади: {datetime.fromtimestamp(end,TZ):%H:%M}\n"
+        f"⏱ Иш вақти: {hours} соат {minutes} дақиқа\n"
+        f"📍 Бошланиш локацияси: {start_loc}\n"
+        + (f"{start_link}\n" if start_link else "") +
+        f"🏁 Охирги локация: {end_loc}\n"
+        + (f"{end_link}\n" if end_link else "") +
+        f"🛣 Тахминий йўл: {stats['km']} км · GPS: {len(points)} нуқта\n"
+        f"🆕 Янги мижоз: {int(new_clients)} та\n"
+        f"🏪 Ишланган мижозлар: {active_clients} та · ташриф: {visits} та\n"
+        f"📦 Реализацияга берилди: {delivered} дона · буюртма: {orders} дона · қайтди: {returns} дона\n"
+        f"💵 Сотилди: {sold_qty} дона / {m(sold_amount)} сўм\n"
+        f"💰 Олинган пул: {m(payments)} сўм\n"
+        f"📝 Қисқа хулоса: {note}"
+    )
+    return {
+        'agent':agent,'name':name,'shift_id':shift_id,'start':start,'end':end,
+        'duration':duration,'km':stats['km'],'gps_points':len(points),'gaps':len(stats['gaps']),
+        'new_clients':int(new_clients),'active_clients':active_clients,'visits':visits,
+        'sold_qty':sold_qty,'sold_amount':sold_amount,'payments':payments,
+        'delivered':delivered,'orders':orders,'returns':returns,
+        'first':rowdict(first) if first else None,'last':rowdict(last) if last else None,
+        'text':text
+    }
+
 def route_map_html(db,actor,agent):
     admin_only(db,actor)
     shift=db.execute('SELECT * FROM shifts WHERE agent=? ORDER BY id DESC LIMIT 1',(agent,)).fetchone()
