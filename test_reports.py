@@ -53,7 +53,7 @@ class ReportsTests(unittest.TestCase):
   self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,99)',(start,end))
   shift=self.db.execute('SELECT id FROM shifts WHERE agent=2 ORDER BY id DESC LIMIT 1').fetchone()[0]
   self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
-   (shift,start+10,40.0,71.0,10),(shift,start+600,40.01,71.01,10),(shift,end-10,40.02,71.02,10)
+   (shift,start+10,40.0,71.0,10),(shift,start+200,40.01,71.01,10),(shift,start+400,40.02,71.02,10)
   ])
   self.db.execute("INSERT INTO clients(id,agent,name,phone,address,created_ts) VALUES(10,2,'New client','+998900000010','A',?)",(start+100,))
   self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,10,'delivery',1,4,0,?)",(start+200,))
