@@ -1,20 +1,15 @@
-# Paid always-on worker proposal. Review cost before applying.
-# Workers and persistent disks have no free plan.
+# Free test deployment: Telegram webhook + existing Render Postgres.
+# The database is isolated by DB_SCHEMA=agentbot.
 services:
-  - type: worker
+  - type: web
     name: asman-agent-test
     runtime: python
-    plan: starter
+    plan: free
     region: oregon
-    numInstances: 1
     autoDeployTrigger: checksPass
-    maxShutdownDelaySeconds: 120
-    buildCommand: python -m unittest discover -v
+    buildCommand: pip install -r requirements.txt && python -m unittest discover -v
     startCommand: python bot.py
-    disk:
-      name: asman-agent-data
-      mountPath: /var/data
-      sizeGB: 1
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
@@ -24,8 +19,12 @@ services:
         sync: false
       - key: ADMIN_IDS
         sync: false
-      - key: DB_PATH
-        value: /var/data/asman.sqlite3
+      - key: DB_SCHEMA
+        value: agentbot
+      - key: DATABASE_URL
+        fromDatabase:
+          name: asman-accounting-db-v2
+          property: connectionString
       - key: OCR_MODEL
         value: gpt-4.1-mini
-# Optional OPENAI_API_KEY can be added in the Render Environment UI.
+# OPENAI_API_KEY is optional and can be added in Render Environment.
