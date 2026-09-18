@@ -21,7 +21,7 @@ BTN.update({'📄 Акт сверка':'reconcile','📈 Ҳафталик таҳ
 FLOW={
  'reconcile':[('client','Мижозни танланг:'),('start','Давр боши: ЙЙЙЙ-ОО-КК'),('end','Давр охири: ЙЙЙЙ-ОО-КК')],
  'weekly':[('agent','Агентни танланг:')],
- 'client':[('name','Мижоз / дўкон номи:'),('phone','Телефон: +998XXXXXXXXX'),('address','Манзил:'),('location','Дўконнинг оддий локациясини юборинг (📎 → Локация).')],
+ 'client':[('location','1) Дўкон локациясини юборинг (📎 → Локация).'),('name','2) Мижоз исми:'),('shop_name','3) Дўкон номи:'),('address','4) Дўкон манзили:'),('pack','5) Берилган товар — Грунтовка 7/1 қадоғи (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'sold':[('client','Мижозни танланг:'),('pack','Қайси қадоқ сотилди (кг)?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?'),('amount','Шу сотилган товарнинг ЖАМИ суммаси (сўм):')],
@@ -105,11 +105,11 @@ def prompt(db,u,s):
     if key=='role':keys=[['agent','cashier']]
     if key in ('client','agent'):
         if key=='client':
-            rows=db.execute('SELECT id,name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 50',(u,) if role(db,u)=='agent' else ()).fetchall()
+            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 50',(u,) if role(db,u)=='agent' else ()).fetchall()
         else:rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 50").fetchall()
-        keys=[[f'{r[0]} · {r[1][:35]}'] for r in rows]
+        keys=[[f"{r[0]} · {r[1][:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"] for r in rows]
         if not rows:msg+='\nҲозирча рўйхат бўш. Аввал қўшинг.'
-    if key in ('name','phone','address') and s.get('suggestion',{}).get(key):
+    if key in ('name','address') and s.get('suggestion',{}).get(key):
         msg+='\nРасмдан: '+s['suggestion'][key]
         keys.append(['Ўқилганини олиш'])
     keys.append(['❌ Бекор қилиш']); save(db,u,s); send(u,msg,keys)
@@ -134,7 +134,7 @@ def report_clients(db,u):
     for c in rows:
         a=c['agent']; cid=c['id']; debt=amount(db,a,['sold'],cid,field='amount')-amount(db,a,['payment'],cid,field='amount')
         stocks=', '.join(f'{p} кг: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
-        send(u,f"#{cid} {c['name']}\n{c['phone']} • {c['address']}\nРеализацияда: {stocks}\nСотилган товар бўйича баланс: {fmt(debt)} сўм (манфий — аванс)\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
+        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📍 {c['address']}\nРеализацияда: {stocks}\nСотилган товар бўйича баланс: {fmt(debt)} сўм (манфий — аванс)\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
 
 def tracking(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -163,7 +163,11 @@ def finish(db,u,s,source):
     elif a=='weekly':
         text,rows=reports.weekly(db,u,v['agent']);send(u,text);document(u,f'weekly-{v["agent"]}.csv',reports.weekly_csv(rows))
     elif a=='client':
-        db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo) VALUES(?,?,?,?,?,?,?)',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v.get('photo')))
+        q=v['qty']*(4 if v.get('unit')=='Блок' else 1)
+        if agent_stock(db,u,v['pack'])<q:raise ValueError('Агентда бу товардан етарли миқдор йўқ. Админ аввал агентга товар берсин.')
+        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],None,v['address'],v['lat'],v['lon'],v.get('photo'),v['shop_name']))
+        cid=cur.fetchone()[0]
+        record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']}",source)
     elif a=='user':
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():raise ValueError('Бу ходим аввал қўшилган.')
         db.execute('INSERT INTO users VALUES(?,?,?)',(v['id'],v['role'],v['name']))
@@ -246,7 +250,7 @@ def handle(db,update):
         if text=='✏️ Қайта киритиш':s={'action':s['action'],'step':0,'values':{}};prompt(db,u,s);return
         send(u,'Тасдиқланг ёки қайта киритинг.');return
     key=FLOW[s['action']][s['step']][0]
-    if text=='Ўқилганини олиш' and key in ('name','phone','address'):text=s.get('suggestion',{}).get(key,'')
+    if text=='Ўқилганини олиш' and key in ('name','address'):text=s.get('suggestion',{}).get(key,'')
     if key=='location':
         loc=m.get('location')
         if not loc or loc.get('live_period'):raise ValueError('Дўкон учун оддий локация юборинг.')
