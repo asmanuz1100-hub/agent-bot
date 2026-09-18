@@ -1,6 +1,12 @@
 import sqlite3, json, time, math, re, os
 from decimal import Decimal, InvalidOperation
 
+PRODUCTS={
+    1:'Грунтовка 7/1 — 1 кг',
+    3:'Грунтовка 7/1 — 3 кг',
+    5:'Грунтовка 7/1 — 5 кг',
+}
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT);
@@ -12,6 +18,7 @@ CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, actor INTEGER, agent I
 CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amount INTEGER, status TEXT DEFAULT 'pending', cashier INTEGER, source INTEGER UNIQUE, ts INTEGER);
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
 '''
 
 PG_SCHEMA = '''
@@ -25,6 +32,7 @@ CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent 
 CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
 '''
 
 class HybridRow:
@@ -86,6 +94,8 @@ def connect(path):
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS shop_name TEXT')
         db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT ''")
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_due TEXT')
+        for pack,name in PRODUCTS.items():
+            db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
         db.commit()
         return db
     db=sqlite3.connect(path)
@@ -100,8 +110,24 @@ def connect(path):
         db.execute("ALTER TABLE clients ADD COLUMN comment TEXT DEFAULT ''")
     if 'payment_due' not in client_cols:
         db.execute('ALTER TABLE clients ADD COLUMN payment_due TEXT')
+    for pack,name in PRODUCTS.items():
+        db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
     db.execute('PRAGMA journal_mode=WAL')
     return db
+
+def product_name(pack):
+    return PRODUCTS.get(int(pack),f'Товар {pack}')
+
+def product_price(db,pack):
+    row=db.execute('SELECT price FROM products WHERE pack=?',(pack,)).fetchone()
+    return int(row[0]) if row else 0
+
+def set_product_price(db,actor,pack,value):
+    r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not r or r[0]!='admin':raise ValueError('Нархни фақат админ ўзгартиради.')
+    if pack not in PRODUCTS:raise ValueError('Товар топилмади.')
+    if not isinstance(value,int) or value<=0:raise ValueError('Нарх нотўғри.')
+    db.execute('UPDATE products SET price=?,name=? WHERE pack=?',(value,PRODUCTS[pack],pack))
 
 def money(value):
     try:
