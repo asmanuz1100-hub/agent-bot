@@ -6,7 +6,7 @@ class Tests(unittest.TestCase):
  def setUp(self):
   self.db=core.connect(':memory:')
   self.db.executemany('INSERT INTO users VALUES(?,?,?)',[(1,'admin','A'),(2,'agent','B'),(3,'cashier','C'),(4,'agent','D')])
-  self.db.execute("INSERT INTO clients VALUES(1,2,'Мижоз','+998900000001','Тест манзил',40,71,NULL)")
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,address,lat,lon,photo,shop_name) VALUES(1,2,'Мижоз','+998900000001','Тест манзил',40,71,NULL,'Тест дўкон')")
  def tearDown(self):self.db.close()
  def rec(self,k,q=0,value=0,actor=2,source=None):
   core.record(self.db,actor,2,None if k=='load' else 1,k,1,q,value,source=source)
@@ -79,6 +79,33 @@ class Tests(unittest.TestCase):
    self.assertEqual(core.agent_stock(self.db,2,1),4)
    bot.handle(self.db,msg(106,'✅ Тасдиқлаш'))
    self.assertEqual(core.agent_stock(self.db,2,1),4)
+ def test_client_onboarding_location_first_and_delivery(self):
+  self.rec('load',12,actor=1)
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':80,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,text=None,loc=None):
+   m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
+   if text is not None:m['text']=text
+   if loc is not None:m['location']=loc
+   return {'update_id':i,'message':m}
+  with patch.object(bot,'send'):
+   bot.handle(self.db,msg(200,'🏪 Мижоз қўшиш'))
+   self.assertEqual(bot.state(self.db,2)['step'],0)
+   bot.handle(self.db,msg(201,loc={'latitude':40.5,'longitude':71.5}))
+   bot.handle(self.db,msg(202,'Алишер'))
+   bot.handle(self.db,msg(203,'ASMAN SHOP'))
+   bot.handle(self.db,msg(204,'Қўқон, Марказ'))
+   bot.handle(self.db,msg(205,'1'))
+   bot.handle(self.db,msg(206,'Блок'))
+   bot.handle(self.db,msg(207,'2'))
+   bot.handle(self.db,msg(208,'✅ Тасдиқлаш'))
+  row=self.db.execute("SELECT name,shop_name,address FROM clients WHERE name='Алишер'").fetchone()
+  self.assertEqual((row['name'],row['shop_name'],row['address']),('Алишер','ASMAN SHOP','Қўқон, Марказ'))
+  cid=self.db.execute("SELECT id FROM clients WHERE name='Алишер'").fetchone()[0]
+  self.assertEqual(core.client_stock(self.db,2,cid,1),8)
+  self.assertEqual(core.agent_stock(self.db,2,1),4)
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
