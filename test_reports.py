@@ -45,10 +45,9 @@ class ReportsTests(unittest.TestCase):
   self.assertIn('Кассир қабул қилган: 5.00',text)
  def test_agent_report_flow_no_other_agent(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  self.assertFalse(bot.allowed(self.db,2,'weekly'))
+  self.assertFalse(bot.allowed(self.db,2,'reconcile'))
   with patch.object(bot,'send'),patch.object(bot,'document'):
-   bot.handle(self.db,msg(1,'📈 Ҳафталик таҳлил'))
-   self.assertEqual(bot.state(self.db,2)['values']['agent'],2)
-   bot.handle(self.db,msg(2,'✅ Тасдиқлаш'))
-   self.assertIsNone(bot.state(self.db,2))
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(1,'📈 Ҳафталик таҳлил'))
 
 if __name__=='__main__':unittest.main()
