@@ -48,6 +48,8 @@ class HybridRow:
     def keys(self): return self.data.keys()
 
 def _hybrid_row(cursor):
+    if cursor.description is None:
+        return lambda values: values
     cols=[c.name for c in cursor.description]
     return lambda values: HybridRow(cols,values)
 
