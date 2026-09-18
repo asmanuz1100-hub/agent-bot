@@ -44,7 +44,8 @@ def _hybrid_row(cursor):
     return lambda values: HybridRow(cols,values)
 
 def _pg_sql(sql):
-    return sql.replace('?','%s')
+    sql=sql.replace('?','%s')
+    return re.sub(r'\\bend\\b','"end"',sql,flags=re.IGNORECASE)
 
 class PostgresDB:
     def __init__(self,conn): self.conn=conn
