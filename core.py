@@ -76,7 +76,13 @@ def _hybrid_row(cursor):
 
 def _pg_sql(sql):
     sql=sql.replace('?','%s')
-    return re.sub(r'\bend\b','"end"',sql,flags=re.IGNORECASE)
+    # PostgreSQL reserves END for CASE expressions. Quote only the shifts.end
+    # column where SQL grammar clearly treats it as a column, never CASE ... END.
+    sql=re.sub(r'\bend\b(?=\s+(?:INTEGER|BIGINT)\b)','"end"',sql,flags=re.IGNORECASE)
+    sql=re.sub(r'\bend\b(?=\s+IS\b)','"end"',sql,flags=re.IGNORECASE)
+    sql=re.sub(r'\bend\b(?=\s*(?:=|>=|<=|>|<))','"end"',sql,flags=re.IGNORECASE)
+    sql=re.sub(r'(?<=\.)\bend\b','"end"',sql,flags=re.IGNORECASE)
+    return sql
 
 class PostgresDB:
     def __init__(self,conn): self.conn=conn
