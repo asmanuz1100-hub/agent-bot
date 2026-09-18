@@ -156,6 +156,33 @@ class Tests(unittest.TestCase):
    self.assertIn('Каталог нархи: 10 000.00',text)
    self.assertIn('Ҳисобланган жами: 20 000.00',text)
 
+ def test_agent_service_permissions(self):
+  self.assertTrue(core.feature_enabled(self.db,2,'delivery'))
+  self.assertTrue(bot.allowed(self.db,2,'delivery'))
+  self.assertTrue(bot.allowed(self.db,2,'shift'))
+  core.set_agent_feature(self.db,1,2,'delivery',False)
+  self.assertFalse(core.feature_enabled(self.db,2,'delivery'))
+  self.assertFalse(bot.allowed(self.db,2,'delivery'))
+  self.assertTrue(bot.allowed(self.db,2,'shift'))
+  flat=[x for row in bot.menu(self.db,2) for x in row]
+  self.assertNotIn('📦 Товар бериш',flat)
+  with self.assertRaises(ValueError):core.set_agent_feature(self.db,2,2,'delivery',True)
+
+ def test_admin_agent_profile_toggle_flow(self):
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(500,'👥 Агентлар бошқаруви'))
+   self.assertIn('👤 Агент профили',[x for row in send.call_args.args[2] for x in row])
+   bot.handle(self.db,msg(501,'👤 Агент профили'))
+   bot.handle(self.db,msg(502,'2 · B'))
+   self.assertEqual(bot.state(self.db,1)['action'],'agent_profile_view')
+   self.assertIn('АГЕНТ ПРОФИЛИ',send.call_args.args[1])
+   bot.handle(self.db,msg(503,'✅ 📦 Товар бериш'))
+   self.assertFalse(core.feature_enabled(self.db,2,'delivery'))
+   self.assertIn('❌ 📦 Товар бериш',send.call_args.args[1])
+   bot.handle(self.db,msg(504,'❌ 📦 Товар бериш'))
+   self.assertTrue(core.feature_enabled(self.db,2,'delivery'))
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
