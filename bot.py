@@ -17,6 +17,8 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
+MAP_TTL_SECONDS=15*60
+MAX_UPDATE_RETRIES=3
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
@@ -57,13 +59,22 @@ def send(uid,text,keys=None):
 def send_inline(uid,text,buttons):
     api('sendMessage',chat_id=uid,text=text,reply_markup={'inline_keyboard':[[{'text':label,'url':url}] for label,url in buttons]})
 
-def _map_sig(scope):
-    return hmac.new(hashlib.sha256(TOKEN.encode()).digest(),scope.encode(),hashlib.sha256).hexdigest()[:32]
+def _map_sig(scope,expires):
+    payload=f'{scope}:{int(expires)}'
+    return hmac.new(hashlib.sha256(TOKEN.encode()).digest(),payload.encode(),hashlib.sha256).hexdigest()[:32]
 
-def map_link(scope):
+def _map_valid(scope,expires,sig,now=None):
+    now=int(time.time() if now is None else now)
+    try:expires=int(expires)
+    except (TypeError,ValueError):return False
+    if expires<now:return False
+    return hmac.compare_digest(sig,_map_sig(scope,expires))
+
+def map_link(scope,ttl=MAP_TTL_SECONDS):
     base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
     if not base:return None
-    return f"{base}/map/{scope}/{_map_sig(scope)}"
+    expires=int(time.time())+max(60,min(int(ttl),3600))
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
 
 def document(uid,filename,content):
     mime="text/html" if filename.endswith(".html") else "text/csv"
@@ -201,9 +212,14 @@ def prompt(db,u,s):
             keys.append([raw])
     if key in ('client','agent'):
         if key=='client':
-            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 50',(u,) if role(db,u)=='agent' else ()).fetchall()
-        else:rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 50").fetchall()
-        keys=[[f"{r[0]} · {r[1][:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"] for r in rows]
+            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 20',(u,) if role(db,u)=='agent' else ()).fetchall()
+            search_button='🔎 Мижоз қидириш'
+        else:
+            rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 20").fetchall()
+            search_button='🔎 Агент қидириш'
+        keys=[[f"{r[0]} · {(r[1] or 'Номсиз')[:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"] for r in rows]
+        keys.append([search_button])
+        msg+='\nРўйхатда топилмаса, қидириш тугмасини босинг.'
         if not rows:msg+='\nҲозирча рўйхат бўш. Аввал қўшинг.'
     if key in ('name','address') and s.get('suggestion',{}).get(key):
         msg+='\nРасмдан: '+s['suggestion'][key]
@@ -414,11 +430,43 @@ def handle(db,update):
             except ValueError:raise ValueError('Тўлов санасини YYYY-MM-DD форматда киритинг ёки «Аниқ эмас»ни танланг.')
             v=text
     elif key in ('client','agent','id'):
-        v=int(text.split(' · ')[0])
+        search_button='🔎 Мижоз қидириш' if key=='client' else '🔎 Агент қидириш'
+        if key in ('client','agent') and text==search_button:
+            save(db,u,s)
+            send(u,'Қидириш учун исм, дўкон номи, телефон, манзил ёки IDдан камида 2 та белги киритинг.',[['❌ Бекор қилиш']]);return
+        if key in ('client','agent') and ' · ' not in text and not text.isdigit():
+            term=text.strip().lower()
+            if len(term)<2:raise ValueError('Қидириш учун камида 2 та белги киритинг.')
+            pat='%'+term+'%'
+            if key=='client':
+                if r=='agent':
+                    rows=db.execute("""SELECT id,name,shop_name FROM clients
+                        WHERE agent=? AND (
+                          CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
+                          LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
+                          LOWER(COALESCE(address,'')) LIKE ?
+                        ) ORDER BY id DESC LIMIT 20""",(u,pat,pat,pat,pat,pat)).fetchall()
+                else:
+                    rows=db.execute("""SELECT id,name,shop_name FROM clients
+                        WHERE CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
+                          LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
+                          LOWER(COALESCE(address,'')) LIKE ?
+                        ORDER BY id DESC LIMIT 20""",(pat,pat,pat,pat,pat)).fetchall()
+            else:
+                rows=db.execute("""SELECT id,name FROM users WHERE role='agent' AND
+                    (CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ?)
+                    ORDER BY name LIMIT 20""",(pat,pat)).fetchall()
+            if not rows:
+                save(db,u,s);send(u,'🔎 Ҳеч нарса топилмади. Бошқа сўз ёки ID билан қидиринг.',[[search_button],['❌ Бекор қилиш']]);return
+            choices=[[f"{x[0]} · {(x[1] or 'Номсиз')[:22]}{(' — '+x[2][:18]) if len(x)>2 and x[2] else ''}"] for x in rows]
+            choices.append([search_button]);choices.append(['❌ Бекор қилиш'])
+            save(db,u,s);send(u,f'🔎 {len(rows)} та натижа топилди. Кераклисини танланг:',choices);return
+        try:v=int(text.split(' · ')[0])
+        except ValueError:raise ValueError('Рўйхатдан танланг ёки қидиришдан фойдаланинг.')
         if v<=0:raise ValueError('ID нотўғри.')
         if key=='client':
-            c=db.execute('SELECT agent FROM clients WHERE id=?',(v,)).fetchone()
-            if not c or (r!='admin' and c[0]!=u):raise ValueError('Мижоз топилмади.')
+            row=db.execute('SELECT agent FROM clients WHERE id=?',(v,)).fetchone()
+            if not row or (r!='admin' and row[0]!=u):raise ValueError('Мижоз топилмади.')
         if key=='agent' and not db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v,)).fetchone():raise ValueError('Агент топилмади.')
     elif key=='pack':
         by_name={product_name(p):p for p in (1,3,5)}
@@ -443,10 +491,32 @@ def handle(db,update):
         show_agent_profile(db,u,v);return
     prompt(db,u,s)
 
+def _failure_key(update_id):return f'update_failure:{int(update_id)}'
+
+def _register_failure(db,update_id,error):
+    key=_failure_key(update_id)
+    with db:
+        row=db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
+        attempts=(int(row[0]) if row else 0)+1
+        db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(attempts)))
+    logging.error('Update %s unexpected failure attempt %s/%s: %s',update_id,attempts,MAX_UPDATE_RETRIES,type(error).__name__)
+    return attempts
+
+def _notify_admins_failed(update_id,error):
+    text=f'⚠️ Update #{update_id} {MAX_UPDATE_RETRIES} марта хатолик берди ва навбатни тўхтатмаслик учун ўтказиб юборилди. Хато тури: {type(error).__name__}.'
+    for admin in ADMINS:
+        try:send(admin,text)
+        except Exception:logging.exception('Failed to notify admin=%s about update=%s',admin,update_id)
+
 def _mark_processed(db,update_id,save_offset=False):
     db.execute('INSERT INTO processed(id) VALUES(?) ON CONFLICT(id) DO NOTHING',(update_id,))
+    db.execute('DELETE FROM meta WHERE key=?',(_failure_key(update_id),))
     if save_offset:
         db.execute("INSERT INTO meta(key,value) VALUES('offset',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(update_id+1),))
+
+def _skip_failed_update(db,update_id,error,save_offset=False):
+    with db:_mark_processed(db,update_id,save_offset)
+    _notify_admins_failed(update_id,error)
 
 def process_update(db,up,save_offset=False):
     update_id=up.get('update_id')
@@ -483,7 +553,14 @@ def run_polling(db):
             if STOP:break
             try:process_update(db,up,True)
             except Exception as e:
-                logging.exception('Update %s failed: %s',up.get('update_id'),type(e).__name__)
+                update_id=up.get('update_id')
+                if update_id is None:
+                    logging.exception('Update without id failed: %s',type(e).__name__);continue
+                attempts=_register_failure(db,update_id,e)
+                if attempts>=MAX_UPDATE_RETRIES:
+                    _skip_failed_update(db,update_id,e,True)
+                    continue
+                logging.exception('Update %s will retry: %s',update_id,type(e).__name__)
                 time.sleep(2);break
 
 def serve_webhook(db,base_url):
@@ -501,19 +578,22 @@ def serve_webhook(db,base_url):
             path=urlparse(self.path).path
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
-            m=re.fullmatch(r'/map/overall/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/overall/(\d{10,})/([0-9a-f]{32})',path)
             if m:
-                if not hmac.compare_digest(m.group(1),_map_sig('overall')):self._reply(403,b'Forbidden');return
+                expires,sig=m.group(1),m.group(2)
+                if not _map_valid('overall',expires,sig):
+                    self._reply(410,b'Map link expired or invalid');return
                 try:
                     actor=next(iter(ADMINS));_,html=reports.overall(db,actor)
                     self._reply(200,html,'text/html; charset=utf-8')
                 except Exception:
                     logging.exception('Overall map failed');self._reply(500,b'Map error')
                 return
-            m=re.fullmatch(r'/map/agent/(\d+)/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/agent/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
-                agent=int(m.group(1));scope=f'agent/{agent}'
-                if not hmac.compare_digest(m.group(2),_map_sig(scope)):self._reply(403,b'Forbidden');return
+                agent=int(m.group(1));expires=m.group(2);sig=m.group(3);scope=f'agent/{agent}'
+                if not _map_valid(scope,expires,sig):
+                    self._reply(410,b'Map link expired or invalid');return
                 try:
                     actor=next(iter(ADMINS));html,_,_=reports.route_map_html(db,actor,agent)
                     self._reply(200,html,'text/html; charset=utf-8')
@@ -525,13 +605,26 @@ def serve_webhook(db,base_url):
             supplied=self.headers.get('X-Telegram-Bot-Api-Secret-Token','')
             if self.path!=path or not hmac.compare_digest(supplied,secret):
                 self._reply(403,b'Forbidden');return
+            up=None
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if length<=0 or length>2_000_000:raise ValueError('Bad request size')
+                if length<=0 or length>2_000_000:
+                    self._reply(400,b'Bad request size');return
                 up=json.loads(self.rfile.read(length))
                 process_update(db,up,False)
-            except Exception:
-                logging.exception('Webhook update failed')
+            except (json.JSONDecodeError,UnicodeDecodeError):
+                logging.warning('Webhook invalid JSON')
+                self._reply(400,b'Bad JSON');return
+            except Exception as e:
+                update_id=up.get('update_id') if isinstance(up,dict) else None
+                if update_id is None:
+                    logging.exception('Webhook request failed without update id')
+                    self._reply(500,b'Retry');return
+                attempts=_register_failure(db,update_id,e)
+                if attempts>=MAX_UPDATE_RETRIES:
+                    _skip_failed_update(db,update_id,e,False)
+                    self._reply(200,b'Skipped after repeated failure');return
+                logging.exception('Webhook update %s failed; Telegram may retry',update_id)
                 self._reply(500,b'Retry');return
             self._reply(200,b'OK')
         def log_message(self,format,*args):
