@@ -317,6 +317,16 @@ class Tests(unittest.TestCase):
   self.assertTrue(any(args[0]==2 and 'КУНЛИК ФАОЛИЯТ' in args[1] for args in messages))
   self.assertTrue(any(args[0]==1 and 'Агент ишни тугатди' in args[1] for args in messages))
 
+ def test_pg_sql_quotes_shift_end_but_preserves_case_end(self):
+  q=core._pg_sql("SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0) FROM events")
+  self.assertIn("CASE WHEN kind='sold' THEN amount ELSE 0 END",q)
+  self.assertNotIn('0 "end"',q)
+  q=core._pg_sql("UPDATE shifts SET end=? WHERE agent=? AND end IS NULL")
+  self.assertIn('SET "end"=%s',q)
+  self.assertIn('AND "end" IS NULL',q)
+  q=core._pg_sql("CREATE TABLE shifts(id BIGSERIAL, end BIGINT)")
+  self.assertIn('"end" BIGINT',q)
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
