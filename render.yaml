@@ -1,5 +1,5 @@
 # Free test deployment: Telegram webhook + existing Render Postgres.
-# The database is isolated by DB_SCHEMA=agentbot.
+# Database tables are isolated in DB_SCHEMA=agentbot.
 services:
   - type: web
     name: asman-agent-test
@@ -27,4 +27,3 @@ services:
           property: connectionString
       - key: OCR_MODEL
         value: gpt-4.1-mini
-# OPENAI_API_KEY is optional and can be added in Render Environment.
