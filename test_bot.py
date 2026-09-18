@@ -183,6 +183,67 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(504,'❌ 📦 Товар бериш'))
    self.assertTrue(core.feature_enabled(self.db,2,'delivery'))
 
+ def test_map_links_expire(self):
+  with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'},clear=False), patch.object(bot.time,'time',return_value=2_000_000_000):
+   link=bot.map_link('overall')
+  parts=link.rstrip('/').split('/')
+  expires=int(parts[-2]);sig=parts[-1]
+  self.assertEqual(expires,2_000_000_000+bot.MAP_TTL_SECONDS)
+  self.assertTrue(bot._map_valid('overall',expires,sig,2_000_000_000))
+  self.assertFalse(bot._map_valid('overall',expires,sig,expires+1))
+  self.assertFalse(bot._map_valid('agent/2',expires,sig,2_000_000_000))
+
+ def test_repeated_unexpected_update_can_be_skipped(self):
+  err=RuntimeError('boom')
+  self.assertEqual(bot._register_failure(self.db,900,err),1)
+  self.assertEqual(bot._register_failure(self.db,900,err),2)
+  self.assertEqual(bot._register_failure(self.db,900,err),3)
+  with patch.object(bot,'send'):
+   bot._skip_failed_update(self.db,900,err,True)
+  self.assertIsNotNone(self.db.execute('SELECT 1 FROM processed WHERE id=900').fetchone())
+  self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='offset'").fetchone()[0],'901')
+  self.assertIsNone(self.db.execute('SELECT value FROM meta WHERE key=?',(bot._failure_key(900),)).fetchone())
+
+ def test_client_search_finds_older_clients(self):
+  rows=[]
+  for i in range(60):
+   rows.append((10+i,2,f'Client {i:02d}',f'+99891{i:07d}',f'Address {i}',40,71,None,f'Shop {i:02d}'))
+  self.db.executemany('INSERT INTO clients(id,agent,name,phone,address,lat,lon,photo,shop_name) VALUES(?,?,?,?,?,?,?,?,?)',rows)
+  self.rec('load',20,actor=1)
+  now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':600,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(601,'📦 Товар бериш'))
+   bot.handle(self.db,msg(602,'🔎 Мижоз қидириш'))
+   bot.handle(self.db,msg(603,'Client 05'))
+   keys=send.call_args.args[2]
+  flat=[x for row in keys for x in row]
+  self.assertTrue(any('Client 05' in x for x in flat))
+
+ def test_full_sale_return_payment_and_reconcile_ui(self):
+  self.rec('load',12,actor=1);self.rec('delivery',6)
+  now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':700,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def amsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send'):
+   seq=['💵 Сотилган товар','1','Грунтовка 7/1 — 1 кг','Дона','2','20000','✅ Тасдиқлаш']
+   for i,t in enumerate(seq,701):bot.handle(self.db,amsg(i,t))
+   self.assertEqual(core.client_stock(self.db,2,1,1),4)
+   self.assertEqual(core.amount(self.db,2,['sold'],1,field='amount'),core.money('20000'))
+   seq=['↩️ Товар қайтариш','1','Грунтовка 7/1 — 1 кг','Дона','1','✅ Тасдиқлаш']
+   for i,t in enumerate(seq,710):bot.handle(self.db,amsg(i,t))
+   self.assertEqual(core.client_stock(self.db,2,1,1),3)
+   seq=['💰 Пул олиш','1','5000','✅ Тасдиқлаш']
+   for i,t in enumerate(seq,720):bot.handle(self.db,amsg(i,t))
+   self.assertEqual(core.cash(self.db,2),core.money('5000'))
+  day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
+  def dmsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
+  with patch.object(bot,'send'),patch.object(bot,'document') as document:
+   for i,t in enumerate(['📄 Акт сверка','1',day,day,'✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
+   document.assert_called_once()
+   self.assertIn('akt-sverka-1-',document.call_args.args[1])
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
