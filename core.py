@@ -55,7 +55,7 @@ def _hybrid_row(cursor):
 
 def _pg_sql(sql):
     sql=sql.replace('?','%s')
-    return re.sub(r'\\bend\\b','"end"',sql,flags=re.IGNORECASE)
+    return re.sub(r'\bend\b','"end"',sql,flags=re.IGNORECASE)
 
 class PostgresDB:
     def __init__(self,conn): self.conn=conn
