@@ -1,5 +1,6 @@
 """ASMAN Agent test bot. Python 3.11+, standard library only."""
-import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal
+import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from core import *
@@ -68,7 +69,7 @@ def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a)]
     return [keys[i:i+2] for i in range(0,len(keys),2)]
 
-def save(db,u,s):db.execute('INSERT OR REPLACE INTO sessions VALUES(?,?)',(u,json.dumps(s)))
+def save(db,u,s):db.execute('INSERT INTO sessions(agent,data) VALUES(?,?) ON CONFLICT(agent) DO UPDATE SET data=excluded.data',(u,json.dumps(s)))
 def state(db,u):
     r=db.execute('SELECT data FROM sessions WHERE agent=?',(u,)).fetchone()
     return json.loads(r[0]) if r else None
@@ -259,41 +260,101 @@ def handle(db,update):
         v=text
     s['values'][key]=v;s['step']+=1;prompt(db,u,s)
 
+def _mark_processed(db,update_id,save_offset=False):
+    db.execute('INSERT INTO processed(id) VALUES(?) ON CONFLICT(id) DO NOTHING',(update_id,))
+    if save_offset:
+        db.execute("INSERT INTO meta(key,value) VALUES('offset',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(update_id+1),))
+
+def process_update(db,up,save_offset=False):
+    update_id=up.get('update_id')
+    if update_id is None:return
+    if db.execute('SELECT 1 FROM processed WHERE id=?',(update_id,)).fetchone():
+        if save_offset:
+            with db:_mark_processed(db,update_id,True)
+        return
+    try:
+        with db:
+            handle(db,up)
+            _mark_processed(db,update_id,save_offset)
+    except Exception as e:
+        if not (isinstance(e,ValueError) or is_integrity_error(e)):
+            raise
+        msg='Бу телефон аввал киритилган ёки ёзув такрорий.' if is_integrity_error(e) else str(e)
+        m=up.get('message') or up.get('edited_message') or {}
+        if m.get('chat',{}).get('type')=='private':
+            try:send(m['chat']['id'],'⚠️ '+msg)
+            except Exception:pass
+        with db:_mark_processed(db,update_id,save_offset)
+
+def run_polling(db):
+    api('deleteWebhook',drop_pending_updates=False)
+    while not STOP:
+        row=db.execute("SELECT value FROM meta WHERE key='offset'").fetchone()
+        offset=int(row[0]) if row else 0
+        try:
+            updates=api('getUpdates',offset=offset,timeout=25,allowed_updates=['message','edited_message'])
+        except Exception as e:
+            logging.warning('Polling failed: %s',type(e).__name__)
+            time.sleep(3);continue
+        for up in updates:
+            if STOP:break
+            try:process_update(db,up,True)
+            except Exception as e:
+                logging.exception('Update %s failed: %s',up.get('update_id'),type(e).__name__)
+                time.sleep(2);break
+
+def serve_webhook(db,base_url):
+    secret=(os.getenv('WEBHOOK_SECRET') or hashlib.sha256(TOKEN.encode()).hexdigest()[:40]).strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,256}',secret):
+        raise SystemExit('WEBHOOK_SECRET фақат A-Z, a-z, 0-9, _ ва - белгиларидан иборат бўлсин.')
+    path='/telegram/'+secret
+    webhook=base_url.rstrip('/')+path
+    api('setWebhook',url=webhook,secret_token=secret,allowed_updates=['message','edited_message'],drop_pending_updates=False)
+    port=int(os.getenv('PORT','10000'))
+    class Handler(BaseHTTPRequestHandler):
+        def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8'):
+            self.send_response(code);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+        def do_GET(self):
+            if self.path in ('/','/health'):self._reply(200,b'ASMAN Agent OK')
+            else:self._reply(404,b'Not found')
+        def do_POST(self):
+            supplied=self.headers.get('X-Telegram-Bot-Api-Secret-Token','')
+            if self.path!=path or not hmac.compare_digest(supplied,secret):
+                self._reply(403,b'Forbidden');return
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if length<=0 or length>2_000_000:raise ValueError('Bad request size')
+                up=json.loads(self.rfile.read(length))
+                process_update(db,up,False)
+            except Exception:
+                logging.exception('Webhook update failed')
+                self._reply(500,b'Retry');return
+            self._reply(200,b'OK')
+        def log_message(self,format,*args):
+            logging.info('HTTP '+format,*args)
+    server=HTTPServer(('0.0.0.0',port),Handler)
+    logging.info('Webhook active on %s; HTTP port %s',base_url,port)
+    try:server.serve_forever(poll_interval=.5)
+    finally:server.server_close()
+
 def run():
     if not TOKEN or not ADMINS:raise SystemExit('BOT_TOKEN ва ADMIN_IDS муҳит ўзгарувчиларини белгиланг.')
-    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)),exist_ok=True)
-    db=connect(DB_PATH)
-    for u in ADMINS:db.execute('INSERT INTO users VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
-    db.commit(); logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
+    dsn=os.getenv('DATABASE_URL') or DB_PATH
+    if not str(dsn).startswith(('postgres://','postgresql://')):
+        os.makedirs(os.path.dirname(os.path.abspath(dsn)),exist_ok=True)
+    db=connect(dsn)
+    for u in ADMINS:
+        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
+    db.commit()
+    logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
     api('getMe')
     print('ASMAN Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
     signal.signal(signal.SIGINT,stop_signal)
-    while not STOP:
-        row=db.execute("SELECT value FROM meta WHERE key='offset'").fetchone();offset=int(row[0]) if row else 0
-        try:updates=api('getUpdates',offset=offset,timeout=25,allowed_updates=['message','edited_message'])
-        except Exception as e:
-            logging.warning('Polling failed: %s',type(e).__name__);time.sleep(3);continue
-        for up in updates:
-            if STOP:break
-            if db.execute('SELECT 1 FROM processed WHERE id=?',(up['update_id'],)).fetchone():continue
-            try:
-                with db:
-                    handle(db,up)
-                    db.execute('INSERT INTO processed VALUES(?)',(up['update_id'],))
-                    db.execute("INSERT OR REPLACE INTO meta VALUES('offset',?)",(str(up['update_id']+1),))
-            except (ValueError,sqlite3.IntegrityError) as e:
-                msg='Бу телефон аввал киритилган ёки ёзув такрорий.' if isinstance(e,sqlite3.IntegrityError) else str(e)
-                m=up.get('message',{})
-                if m.get('chat',{}).get('type')=='private':
-                    try:send(m['chat']['id'],'⚠️ '+msg)
-                    except Exception:pass
-                with db:
-                    db.execute('INSERT OR IGNORE INTO processed VALUES(?)',(up['update_id'],));db.execute("INSERT OR REPLACE INTO meta VALUES('offset',?)",(str(up['update_id']+1),))
-            except Exception as e:
-                logging.warning('Update %s failed: %s',up['update_id'],type(e).__name__)
-                time.sleep(2);break
-
-    db.close()
+    try:
+        base=os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL')
+        if base:serve_webhook(db,base)
+        else:run_polling(db)
+    finally:db.close()
 
 if __name__=='__main__':run()
