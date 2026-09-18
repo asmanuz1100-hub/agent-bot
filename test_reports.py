@@ -48,6 +48,24 @@ class ReportsTests(unittest.TestCase):
   with self.assertRaises(ValueError):reports.route_map_html(self.db,2,2)
   with self.assertRaises(ValueError):reports.overall(self.db,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
 
+ def test_shift_daily_summary(self):
+  start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp());end=start+3600
+  self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,99)',(start,end))
+  shift=self.db.execute('SELECT id FROM shifts WHERE agent=2 ORDER BY id DESC LIMIT 1').fetchone()[0]
+  self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
+   (shift,start+10,40.0,71.0,10),(shift,start+600,40.01,71.01,10),(shift,end-10,40.02,71.02,10)
+  ])
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,address,created_ts) VALUES(10,2,'New client','+998900000010','A',?)",(start+100,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,10,'delivery',1,4,0,?)",(start+200,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,10,'sold',1,2,2000000,?)",(start+300,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,10,'payment',0,0,500000,?)",(start+400,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,ts) VALUES(2,2,10,'visit',0,0,0,?)",(start+500,))
+  r=reports.shift_summary(self.db,2,shift)
+  self.assertEqual(r['new_clients'],1);self.assertEqual(r['active_clients'],1);self.assertEqual(r['visits'],1)
+  self.assertEqual(r['sold_qty'],2);self.assertEqual(r['sold_amount'],2000000);self.assertEqual(r['payments'],500000)
+  self.assertEqual(r['duration'],3600);self.assertGreater(r['km'],0);self.assertEqual(r['gps_points'],3)
+  self.assertIn('КУНЛИК ФАОЛИЯТ',r['text']);self.assertIn('Янги мижоз: 1 та',r['text']);self.assertIn('20 000.00 сўм',r['text'])
+
  def test_agent_report_flow_no_other_agent(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   self.assertFalse(bot.allowed(self.db,2,'reconcile'))
