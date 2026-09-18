@@ -1,4 +1,4 @@
-"""Deterministic reconciliation and seven-day activity reports."""
+"""Deterministic reconciliation, route maps, and daily analytics."""
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
@@ -109,22 +109,30 @@ def overall(db,actor,now=None):
             route['agent']=ag[1] or str(aid);routes.append(route);akm+=stats['km'];astops+=len(stats['stops']);agaps+=len(stats['gaps']);gps_points+=len(route['points'])
             for s in shops:
                 if s['id'] not in seen_shops:all_shops.append(s);seen_shops.add(s['id'])
-        ev=db.execute('SELECT * FROM events WHERE agent=? AND ts>=? AND ts<?',(aid,a,b)).fetchall()
-        active={x['client'] for x in ev if x['client'] is not None}
-        sold=sum(x['amount'] for x in ev if x['kind']=='sold');paid=sum(x['amount'] for x in ev if x['kind']=='payment')
-        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {len(active)} нуқта · сотув {m(sold)} сўм · тўлов {m(paid)} сўм")
+        metric=db.execute("""SELECT
+            COUNT(DISTINCT client),
+            COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0)
+            FROM events WHERE agent=? AND ts>=? AND ts<?""",(aid,a,b)).fetchone()
+        active_count=int(metric[0] or 0);sold=int(metric[1] or 0);paid=int(metric[2] or 0)
+        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {active_count} нуқта · сотув {m(sold)} сўм · тўлов {m(paid)} сўм")
         total_km+=akm;stops+=astops;gaps+=agaps
-    events=db.execute('SELECT * FROM events WHERE ts>=? AND ts<?',(a,b)).fetchall()
-    active_all={x['client'] for x in events if x['client'] is not None}
-    sold_qty=sum(x['qty'] for x in events if x['kind']=='sold');sold=sum(x['amount'] for x in events if x['kind']=='sold')
-    delivered=sum(x['qty'] for x in events if x['kind']=='delivery');paid=sum(x['amount'] for x in events if x['kind']=='payment')
+    metric=db.execute("""SELECT
+        COUNT(DISTINCT client),
+        COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0)
+        FROM events WHERE ts>=? AND ts<?""",(a,b)).fetchone()
+    active_all=int(metric[0] or 0);sold_qty=int(metric[1] or 0);sold=int(metric[2] or 0)
+    delivered=int(metric[3] or 0);paid=int(metric[4] or 0)
     text=(f"УМУМИЙ ТАҲЛИЛ · {now:%d.%m.%Y %H:%M}\n"
           f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\nGPS нуқталари: {gps_points}\n"
-          f"Фаол савдо нуқталари: {len(active_all)}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
+          f"Фаол савдо нуқталари: {active_all}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
           f"Берилган товар: {delivered} дона\nСотилган: {sold_qty} дона / {m(sold)} сўм\nОлинган пул: {m(paid)} сўм\n\n"
           +"Агентлар:\n"+("\n".join(details) if details else "Агент йўқ"))
     if gps_points==0:text+='\n\n⚠️ Бугун GPS нуқталари сақланмаган. Агент сменани бошлаб Telegram жонли локациясини юбориши керак.'
-    summary=f"{round(total_km,2)} км · {len(active_all)} фаол нуқта · {m(sold)} сўм сотув"
+    summary=f"{round(total_km,2)} км · {active_all} фаол нуқта · {m(sold)} сўм сотув"
     return text,_map_html(f'Умумий маршрут · {now:%d.%m.%Y}',routes,all_shops,summary)
 
 def dates(start,end):
@@ -143,13 +151,17 @@ def reconciliation(db,actor,client,start,end):
     c=db.execute('SELECT * FROM clients WHERE id=?',(client,)).fetchone()
     if not c:raise ValueError('Мижоз топилмади.')
     auth(db,actor,c['agent']);a,b=dates(start,end)
-    before=db.execute('SELECT * FROM events WHERE client=? AND ts<? ORDER BY ts,id',(client,a)).fetchall()
-    events=db.execute('SELECT * FROM events WHERE client=? AND ts>=? AND ts<? ORDER BY ts,id',(client,a,b)).fetchall()
-    stocks={1:0,3:0,5:0};opening=0
-    for e in before:
-        if e['kind'] in ('delivery','sold','return'):stocks[e['pack']]+=e['qty']*(1 if e['kind']=='delivery' else -1)
-        if e['kind']=='sold':opening+=e['amount']
-        if e['kind']=='payment':opening-=e['amount']
+    opening_row=db.execute("""SELECT
+        COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN pack=1 AND kind='delivery' THEN qty WHEN pack=1 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN pack=3 AND kind='delivery' THEN qty WHEN pack=3 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN pack=5 AND kind='delivery' THEN qty WHEN pack=5 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0)
+        FROM events WHERE client=? AND ts<?""",(client,a)).fetchone()
+    opening=int(opening_row[0] or 0)
+    stocks={1:int(opening_row[1] or 0),3:int(opening_row[2] or 0),5:int(opening_row[3] or 0)}
+    events=db.execute("""SELECT id,ts,kind,pack,qty,amount FROM events
+        WHERE client=? AND ts>=? AND ts<? AND kind IN ('delivery','sold','return','payment')
+        ORDER BY ts,id""",(client,a,b)).fetchall()
     initial=stocks.copy();balance=opening;rows=[];sales=payments=0
     for e in events:
         k=e['kind']
