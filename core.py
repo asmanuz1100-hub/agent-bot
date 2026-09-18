@@ -164,7 +164,9 @@ def point(db,agent,message,edited=False):
     if edited and s['live_id']!=mid:return False
     if not edited:
         if not loc.get('live_period'):return False
-        db.execute('UPDATE shifts SET live_id=? WHERE id=?',(mid,s['id']))
+        if s['live_id'] is not None and s['live_id']!=mid:return False
+        if s['live_id'] is None:
+            db.execute('UPDATE shifts SET live_id=? WHERE id=?',(mid,s['id']))
     if not loc.get('live_period'):return False
     if not (-90<=loc['latitude']<=90 and -180<=loc['longitude']<=180): return False
     db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?) ON CONFLICT(shift,ts) DO NOTHING',(s['id'],ts,loc['latitude'],loc['longitude'],loc.get('horizontal_accuracy')))
