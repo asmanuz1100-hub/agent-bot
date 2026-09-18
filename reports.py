@@ -2,10 +2,91 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
-import io,csv
+import io,csv,json,time
 from core import route_stats
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Реализацияга берилди','sold':'Сотилди','payment':'Нақд пул олинди','return':'Сотилмаган товар қайтди','order':'Буюртма','visit':'Ташриф / таклиф'}
+
+def rowdict(r):
+    return {k:r[k] for k in r.keys()}
+
+def admin_only(db,actor):
+    r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not r or r[0]!='admin':raise ValueError('Фақат админ.')
+
+def _safe_json(obj):
+    return json.dumps(obj,ensure_ascii=False,separators=(',',':')).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
+
+def _map_html(title, routes, shops, summary):
+    data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary})
+    return f'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>html,body,#map{{height:100%;margin:0}}#panel{{position:absolute;z-index:1000;top:12px;left:12px;max-width:360px;background:#fff;padding:14px 16px;border-radius:12px;box-shadow:0 2px 16px #0003;font:14px Arial}}#panel b{{font-size:16px}}.muted{{color:#64748b;margin-top:6px}}</style></head>
+<body><div id="panel"><b>{escape(title)}</b><div id="summary" class="muted"></div></div><div id="map"></div>
+<script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map');
+L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{maxZoom:19,attribution:'© OpenStreetMap'}}).addTo(map);
+const bounds=[]; const colors=['#1769aa','#d97706','#15803d','#7c3aed','#be123c','#0f766e','#a16207','#475569'];
+function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
+D.routes.forEach((r,i)=>{{const pts=r.points.map(p=>[p.lat,p.lon]); if(pts.length){{L.polyline(pts,{{weight:5,color:colors[i%colors.length],opacity:.85}}).addTo(map).bindTooltip(esc(r.agent));pts.forEach(x=>bounds.push(x));L.circleMarker(pts[0],{{radius:6,color:colors[i%colors.length]}}).addTo(map).bindPopup('Бошланиш · '+esc(r.agent));L.circleMarker(pts[pts.length-1],{{radius:6,color:colors[i%colors.length]}}).addTo(map).bindPopup('Охирги нуқта · '+esc(r.agent));}}}});
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];bounds.push(p);L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,fillOpacity:s.active?.85:.45}}).addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(s.active?'✅ Бугун/сменада фаол':'Қайд этилган савдо нуқтаси'));}});
+document.getElementById('summary').textContent=D.summary;
+if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);
+</script></body></html>'''.encode('utf-8')
+
+def shift_route_data(db,agent,shift):
+    end=shift['end'] or int(time.time())
+    points=db.execute('SELECT * FROM points WHERE shift=? ORDER BY ts',(shift['id'],)).fetchall()
+    stats=route_stats(points,shift['start'],end)
+    active={r[0] for r in db.execute('SELECT DISTINCT client FROM events WHERE agent=? AND client IS NOT NULL AND ts BETWEEN ? AND ?',(agent,shift['start'],end)).fetchall()}
+    shops=[]
+    for s in db.execute('SELECT * FROM clients WHERE agent=? AND lat IS NOT NULL AND lon IS NOT NULL',(agent,)).fetchall():
+        shops.append({'id':s['id'],'name':s['name'],'shop':s['shop_name'],'address':s['address'],'lat':s['lat'],'lon':s['lon'],'active':s['id'] in active})
+    route={'agent':str(agent),'shift':shift['id'],'km':stats['km'],'points':[{'lat':p['lat'],'lon':p['lon'],'ts':p['ts']} for p in points]}
+    return route,shops,stats,len(active)
+
+def route_map_html(db,actor,agent):
+    admin_only(db,actor)
+    shift=db.execute('SELECT * FROM shifts WHERE agent=? ORDER BY id DESC LIMIT 1',(agent,)).fetchone()
+    if not shift:raise ValueError('Бу агент ҳали иш бошламаган.')
+    route,shops,stats,active=shift_route_data(db,agent,shift)
+    summary=f"{stats['km']} км · {active} фаол савдо нуқтаси · {len(stats['stops'])} тўхташ · {len(stats['gaps'])} узилиш"
+    return _map_html(f'ASMAN · агент {agent} · смена #{shift["id"]}',[route],shops,summary),stats,active
+
+def overall(db,actor,now=None):
+    admin_only(db,actor)
+    now=now or datetime.now(TZ);now=now.astimezone(TZ)
+    start=now.replace(hour=0,minute=0,second=0,microsecond=0)
+    a=int(start.timestamp());b=int(now.timestamp())+1
+    agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
+    routes=[];all_shops=[];seen_shops=set();total_km=0;stops=gaps=0
+    details=[]
+    for ag in agents:
+        aid=ag[0]
+        shifts=db.execute('SELECT * FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?) ORDER BY start',(aid,b,a)).fetchall()
+        akm=0;astops=agaps=0
+        for sh in shifts:
+            route,shops,stats,_=shift_route_data(db,aid,sh)
+            route['agent']=ag[1] or str(aid);routes.append(route);akm+=stats['km'];astops+=len(stats['stops']);agaps+=len(stats['gaps'])
+            for s in shops:
+                if s['id'] not in seen_shops:all_shops.append(s);seen_shops.add(s['id'])
+        ev=db.execute('SELECT * FROM events WHERE agent=? AND ts>=? AND ts<?',(aid,a,b)).fetchall()
+        active={x['client'] for x in ev if x['client'] is not None}
+        sold=sum(x['amount'] for x in ev if x['kind']=='sold');paid=sum(x['amount'] for x in ev if x['kind']=='payment')
+        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {len(active)} нуқта · сотув {m(sold)} сўм · тўлов {m(paid)} сўм")
+        total_km+=akm;stops+=astops;gaps+=agaps
+    events=db.execute('SELECT * FROM events WHERE ts>=? AND ts<?',(a,b)).fetchall()
+    active_all={x['client'] for x in events if x['client'] is not None}
+    sold_qty=sum(x['qty'] for x in events if x['kind']=='sold');sold=sum(x['amount'] for x in events if x['kind']=='sold')
+    delivered=sum(x['qty'] for x in events if x['kind']=='delivery');paid=sum(x['amount'] for x in events if x['kind']=='payment')
+    text=(f"УМУМИЙ ТАҲЛИЛ · {now:%d.%m.%Y %H:%M}\n"
+          f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\n"
+          f"Фаол савдо нуқталари: {len(active_all)}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
+          f"Берилган товар: {delivered} дона\nСотилган: {sold_qty} дона / {m(sold)} сўм\nОлинган пул: {m(paid)} сўм\n\n"
+          +"Агентлар:\n"+("\n".join(details) if details else "Агент йўқ"))
+    summary=f"{round(total_km,2)} км · {len(active_all)} фаол нуқта · {m(sold)} сўм сотув"
+    return text,_map_html(f'ASMAN · умумий маршрут · {now:%d.%m.%Y}',routes,all_shops,summary)
 
 def dates(start,end):
     try:
@@ -38,7 +119,7 @@ def reconciliation(db,actor,client,start,end):
         charge=e['amount'] if k=='sold' else 0;credit=e['amount'] if k=='payment' else 0
         balance+=charge-credit;sales+=charge;payments+=credit
         rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance})
-    return {'client':dict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
+    return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
 def m(x):return f'{x/100:,.2f}'.replace(',',' ')
 
