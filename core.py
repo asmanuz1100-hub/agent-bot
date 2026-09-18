@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT);
+CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT);
 CREATE TABLE IF NOT EXISTS sessions(agent INTEGER PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS shifts(id INTEGER PRIMARY KEY, agent INTEGER, start INTEGER, end INTEGER, live_id INTEGER);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 
 PG_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id BIGINT PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT);
+CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT);
 CREATE TABLE IF NOT EXISTS sessions(agent BIGINT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS shifts(id BIGSERIAL PRIMARY KEY, agent BIGINT, start BIGINT, end BIGINT, live_id BIGINT);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
@@ -84,6 +84,8 @@ def connect(path):
         for stmt in PG_SCHEMA.split(';'):
             if stmt.strip():db.execute(stmt)
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS shop_name TEXT')
+        db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT ''")
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_due TEXT')
         db.commit()
         return db
     db=sqlite3.connect(path)
@@ -91,8 +93,13 @@ def connect(path):
     db.executescript(SCHEMA)
     if 'accepted_ts' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN accepted_ts INTEGER')
-    if 'shop_name' not in {r[1] for r in db.execute('PRAGMA table_info(clients)')}:
+    client_cols={r[1] for r in db.execute('PRAGMA table_info(clients)')}
+    if 'shop_name' not in client_cols:
         db.execute('ALTER TABLE clients ADD COLUMN shop_name TEXT')
+    if 'comment' not in client_cols:
+        db.execute("ALTER TABLE clients ADD COLUMN comment TEXT DEFAULT ''")
+    if 'payment_due' not in client_cols:
+        db.execute('ALTER TABLE clients ADD COLUMN payment_due TEXT')
     db.execute('PRAGMA journal_mode=WAL')
     return db
 
