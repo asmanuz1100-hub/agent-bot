@@ -50,7 +50,10 @@ class Tests(unittest.TestCase):
   m={'message_id':20,'date':100,'location':{'latitude':40,'longitude':71,'live_period':3600}}
   self.assertFalse(core.point(self.db,2,m))
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,100)')
-  self.assertTrue(core.point(self.db,2,m));m['edit_date']=110
+  self.assertTrue(core.point(self.db,2,m))
+  other={'message_id':21,'date':101,'location':{'latitude':40.1,'longitude':71.1,'live_period':3600}}
+  self.assertFalse(core.point(self.db,2,other))
+  m['edit_date']=110
   self.assertTrue(core.point(self.db,2,m,True))
   m['message_id']=21;self.assertFalse(core.point(self.db,2,m,True))
   self.db.execute('UPDATE shifts SET end=120');m['message_id']=20;m['edit_date']=130
@@ -65,6 +68,9 @@ class Tests(unittest.TestCase):
   self.assertEqual(len(core.route_stats(ps,100,500)['stops']),1)
  def test_full_delivery_ui_and_confirmation(self):
   self.rec('load',12,actor=1)
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':90,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   with patch.object(bot,'send'):
    for i,t in enumerate(['📦 Товар бериш','1 · Мижоз','1','Блок','2'],100):bot.handle(self.db,msg(i,t))
