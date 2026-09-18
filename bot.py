@@ -63,11 +63,23 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    return (r=='admin' and action in ('user','load','tracking','summary','clients','reconcile','weekly')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance','reconcile','weekly'))
+    return (r=='admin' and action in ('user','load','tracking','summary','clients','reconcile','weekly')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a)]
     return [keys[i:i+2] for i in range(0,len(keys),2)]
+
+AGENT_WORK_ACTIONS={'client','clients','delivery','sold','order','payment','return','visit','handover'}
+
+def live_ready(db,u,max_age=300):
+    s=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone()
+    if not s:return False,'Аввал «Ишни бошлаш»ни босинг.'
+    if s['live_id'] is None:return False,'Иш бошланган. Энди Telegram жонли локациясини юборинг.'
+    p=db.execute('SELECT ts FROM points WHERE shift=? ORDER BY ts DESC LIMIT 1',(s['id'],)).fetchone()
+    if not p:return False,'Жонли локация нуқтаси ҳали келмаган.'
+    age=max(0,int(time.time())-int(p[0]))
+    if age>max_age:return False,f'Жонли локация {age//60} дақиқадан бери янгиланмаган. Давом этиш учун локацияни қайта ёқинг.'
+    return True,''
 
 def save(db,u,s):db.execute('INSERT INTO sessions(agent,data) VALUES(?,?) ON CONFLICT(agent) DO UPDATE SET data=excluded.data',(u,json.dumps(s)))
 def state(db,u):
@@ -179,6 +191,10 @@ def handle(db,update):
     action=BTN.get(text)
     if action:
         if not allowed(db,u,action):raise ValueError('Бу амалга рухсат йўқ.')
+        if r=='agent' and action in AGENT_WORK_ACTIONS:
+            ok,msg=live_ready(db,u)
+            if not ok:
+                send(u,'⚠️ '+msg,menu(db,u));return
         db.execute('DELETE FROM sessions WHERE agent=?',(u,))
         if action in FLOW:
             s={'action':action,'step':0,'values':{}}
@@ -187,10 +203,10 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди. 📎 → Локация → Жонли локацияни улашиш.\nИш давомида келган нуқталар сақланади; маршрутни фақат админ кўради.\nДўкон манзили учун оддий локацияни алоҳида юборинг.');return
+            send(u,'Иш бошланди. Энди 📎 → Локация → «Жонли локацияни улашиш»ни юборинг.\nБир сменада биринчи жонли локация асосий ҳисобланади ва бошқасига алмаштирилмайди.\nЛокация 5 дақиқадан ортиқ янгиланмаса, савдо амаллари вақтинча блокланади. Маршрутни фақат админ кўради.');return
         if action=='end':
             n=db.execute('UPDATE shifts SET end=? WHERE agent=? AND end IS NULL',(m['date'],u)).rowcount
-            send(u,'Иш тугади. Бот координаталарни сақлашни тўхтатди. Telegramда жонли улашишни ҳам ўчиринг.' if n else 'Очиқ смена йўқ.');return
+            send(u,'Иш тугади. Бот координаталарни сақлашни тўхтатди. Telegramда жонли улашишни ҳам ўчиринг.' if n else 'Очиқ смена йўқ.',menu(db,u));return
         if action=='clients':report_clients(db,u);return
         if action=='balance':
             send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{p} кг: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги нақд пул: {fmt(cash(db,u))} сўм');return
@@ -204,8 +220,14 @@ def handle(db,update):
             send(u,'Сўнгги буюртмалар (талаб қайди):\n'+'\n'.join(f"Агент {x[0]}, мижоз #{x[1]}: {x[2]} кг × {x[3]} дона" for x in orders));return
     if 'location' in m and m['location'].get('live_period'):
         if r!='agent':raise ValueError('Жонли локация агент учун.')
-        if point(db,u,m):send(u,'📍 Жонли локация қабул қилинди. Янгиланишлар иш тугагунча қайд этилади.')
-        else:send(u,'Аввал «Ишни бошлаш»ни босинг, кейин янги жонли локация юборинг.')
+        if point(db,u,m):
+            send(u,'📍 Жонли локация қабул қилинди. Энди иш менюси фаол. Янгиланишлар иш тугагунча қайд этилади.',menu(db,u))
+        else:
+            s0=db.execute('SELECT live_id FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone()
+            if s0 and s0[0] is not None and s0[0]!=m['message_id']:
+                send(u,'⚠️ Бу сменада жонли локация аввал бириктирилган. Уни бошқа live-location билан алмаштириб бўлмайди.',menu(db,u))
+            else:
+                send(u,'Аввал «Ишни бошлаш»ни босинг, кейин жонли локация юборинг.',menu(db,u))
         return
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
