@@ -114,6 +114,48 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.client_stock(self.db,2,cid,1),8)
   self.assertEqual(core.agent_stock(self.db,2,1),4)
 
+ def test_product_catalog_and_admin_price(self):
+  self.assertEqual(core.product_name(1),'Грунтовка 7/1 — 1 кг')
+  self.assertEqual(core.product_name(3),'Грунтовка 7/1 — 3 кг')
+  self.assertEqual(core.product_name(5),'Грунтовка 7/1 — 5 кг')
+  core.set_product_price(self.db,1,1,core.money('12000'))
+  self.assertEqual(core.product_price(self.db,1),core.money('12000'))
+  with self.assertRaises(ValueError):core.set_product_price(self.db,2,1,core.money('13000'))
+
+ def test_admin_agent_management_and_price_flow(self):
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(300,'👥 Агентлар бошқаруви'))
+   self.assertIn('Агентларни бошқариш',send.call_args.args[1])
+   bot.handle(self.db,msg(301,'✏️ Нарх киритиш'))
+   bot.handle(self.db,msg(302,'Грунтовка 7/1 — 1 кг'))
+   bot.handle(self.db,msg(303,'15000'))
+   bot.handle(self.db,msg(304,'✅ Тасдиқлаш'))
+  self.assertEqual(core.product_price(self.db,1),core.money('15000'))
+  with patch.object(bot,'send'):
+   bot.handle(self.db,msg(305,'✏️ Агент номини ўзгартириш'))
+   bot.handle(self.db,msg(306,'2 · B'))
+   bot.handle(self.db,msg(307,'Сардор'))
+   bot.handle(self.db,msg(308,'✅ Тасдиқлаш'))
+  self.assertEqual(self.db.execute('SELECT name FROM users WHERE id=2').fetchone()[0],'Сардор')
+
+ def test_sale_prompt_uses_catalog_price(self):
+  core.set_product_price(self.db,1,1,core.money('10000'))
+  self.rec('load',8,actor=1);self.rec('delivery',4)
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':77,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(400,'💵 Сотилган товар'))
+   bot.handle(self.db,msg(401,'1 · Мижоз'))
+   bot.handle(self.db,msg(402,'Грунтовка 7/1 — 1 кг'))
+   bot.handle(self.db,msg(403,'Дона'))
+   bot.handle(self.db,msg(404,'2'))
+   text=send.call_args.args[1]
+   self.assertIn('Каталог нархи: 10 000.00',text)
+   self.assertIn('Ҳисобланган жами: 20 000.00',text)
+
  def test_nonprivate_ignored(self):
   with patch.object(bot,'send') as send:
    bot.handle(self.db,{'update_id':10,'message':{'chat':{'id':-1,'type':'group'},'from':{'id':1},'text':'📍 Агентлар'}})
