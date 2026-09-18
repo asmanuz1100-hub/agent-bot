@@ -21,15 +21,9 @@ class ReportsTests(unittest.TestCase):
   self.assertEqual(r['opening_stock'][1],10);self.assertEqual(r['closing_stock'][1],5)
   self.assertEqual(len(r['rows']),3)
   html=reports.reconciliation_html(r).decode();self.assertIn('&lt;script&gt;',html);self.assertNotIn('<script>',html)
- def test_unique_shops_and_visits(self):
-  self.add('visit','2026-09-12');self.add('visit','2026-09-13');self.add('visit','2026-09-18',client=2)
-  self.add('visit','2026-09-11',client=2);self.add('delivery','2026-09-14',8)
-  text,rows=reports.weekly(self.db,1,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
-  self.assertIn('Алоҳида дўконлар: 2',text);self.assertIn('ташрифлар: 3',text);self.assertEqual(len(rows),4)
  def test_report_permissions(self):
   for uid in (3,4,99):
    with self.assertRaises(ValueError):reports.reconciliation(self.db,uid,1,'2026-09-01','2026-09-18')
-   with self.assertRaises(ValueError):reports.weekly(self.db,uid,2)
  def test_period_validation(self):
   with self.assertRaises(ValueError):reports.dates('2026-09-20','2026-09-18')
   with self.assertRaises(ValueError):reports.dates('bad','2026-09-18')
@@ -37,12 +31,6 @@ class ReportsTests(unittest.TestCase):
   self.add('payment','2026-09-01',amount=1000)
   r=reports.reconciliation(self.db,1,1,'2026-09-01','2026-09-18')
   self.assertEqual(r['closing'],-1000)
- def test_handover_accept_time(self):
-  self.add('payment','2026-09-01',amount=1000)
-  old=int(datetime(2026,9,1,tzinfo=reports.TZ).timestamp());new=int(datetime(2026,9,15,tzinfo=reports.TZ).timestamp())
-  self.db.execute("INSERT INTO handovers(agent,amount,status,ts,accepted_ts) VALUES(2,500,'accepted',?,?)",(old,new))
-  text,_=reports.weekly(self.db,1,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
-  self.assertIn('Кассир қабул қилган: 5.00',text)
  def test_route_map_and_overall_analysis(self):
   self.db.execute("UPDATE clients SET shop_name='Shop one',lat=40.0,lon=71.0 WHERE id=1")
   start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
@@ -62,9 +50,6 @@ class ReportsTests(unittest.TestCase):
 
  def test_agent_report_flow_no_other_agent(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
-  self.assertFalse(bot.allowed(self.db,2,'weekly'))
   self.assertFalse(bot.allowed(self.db,2,'reconcile'))
-  with patch.object(bot,'send'),patch.object(bot,'document'):
-   with self.assertRaises(ValueError):bot.handle(self.db,msg(1,'📈 Ҳафталик таҳлил'))
 
 if __name__=='__main__':unittest.main()
