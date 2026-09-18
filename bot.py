@@ -18,10 +18,9 @@ TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.stri
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','📍 Агентлар':'tracking','➕ Ходим':'user','🚚 Агентга товар':'load','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
-BTN.update({'📄 Акт сверка':'reconcile','📈 Ҳафталик таҳлил':'weekly'})
+BTN.update({'📄 Акт сверка':'reconcile'})
 FLOW={
  'reconcile':[('client','Мижозни танланг:'),('start','Давр боши: ЙЙЙЙ-ОО-КК'),('end','Давр охири: ЙЙЙЙ-ОО-КК')],
- 'weekly':[('agent','Агентни танланг:')],
  'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('name','2) 👤 Мижоз исми:'),('shop_name','3) 🏪 Дўкон номи:'),('phone','4) 📞 Мижоз телефон рақами: +998XXXXXXXXX'),('address','5) 🏠 Дўкон манзили:'),('photo','6) 📷 Дўкон/витрина расмини юборинг:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товар — Грунтовка 7/1 қадоғи (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
@@ -76,7 +75,7 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','weekly')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
+    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a)]
@@ -179,8 +178,6 @@ def finish(db,u,s,source):
         result=reports.reconciliation(db,u,v['client'],v['start'],v['end'])
         send(u,f"Акт сверка: {result['client']['name']}\nСотилган: {fmt(result['sales'])} сўм\nОлинган пул: {fmt(result['payments'])} сўм\nЯкуний баланс: {fmt(result['closing'])} сўм")
         document(u,f'akt-sverka-{v["client"]}-{v["end"]}.html',reports.reconciliation_html(result))
-    elif a=='weekly':
-        text,rows=reports.weekly(db,u,v['agent']);send(u,text);document(u,f'weekly-{v["agent"]}.csv',reports.weekly_csv(rows))
     elif a=='client':
         q=v['qty']*(4 if v.get('unit')=='Блок' else 1)
         if agent_stock(db,u,v['pack'])<q:raise ValueError('Агентда бу товардан етарли миқдор йўқ. Админ аввал агентга товар берсин.')
@@ -224,7 +221,6 @@ def handle(db,update):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,))
         if action in FLOW:
             s={'action':action,'step':0,'values':{}}
-            if action=='weekly' and r=='agent':s.update(step=1,values={'agent':u})
             prompt(db,u,s);return
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
