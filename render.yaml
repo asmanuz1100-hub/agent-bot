@@ -1,0 +1,31 @@
+# Paid always-on worker proposal. Review cost before applying.
+# Workers and persistent disks have no free plan.
+services:
+  - type: worker
+    name: asman-agent-test
+    runtime: python
+    plan: starter
+    region: oregon
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 120
+    buildCommand: python -m unittest discover -v
+    startCommand: python bot.py
+    disk:
+      name: asman-agent-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: DB_PATH
+        value: /var/data/asman.sqlite3
+      - key: OCR_MODEL
+        value: gpt-4.1-mini
+# Optional OPENAI_API_KEY can be added in the Render Environment UI.
