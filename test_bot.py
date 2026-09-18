@@ -84,10 +84,11 @@ class Tests(unittest.TestCase):
   now=int(time.time())
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':80,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
-  def msg(i,text=None,loc=None):
+  def msg(i,text=None,loc=None,photo=None):
    m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
    if text is not None:m['text']=text
    if loc is not None:m['location']=loc
+   if photo is not None:m['photo']=[{'file_id':photo}]
    return {'update_id':i,'message':m}
   with patch.object(bot,'send'):
    bot.handle(self.db,msg(200,'🏪 Мижоз қўшиш'))
@@ -95,13 +96,20 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(201,loc={'latitude':40.5,'longitude':71.5}))
    bot.handle(self.db,msg(202,'Алишер'))
    bot.handle(self.db,msg(203,'ASMAN SHOP'))
-   bot.handle(self.db,msg(204,'Қўқон, Марказ'))
-   bot.handle(self.db,msg(205,'1'))
-   bot.handle(self.db,msg(206,'Блок'))
-   bot.handle(self.db,msg(207,'2'))
-   bot.handle(self.db,msg(208,'✅ Тасдиқлаш'))
-  row=self.db.execute("SELECT name,shop_name,address FROM clients WHERE name='Алишер'").fetchone()
-  self.assertEqual((row['name'],row['shop_name'],row['address']),('Алишер','ASMAN SHOP','Қўқон, Марказ'))
+   bot.handle(self.db,msg(204,'+998901234567'))
+   bot.handle(self.db,msg(205,'Қўқон, Марказ'))
+   bot.handle(self.db,msg(206,photo='photo-file-id'))
+   bot.handle(self.db,msg(207,'1 кг грунтовкадан кўпроқ олишни хоҳлади'))
+   bot.handle(self.db,msg(208,'2026-09-25'))
+   bot.handle(self.db,msg(209,'1'))
+   bot.handle(self.db,msg(210,'Блок'))
+   bot.handle(self.db,msg(211,'2'))
+   bot.handle(self.db,msg(212,'✅ Тасдиқлаш'))
+  row=self.db.execute("SELECT name,shop_name,phone,address,photo,comment,payment_due FROM clients WHERE name='Алишер'").fetchone()
+  self.assertEqual((row['name'],row['shop_name'],row['phone'],row['address']),('Алишер','ASMAN SHOP','+998901234567','Қўқон, Марказ'))
+  self.assertEqual(row['photo'],'photo-file-id')
+  self.assertIn('грунтовка',row['comment'])
+  self.assertEqual(row['payment_due'],'2026-09-25')
   cid=self.db.execute("SELECT id FROM clients WHERE name='Алишер'").fetchone()[0]
   self.assertEqual(core.client_stock(self.db,2,cid,1),8)
   self.assertEqual(core.agent_stock(self.db,2,1),4)
