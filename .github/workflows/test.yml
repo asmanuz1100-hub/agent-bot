@@ -11,3 +11,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -v
+      - name: Build source ZIP
+        run: zip -r internal-agent-bot-test.zip . -x ".git/*" "data/*" "*.sqlite3*" ".env"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: internal-agent-bot-test
+          path: internal-agent-bot-test.zip
+          retention-days: 7
