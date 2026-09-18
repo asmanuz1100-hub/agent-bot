@@ -301,7 +301,7 @@ def finish(db,u,s,source):
     elif a=='client':
         q=v['qty']*(4 if v.get('unit')=='Блок' else 1)
         if agent_stock(db,u,v['pack'])<q:raise ValueError('Агентда бу товардан етарли миқдор йўқ. Админ аввал агентга товар берсин.')
-        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due']))
+        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time())))
         cid=cur.fetchone()[0]
         record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",source)
     elif a=='user':
@@ -355,10 +355,24 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\nЭнди 3 қадам:\n1) 📎 ни босинг\n2) «Локация»ни танланг\n3) «Жонли локацияни улашиш»ни босинг\n\nАгар тушунарсиз бўлса, «ℹ️ Локация ёрдами»ни босинг. Бир сменада биринчи live-location асосий ҳисобланади.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
+            send(u,'Иш бошланди ✅\n\nTelegram хавфсизлик қоидаси бўйича жонли локацияни бот сизнинг номингиздан автомат ёқа олмайди. Бир марта ўзингиз: 📎 → «Локация» → «Жонли локацияни улашиш»ни босинг.\n\nШундан кейин бот смена тугагунча келган GPS нуқталарини автомат қайд этади. «⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни автомат тўхтатади.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
-            n=db.execute('UPDATE shifts SET end=? WHERE agent=? AND end IS NULL',(m['date'],u)).rowcount
-            send(u,'Иш тугади. Бот координаталарни сақлашни тўхтатди. Telegramда жонли улашишни ҳам ўчиринг.' if n else 'Очиқ смена йўқ.',menu(db,u));return
+            shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
+            if not shift:
+                send(u,'Очиқ смена йўқ.',menu(db,u));return
+            db.execute('UPDATE shifts SET end=? WHERE id=?',(m['date'],shift['id']))
+            try:
+                report=reports.shift_summary(db,u,shift['id'])
+                send(u,'Иш тугади ✅\nБот координаталарни қабул қилишни автомат тўхтатди.\n\n'+report['text'],menu(db,u))
+                for admin in ADMINS:
+                    if admin==u:continue
+                    send(admin,'📣 Агент ишни тугатди\n\n'+report['text'])
+                    link=map_link(f'agent/{u}')
+                    if link:send_inline(admin,'🗺 Шу сменанинг маршрути:',[('🗺 Харитада очиш',link)])
+            except Exception:
+                logging.exception('End-of-shift summary failed agent=%s shift=%s',u,shift['id'])
+                send(u,'Иш тугади ✅ Бот координаталарни қабул қилишни автомат тўхтатди. Кунлик ҳисоботни тайёрлашда хато бўлди.',menu(db,u))
+            return
         if action=='clients':report_clients(db,u);return
         if action=='balance':
             send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги нақд пул: {fmt(cash(db,u))} сўм');return
