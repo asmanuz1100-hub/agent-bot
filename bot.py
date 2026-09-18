@@ -18,8 +18,8 @@ TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.stri
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
-BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
-ADMIN_SUB_ACTIONS={'agent_list','tracking','load','agent_rename','prices','price_set','home'}
+BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
+ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
  'reconcile':[('client','Мижозни танланг:'),('start','Давр боши: ЙЙЙЙ-ОО-КК'),('end','Давр охири: ЙЙЙЙ-ОО-КК')],
  'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('name','2) 👤 Мижоз исми:'),('shop_name','3) 🏪 Дўкон номи:'),('phone','4) 📞 Мижоз телефон рақами: +998XXXXXXXXX'),('address','5) 🏠 Дўкон манзили:'),('photo','6) 📷 Дўкон/витрина расмини юборинг:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
@@ -33,6 +33,7 @@ FLOW={
  'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
  'tracking':[('agent','Агентни танланг:')],
+ 'agent_profile':[('agent','Профилини бошқариш учун агентни танланг:')],
  'agent_rename':[('agent','Агентни танланг:'),('name','Агентнинг янги исмини киритинг:')],
  'price_set':[('pack','Қайси товар нархини киритасиз?'),('amount','1 дона учун сотув нархини киритинг (сўм):')],
 }
@@ -78,21 +79,60 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','agent_admin','agent_list','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and action in ('shift','end','client','clients','delivery','sold','order','payment','return','visit','handover','balance'))
+    return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS]
     return [keys[i:i+2] for i in range(0,len(keys),2)]
 
 AGENT_WORK_ACTIONS={'client','clients','delivery','sold','order','payment','return','visit','handover'}
+FEATURE_LABELS={
+    'client':'🏪 Мижоз қўшиш',
+    'clients':'👥 Мижозлар',
+    'delivery':'📦 Товар бериш',
+    'order':'🛒 Буюртма',
+    'sold':'💵 Сотилган товар',
+    'payment':'💰 Пул олиш',
+    'return':'↩️ Товар қайтариш',
+    'visit':'📝 Ташриф / таклиф',
+    'handover':'🏦 Кассага топшириш',
+    'balance':'📊 Ҳисобим',
+}
 
 def admin_agent_menu():
     return [
-        ['📋 Агентлар рўйхати','📍 Агент маршрути'],
-        ['🚚 Агентга товар','✏️ Агент номини ўзгартириш'],
+        ['📋 Агентлар рўйхати','👤 Агент профили'],
+        ['📍 Агент маршрути','🚚 Агентга товар'],
+        ['✏️ Агент номини ўзгартириш'],
         ['💲 Товар ва нархлар'],
         ['⬅️ Админ меню']
     ]
+
+def show_agent_profile(db,u,a):
+    if role(db,u)!='admin':raise ValueError('Фақат админ.')
+    row=db.execute("SELECT id,name FROM users WHERE id=? AND role='agent'",(a,)).fetchone()
+    if not row:raise ValueError('Агент топилмади.')
+    clients=db.execute('SELECT COUNT(*) FROM clients WHERE agent=?',(a,)).fetchone()[0]
+    shift=db.execute('SELECT id FROM shifts WHERE agent=? AND end IS NULL',(a,)).fetchone()
+    enabled=sum(1 for feature in AGENT_FEATURES if feature_enabled(db,a,feature))
+    lines=[
+        f"АГЕНТ ПРОФИЛИ",
+        f"{row['name']} ({a})",
+        f"Ҳолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}",
+        f"Мижозлар: {clients}",
+        f"Нақд пул: {fmt(cash(db,a))} сўм",
+        f"Хизматлар: {enabled}/{len(AGENT_FEATURES)} ёқилган",
+        "",
+        "ХИЗМАТ РУХСАТЛАРИ:"
+    ]
+    keys=[]
+    for feature,label in FEATURE_LABELS.items():
+        on=feature_enabled(db,a,feature)
+        lines.append(f"{'✅' if on else '❌'} {label}")
+        keys.append([f"{'✅' if on else '❌'} {label}"])
+    keys.append(['⬅️ Агентлар бошқаруви'])
+    save(db,u,{'action':'agent_profile_view','step':0,'values':{'agent':a}})
+    send(u,'\n'.join(lines),keys)
 
 def report_agents(db,u):
     rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
@@ -317,6 +357,21 @@ def handle(db,update):
         return
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
+    if s.get('action')=='agent_profile_view':
+        if r!='admin':raise ValueError('Фақат админ.')
+        if text=='⬅️ Агентлар бошқаруви':
+            db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+            send(u,'Агентларни бошқариш бўлими:',admin_agent_menu());return
+        agent=s.get('values',{}).get('agent')
+        matched=None
+        for feature,label in FEATURE_LABELS.items():
+            if text in (f'✅ {label}',f'❌ {label}'):
+                matched=feature;break
+        if matched:
+            set_agent_feature(db,u,agent,matched,not feature_enabled(db,agent,matched))
+            show_agent_profile(db,u,agent);return
+        send(u,'Хизматни ёқиш ёки ўчириш учун тугмани босинг.')
+        show_agent_profile(db,u,agent);return
     if s['action']=='client' and m.get('photo'):
         current_key=FLOW[s['action']][s['step']][0] if s['step']<len(FLOW[s['action']]) else None
         photo=m['photo'][-1]['file_id']
@@ -383,7 +438,10 @@ def handle(db,update):
     else:
         if not text or len(text)>1000:raise ValueError('1–1000 белгидан иборат матн киритинг.')
         v=text
-    s['values'][key]=v;s['step']+=1;prompt(db,u,s)
+    s['values'][key]=v;s['step']+=1
+    if s['action']=='agent_profile' and key=='agent':
+        show_agent_profile(db,u,v);return
+    prompt(db,u,s)
 
 def _mark_processed(db,update_id,save_offset=False):
     db.execute('INSERT INTO processed(id) VALUES(?) ON CONFLICT(id) DO NOTHING',(update_id,))
