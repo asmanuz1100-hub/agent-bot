@@ -334,6 +334,8 @@ def handle(db,update):
     action=BTN.get(text)
     if action:
         if not allowed(db,u,action):raise ValueError('Бу амалга рухсат йўқ.')
+        if action=='location_help':
+            send(u,location_help_text(),[['⬅️ Меню']]);return
         if r=='agent' and action in AGENT_WORK_ACTIONS:
             ok,msg=live_ready(db,u)
             if not ok:
@@ -350,8 +352,6 @@ def handle(db,update):
         if action in FLOW:
             s={'action':action,'step':0,'values':{}}
             prompt(db,u,s);return
-        if action=='location_help':
-            send(u,location_help_text(),[['▶️ Ишни бошлаш','⏹ Ишни тугатиш'],['⬅️ Меню']]);return
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
