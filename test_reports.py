@@ -43,6 +43,23 @@ class ReportsTests(unittest.TestCase):
   self.db.execute("INSERT INTO handovers(agent,amount,status,ts,accepted_ts) VALUES(2,500,'accepted',?,?)",(old,new))
   text,_=reports.weekly(self.db,1,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
   self.assertIn('Кассир қабул қилган: 5.00',text)
+ def test_route_map_and_overall_analysis(self):
+  self.db.execute("UPDATE clients SET shop_name='Shop one',lat=40.0,lon=71.0 WHERE id=1")
+  start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
+  self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,10)',(start,start+1200))
+  shift=self.db.execute('SELECT id FROM shifts WHERE agent=2').fetchone()[0]
+  self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
+   (shift,start,40.0,71.0,10),(shift,start+300,40.01,71.01,10),(shift,start+600,40.02,71.02,10)
+  ])
+  self.add('visit','2026-09-18T09:05:00',client=1)
+  html,stats,active=reports.route_map_html(self.db,1,2)
+  txt=html.decode('utf-8')
+  self.assertIn('L.polyline',txt);self.assertIn('Shop one',txt);self.assertGreater(stats['km'],0);self.assertEqual(active,1)
+  text,overall_html=reports.overall(self.db,1,datetime(2026,9,18,12,tzinfo=reports.TZ))
+  self.assertIn('Жами йўл:',text);self.assertIn('Фаол савдо нуқталари: 1',text);self.assertIn('L.polyline',overall_html.decode('utf-8'))
+  with self.assertRaises(ValueError):reports.route_map_html(self.db,2,2)
+  with self.assertRaises(ValueError):reports.overall(self.db,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
+
  def test_agent_report_flow_no_other_agent(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   self.assertFalse(bot.allowed(self.db,2,'weekly'))
