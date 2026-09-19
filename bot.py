@@ -19,7 +19,7 @@ DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','🔐 Админ қўшиш':'admin_add','📥 Касса':'cashbox','📋 Умумий ҳисоб':'summary','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
@@ -34,6 +34,7 @@ FLOW={
  'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
  'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
+ 'admin_add':[('id','Янги админнинг Telegram ID рақамини киритинг:'),('name','Янги админнинг исмини киритинг:')],
  'tracking':[('agent','Агентни танланг:')],
  'agent_profile':[('agent','Профилини бошқариш учун агентни танланг:')],
  'agent_rename':[('agent','Агентни танланг:'),('name','Агентнинг янги исмини киритинг:')],
@@ -90,6 +91,7 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
+    if action=='admin_add':return r=='admin' and u in ADMINS
     return (r=='admin' and action in ('user','load','tracking','summary','analytics','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
@@ -306,13 +308,22 @@ def finish(db,u,s,source):
     elif a=='user':
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():raise ValueError('Бу ходим аввал қўшилган.')
         db.execute('INSERT INTO users VALUES(?,?,?)',(v['id'],v['role'],v['name']))
+    elif a=='admin_add':
+        if u not in ADMINS:raise ValueError('Янги админ қўшиш ҳуқуқи фақат асосий админда.')
+        if v['id'] in ADMINS:raise ValueError('Бу фойдаланувчи аллақачон асосий админ.')
+        old=db.execute('SELECT role FROM users WHERE id=?',(v['id'],)).fetchone()
+        if old:raise ValueError('Бу ID аввал рўйхатдан ўтган. Мавжуд ходимнинг ролини автомат ўзгартирмаймиз.')
+        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(v['id'],'admin',v['name']))
     elif a=='handover':handover(db,u,money(v['amount']),source,currency='USD')
     elif a=='tracking':tracking(db,u,v['agent'])
     else:
         q=v.get('qty',0)*(4 if v.get('unit')=='Блок' else 1)
         record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
-    send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
+    if a=='admin_add':
+        send(u,f"✅ {v['name']} (ID: {v['id']}) админ сифатида қўшилди. У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
+    else:
+        send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
 def handle(db,update):
     m=update.get('message') or update.get('edited_message')
