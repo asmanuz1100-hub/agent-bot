@@ -125,19 +125,13 @@ def shift_summary(db,agent,shift_id):
         note=f"{new_clients} та янги мижоз қўшилди, лекин сотув қайд этилмади."
     else:
         note="Янги мижоз ва сотув қайд этилмади."
-    if len(stats['gaps']):
-        note+=f" GPSда {len(stats['gaps'])} та 5 дақиқадан ортиқ узилиш бор."
+    # GPS details remain available only in the admin tracking view, not in daily summaries.
     text=(
         f"📊 КУНЛИК ФАОЛИЯТ · {datetime.fromtimestamp(end,TZ):%d.%m.%Y}\n"
         f"👤 Агент: {name} ({agent})\n"
         f"🟢 Иш бошланди: {datetime.fromtimestamp(start,TZ):%H:%M}\n"
         f"🔴 Иш тугади: {datetime.fromtimestamp(end,TZ):%H:%M}\n"
         f"⏱ Иш вақти: {hours} соат {minutes} дақиқа\n"
-        f"📍 Бошланиш локацияси: {start_loc}\n"
-        + (f"{start_link}\n" if start_link else "") +
-        f"🏁 Охирги локация: {end_loc}\n"
-        + (f"{end_link}\n" if end_link else "") +
-        f"🛣 Тахминий йўл: {stats['km']} км · GPS: {len(points)} нуқта\n"
         f"🆕 Янги мижоз: {int(new_clients)} та\n"
         f"🏪 Ишланган мижозлар: {active_clients} та · ташриф: {visits} та\n"
         f"📦 Реализацияга берилди: {delivered} дона · буюртма: {orders} дона · қайтди: {returns} дона\n"
