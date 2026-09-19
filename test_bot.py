@@ -76,6 +76,80 @@ class Tests(unittest.TestCase):
     bot.finish(self.db,1,{'action':'admin_add','step':2,'values':{'id':2,'name':'Agent'}},15008)
    self.assertEqual(bot.role(self.db,2),'agent')
 
+ def test_return_uses_original_delivery_prices_with_allocation(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  self.rec('load',12,actor=1)
+  core.record(self.db,2,2,1,'delivery',1,4,source=30001,currency='USD')
+  core.set_product_price(self.db,1,1,core.money('3.00'))
+  core.record(self.db,2,2,1,'delivery',1,4,source=30002,currency='USD')
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('20.00'))
+  core.record(self.db,2,2,1,'return',1,5,source=30003,currency='USD')
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('9.00'))
+  rows=self.db.execute('SELECT qty,amount_usd FROM return_allocations ORDER BY delivery_event').fetchall()
+  self.assertEqual([(x['qty'],x['amount_usd']) for x in rows],[(4,core.money('8.00')),(1,core.money('3.00'))])
+  core.record(self.db,2,2,1,'return',1,1,source=30004,currency='USD')
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('6.00'))
+  self.assertEqual(sum(x[0] for x in self.db.execute('SELECT qty FROM return_allocations')),6)
+  with self.assertRaises(ValueError):
+   core.record(self.db,2,2,1,'return',1,3,source=30005,currency='USD')
+
+ def test_failed_update_is_persisted_for_admin_review(self):
+  up={'update_id':30010,'message':{'from':{'id':2}}}
+  with patch.object(bot,'send') as send:
+   self.assertEqual(bot._register_failure(self.db,30010,RuntimeError('boom'),up),1)
+   self.assertEqual(bot._register_failure(self.db,30010,RuntimeError('boom'),up),2)
+   self.assertEqual(bot._register_failure(self.db,30010,RuntimeError('boom'),up),3)
+   bot._skip_failed_update(self.db,30010,RuntimeError('boom'))
+   row=self.db.execute('SELECT actor,attempts,status FROM failed_updates WHERE update_id=30010').fetchone()
+   self.assertEqual(tuple(row),(2,3,'skipped'))
+   self.assertIsNotNone(self.db.execute('SELECT 1 FROM processed WHERE id=30010').fetchone())
+   msg={'update_id':30011,'message':{'message_id':30011,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'/failed'}}
+   bot.handle(self.db,msg)
+   self.assertIn('30010',send.call_args.args[1])
+   self.assertIn('skipped',send.call_args.args[1])
+
+ def test_transfer_account_preserves_balances_and_disables_old_id(self):
+  self.rec('load',10,actor=1)
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,2,2,1,'delivery',1,4,source=30101,currency='USD')
+  core.record(self.db,2,2,1,'payment',value=core.money('1.00'),source=30102,currency='USD')
+  core.set_agent_feature(self.db,1,2,'order',False)
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
+   bot.finish(self.db,1,{'action':'agent_transfer','values':{'agent':2,'id':123456999}},30103)
+  self.assertEqual(bot.role(self.db,2),'disabled')
+  self.assertEqual(bot.role(self.db,123456999),'agent')
+  self.assertEqual(self.db.execute('SELECT agent FROM clients WHERE id=1').fetchone()[0],123456999)
+  self.assertEqual(core.agent_stock(self.db,123456999,1),6)
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('7.00'))
+  self.assertEqual(core.cash_usd(self.db,123456999),core.money('1.00'))
+  self.assertFalse(core.feature_enabled(self.db,123456999,'order'))
+  self.assertEqual(self.db.execute('SELECT action FROM role_audit WHERE old_id=2 AND new_id=123456999').fetchone()[0],'agent_transfer')
+  self.assertFalse(bot.allowed(self.db,2,'delivery'))
+  with patch.object(bot,'send') as send:
+   msg={'update_id':30104,'message':{'message_id':30104,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':'/start'}}
+   bot.handle(self.db,msg)
+   self.assertIn('ёпилган',send.call_args.args[1])
+
+ def test_transfer_denied_if_shift_open_or_destination_registered(self):
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
+   with self.assertRaises(ValueError):
+    bot.finish(self.db,1,{'action':'agent_transfer','values':{'agent':2,'id':4}},30200)
+   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(int(time.time()),))
+   with self.assertRaises(ValueError):
+    bot.finish(self.db,1,{'action':'agent_transfer','values':{'agent':2,'id':123456998}},30201)
+   self.assertEqual(bot.role(self.db,2),'agent')
+   self.assertIsNone(self.db.execute('SELECT role FROM users WHERE id=123456998').fetchone())
+
+ def test_http_server_selection_matches_database_backend(self):
+  self.assertIsInstance(self.db,core.sqlite3.Connection)
+  from http.server import HTTPServer,ThreadingHTTPServer
+  self.assertFalse(isinstance(self.db,core.PostgresDB))
+  self.assertIsNot(HTTPServer,ThreadingHTTPServer)
+  self.assertIn('ThreadingHTTPServer if postgres else HTTPServer',
+                __import__('inspect').getsource(bot.serve_webhook))
+  self.assertIn('return connect(database_url,initialize=False) if postgres else db',
+                __import__('inspect').getsource(bot.serve_webhook))
+
  def test_privacy(self):
   self.assertFalse(bot.allowed(self.db,2,'tracking'));self.assertFalse(bot.allowed(self.db,3,'tracking'))
   with self.assertRaises(ValueError):bot.tracking(self.db,3,2)
