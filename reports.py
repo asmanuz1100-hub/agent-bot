@@ -92,11 +92,31 @@ def shift_route_data(db,agent,shift):
 def shift_summary(db,agent,shift_id):
     shift=db.execute('SELECT * FROM shifts WHERE id=? AND agent=?',(shift_id,agent)).fetchone()
     if not shift:raise ValueError('Смена топилмади.')
-    end=int(shift['end'] or time.time());start=int(shift['start'])
+    end=int(shift['end'] or time.time())
+    day=datetime.fromtimestamp(end,TZ).replace(hour=0,minute=0,second=0,microsecond=0)
+    day_start=int(day.timestamp())
+    # Summarize the whole work day once, not each shift as an additional daily total.
+    # Ignore shifts that happened after the shift being reported.
+    shifts=db.execute("""SELECT * FROM shifts WHERE agent=? AND start<=?
+        AND (end IS NULL OR end>=?) ORDER BY start,id""",(agent,end,day_start)).fetchall()
+    start=min(max(int(s['start']),day_start) for s in shifts)
     user=db.execute('SELECT name FROM users WHERE id=?',(agent,)).fetchone()
     name=(user[0] if user else str(agent)) or str(agent)
-    points=db.execute('SELECT * FROM points WHERE shift=? ORDER BY ts',(shift_id,)).fetchall()
-    stats=route_stats(points,start,end)
+    km=0;gaps=[];seen=set();points=[];duration=0
+    for sh in shifts:
+        lo=max(day_start,int(sh['start']));hi=min(end,int(sh['end'] or end))
+        if hi<lo:continue
+        duration+=max(0,hi-lo)
+        pts=[]
+        for p in db.execute('SELECT * FROM points WHERE shift=? AND ts>=? AND ts<=? ORDER BY ts,id',
+                            (sh['id'],lo,hi)).fetchall():
+            key=(p['ts'],round(float(p['lat']),6),round(float(p['lon']),6))
+            if key not in seen:
+                seen.add(key);pts.append(p);points.append(p)
+        if pts:
+            segment=route_stats(pts,lo,hi)
+            km+=segment['km'];gaps.extend(segment['gaps'])
+    points.sort(key=lambda x:x['ts'])
     metric=db.execute("""SELECT
         COUNT(DISTINCT client),
         COALESCE(SUM(CASE WHEN kind='visit' THEN 1 ELSE 0 END),0),
@@ -106,21 +126,18 @@ def shift_summary(db,agent,shift_id):
         COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='order' THEN qty ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0)
-        FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,start,end)).fetchone()
+        FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,day_start,end)).fetchone()
     new_clients=db.execute(
         'SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts IS NOT NULL AND created_ts>=? AND created_ts<=?',
-        (agent,start,end)
+        (agent,day_start,end)
     ).fetchone()[0]
     active_clients=int(metric[0] or 0);visits=int(metric[1] or 0)
     sold_qty=int(metric[2] or 0);sold_amount=int(metric[3] or 0)
     payments=int(metric[4] or 0);delivered=int(metric[5] or 0)
     orders=int(metric[6] or 0);returns=int(metric[7] or 0)
-    duration=max(0,end-start);hours=duration//3600;minutes=(duration%3600)//60
+    hours=duration//3600;minutes=(duration%3600)//60
     first=points[0] if points else None;last=points[-1] if points else None
-    start_loc=(f"{first['lat']:.6f}, {first['lon']:.6f}" if first else 'GPS нуқтаси келмаган')
-    end_loc=(f"{last['lat']:.6f}, {last['lon']:.6f}" if last else 'GPS нуқтаси келмаган')
-    start_link=(f"https://www.google.com/maps?q={first['lat']},{first['lon']}" if first else '')
-    end_link=(f"https://www.google.com/maps?q={last['lat']},{last['lon']}" if last else '')
+    stats={'km':round(km,2),'gaps':gaps}
     if sold_qty and new_clients:
         note=f"Кунда {new_clients} та янги мижоз қўшилди ва {sold_qty} дона товар сотилди."
     elif sold_qty:
@@ -135,7 +152,7 @@ def shift_summary(db,agent,shift_id):
         f"👤 Агент: {name} ({agent})\n"
         f"🟢 Иш бошланди: {datetime.fromtimestamp(start,TZ):%H:%M}\n"
         f"🔴 Иш тугади: {datetime.fromtimestamp(end,TZ):%H:%M}\n"
-        f"⏱ Иш вақти: {hours} соат {minutes} дақиқа\n"
+        f"⏱ Жами иш вақти: {hours} соат {minutes} дақиқа · сменалар: {len(shifts)} та\n"
         f"🆕 Янги мижоз: {int(new_clients)} та\n"
         f"🏪 Ишланган мижозлар: {active_clients} та · ташриф: {visits} та\n"
         f"📦 Реализацияга берилди: {delivered} дона · буюртма: {orders} дона · қайтди: {returns} дона\n"
@@ -146,7 +163,7 @@ def shift_summary(db,agent,shift_id):
     )
     return {
         'agent':agent,'name':name,'shift_id':shift_id,'start':start,'end':end,
-        'duration':duration,'km':stats['km'],'gps_points':len(points),'gaps':len(stats['gaps']),
+        'duration':duration,'shift_count':len(shifts),'km':stats['km'],'gps_points':len(points),'gaps':len(stats['gaps']),
         'new_clients':int(new_clients),'active_clients':active_clients,'visits':visits,
         'sold_qty':sold_qty,'sold_amount':sold_amount,'payments':payments,
         'delivered':delivered,'orders':orders,'returns':returns,
