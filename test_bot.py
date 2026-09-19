@@ -345,7 +345,7 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,location)
    self.assertIn('админ',send.call_args.args[1])
 
-  def test_pg_sql_quotes_shift_end_but_preserves_case_end(self):
+ def test_pg_sql_quotes_shift_end_but_preserves_case_end(self):
   q=core._pg_sql("SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0) FROM events")
   self.assertIn("CASE WHEN kind='sold' THEN amount ELSE 0 END",q)
   self.assertNotIn('0 "end"',q)
