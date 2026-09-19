@@ -326,6 +326,7 @@ class Tests(unittest.TestCase):
    self.assertIn('2.50 USD / дона',send.call_args.args[1])
    self.assertIn('сўмда юритилади',send.call_args.args[1])
    bot.handle(self.db,{'update_id':9991,'message':{'message_id':9991,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'✏️ Нарх киритиш'}})
+   bot.handle(self.db,{'update_id':9992,'message':{'message_id':9992,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'Грунтовка 7/1 — 1 кг'}})
    self.assertIn('USD',send.call_args.args[1])
   self.assertEqual(core.product_price(self.db,1),core.money('2.50'))
   # The product catalog uses USD cents, but cash and existing balances stay in UZS cents.
