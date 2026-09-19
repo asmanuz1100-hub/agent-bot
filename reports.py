@@ -210,7 +210,7 @@ def overall(db,actor,now=None):
         if segments:
             routes.append({'agent':ag[1] or str(aid),'agent_id':aid,'km':round(akm,2),
                 'points':[p for seg in segments for p in seg],'segments':segments})
-    metric=db.execute("""SELECT
+        metric=db.execute("""SELECT
             COUNT(DISTINCT client),
             COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
             COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
