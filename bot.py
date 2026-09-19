@@ -27,11 +27,11 @@ FLOW={
  'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('name','2) 👤 Мижоз исми:'),('shop_name','3) 🏪 Дўкон номи:'),('phone','4) 📞 Мижоз телефон рақами: +998XXXXXXXXX'),('address','5) 🏠 Дўкон манзили:'),('photo','6) 📷 Дўкон/витрина расмини юборинг:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
- 'sold':[('client','Мижозни танланг:'),('pack','Қайси товар сотилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?'),('amount','Шу сотилган товарнинг ЖАМИ суммаси (сўм):')],
+ 'sold':[('client','Мижозни танланг:'),('pack','Қайси товар сотилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?')],
  'return':[('client','Мижозни танланг:'),('pack','Қайси товар қайтарилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта қайтарилди?')],
- 'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган НАҚД пул (сўм):')],
+ 'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган тўлов (USD):')],
  'visit':[('client','Мижозни танланг:'),('note','Суҳбат натижаси, мижоз таклифи ёки бозор маълумоти:')],
- 'handover':[('amount','Кассирга топширилаётган сумма (сўм):')],
+ 'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
  'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
  'tracking':[('agent','Агентни танланг:')],
@@ -131,7 +131,7 @@ def show_agent_profile(db,u,a):
         f"{row['name']} ({a})",
         f"Ҳолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}",
         f"Мижозлар: {clients}",
-        f"Нақд пул: {fmt(cash(db,a))} сўм",
+        f"Нақд пул: {fmt(cash_usd(db,a))} USD"+(f" · эски UZS: {fmt(cash(db,a))} сўм" if cash(db,a) else ''),
         f"Хизматлар: {enabled}/{len(AGENT_FEATURES)} ёқилган",
         "",
         "ХИЗМАТ РУХСАТЛАРИ:"
@@ -154,7 +154,7 @@ def report_agents(db,u):
         a=row['id']; clients=db.execute('SELECT COUNT(*) FROM clients WHERE agent=?',(a,)).fetchone()[0]
         shift=db.execute('SELECT id FROM shifts WHERE agent=? AND end IS NULL',(a,)).fetchone()
         stock=' | '.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5))
-        out.append(f"\n{row['name']} ({a})\nҲолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}\nМижозлар: {clients}\nНақд пул: {fmt(cash(db,a))} сўм\n{stock}")
+        out.append(f"\n{row['name']} ({a})\nҲолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}\nМижозлар: {clients}\nНақд пул: {fmt(cash_usd(db,a))} USD\n{stock}")
     send(u,'\n'.join(out),admin_agent_menu())
 
 def report_prices(db,u):
@@ -162,7 +162,7 @@ def report_prices(db,u):
     for p in (1,3,5):
         price=product_price(db,p)
         lines.append(f"\n{product_name(p)}\nНарх: {fmt(price)+' USD / дона' if price else 'киритилмаган'}")
-    send(u,'\n'.join(lines)+"\n\nℹ️ Каталог нархлари USDда; сотув ва тўлов суммалари ҳозирча сўмда юритилади.",[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
+    send(u,'\n'.join(lines)+"\n\nℹ️ Янги товар топшириш ва тўловлар USD ҳисобда юритилади. Эски UZS операциялар алоҳида сақланади.",[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
 
 def location_help_text():
     return (
@@ -211,6 +211,9 @@ def prompt(db,u,s):
         if 'qty' in s['values']:
             n=s['values']['qty']*(4 if s['values'].get('unit')=='Блок' else 1)
             lines.append(f'Ҳисобга: {n} дона')
+            if s['action'] in ('delivery','client') and s['values'].get('pack'):
+                price=product_price(db,s['values']['pack'])
+                lines.append(f'Мижоз қарзига ёзилади: {fmt(n*price)} USD' if price else '⚠️ USD нарх киритилмаган')
         send(u,'Текширинг:\n'+'\n'.join(lines),[['✅ Тасдиқлаш','⬅️ Орқага'],['✏️ Бошидан киритиш','❌ Бекор қилиш']]);return
     key,msg=fields[i]; keys=[]
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
@@ -218,12 +221,8 @@ def prompt(db,u,s):
     if key=='unit':keys=[['Дона','Блок']]
     if key=='role':keys=[['agent','cashier']]
     if key=='payment_due':keys=[['Аниқ эмас']]
-    if key=='amount' and s['action']=='sold' and s['values'].get('pack') and s['values'].get('qty'):
-        pp=product_price(db,s['values']['pack'])
-        if pp:
-            pieces=s['values']['qty']*(4 if s['values'].get('unit')=='Блок' else 1)
-            total=pp*pieces
-            msg+=f"\nКаталог нархи: {fmt(pp)} USD / дона. Жами: {fmt(total)} USD.\n⚠️ Каталог нархи USDда, сотув суммаси эса сўмда киритилади. Курс бўйича ўзингиз ҳисоблаб, ҳақиқий сўм суммасини киритинг; USD суммаси сўмга автомат ўтказилмайди."
+    if key=='qty' and s['action']=='sold':
+        msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
     if key in ('client','agent'):
         if key=='client':
             rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 20',(u,) if role(db,u)=='agent' else ()).fetchall()
@@ -259,9 +258,9 @@ def report_clients(db,u):
     rows=db.execute('SELECT * FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id', (u,) if role(db,u)=='agent' else ()).fetchall()
     if not rows:send(u,'Мижозлар ҳали йўқ.');return
     for c in rows:
-        a=c['agent']; cid=c['id']; debt=amount(db,a,['sold'],cid,field='amount')-amount(db,a,['payment'],cid,field='amount')
+        a=c['agent']; cid=c['id']; debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
         stocks=', '.join(f'{product_name(p)}: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
-        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nРеализацияда: {stocks}\nСотилган товар бўйича баланс: {fmt(debt)} сўм (манфий — аванс)\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
+        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nРеализацияда: {stocks}\nМижознинг товар қарзи: {fmt(debt)} USD (манфий — аванс)"+(f"\nЭски UZS ҳисоб: {fmt(old_debt)} сўм" if old_debt else '')+f"\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
 
 def tracking(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -302,15 +301,15 @@ def finish(db,u,s,source):
         if agent_stock(db,u,v['pack'])<q:raise ValueError('Агентда бу товардан етарли миқдор йўқ. Админ аввал агентга товар берсин.')
         cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time())))
         cid=cur.fetchone()[0]
-        record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",source)
+        record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",source,currency='USD')
     elif a=='user':
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():raise ValueError('Бу ходим аввал қўшилган.')
         db.execute('INSERT INTO users VALUES(?,?,?)',(v['id'],v['role'],v['name']))
-    elif a=='handover':handover(db,u,money(v['amount']),source)
+    elif a=='handover':handover(db,u,money(v['amount']),source,currency='USD')
     elif a=='tracking':tracking(db,u,v['agent'])
     else:
         q=v.get('qty',0)*(4 if v.get('unit')=='Блок' else 1)
-        record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source)
+        record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
@@ -372,10 +371,10 @@ def handle(db,update):
             return
         if action=='clients':report_clients(db,u);return
         if action=='balance':
-            send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги нақд пул: {fmt(cash(db,u))} сўм');return
+            send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
         if action=='cashbox':
             rows=db.execute("SELECT * FROM handovers WHERE status='pending'").fetchall()
-            send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount'])} сўм\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
+            send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount_usd'])} USD"+(f" · {fmt(x['amount'])} сўм" if x['amount'] else '')+f"\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
         if action=='analytics':
             logging.info('Overall analytics requested by admin=%s',u)
             text,map_html=reports.overall(db,u)
@@ -385,7 +384,7 @@ def handle(db,update):
             return
         if action=='summary':
             for row in db.execute("SELECT * FROM users WHERE role='agent'"):
-                a=row['id'];send(u,f"{row['name']} ({a})\nҚўлида: {fmt(cash(db,a))} сўм\n"+'\n'.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5)))
+                a=row['id'];send(u,f"{row['name']} ({a})\nҚўлида: {fmt(cash_usd(db,a))} USD\n"+'\n'.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5)))
             orders=db.execute("SELECT agent,client,pack,qty FROM events WHERE kind='order' ORDER BY id DESC LIMIT 30").fetchall()
             send(u,'Сўнгги буюртмалар (талаб қайди):\n'+'\n'.join(f"Агент {x[0]}, мижоз #{x[1]}: {product_name(x[2])} × {x[3]} дона" for x in orders));return
     if 'location' in m and m['location'].get('live_period'):
