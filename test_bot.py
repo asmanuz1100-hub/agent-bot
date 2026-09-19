@@ -67,6 +67,7 @@ class Tests(unittest.TestCase):
   ps=[{'lat':40,'lon':71,'ts':x,'accuracy':10} for x in [100,200,300,400,500]]
   self.assertEqual(len(core.route_stats(ps,100,500)['stops']),1)
  def test_full_delivery_ui_and_confirmation(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
   self.rec('load',12,actor=1)
   now=int(time.time())
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
@@ -80,6 +81,7 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(106,'✅ Тасдиқлаш'))
    self.assertEqual(core.agent_stock(self.db,2,1),4)
  def test_client_onboarding_location_first_and_delivery(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
   self.rec('load',12,actor=1)
   now=int(time.time())
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
@@ -153,10 +155,9 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(403,'Дона'))
    bot.handle(self.db,msg(404,'2'))
    text=send.call_args.args[1]
-   self.assertIn('Каталог нархи: 10 000.00 USD',text)
-   self.assertIn('Жами: 20 000.00 USD',text)
-   self.assertIn('сотув суммаси эса сўмда',text)
-   self.assertNotIn('20000',str(send.call_args.args[2]))
+   self.assertIn('Текширинг:',text)
+   self.assertIn('2 дона',text)
+   self.assertNotIn('сўмда',text)
 
  def test_agent_service_permissions(self):
   self.assertTrue(core.feature_enabled(self.db,2,'delivery'))
@@ -229,16 +230,16 @@ class Tests(unittest.TestCase):
   self.assertTrue(core.point(self.db,2,{'message_id':700,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
   def amsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   with patch.object(bot,'send'):
-   seq=['💵 Сотилган товар','1','Грунтовка 7/1 — 1 кг','Дона','2','20000','✅ Тасдиқлаш']
+   seq=['💵 Сотилган товар','1','Грунтовка 7/1 — 1 кг','Дона','2','✅ Тасдиқлаш']
    for i,t in enumerate(seq,701):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.client_stock(self.db,2,1,1),4)
-   self.assertEqual(core.amount(self.db,2,['sold'],1,field='amount'),core.money('20000'))
+   self.assertEqual(core.amount(self.db,2,['sold'],1,field='amount'),0)
    seq=['↩️ Товар қайтариш','1','Грунтовка 7/1 — 1 кг','Дона','1','✅ Тасдиқлаш']
    for i,t in enumerate(seq,710):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.client_stock(self.db,2,1,1),3)
    seq=['💰 Пул олиш','1','5000','✅ Тасдиқлаш']
    for i,t in enumerate(seq,720):bot.handle(self.db,amsg(i,t))
-   self.assertEqual(core.cash(self.db,2),core.money('5000'))
+   self.assertEqual(core.cash_usd(self.db,2),core.money('5000'))
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
   def dmsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
   with patch.object(bot,'send'),patch.object(bot,'document') as document:
@@ -324,7 +325,7 @@ class Tests(unittest.TestCase):
   with patch.object(bot,'send') as send:
    bot.report_prices(self.db,1)
    self.assertIn('2.50 USD / дона',send.call_args.args[1])
-   self.assertIn('сўмда юритилади',send.call_args.args[1])
+   self.assertIn('USD ҳисобда юритилади',send.call_args.args[1])
    bot.handle(self.db,{'update_id':9991,'message':{'message_id':9991,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'✏️ Нарх киритиш'}})
    bot.handle(self.db,{'update_id':9992,'message':{'message_id':9992,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'Грунтовка 7/1 — 1 кг'}})
    self.assertIn('USD',send.call_args.args[1])
