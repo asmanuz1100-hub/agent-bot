@@ -153,8 +153,10 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(403,'Дона'))
    bot.handle(self.db,msg(404,'2'))
    text=send.call_args.args[1]
-   self.assertIn('Каталог нархи: 10 000.00',text)
-   self.assertIn('Ҳисобланган жами: 20 000.00',text)
+   self.assertIn('Каталог нархи: 10 000.00 USD',text)
+   self.assertIn('Жами: 20 000.00 USD',text)
+   self.assertIn('сотув суммаси эса сўмда',text)
+   self.assertNotIn('20000',str(send.call_args.args[2]))
 
  def test_agent_service_permissions(self):
   self.assertTrue(core.feature_enabled(self.db,2,'delivery'))
@@ -317,7 +319,33 @@ class Tests(unittest.TestCase):
   self.assertTrue(any(args[0]==2 and 'КУНЛИК ФАОЛИЯТ' in args[1] for args in messages))
   self.assertTrue(any(args[0]==1 and 'Агент ишни тугатди' in args[1] for args in messages))
 
- def test_pg_sql_quotes_shift_end_but_preserves_case_end(self):
+ def test_usd_prices_without_converting_uzs_ledger(self):
+  core.set_product_price(self.db,1,1,core.money('2.50'))
+  with patch.object(bot,'send') as send:
+   bot.report_prices(self.db,1)
+   self.assertIn('2.50 USD / дона',send.call_args.args[1])
+   self.assertIn('сўмда юритилади',send.call_args.args[1])
+   bot.handle(self.db,{'update_id':9991,'message':{'message_id':9991,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'✏️ Нарх киритиш'}})
+   self.assertIn('USD',send.call_args.args[1])
+  self.assertEqual(core.product_price(self.db,1),core.money('2.50'))
+  # The product catalog uses USD cents, but cash and existing balances stay in UZS cents.
+  self.rec('payment',value=core.money('15000'))
+  self.assertEqual(core.cash(self.db,2),core.money('15000'))
+
+ def test_agent_is_informed_about_admin_gps_monitoring(self):
+  now=int(time.time())
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(10001,'▶️ Ишни бошлаш'))
+   self.assertIn('Админ',send.call_args.args[1])
+   self.assertIn('жойлашувингиз',send.call_args.args[1])
+   bot.handle(self.db,msg(10002,'ℹ️ Локация ёрдами'))
+   self.assertIn('кузатиши мумкин',send.call_args.args[1])
+   location={'update_id':10003,'message':{'message_id':10003,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'location':{'latitude':40.0,'longitude':71.0,'live_period':3600}}}
+   bot.handle(self.db,location)
+   self.assertIn('админ',send.call_args.args[1])
+
+  def test_pg_sql_quotes_shift_end_but_preserves_case_end(self):
   q=core._pg_sql("SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0) FROM events")
   self.assertIn("CASE WHEN kind='sold' THEN amount ELSE 0 END",q)
   self.assertNotIn('0 "end"',q)
