@@ -223,6 +223,36 @@ def _delivery_return_allocations(db,client,pack,qty):
     if remaining:raise ValueError('Қайтаришни USD партияларига боғлаб бўлмади. Админ қолдиқни текширсин.')
     return allocated
 
+def transfer_agent_account(db,actor,old_id,new_id):
+    """Replace an agent's Telegram login, preserving client, stock and ledger history.
+
+    The caller must be a primary admin; we re-check the actor's DB role here.
+    A closed shift is required so the old account's live-location message
+    cannot accidentally become associated with the new Telegram account.
+    """
+    if db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()[0]!='admin':
+        raise ValueError('Фақат админ.')
+    if not isinstance(new_id,int) or new_id<=0 or old_id==new_id:
+        raise ValueError('Янги Telegram ID нотўғри.')
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT id FROM users WHERE id IN (?,?) ORDER BY id FOR UPDATE',(old_id,new_id)).fetchall()
+    current=db.execute('SELECT name,role FROM users WHERE id=?',(old_id,)).fetchone()
+    if not current or current['role']!='agent':raise ValueError('Эски ID агент эмас.')
+    if db.execute('SELECT 1 FROM users WHERE id=?',(new_id,)).fetchone():
+        raise ValueError('Янги ID аввал рўйхатдан ўтган. Бўш Telegram ID киритинг.')
+    if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(old_id,)).fetchone():
+        raise ValueError('Аввал агент сменасини ёпинг.')
+    db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(new_id,'agent',current['name']))
+    for table in ('clients','events','shifts','handovers'):
+        db.execute(f'UPDATE {table} SET agent=? WHERE agent=?',(new_id,old_id))
+    db.execute('INSERT INTO agent_features(agent,feature,enabled) SELECT ?,feature,enabled FROM agent_features WHERE agent=?',
+               (new_id,old_id))
+    db.execute('DELETE FROM agent_features WHERE agent=?',(old_id,))
+    db.execute('DELETE FROM sessions WHERE agent=?',(old_id,))
+    db.execute("UPDATE users SET role='disabled' WHERE id=?",(old_id,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,old_id,new_id,'agent_transfer',int(time.time())))
+
 def feature_enabled(db,agent,feature):
     if feature not in AGENT_FEATURES:return True
     row=db.execute('SELECT enabled FROM agent_features WHERE agent=? AND feature=?',(agent,feature)).fetchone()
