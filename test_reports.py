@@ -65,6 +65,12 @@ class ReportsTests(unittest.TestCase):
   self.assertEqual(r['sold_qty'],2);self.assertEqual(r['sold_amount'],2000000);self.assertEqual(r['payments'],500000)
   self.assertEqual(r['duration'],3600);self.assertGreater(r['km'],0);self.assertEqual(r['gps_points'],3)
   self.assertIn('КУНЛИК ФАОЛИЯТ',r['text']);self.assertIn('Янги мижоз: 1 та',r['text']);self.assertIn('20 000.00 сўм',r['text'])
+  self.assertNotIn('Бошланиш локацияси',r['text'])
+  self.assertNotIn('Охирги локация',r['text'])
+  self.assertNotIn('https://www.google.com/maps',r['text'])
+  self.assertNotIn('GPS',r['text'])
+  self.assertNotIn('Тахминий йўл',r['text'])
+  self.assertIsNotNone(r['first']);self.assertIsNotNone(r['last'])
 
  def test_agent_report_flow_no_other_agent(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
