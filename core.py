@@ -21,6 +21,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, shift INTEGER, ts INTEGER, lat REAL, lon REAL, accuracy REAL, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, actor INTEGER, agent INTEGER, client INTEGER, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount INTEGER DEFAULT 0, amount_usd INTEGER DEFAULT 0, note TEXT DEFAULT '', ts INTEGER, source INTEGER UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amount INTEGER, amount_usd INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', cashier INTEGER, source INTEGER UNIQUE, ts INTEGER);
+CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
+CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT NULL, old_id INTEGER, new_id INTEGER, action TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
@@ -43,6 +46,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIGINT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, accuracy DOUBLE PRECISION, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent BIGINT, client BIGINT, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount BIGINT DEFAULT 0, amount_usd BIGINT DEFAULT 0, note TEXT DEFAULT '', ts BIGINT, source BIGINT UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, amount_usd BIGINT DEFAULT 0, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
+CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
+CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT NULL, old_id BIGINT, new_id BIGINT, action TEXT NOT NULL, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
@@ -105,7 +111,7 @@ def is_integrity_error(exc):
     if isinstance(exc,sqlite3.IntegrityError):return True
     return exc.__class__.__name__ in ('IntegrityError','UniqueViolation','ForeignKeyViolation','NotNullViolation','CheckViolation')
 
-def connect(path):
+def connect(path,initialize=True):
     if str(path).startswith(('postgres://','postgresql://')):
         try:
             import psycopg
@@ -116,6 +122,10 @@ def connect(path):
         schema=(os.getenv('DB_SCHEMA','agentbot') or 'agentbot').strip()
         if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',schema):
             raise ValueError('DB_SCHEMA нотўғри.')
+        if not initialize:
+            db.execute(f'SET search_path TO "{schema}"')
+            db.commit()
+            return db
         db.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
         db.execute(f'SET search_path TO "{schema}"')
         for stmt in PG_SCHEMA.split(';'):
@@ -131,8 +141,11 @@ def connect(path):
         _backfill_unbilled_deliveries(db)
         db.commit()
         return db
-    db=sqlite3.connect(path)
+    db=sqlite3.connect(path,timeout=30)
     db.row_factory=sqlite3.Row
+    if not initialize:
+        db.execute('PRAGMA busy_timeout=30000')
+        return db
     db.executescript(SCHEMA)
     if 'accepted_ts' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN accepted_ts INTEGER')
@@ -184,6 +197,31 @@ def legacy_debt_uzs(db,client):
     row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN amount
         WHEN kind='payment' THEN -amount ELSE 0 END),0) FROM events WHERE client=?""",(client,)).fetchone()
     return int(row[0] or 0)
+
+def lock_agent(db,agent):
+    # This row lock serializes inventory, balances and shifts for one agent
+    # across independent PostgreSQL webhook connections.
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT id FROM users WHERE id=? FOR UPDATE',(agent,)).fetchone()
+
+def _delivery_return_allocations(db,client,pack,qty):
+    deliveries=db.execute("""SELECT d.id,d.qty,d.amount_usd,
+        COALESCE((SELECT SUM(a.qty) FROM return_allocations a
+                  WHERE a.delivery_event=d.id),0) returned
+        FROM events d
+        WHERE d.client=? AND d.pack=? AND d.kind='delivery' AND d.amount_usd>0
+        ORDER BY d.id""",(client,pack)).fetchall()
+    remaining=qty;allocated=[]
+    for d in deliveries:
+        available=int(d['qty'])-int(d['returned'] or 0)
+        if available<=0:continue
+        take=min(available,remaining)
+        unit=int(d['amount_usd'])//int(d['qty'])
+        allocated.append((int(d['id']),take,take*unit))
+        remaining-=take
+        if not remaining:break
+    if remaining:raise ValueError('Қайтаришни USD партияларига боғлаб бўлмади. Админ қолдиқни текширсин.')
+    return allocated
 
 def feature_enabled(db,agent,feature):
     if feature not in AGENT_FEATURES:return True
@@ -253,6 +291,7 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
     target=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
     if not target or target[0]!='agent': raise ValueError('Агент топилмади.')
     if kind not in ('load','delivery','sold','return','payment','order','visit'): raise ValueError('Амал нотўғри.')
+    lock_agent(db,agent)
     if kind=='load' and role[0]!='admin': raise ValueError('Товарни фақат админ беради.')
     if kind!='load':
         c=db.execute('SELECT agent FROM clients WHERE id=?',(client,)).fetchone()
@@ -265,27 +304,30 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
     if kind=='payment' and (not isinstance(value,int) or value<=0): raise ValueError('Сумма киритилмаган.')
     if currency=='UZS' and kind=='sold' and (not isinstance(value,int) or value<=0):
         raise ValueError('Сумма киритилмаган.')
-    usd=0
+    usd=0;allocations=[]
     if currency=='USD':
         if kind=='delivery':
             unit=product_price(db,pack)
             if unit<=0:raise ValueError('Админ аввал товарнинг USD нархини киритсин.')
             usd=qty*unit
         elif kind=='return':
-            row=db.execute("""SELECT qty,amount_usd FROM events
-                WHERE client=? AND pack=? AND kind='delivery' AND amount_usd>0
-                ORDER BY id DESC LIMIT 1""",(client,pack)).fetchone()
-            if not row:raise ValueError('Бу мижозга USD ҳисобда топширилган товар йўқ.')
-            usd=qty*(int(row[1])//int(row[0]))
+            allocations=_delivery_return_allocations(db,client,pack,qty)
+            usd=sum(a[2] for a in allocations)
         elif kind=='payment':usd=value
         # Sale is physical confirmation only: delivery already generated the USD receivable.
         value=0
-    db.execute('INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+    cur=db.execute('INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',
                (actor,agent,client,kind,pack,qty,value,usd,note,int(time.time()),source))
+    if allocations:
+        return_id=cur.fetchone()[0]
+        for delivery_id,count,cents in allocations:
+            db.execute('INSERT INTO return_allocations(return_event,delivery_event,qty,amount_usd) VALUES(?,?,?,?)',
+                       (return_id,delivery_id,count,cents))
 
 def handover(db,a,value,source,currency='UZS'):
     role=db.execute('SELECT role FROM users WHERE id=?',(a,)).fetchone()
     if not role or role[0]!='agent': raise ValueError('Фақат агент.')
+    lock_agent(db,a)
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
     field='amount_usd' if currency=='USD' else 'amount'
     reserved=db.execute(f"SELECT COALESCE(SUM({field}),0) FROM handovers WHERE agent=? AND status='pending'",(a,)).fetchone()[0]
@@ -299,6 +341,11 @@ def accept(db,actor,hid,accepted=True):
     if not r or r[0]!='cashier': raise ValueError('Фақат кассир тасдиқлайди.')
     row=db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'",(hid,)).fetchone()
     if not row: raise ValueError('Топшириқ топилмади ёки аввал тасдиқланган.')
+    lock_agent(db,row['agent'])
+    # Re-read after acquiring the agent's ledger lock: another cashier may
+    # have accepted this handover in the meantime.
+    row=db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'",(hid,)).fetchone()
+    if not row:raise ValueError('Бу топшириқ аввал ҳал қилинган.')
     if accepted and (cash_usd(db,row['agent'])<row['amount_usd'] or cash(db,row['agent'])<row['amount']): raise ValueError('Агент пули етарли эмас.')
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
 
