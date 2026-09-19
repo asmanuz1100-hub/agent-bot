@@ -1,6 +1,6 @@
 """Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -579,6 +579,13 @@ def process_update(db,up,save_offset=False):
         return
     try:
         with db:
+            actor=(up.get('message') or up.get('edited_message') or {}).get('from',{}).get('id')
+            if actor is not None:lock_agent(db,actor)
+            # A duplicate may have committed while this request was waiting on
+            # the actor's row lock. Check again *inside* the transaction.
+            if db.execute('SELECT 1 FROM processed WHERE id=?',(update_id,)).fetchone():
+                if save_offset:_mark_processed(db,update_id,True)
+                return
             handle(db,up)
             _mark_processed(db,update_id,save_offset)
     except Exception as e:
@@ -628,6 +635,13 @@ def serve_webhook(db,base_url):
     webhook=base_url.rstrip('/')+path
     api('setWebhook',url=webhook,secret_token=secret,allowed_updates=['message','edited_message'],drop_pending_updates=False)
     port=int(os.getenv('PORT','10000'))
+    postgres=isinstance(db,PostgresDB)
+    database_url=os.getenv('DATABASE_URL') or DB_PATH
+    def request_db():
+        # Every HTTP thread owns its own transaction/connection. Sharing the
+        # bootstrap psycopg connection across request threads is unsafe.
+        return connect(database_url,initialize=False) if postgres else db
+
     class Handler(BaseHTTPRequestHandler):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8'):
             self.send_response(code);self.send_header('Content-Type',ctype);self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
@@ -641,7 +655,12 @@ def serve_webhook(db,base_url):
                 if not _map_valid('overall',expires,sig):
                     self._reply(410,b'Map link expired or invalid');return
                 try:
-                    actor=next(iter(ADMINS));_,html=reports.overall(db,actor)
+                    local=request_db()
+                    try:
+                        actor=next(iter(ADMINS));_,html=reports.overall(local,actor)
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
                     self._reply(200,html,'text/html; charset=utf-8')
                 except Exception:
                     logging.exception('Overall map failed');self._reply(500,b'Map error')
@@ -652,7 +671,12 @@ def serve_webhook(db,base_url):
                 if not _map_valid(scope,expires,sig):
                     self._reply(410,b'Map link expired or invalid');return
                 try:
-                    actor=next(iter(ADMINS));html,_,_=reports.route_map_html(db,actor,agent)
+                    local=request_db()
+                    try:
+                        actor=next(iter(ADMINS));html,_,_=reports.route_map_html(local,actor,agent)
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
                     self._reply(200,html,'text/html; charset=utf-8')
                 except Exception:
                     logging.exception('Agent map failed');self._reply(500,b'Map error')
@@ -668,7 +692,11 @@ def serve_webhook(db,base_url):
                 if length<=0 or length>2_000_000:
                     self._reply(400,b'Bad request size');return
                 up=json.loads(self.rfile.read(length))
-                process_update(db,up,False)
+                local=request_db()
+                try:
+                    process_update(local,up,False)
+                finally:
+                    if postgres:local.close()
             except (json.JSONDecodeError,UnicodeDecodeError):
                 logging.warning('Webhook invalid JSON')
                 self._reply(400,b'Bad JSON');return
@@ -677,16 +705,23 @@ def serve_webhook(db,base_url):
                 if update_id is None:
                     logging.exception('Webhook request failed without update id')
                     self._reply(500,b'Retry');return
-                attempts=_register_failure(db,update_id,e)
-                if attempts>=MAX_UPDATE_RETRIES:
-                    _skip_failed_update(db,update_id,e,False)
-                    self._reply(200,b'Skipped after repeated failure');return
+                local=request_db()
+                try:
+                    attempts=_register_failure(local,update_id,e,up)
+                    if attempts>=MAX_UPDATE_RETRIES:
+                        _skip_failed_update(local,update_id,e,False)
+                        self._reply(200,b'Skipped after repeated failure');return
+                finally:
+                    if postgres:local.close()
                 logging.exception('Webhook update %s failed; Telegram may retry',update_id)
                 self._reply(500,b'Retry');return
             self._reply(200,b'OK')
         def log_message(self,format,*args):
             logging.info('HTTP '+format,*args)
-    server=HTTPServer(('0.0.0.0',port),Handler)
+    # SQLite remains single-threaded; Render/PostgreSQL uses one connection per
+    # request and per-agent database row locks for ledger consistency.
+    server=(ThreadingHTTPServer if postgres else HTTPServer)(('0.0.0.0',port),Handler)
+    if postgres:server.daemon_threads=True
     logging.info('Webhook active on %s; HTTP port %s',base_url,port)
     try:server.serve_forever(poll_interval=.5)
     finally:server.server_close()
