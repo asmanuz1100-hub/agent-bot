@@ -163,7 +163,7 @@ def _backfill_unbilled_deliveries(db):
         FROM events e JOIN products p ON p.pack=e.pack
         WHERE e.kind='delivery' AND e.amount=0 AND e.amount_usd=0 AND p.price>0
         AND NOT EXISTS (SELECT 1 FROM events older WHERE older.client=e.client
-            AND older.kind IN ('sold','payment') AND older.id<=e.id)""").fetchall()
+            AND older.kind IN ('sold','payment') AND older.amount<>0)""").fetchall()
     for row in rows:
         db.execute("UPDATE events SET amount_usd=?,note=COALESCE(note,'') || ? WHERE id=? AND amount_usd=0",
                    (int(row[3])*int(row[4]),' | USD ҳисобга ўтказилди: жорий каталог нархи асосида',row[0]))
