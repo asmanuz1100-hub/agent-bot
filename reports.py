@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
-from core import route_stats,product_name
+from core import route_stats,product_name,distance
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
@@ -59,18 +59,22 @@ L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{maxZo
 const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48','#0891b2','#9333ea','#475569'];
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
-D.routes.forEach((r,i)=>{{const pts=(r.points||[]).map(p=>[p.lat,p.lon]);const color=colors[i%colors.length];
-  if(pts.length){{L.polyline(pts,{{weight:5,color,opacity:.9}}).addTo(map).bindTooltip(esc(r.agent));pts.forEach(x=>bounds.push(x));
-    L.circleMarker(pts[0],{{radius:6,color,fillOpacity:1}}).addTo(map).bindPopup('Бошланиш · '+esc(r.agent));
-    L.circleMarker(pts[pts.length-1],{{radius:6,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги нуқта · '+esc(r.agent));}}
-  const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км</span>';legend.appendChild(row);
+D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
+  const segments=r.segments||[r.points||[]];let first=null,last=null;
+  segments.forEach(seg=>{{const pts=seg.map(p=>[p.lat,p.lon]);if(!pts.length)return;
+    L.polyline(pts,{{weight:5,color,opacity:.9}}).addTo(map).bindTooltip(esc(r.agent));
+    pts.forEach(x=>bounds.push(x));if(!first)first=pts[0];last=pts[pts.length-1];
+  }});
+  if(first)L.circleMarker(first,{{radius:6,color,fillOpacity:1}}).addTo(map).bindPopup('Бошланиш · '+esc(r.agent));
+  if(last){{L.circleMarker(last,{{radius:7,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги GPS нуқта · '+esc(r.agent)+'<br><a rel="noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+last[0]+','+last[1]+'">Навигаторда очиш</a>');}}
+  const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
-D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];bounds.push(p);
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(!bounds.length && s.active)bounds.push(p);
   L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
    .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
-if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);
+if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);setTimeout(()=>map.invalidateSize(),250);
 </script></body></html>'''.encode('utf-8')
 
 def shift_route_data(db,agent,shift):
@@ -164,18 +168,49 @@ def overall(db,actor,now=None):
     start=now.replace(hour=0,minute=0,second=0,microsecond=0)
     a=int(start.timestamp());b=int(now.timestamp())+1
     agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
-    routes=[];all_shops=[];seen_shops=set();total_km=0;stops=gaps=0;gps_points=0
+    routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0
     details=[]
     for ag in agents:
         aid=ag[0]
-        shifts=db.execute('SELECT * FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?) ORDER BY start',(aid,b,a)).fetchall()
-        akm=0;astops=agaps=0
+        shifts=db.execute('SELECT * FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?) ORDER BY start,id',(aid,b,a)).fetchall()
+        akm=0;astops=agaps=0;segments=[];seen_points=set()
         for sh in shifts:
-            route,shops,stats,_=shift_route_data(db,aid,sh)
-            route['agent']=ag[1] or str(aid);routes.append(route);akm+=stats['km'];astops+=len(stats['stops']);agaps+=len(stats['gaps']);gps_points+=len(route['points'])
-            for s in shops:
-                if s['id'] not in seen_shops:all_shops.append(s);seen_shops.add(s['id'])
-        metric=db.execute("""SELECT
+            # Clip to this calendar day and keep shifts separate: do not draw a
+            # fictitious straight line between two distinct work sessions.
+            lo=max(a,int(sh['start']));hi=min(b-1,int(sh['end'] or b-1))
+            if hi<lo:continue
+            raw=db.execute('SELECT * FROM points WHERE shift=? AND ts>=? AND ts<=? ORDER BY ts,id',(sh['id'],lo,hi)).fetchall()
+            pts=[]
+            for p in raw:
+                key=(int(p['ts']),round(float(p['lat']),6),round(float(p['lon']),6))
+                if key in seen_points:continue
+                seen_points.add(key);pts.append(p)
+            if not pts:continue
+            stats=route_stats(pts,lo,hi);akm+=stats['km']
+            astops+=len(stats['stops']);agaps+=len(stats['gaps']);gps_points+=len(pts)
+            # Break lines on GPS gaps, poor accuracy and implausible jumps.
+            seg=[];prev=None
+            for p in pts:
+                if (p['accuracy'] or 0)>100:
+                    if seg:segments.append(seg);seg=[]
+                    prev=None;continue
+                if prev and (p['ts']-prev['ts']>300 or p['ts']<=prev['ts'] or
+                    (distance(prev,p)/max(1,p['ts']-prev['ts']))>55):
+                    if seg:segments.append(seg)
+                    seg=[]
+                seg.append({'lat':p['lat'],'lon':p['lon'],'ts':p['ts']})
+                prev=p
+            if seg:segments.append(seg)
+        active={r[0] for r in db.execute(
+            'SELECT DISTINCT client FROM events WHERE agent=? AND client IS NOT NULL AND ts>=? AND ts<?',
+            (aid,a,b)).fetchall()}
+        for shop in db.execute('SELECT id,name,shop_name,address,lat,lon FROM clients WHERE agent=? AND lat IS NOT NULL AND lon IS NOT NULL',(aid,)).fetchall():
+            all_shops.append({'id':shop['id'],'name':shop['name'],'shop':shop['shop_name'],
+                'address':shop['address'],'lat':shop['lat'],'lon':shop['lon'],'active':shop['id'] in active})
+        if segments:
+            routes.append({'agent':ag[1] or str(aid),'agent_id':aid,'km':round(akm,2),
+                'points':[p for seg in segments for p in seg],'segments':segments})
+    metric=db.execute("""SELECT
             COUNT(DISTINCT client),
             COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
             COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
