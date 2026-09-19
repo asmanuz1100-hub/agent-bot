@@ -225,7 +225,9 @@ class Tests(unittest.TestCase):
   self.assertTrue(any('Client 05' in x for x in flat))
 
  def test_full_sale_return_payment_and_reconcile_ui(self):
-  self.rec('load',12,actor=1);self.rec('delivery',6)
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  self.rec('load',12,actor=1)
+  core.record(self.db,2,2,1,'delivery',1,6,currency='USD')
   now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':700,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
   def amsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
@@ -237,6 +239,7 @@ class Tests(unittest.TestCase):
    seq=['↩️ Товар қайтариш','1','Грунтовка 7/1 — 1 кг','Дона','1','✅ Тасдиқлаш']
    for i,t in enumerate(seq,710):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.client_stock(self.db,2,1,1),3)
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('10.00'))
    seq=['💰 Пул олиш','1','5000','✅ Тасдиқлаш']
    for i,t in enumerate(seq,720):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.cash_usd(self.db,2),core.money('5000'))
