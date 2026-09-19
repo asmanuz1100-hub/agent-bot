@@ -48,6 +48,37 @@ class ReportsTests(unittest.TestCase):
   with self.assertRaises(ValueError):reports.route_map_html(self.db,2,2)
   with self.assertRaises(ValueError):reports.overall(self.db,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
 
+ def test_multiple_shifts_one_agent_one_daily_route_and_summary(self):
+  import json,re
+  start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
+  self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,11)',(start,start+240))
+  s1=self.db.execute('SELECT id FROM shifts WHERE agent=2 ORDER BY id DESC LIMIT 1').fetchone()[0]
+  self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,12)',(start+240,start+480))
+  s2=self.db.execute('SELECT id FROM shifts WHERE agent=2 ORDER BY id DESC LIMIT 1').fetchone()[0]
+  self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
+   (s1,start,40.0,71.0,10),(s1,start+120,40.001,71.001,10),
+   (s1,start+240,40.002,71.002,10),(s2,start+240,40.002,71.002,10),
+   (s2,start+360,40.003,71.003,10)
+  ])
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts) VALUES(2,2,1,'delivery',1,4,0,800,?)",(start+30,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts) VALUES(2,2,1,'payment',0,0,0,200,?)",(start+300,))
+  summary=reports.shift_summary(self.db,2,s2)
+  self.assertEqual(summary['shift_count'],2)
+  self.assertEqual(summary['duration'],480)
+  self.assertEqual(summary['gps_points'],4)
+  self.assertEqual(summary['sold_amount'],800)
+  self.assertEqual(summary['payments'],200)
+  self.assertIn('сменалар: 2 та',summary['text'])
+  text,html=reports.overall(self.db,1,datetime(2026,9,18,10,tzinfo=reports.TZ))
+  match=re.search(r'<script id="data" type="application/json">(.*?)</script>',html.decode('utf-8'),re.S)
+  self.assertIsNotNone(match)
+  data=json.loads(match.group(1))
+  self.assertEqual(len(data['routes']),1)
+  self.assertEqual(len(data['routes'][0]['segments']),2)
+  self.assertEqual(len(data['routes'][0]['points']),4)
+  self.assertIn('GPS нуқталари: 4',text)
+  self.assertIn('Навигаторда очиш',html.decode('utf-8'))
+
  def test_shift_daily_summary(self):
   start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp());end=start+3600
   self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,99)',(start,end))
