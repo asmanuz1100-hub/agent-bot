@@ -329,6 +329,9 @@ def handle(db,update):
     m=update.get('message') or update.get('edited_message')
     if not m or m.get('chat',{}).get('type')!='private':return
     u=m['from']['id']; text=m.get('text','').strip(); r=role(db,u)
+    if r=='disabled':
+        if 'edited_message' not in update:send(u,'Бу аккаунтга кириш ёпилган. Асосий админга мурожаат қилинг.')
+        return
     if not r:
         if 'edited_message' not in update:send(u,f'Сизнинг Telegram ID: {u}\nАдминга шу рақамни юборинг. Кириш ҳали очилмаган.')
         return
@@ -339,6 +342,14 @@ def handle(db,update):
         return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
+    if text=='/failed':
+        if r!='admin':raise ValueError('Фақат админ.')
+        rows=db.execute("""SELECT update_id,actor,failure_type,attempts,status,created_ts
+             FROM failed_updates ORDER BY created_ts DESC,update_id DESC LIMIT 20""").fetchall()
+        msg='⚠️ ҚАЙТА ТЕКШИРИЛАДИГАН UPDATEЛАР\n'
+        msg+='\n'.join(f"#{x['update_id']} · ID {x['actor']} · {x['failure_type']} · {x['attempts']} уриниш · {x['status']} · {stamp(x['created_ts'])}" for x in rows) if rows else 'Ҳозирча хато update йўқ.'
+        send(u,msg+'\n\nБу ёзувлар автомат қайта ўтказилмайди. Товар ва пул ҳолатини текшириб, зарур бўлса тузатиш киритинг.')
+        return
     if text.startswith('/accept ') or text.startswith('/reject '):
         accept(db,u,int(text.split()[1]),text.startswith('/accept'));send(u,'✅ Қайд қилинди.',menu(db,u));return
     action=BTN.get(text)
@@ -545,12 +556,17 @@ def handle(db,update):
 
 def _failure_key(update_id):return f'update_failure:{int(update_id)}'
 
-def _register_failure(db,update_id,error):
+def _register_failure(db,update_id,error,up=None):
     key=_failure_key(update_id)
+    actor=((up or {}).get('message') or (up or {}).get('edited_message') or {}).get('from',{}).get('id')
     with db:
         row=db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
         attempts=(int(row[0]) if row else 0)+1
         db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(attempts)))
+        db.execute("""INSERT INTO failed_updates(update_id,actor,failure_type,attempts,status,last_error,created_ts)
+            VALUES(?,?,?,?,'pending',?,?) ON CONFLICT(update_id)
+            DO UPDATE SET attempts=excluded.attempts,status='pending',last_error=excluded.last_error""",
+            (update_id,actor,type(error).__name__,attempts,type(error).__name__,int(time.time())))
     logging.error('Update %s unexpected failure attempt %s/%s: %s',update_id,attempts,MAX_UPDATE_RETRIES,type(error).__name__)
     return attempts
 
@@ -567,7 +583,9 @@ def _mark_processed(db,update_id,save_offset=False):
         db.execute("INSERT INTO meta(key,value) VALUES('offset',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(update_id+1),))
 
 def _skip_failed_update(db,update_id,error,save_offset=False):
-    with db:_mark_processed(db,update_id,save_offset)
+    with db:
+        _mark_processed(db,update_id,save_offset)
+        db.execute("UPDATE failed_updates SET status='skipped' WHERE update_id=?",(update_id,))
     _notify_admins_failed(update_id,error)
 
 def process_update(db,up,save_offset=False):
@@ -620,7 +638,7 @@ def run_polling(db):
                 update_id=up.get('update_id')
                 if update_id is None:
                     logging.exception('Update without id failed: %s',type(e).__name__);continue
-                attempts=_register_failure(db,update_id,e)
+                attempts=_register_failure(db,update_id,e,up)
                 if attempts>=MAX_UPDATE_RETRIES:
                     _skip_failed_update(db,update_id,e,True)
                     continue
@@ -739,7 +757,7 @@ def run():
         db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
     for u in TEST_AGENTS:
         if u not in ADMINS:
-            db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'agent',f'Агент {u}'))
+            db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role WHERE users.role!='disabled'",(u,'agent',f'Агент {u}'))
     db.commit()
     api('getMe')
     print('Internal Agent test bot started',flush=True)
