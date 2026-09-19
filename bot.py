@@ -37,7 +37,7 @@ FLOW={
  'tracking':[('agent','Агентни танланг:')],
  'agent_profile':[('agent','Профилини бошқариш учун агентни танланг:')],
  'agent_rename':[('agent','Агентни танланг:'),('name','Агентнинг янги исмини киритинг:')],
- 'price_set':[('pack','Қайси товар нархини киритасиз?'),('amount','1 дона учун сотув нархини киритинг (сўм):')],
+ 'price_set':[('pack','Қайси товар нархини киритасиз?'),('amount','1 дона учун каталог нархини киритинг (USD, масалан 2.50):')],
 }
 
 def request(url,payload=None,headers=None,timeout=50):
@@ -161,8 +161,8 @@ def report_prices(db,u):
     lines=['ТОВАР ВА НАРХЛАР']
     for p in (1,3,5):
         price=product_price(db,p)
-        lines.append(f"\n{product_name(p)}\nНарх: {fmt(price)+' сўм / дона' if price else 'киритилмаган'}")
-    send(u,'\n'.join(lines),[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
+        lines.append(f"\n{product_name(p)}\nНарх: {fmt(price)+' USD / дона' if price else 'киритилмаган'}")
+    send(u,'\n'.join(lines)+"\n\nℹ️ Каталог нархлари USDда; сотув ва тўлов суммалари ҳозирча сўмда юритилади.",[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
 
 def location_help_text():
     return (
@@ -175,8 +175,9 @@ def location_help_text():
         "• Telegramда жонли улашиш ҳали активлигини текширинг;\n"
         "• батарея тежаш режими Telegramни фонда тўхтатмаганини текширинг;\n"
         "• Telegramга фон ишлаши ва локация рухсатлари берилганини текширинг.\n\n"
+        "📍 Огоҳлантириш: смена давомида GPS нуқталарингиз сақланади, админ жойлашувингиз ва ҳаракат маршрутини кузатиши мумкин. "
         "Локация 5 дақиқадан ортиқ янгиланмаса, савдо амаллари вақтинча блокланади. "
-        "Маршрутни фақат админ кўради."
+        "«Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади; Telegramда жонли улашишни ҳам ўзингиз тўхтатинг."
     )
 
 def live_ready(db,u,max_age=300):
@@ -222,9 +223,7 @@ def prompt(db,u,s):
         if pp:
             pieces=s['values']['qty']*(4 if s['values'].get('unit')=='Блок' else 1)
             total=pp*pieces
-            msg+=f"\nКаталог нархи: {fmt(pp)} сўм / дона. Ҳисобланган жами: {fmt(total)} сўм."
-            raw=f"{total/100:.2f}".rstrip('0').rstrip('.')
-            keys.append([raw])
+            msg+=f"\nКаталог нархи: {fmt(pp)} USD / дона. Жами: {fmt(total)} USD.\n⚠️ Каталог нархи USDда, сотув суммаси эса сўмда киритилади. Курс бўйича ўзингиз ҳисоблаб, ҳақиқий сўм суммасини киритинг; USD суммаси сўмга автомат ўтказилмайди."
     if key in ('client','agent'):
         if key=='client':
             rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 20',(u,) if role(db,u)=='agent' else ()).fetchall()
@@ -355,7 +354,7 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\nTelegram хавфсизлик қоидаси бўйича жонли локацияни бот сизнинг номингиздан автомат ёқа олмайди. Бир марта ўзингиз: 📎 → «Локация» → «Жонли локацияни улашиш»ни босинг.\n\nШундан кейин бот смена тугагунча келган GPS нуқталарини автомат қайд этади. «⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни автомат тўхтатади.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
+            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
             if not shift:
@@ -363,12 +362,10 @@ def handle(db,update):
             db.execute('UPDATE shifts SET end=? WHERE id=?',(m['date'],shift['id']))
             try:
                 report=reports.shift_summary(db,u,shift['id'])
-                send(u,'Иш тугади ✅\nБот координаталарни қабул қилишни автомат тўхтатди.\n\n'+report['text'],menu(db,u))
+                send(u,'Иш тугади ✅\nБот координаталарни қабул қилишни тўхтатди. Telegramда жонли локация улашишни ҳам ўзингиз тўхтатинг.\n\n'+report['text'],menu(db,u))
                 for admin in ADMINS:
                     if admin==u:continue
                     send(admin,'📣 Агент ишни тугатди\n\n'+report['text'])
-                    link=map_link(f'agent/{u}')
-                    if link:send_inline(admin,'🗺 Шу сменанинг маршрути:',[('🗺 Харитада очиш',link)])
             except Exception:
                 logging.exception('End-of-shift summary failed agent=%s shift=%s',u,shift['id'])
                 send(u,'Иш тугади ✅ Бот координаталарни қабул қилишни автомат тўхтатди. Кунлик ҳисоботни тайёрлашда хато бўлди.',menu(db,u))
@@ -395,7 +392,7 @@ def handle(db,update):
         if r!='agent':raise ValueError('Жонли локация агент учун.')
         if point(db,u,m):
             logging.info('Live point saved agent=%s message=%s edited=0',u,m.get('message_id'))
-            send(u,'📍 Жонли локация қабул қилинди. Энди иш менюси фаол. Янгиланишлар иш тугагунча қайд этилади.',menu(db,u))
+            send(u,'📍 Жонли локация қабул қилинди. Смена давомида GPS нуқталарингиз сақланади ва админ маршрутингизни кузатиши мумкин. Иш тугаганда ботда «⏹ Ишни тугатиш»ни босинг ва Telegramда локация улашишни ҳам тўхтатинг.',menu(db,u))
         else:
             s0=db.execute('SELECT live_id FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone()
             if s0 and s0[0] is not None and s0[0]!=m['message_id']:
