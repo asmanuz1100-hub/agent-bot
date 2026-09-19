@@ -5,7 +5,7 @@ from html import escape
 import io,csv,json,time
 from core import route_stats,product_name
 TZ=ZoneInfo('Asia/Tashkent')
-NAMES={'delivery':'Реализацияга берилди','sold':'Сотилди','payment':'Нақд пул олинди','return':'Сотилмаган товар қайтди','order':'Буюртма','visit':'Ташриф / таклиф'}
+NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
 def rowdict(r):
     return {k:r[k] for k in r.keys()}
@@ -97,8 +97,8 @@ def shift_summary(db,agent,shift_id):
         COUNT(DISTINCT client),
         COALESCE(SUM(CASE WHEN kind='visit' THEN 1 ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='order' THEN qty ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0)
@@ -135,8 +135,9 @@ def shift_summary(db,agent,shift_id):
         f"🆕 Янги мижоз: {int(new_clients)} та\n"
         f"🏪 Ишланган мижозлар: {active_clients} та · ташриф: {visits} та\n"
         f"📦 Реализацияга берилди: {delivered} дона · буюртма: {orders} дона · қайтди: {returns} дона\n"
-        f"💵 Сотилди: {sold_qty} дона / {m(sold_amount)} сўм\n"
-        f"💰 Олинган пул: {m(payments)} сўм\n"
+        f"💵 Сотилган миқдор: {sold_qty} дона\n"
+        f"📦 Топширилган товар ҳисоб-фактураси (қайтариш чегирилган): {m(sold_amount)} USD\n"
+        f"💰 Олинган тўлов: {m(payments)} USD\n"
         f"📝 Қисқа хулоса: {note}"
     )
     return {
@@ -176,28 +177,28 @@ def overall(db,actor,now=None):
                 if s['id'] not in seen_shops:all_shops.append(s);seen_shops.add(s['id'])
         metric=db.execute("""SELECT
             COUNT(DISTINCT client),
-            COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
-            COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0)
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
             FROM events WHERE agent=? AND ts>=? AND ts<?""",(aid,a,b)).fetchone()
         active_count=int(metric[0] or 0);sold=int(metric[1] or 0);paid=int(metric[2] or 0)
-        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {active_count} нуқта · сотув {m(sold)} сўм · тўлов {m(paid)} сўм")
+        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {active_count} нуқта · топширилди {m(sold)} USD · тўлов {m(paid)} USD")
         total_km+=akm;stops+=astops;gaps+=agaps
     metric=db.execute("""SELECT
         COUNT(DISTINCT client),
         COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='sold' THEN amount ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0)
+        COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
         FROM events WHERE ts>=? AND ts<?""",(a,b)).fetchone()
     active_all=int(metric[0] or 0);sold_qty=int(metric[1] or 0);sold=int(metric[2] or 0)
     delivered=int(metric[3] or 0);paid=int(metric[4] or 0)
     text=(f"УМУМИЙ ТАҲЛИЛ · {now:%d.%m.%Y %H:%M}\n"
           f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\nGPS нуқталари: {gps_points}\n"
           f"Фаол савдо нуқталари: {active_all}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
-          f"Берилган товар: {delivered} дона\nСотилган: {sold_qty} дона / {m(sold)} сўм\nОлинган пул: {m(paid)} сўм\n\n"
+          f"Берилган товар: {delivered} дона · Сотилган: {sold_qty} дона\nТовар ҳисоби: {m(sold)} USD\nОлинган тўлов: {m(paid)} USD\n\n"
           +"Агентлар:\n"+("\n".join(details) if details else "Агент йўқ"))
     if gps_points==0:text+='\n\n⚠️ Бугун GPS нуқталари сақланмаган. Агент сменани бошлаб Telegram жонли локациясини юбориши керак.'
-    summary=f"{round(total_km,2)} км · {active_all} фаол нуқта · {m(sold)} сўм сотув"
+    summary=f"{round(total_km,2)} км · {active_all} фаол нуқта · {m(sold)} USD товар"
     return text,_map_html(f'Умумий маршрут · {now:%d.%m.%Y}',routes,all_shops,summary)
 
 def dates(start,end):
@@ -224,9 +225,13 @@ def reconciliation(db,actor,client,start,end):
         FROM events WHERE client=? AND ts<?""",(client,a)).fetchone()
     opening=int(opening_row[0] or 0)
     stocks={1:int(opening_row[1] or 0),3:int(opening_row[2] or 0),5:int(opening_row[3] or 0)}
-    events=db.execute("""SELECT id,ts,kind,pack,qty,amount FROM events
+    events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd FROM events
         WHERE client=? AND ts>=? AND ts<? AND kind IN ('delivery','sold','return','payment')
         ORDER BY ts,id""",(client,a,b)).fetchall()
+    before_usd=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
+        WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0)
+        FROM events WHERE client=? AND ts<?""",(client,a)).fetchone()[0]
+    usd_opening=int(before_usd or 0);usd_balance=usd_opening;usd_sales=usd_payments=usd_returns=0
     initial=stocks.copy();balance=opening;rows=[];sales=payments=0
     for e in events:
         k=e['kind']
@@ -234,15 +239,20 @@ def reconciliation(db,actor,client,start,end):
         if k in ('delivery','sold','return'):stocks[e['pack']]+=e['qty']*(1 if k=='delivery' else -1)
         charge=e['amount'] if k=='sold' else 0;credit=e['amount'] if k=='payment' else 0
         balance+=charge-credit;sales+=charge;payments+=credit
-        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance})
-    return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
+        usd_charge=e['amount_usd'] if k=='delivery' else 0
+        usd_credit=e['amount_usd'] if k in ('payment','return') else 0
+        usd_balance+=usd_charge-usd_credit;usd_sales+=usd_charge
+        if k=='payment':usd_payments+=usd_credit
+        if k=='return':usd_returns+=usd_credit
+        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
+    return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
 def m(x):return f'{x/100:,.2f}'.replace(',',' ')
 
 def reconciliation_html(r):
     c=r['client'];esc=lambda x:escape(str(x),quote=True)
     stock=''.join(f'<tr><td>{escape(product_name(p))}</td><td>{r["opening_stock"][p]}</td><td>{r["closing_stock"][p]}</td></tr>' for p in (1,3,5))
-    rows=''.join('<tr>'+''.join(f'<td>{esc(v)}</td>' for v in [x['id'],x['time'],x['kind'],product_name(x['pack']) if x['pack'] else '—',x['qty'] or '—',m(x['charge']),m(x['credit']),m(x['balance'])])+'</tr>' for x in r['rows'])
+    rows=''.join('<tr>'+''.join(f'<td>{esc(v)}</td>' for v in [x['id'],x['time'],x['kind'],product_name(x['pack']) if x['pack'] else '—',x['qty'] or '—',m(x['usd_charge']),m(x['usd_credit']),m(x['usd_balance'])])+'</tr>' for x in r['rows'])
     return f'''<!doctype html><html lang="uz"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ички ҳисоб — акт сверка</title><style>
 body{{font:14px Arial,sans-serif;color:#15243b;background:#eef3f8;margin:0;padding:24px}}main{{max-width:1000px;margin:auto;background:white;padding:36px}}h1{{color:#174e87;margin:8px 0}}.muted{{color:#52647a}}.cards{{display:flex;flex-wrap:wrap;gap:16px;margin:24px 0}}.card{{padding:16px;background:#edf4fb;flex:1;min-width:160px}}strong{{display:block;font-size:20px;margin-top:8px}}table{{border-collapse:collapse;width:100%;font-size:12px;margin:18px 0}}th{{background:#174e87;color:white}}td,th{{padding:9px;border:1px solid #d3dce8;text-align:left}}.scroll{{overflow:auto}}footer{{margin-top:32px}}@media print{{body{{background:white;padding:0}}main{{padding:0}}thead{{display:table-header-group}}tr{{break-inside:avoid}}button{{display:none}}}}@page{{size:A4 landscape;margin:14mm}}
-</style><main><p class="muted">ИЧКИ САВДО НАЗОРАТИ · ТЕСТ ҲИСОБОТИ</p><h1>Ўзаро ҳисоб-китобларни солиштириш далолатномаси</h1><p>{esc(r['start'])} — {esc(r['end'])} · Тошкент вақти</p><h2>{esc(c['name'])}</h2><p>{esc(c['phone'])} · {esc(c['address'])}</p><div class="cards"><div class="card">Бошланғич баланс<strong>{m(r['opening'])} сўм</strong></div><div class="card">Сотилган товар<strong>{m(r['sales'])} сўм</strong></div><div class="card">Олинган пул<strong>{m(r['payments'])} сўм</strong></div><div class="card">Якуний баланс<strong>{m(r['closing'])} сўм</strong></div></div><p>Мусбат баланс — сотилган товар учун тўлов қолдиғи. Манфий баланс — мижоз аванси. Сотилмаган реализация товари пул қарзига қўшилмаган.</p><h2>Операциялар</h2><div class="scroll"><table><thead><tr><th>№</th><th>Сана</th><th>Амал</th><th>Қадоқ</th><th>Дона</th><th>Сотув, сўм</th><th>Тўлов, сўм</th><th>Баланс, сўм</th></tr></thead><tbody>{rows or '<tr><td colspan="8">Бу даврда операция йўқ</td></tr>'}</tbody></table></div><h2>Мижоздаги сотилмаган товар</h2><table><thead><tr><th>Маҳсулот</th><th>Давр бошида, дона</th><th>Давр охирида, дона</th></tr></thead><tbody>{stock}</tbody></table><footer><p>Ҳисобот ботга тасдиқлаб киритилган маълумотлар асосида тузилди. Иккинчи томон ҳали тасдиқламаган.</p><p>Масъул ходим: ____________________ &nbsp;&nbsp; Мижоз: ____________________</p></footer></main></html>'''.encode()
+</style><main><p class="muted">ИЧКИ САВДО НАЗОРАТИ · ТЕСТ ҲИСОБОТИ</p><h1>Ўзаро ҳисоб-китобларни солиштириш далолатномаси</h1><p>{esc(r['start'])} — {esc(r['end'])} · Тошкент вақти</p><h2>{esc(c['name'])}</h2><p>{esc(c['phone'])} · {esc(c['address'])}</p><div class="cards"><div class="card">Бошланғич қарз<strong>{m(r['usd_opening'])} USD</strong></div><div class="card">Топширилган товар<strong>{m(r['usd_sales'])} USD</strong></div><div class="card">Қайтарилган товар<strong>{m(r['usd_returns'])} USD</strong></div><div class="card">Олинган тўлов<strong>{m(r['usd_payments'])} USD</strong></div><div class="card">Якуний қарз<strong>{m(r['usd_closing'])} USD</strong></div></div><p>Товар топширилганда USD қарз ёзилади, қайтариш ва тўлов қарзни камайтиради. Сотилди деган қайд қарзни қайта оширмайди. Манфий баланс — аванс.</p><p>Эски UZS операциялари алоҳида: бошланғич {m(r['opening'])} сўм, сотув {m(r['sales'])} сўм, тўлов {m(r['payments'])} сўм, қолдиқ {m(r['closing'])} сўм. Бу суммалар USD билан қўшилмайди.</p><h2>Операциялар</h2><div class="scroll"><table><thead><tr><th>№</th><th>Сана</th><th>Амал</th><th>Қадоқ</th><th>Дона</th><th>Топширилган, USD</th><th>Тўлов/қайтариш, USD</th><th>Қарз, USD</th></tr></thead><tbody>{rows or '<tr><td colspan="8">Бу даврда операция йўқ</td></tr>'}</tbody></table></div><h2>Мижоздаги сотилмаган товар</h2><table><thead><tr><th>Маҳсулот</th><th>Давр бошида, дона</th><th>Давр охирида, дона</th></tr></thead><tbody>{stock}</tbody></table><footer><p>Ҳисобот ботга тасдиқлаб киритилган маълумотлар асосида тузилди. Иккинчи томон ҳали тасдиқламаган.</p><p>Масъул ходим: ____________________ &nbsp;&nbsp; Мижоз: ____________________</p></footer></main></html>'''.encode()
