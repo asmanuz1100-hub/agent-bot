@@ -61,7 +61,8 @@ class Tests(unittest.TestCase):
    self.assertIn('админ сифатида қўшилди',send.call_args.args[1])
    bot.handle(self.db,msg(15005,123456789,'/start'))
    self.assertIn('Амални танланг',send.call_args.args[1])
-   bot.handle(self.db,msg(15006,123456789,'🔐 Админ қўшиш'))
+   with self.assertRaises(ValueError):
+    bot.handle(self.db,msg(15006,123456789,'🔐 Админ қўшиш'))
    self.assertIsNone(self.db.execute('SELECT 1 FROM users WHERE id=123456790').fetchone())
 
  def test_secondary_admin_cannot_escalate_via_saved_wizard(self):
