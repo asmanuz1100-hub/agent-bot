@@ -43,6 +43,38 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.money('12 000,50'),1200050)
   for v in ['NaN','-2','1.001','0','Infinity']:
    with self.assertRaises(ValueError):core.money(v)
+ def test_primary_admin_can_add_secondary_admin(self):
+  def msg(i,uid,text):
+   return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':uid},'chat':{'id':uid,'type':'private'},'text':text}}
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send') as send:
+   buttons=[b for row in bot.menu(self.db,1) for b in row]
+   self.assertIn('🔐 Админ қўшиш',buttons)
+   bot.handle(self.db,msg(15001,1,'🔐 Админ қўшиш'))
+   bot.handle(self.db,msg(15002,1,'123456789'))
+   bot.handle(self.db,msg(15003,1,'Янги админ'))
+   self.assertIn('Текширинг:',send.call_args.args[1])
+   bot.handle(self.db,msg(15004,1,'✅ Тасдиқлаш'))
+   self.assertEqual(bot.role(self.db,123456789),'admin')
+   self.assertTrue(bot.allowed(self.db,123456789,'analytics'))
+   self.assertFalse(bot.allowed(self.db,123456789,'admin_add'))
+   self.assertNotIn('🔐 Админ қўшиш',[b for row in bot.menu(self.db,123456789) for b in row])
+   self.assertIn('админ сифатида қўшилди',send.call_args.args[1])
+   bot.handle(self.db,msg(15005,123456789,'/start'))
+   self.assertIn('Амални танланг',send.call_args.args[1])
+   bot.handle(self.db,msg(15006,123456789,'🔐 Админ қўшиш'))
+   self.assertIsNone(self.db.execute('SELECT 1 FROM users WHERE id=123456790').fetchone())
+
+ def test_secondary_admin_cannot_escalate_via_saved_wizard(self):
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
+   self.db.execute("INSERT INTO users(id,role,name) VALUES(123456789,'admin','Secondary')")
+   self.assertFalse(bot.allowed(self.db,123456789,'admin_add'))
+   with self.assertRaises(ValueError):
+    bot.finish(self.db,123456789,{'action':'admin_add','step':2,'values':{'id':123456790,'name':'Other'}},15007)
+   self.assertIsNone(self.db.execute('SELECT 1 FROM users WHERE id=123456790').fetchone())
+   with self.assertRaises(ValueError):
+    bot.finish(self.db,1,{'action':'admin_add','step':2,'values':{'id':2,'name':'Agent'}},15008)
+   self.assertEqual(bot.role(self.db,2),'agent')
+
  def test_privacy(self):
   self.assertFalse(bot.allowed(self.db,2,'tracking'));self.assertFalse(bot.allowed(self.db,3,'tracking'))
   with self.assertRaises(ValueError):bot.tracking(self.db,3,2)
