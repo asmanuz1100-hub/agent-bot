@@ -260,7 +260,7 @@ def report_clients(db,u):
     for c in rows:
         a=c['agent']; cid=c['id']; debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
         stocks=', '.join(f'{product_name(p)}: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
-        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nРеализацияда: {stocks}\nМижознинг товар қарзи: {fmt(debt)} USD (манфий — аванс)"+(f"\nЭски UZS ҳисоб: {fmt(old_debt)} сўм" if old_debt else '')+f"\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
+        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nМижозда қолган товар: {stocks}\nМижознинг товар қарзи: {fmt(debt)} USD (манфий — аванс)"+(f"\nЭски UZS ҳисоб: {fmt(old_debt)} сўм" if old_debt else '')+f"\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
 
 def tracking(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -288,7 +288,8 @@ def finish(db,u,s,source):
     if not allowed(db,u,a):raise ValueError('Рухсат йўқ.')
     if a=='reconcile':
         result=reports.reconciliation(db,u,v['client'],v['start'],v['end'])
-        send(u,f"Акт сверка: {result['client']['name']}\nСотилган: {fmt(result['sales'])} сўм\nОлинган пул: {fmt(result['payments'])} сўм\nЯкуний баланс: {fmt(result['closing'])} сўм")
+        legacy=(f"\nЭски UZS ҳисоби: {fmt(result['closing'])} сўм (USDга қўшилмайди)" if result['opening'] or result['sales'] or result['payments'] else '')
+        send(u,f"Акт сверка: {result['client']['name']}\nТопширилган товар: {fmt(result['usd_sales'])} USD\nҚайтарилган: {fmt(result['usd_returns'])} USD\nТўлов: {fmt(result['usd_payments'])} USD\nЯкуний қарз: {fmt(result['usd_closing'])} USD"+legacy)
         document(u,f'akt-sverka-{v["client"]}-{v["end"]}.html',reports.reconciliation_html(result))
     elif a=='agent_rename':
         target=db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v['agent'],)).fetchone()
