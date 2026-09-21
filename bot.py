@@ -19,13 +19,16 @@ DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
 ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
-ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
+ADMIN_SUB_ACTIONS={'agent_list','agent_profile','agent_add','agent_deactivate','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
  'reconcile':[('client','Умумий акт сверка учун мижозни танланг:')],
+ 'client_view':[('client','Маълумотини кўриш учун мижозни танланг:')],
+ 'agent_add':[('id','Янги агентнинг Telegram ID рақами:'),('name','Янги агентнинг исми:')],
+ 'agent_deactivate':[('agent','Ҳисобини ёпиш учун агентни танланг:')],
  'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('name','2) 👤 Мижоз исми:'),('shop_name','3) 🏪 Дўкон номи:'),('phone','4) 📞 Мижоз телефон рақами: +998XXXXXXXXX'),('address','5) 🏠 Дўкон манзили:'),('photo','6) 📷 Дўкон/витрина расмини юборинг:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
@@ -109,8 +112,9 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
-    if action in ('admin_add','agent_transfer'):return r=='admin' and u in ADMINS
-    return (r=='admin' and action in ('user','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
+    if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
+    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -133,6 +137,7 @@ FEATURE_LABELS={
 def admin_agent_menu():
     return [
         ['📋 Агентлар рўйхати','👤 Агент профили'],
+        ['➕ Агент қўшиш','🗑 Агент ҳисобини ёпиш'],
         ['📍 Агент маршрути','🚚 Агентга товар'],
         ['✏️ Агент номини ўзгартириш'],
         ['💲 Товар ва нархлар'],
@@ -276,16 +281,106 @@ def ocr(photo):
     result=json.loads(txt)
     return {k:str(result.get(k,'') or '')[:300] for k in ('name','phone','address')}
 
+CLIENT_EDIT_LABELS={
+    'name':'👤 Мижоз исми',
+    'shop_name':'🏪 Дўкон номи',
+    'phone':'📞 Телефон',
+    'address':'🏠 Манзил',
+    'comment':'📝 Изоҳ',
+    'payment_due':'📅 Тўлов санаси',
+    'photo':'📷 Фото',
+    'location':'📍 Дўкон локацияси',
+}
+
+def client_visible(db,u,cid):
+    c=db.execute('SELECT * FROM clients WHERE id=?',(cid,)).fetchone()
+    r=role(db,u)
+    if not c or not (r=='admin' or (r=='agent' and c['agent']==u)):
+        raise ValueError('Мижоз топилмади ёки кўришга рухсат йўқ.')
+    return c
+
+def show_client_card(db,u,cid):
+    c=client_visible(db,u,cid)
+    a=c['agent'];debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
+    stock='\n'.join(f'• {product_name(p)}: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
+    coords=(f"https://www.google.com/maps?q={c['lat']},{c['lon']}"
+            if c['lat'] is not None and c['lon'] is not None else 'Локация киритилмаган')
+    name=c['name'] or 'Номсиз'
+    send(u,f"👤 МИЖОЗ #{cid} · {name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
+         f"\n📞 {c['phone'] or 'Телефон йўқ'}\n🏠 {c['address'] or 'Манзил йўқ'}"
+         f"\n📝 {c['comment'] or 'Изоҳ йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}"
+         f"\n📦 Мижоздаги товар:\n{stock}\n💵 Мижоз қарзи: {fmt(debt)} USD"
+         +(f"\nЭски сўм ҳисоби: {fmt(old_debt)} сўм" if old_debt else '')
+         +f"\n📍 {coords}",
+         [['✏️ Мижоз маълумотини ўзгартириш'],['⬅️ Мижозлар','⬅️ Меню']])
+    save(db,u,{'action':'client_card','step':0,'values':{'client':cid}})
+    if c['photo']:
+        try:send_photo(u,c['photo'],f"📷 #{cid} · {c['shop_name'] or name}")
+        except Exception:logging.exception('Client photo failed client=%s',cid)
+
 def report_clients(db,u):
-    rows=db.execute('SELECT * FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id', (u,) if role(db,u)=='agent' else ()).fetchall()
-    if not rows:send(u,'Мижозлар ҳали йўқ.');return
-    for c in rows:
-        a=c['agent']; cid=c['id']; debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
-        stocks=', '.join(f'{product_name(p)}: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
-        send(u,f"#{cid} {c['name']}\n🏪 {c['shop_name'] or 'Дўкон номи киритилмаган'}\n📞 {c['phone'] or 'Телефон йўқ'}\n📍 {c['address']}\n📝 {c['comment'] or 'Комментария йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}\n📷 {'Фото бор' if c['photo'] else 'Фото йўқ'}\nМижозда қолган товар: {stocks}\nМижознинг товар қарзи: {fmt(debt)} USD (манфий — аванс)"+(f"\nЭски UZS ҳисоб: {fmt(old_debt)} сўм" if old_debt else '')+f"\nhttps://www.google.com/maps?q={c['lat']},{c['lon']}")
-        if c['photo']:
-            try:send_photo(u,c['photo'],f"📷 #{cid} · {c['shop_name'] or c['name'] or 'Мижоз'}")
-            except Exception:logging.exception('Client photo could not be sent for client=%s',cid)
+    if not allowed(db,u,'client_view'):raise ValueError('Мижозлар рўйхатига рухсат йўқ.')
+    where=' WHERE agent=?' if role(db,u)=='agent' else ''
+    params=(u,) if where else ()
+    if not db.execute('SELECT 1 FROM clients'+where+' LIMIT 1',params).fetchone():
+        send(u,'Мижозлар ҳали қўшилмаган.',menu(db,u));return
+    prompt(db,u,{'action':'client_view','step':0,'values':{}})
+
+def show_client_edit_fields(db,u,cid):
+    client_visible(db,u,cid)
+    save(db,u,{'action':'client_edit_field','step':0,'values':{'client':cid}})
+    keys=[[label] for label in CLIENT_EDIT_LABELS.values()]
+    keys.extend([['⬅️ Мижоз карточкаси'],['⬅️ Меню']])
+    send(u,'Қайси маълумотни ўзгартирасиз?\nТовар, қарз ва тўлов тарихи ўзгармайди.',keys)
+
+def ask_client_edit(db,u,cid,field):
+    c=client_visible(db,u,cid)
+    if field not in CLIENT_EDIT_LABELS:raise ValueError('Майдон топилмади.')
+    old=(f"{c['lat']}, {c['lon']}" if field=='location' else c[field])
+    save(db,u,{'action':'client_edit_value','step':0,'values':{'client':cid,'field':field}})
+    keys=[]
+    if field=='location':
+        keys=[[{'text':'📍 Янги локацияни юбориш','request_location':True}]]
+    elif field=='payment_due':keys=[['Аниқ эмас']]
+    keys.append(['⬅️ Мижоз карточкаси'])
+    msg=('Оддий (жонли эмас) локация юборинг.' if field=='location' else
+         'Фото хабар юборинг.' if field=='photo' else
+         'YYYY-MM-DD форматда сана ёки «Аниқ эмас» киритинг.' if field=='payment_due' else
+         'Янги маълумотни киритинг:')
+    send(u,f"{CLIENT_EDIT_LABELS[field]}\nҲозирги: {old or 'Киритилмаган'}\n{msg}",keys)
+
+def process_client_edit(db,u,s,m,text):
+    cid=s['values']['client'];field=s['values']['field']
+    client_visible(db,u,cid)
+    if field=='photo':
+        if not m.get('photo'):raise ValueError('Янги расмни фото сифатида юборинг.')
+        value=m['photo'][-1]['file_id']
+    elif field=='location':
+        loc=m.get('location')
+        if not loc or loc.get('live_period'):raise ValueError('Оддий дўкон локациясини юборинг.')
+        lat,lon=loc.get('latitude'),loc.get('longitude')
+        if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
+            raise ValueError('Локация нотўғри.')
+        value={'lat':float(lat),'lon':float(lon)}
+    elif field=='phone':
+        digits=re.sub(r'\D','',text)
+        if len(digits)==9:digits='998'+digits
+        if not re.fullmatch(r'998\d{9}',digits):raise ValueError('Телефон: +998XXXXXXXXX')
+        value='+'+digits
+    elif field=='payment_due':
+        if text=='Аниқ эмас':value=text
+        else:
+            try:datetime.strptime(text,'%Y-%m-%d')
+            except ValueError:raise ValueError('Сана: YYYY-MM-DD ёки «Аниқ эмас».')
+            value=text
+    else:
+        if not text or len(text)>500:raise ValueError('1–500 белгидан иборат матн киритинг.')
+        value=text
+    save(db,u,{'action':'client_edit_confirm','step':0,'values':{'client':cid,'field':field,'value':value}})
+    shown='Локация бириктирилди' if field=='location' else 'Фото қабул қилинди' if field=='photo' else value
+    send(u,f"{CLIENT_EDIT_LABELS[field]}\nЯнги маълумот: {shown}\nТасдиқлайсизми?",
+         [['✅ Ўзгаришни сақлаш'],['⬅️ Мижоз карточкаси','❌ Бекор қилиш']])
+
 
 def tracking(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -328,6 +423,14 @@ def finish(db,u,s,source):
         cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time())))
         cid=cur.fetchone()[0]
         record(db,u,u,cid,'delivery',v['pack'],q,0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",source,currency='USD')
+    elif a=='agent_add':
+        if role(db,u)!='admin':raise ValueError('Фақат админ.')
+        if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():
+            raise ValueError('Бу Telegram ID аввал рўйхатдан ўтган.')
+        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(v['id'],'agent',v['name']))
+    elif a=='agent_deactivate':
+        if u not in ADMINS:raise ValueError('Бу ҳуқуқ фақат асосий админда.')
+        deactivate_agent(db,u,v['agent'])
     elif a=='user':
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():raise ValueError('Бу ходим аввал қўшилган.')
         db.execute('INSERT INTO users VALUES(?,?,?)',(v['id'],v['role'],v['name']))
@@ -352,7 +455,11 @@ def finish(db,u,s,source):
         send(u,f'✅ Товар сақланди. Мижоз #{selected} учун яна бошқа қадоқ қўшасизми?',
              [['➕ Яна маҳсулот қўшиш'],['⬅️ Меню']])
         return
-    if a=='admin_add':
+    if a=='agent_add':
+        send(u,f"✅ Агент қўшилди: {v['name']} (ID {v['id']}). Энди /start юборсин.",admin_agent_menu())
+    elif a=='agent_deactivate':
+        send(u,f"✅ Агент #{v['agent']} кириши ёпилди. Товар, қарз ва тарих ўчирилмади.",admin_agent_menu())
+    elif a=='admin_add':
         send(u,f"✅ {v['name']} (ID: {v['id']}) админ сифатида қўшилди. У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
