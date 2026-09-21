@@ -7,6 +7,12 @@ PRODUCTS={
     5:'Грунтовка 7/1 — 5 кг',
 }
 
+PACK_UNITS={1:10,3:6,5:2}
+
+def units_per_block(pack):
+    try:return PACK_UNITS[int(pack)]
+    except (KeyError,TypeError,ValueError):raise ValueError('Нотўғри товар қадоғи.')
+
 AGENT_FEATURES=(
     'client','clients','delivery','order','sold',
     'payment','return','visit','handover','balance'
