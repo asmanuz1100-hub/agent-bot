@@ -80,7 +80,7 @@ function rasterFallback(){{
   try{{if(basemap)map.removeLayer(basemap);}}catch(e){{console.warn('Vector background cleanup',e);}}
   try{{
     // CARTO raster tiles are an independent fallback, not the volunteer-run
-    // tile.openstreetmap.org host that previously returned HTTP 403.
+    // blocked volunteer-operated OSM raster endpoint.
     const raster=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
       maxZoom:19,subdomains:'abcd',
       attribution:'© OpenStreetMap contributors · © CARTO'
