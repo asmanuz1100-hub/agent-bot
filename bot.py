@@ -741,7 +741,15 @@ def serve_webhook(db,base_url):
                 self._reply(500,b'Retry');return
             self._reply(200,b'OK')
         def log_message(self,format,*args):
-            logging.info('HTTP '+format,*args)
+            # Access logs must not retain webhook secrets or signed map URLs.
+            safe=[]
+            for arg in args:
+                value=str(arg)
+                value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
+                value=re.sub(r'/map/agent/\\d+/\\d+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
+                value=re.sub(r'/map/overall/\\d+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
+                safe.append(value)
+            logging.info('HTTP '+format,*safe)
     # SQLite remains single-threaded; Render/PostgreSQL uses one connection per
     # request and per-agent database row locks for ledger consistency.
     server=(ThreadingHTTPServer if postgres else HTTPServer)(('0.0.0.0',port),Handler)
