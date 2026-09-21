@@ -254,7 +254,10 @@ def prompt(db,u,s):
         msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
     if key in ('client','agent'):
         if key=='client':
-            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if role(db,u)=='agent' else '')+' ORDER BY id DESC LIMIT 20',(u,) if role(db,u)=='agent' else ()).fetchall()
+            all_clients=s['action']=='client_view'
+            own_only=role(db,u)=='agent' and not all_clients
+            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if own_only else '')+
+                            ' ORDER BY id DESC LIMIT 20',(u,) if own_only else ()).fetchall()
             search_button='🔎 Мижоз қидириш'
         else:
             rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 20").fetchall()
@@ -297,7 +300,7 @@ CLIENT_EDIT_LABELS={
 def client_visible(db,u,cid):
     c=db.execute('SELECT * FROM clients WHERE id=?',(cid,)).fetchone()
     r=role(db,u)
-    if not c or not (r=='admin' or (r=='agent' and c['agent']==u)):
+    if not c or not (r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))):
         raise ValueError('Мижоз топилмади ёки кўришга рухсат йўқ.')
     return c
 
@@ -308,13 +311,17 @@ def show_client_card(db,u,cid):
     coords=(f"https://www.google.com/maps?q={c['lat']},{c['lon']}"
             if c['lat'] is not None and c['lon'] is not None else 'Локация киритилмаган')
     name=c['name'] or 'Номсиз'
-    send(u,f"👤 МИЖОЗ #{cid} · {name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
+    owner=db.execute('SELECT name FROM users WHERE id=?',(a,)).fetchone()
+    owner_name=owner[0] if owner else str(a)
+    can_edit=role(db,u)=='admin' or (role(db,u)=='agent' and a==u)
+    send(u,f"👤 МИЖОЗ #{cid} · {name}\n👨‍💼 Бириктирилган агент: {owner_name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
          f"\n📞 {c['phone'] or 'Телефон йўқ'}\n🏠 {c['address'] or 'Манзил йўқ'}"
          f"\n📝 {c['comment'] or 'Изоҳ йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}"
          f"\n📦 Мижоздаги товар:\n{stock}\n💵 Мижоз қарзи: {fmt(debt)} USD"
          +(f"\nЭски сўм ҳисоби: {fmt(old_debt)} сўм" if old_debt else '')
          +f"\n📍 {coords}",
-         [['✏️ Мижоз маълумотини ўзгартириш'],['⬅️ Мижозлар','⬅️ Меню']])
+         ([['✏️ Мижоз маълумотини ўзгартириш']] if can_edit else [])+
+         [['⬅️ Мижозлар','⬅️ Меню']])
     save(db,u,{'action':'client_card','step':0,'values':{'client':cid}})
     if c['photo']:
         try:send_photo(u,c['photo'],f"📷 #{cid} · {c['shop_name'] or name}")
@@ -322,14 +329,14 @@ def show_client_card(db,u,cid):
 
 def report_clients(db,u):
     if not allowed(db,u,'client_view'):raise ValueError('Мижозлар рўйхатига рухсат йўқ.')
-    where=' WHERE agent=?' if role(db,u)=='agent' else ''
-    params=(u,) if where else ()
-    if not db.execute('SELECT 1 FROM clients'+where+' LIMIT 1',params).fetchone():
+    if not db.execute('SELECT 1 FROM clients LIMIT 1').fetchone():
         send(u,'Мижозлар ҳали қўшилмаган.',menu(db,u));return
     prompt(db,u,{'action':'client_view','step':0,'values':{}})
 
 def show_client_edit_fields(db,u,cid):
-    client_visible(db,u,cid)
+    c=client_visible(db,u,cid)
+    if role(db,u)!='admin' and c['agent']!=u:
+        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     save(db,u,{'action':'client_edit_field','step':0,'values':{'client':cid}})
     keys=[[label] for label in CLIENT_EDIT_LABELS.values()]
     keys.extend([['⬅️ Мижоз карточкаси'],['⬅️ Меню']])
@@ -337,6 +344,8 @@ def show_client_edit_fields(db,u,cid):
 
 def ask_client_edit(db,u,cid,field):
     c=client_visible(db,u,cid)
+    if role(db,u)!='admin' and c['agent']!=u:
+        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     if field not in CLIENT_EDIT_LABELS:raise ValueError('Майдон топилмади.')
     old=(f"{c['lat']}, {c['lon']}" if field=='location' else c[field])
     save(db,u,{'action':'client_edit_value','step':0,'values':{'client':cid,'field':field}})
@@ -353,7 +362,9 @@ def ask_client_edit(db,u,cid,field):
 
 def process_client_edit(db,u,s,m,text):
     cid=s['values']['client'];field=s['values']['field']
-    client_visible(db,u,cid)
+    c=client_visible(db,u,cid)
+    if role(db,u)!='admin' and c['agent']!=u:
+        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     if field=='photo':
         if not m.get('photo'):raise ValueError('Янги расмни фото сифатида юборинг.')
         value=m['photo'][-1]['file_id']
@@ -690,19 +701,14 @@ def handle(db,update):
             if len(term)<2:raise ValueError('Қидириш учун камида 2 та белги киритинг.')
             pat='%'+term+'%'
             if key=='client':
-                if r=='agent':
-                    rows=db.execute("""SELECT id,name,shop_name FROM clients
-                        WHERE agent=? AND (
-                          CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
-                          LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
-                          LOWER(COALESCE(address,'')) LIKE ?
-                        ) ORDER BY id DESC LIMIT 20""",(u,pat,pat,pat,pat,pat)).fetchall()
-                else:
-                    rows=db.execute("""SELECT id,name,shop_name FROM clients
-                        WHERE CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
-                          LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
-                          LOWER(COALESCE(address,'')) LIKE ?
-                        ORDER BY id DESC LIMIT 20""",(pat,pat,pat,pat,pat)).fetchall()
+                own_only=r=='agent' and s['action']!='client_view'
+                rows=db.execute("""SELECT id,name,shop_name FROM clients
+                    WHERE """+('agent=? AND ' if own_only else '')+"""(
+                      CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
+                      LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
+                      LOWER(COALESCE(address,'')) LIKE ?
+                    ) ORDER BY id DESC LIMIT 20""",
+                    ((u,) if own_only else ())+(pat,pat,pat,pat,pat)).fetchall()
             else:
                 rows=db.execute("""SELECT id,name FROM users WHERE role='agent' AND
                     (CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ?)
@@ -717,7 +723,8 @@ def handle(db,update):
         if v<=0:raise ValueError('ID нотўғри.')
         if key=='client':
             row=db.execute('SELECT agent FROM clients WHERE id=?',(v,)).fetchone()
-            if not row or (r!='admin' and row[0]!=u):raise ValueError('Мижоз топилмади.')
+            if not row or (r!='admin' and s['action']!='client_view' and row[0]!=u):
+                raise ValueError('Мижоз топилмади.')
         if key=='agent' and not db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v,)).fetchone():raise ValueError('Агент топилмади.')
     elif key=='pack':
         by_name={product_name(p):p for p in (1,3,5)}
