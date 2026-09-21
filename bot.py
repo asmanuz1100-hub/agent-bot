@@ -1018,6 +1018,17 @@ def serve_webhook(db,base_url):
     try:server.serve_forever(poll_interval=.5)
     finally:server.server_close()
 
+def bootstrap_users(db):
+    for u in ADMINS:
+        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',
+                   (u,'admin','Админ'))
+    for u in TEST_AGENTS:
+        if u not in ADMINS:
+            # Bootstrap only: existing roles are authoritative.
+            db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING",
+                       (u,'agent',f'Агент {u}'))
+    db.commit()
+
 def run():
     if not TOKEN or not ADMINS:raise SystemExit('BOT_TOKEN ва ADMIN_IDS муҳит ўзгарувчиларини белгиланг.')
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s',force=True)
@@ -1027,15 +1038,7 @@ def run():
     db=connect(dsn)
     backend='postgres' if str(dsn).startswith(('postgres://','postgresql://')) else 'sqlite'
     logging.warning('Database backend: %s%s',backend,' (Render local files are ephemeral)' if backend=='sqlite' and os.getenv('RENDER_EXTERNAL_URL') else '')
-    for u in ADMINS:
-        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
-    for u in TEST_AGENTS:
-        if u not in ADMINS:
-            # TEST_AGENT_IDS is bootstrap-only. Never downgrade an existing
-            # admin/cashier/disabled user back to agent on Render restart.
-            db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING",
-                       (u,'agent',f'Агент {u}'))
-    db.commit()
+    bootstrap_users(db)
     api('getMe')
     print('Internal Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
