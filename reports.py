@@ -28,7 +28,8 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('Агентлар',metrics.get('agents',0)),
             ('Жами йўл',f"{metrics.get('km',0)} км"),
             ('Янги мижозлар',len(shops)),
-            ('Савдо суммаси',f"{m(metrics.get('sales',0))} USD"),
+            ('Берилган товар жами',f"{m(metrics.get('delivered',0))} USD"),
+            ('Олинган пул жами',f"{m(metrics.get('payments',0))} USD"),
         ]
     else:
         cards=[
@@ -47,7 +48,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 .top{{padding:18px 22px 14px;background:var(--panel);border-bottom:1px solid var(--line);z-index:1001}}
 .head{{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}}
 .title{{font-size:22px;font-weight:800;letter-spacing:-.02em}} .badge{{font-size:12px;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-weight:700}}
-.kpis{{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-top:14px}}
+.kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-top:14px}}
 .kpi{{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px 14px}}
 .kpi span{{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}} .kpi strong{{font-size:18px}}
 .body{{min-height:0;display:grid;grid-template-columns:310px 1fr;gap:14px;padding:14px}}
@@ -319,9 +320,13 @@ def overall(db,actor,now=None,period='day'):
         if not gps_points:text+='\n⚠️ Бугун GPS нуқталари сақланмаган.'
     else:
         text+='\n🗺 Харитада фақат шу даврда қўшилган янги мижозлар кўринади; агент траекторияси чизилмайди.'
-    summary=f"{worked} иш · {round(total_km,2)} км · {total_new} янги мижоз · {m(total_sales)} USD сотув"
+    delivered_total=int(total_sold[1] or 0)
+    payments_total=int(total_sold[2] or 0)
+    summary=(f"{worked} иш · {round(total_km,2)} км · {total_new} янги мижоз · "
+             f"берилган товар {m(delivered_total)} USD · олинган пул {m(payments_total)} USD")
     html=_map_html(f'{label} · {map_label}',routes if period=='day' else [],all_shops,summary,
-                   points_only=(period!='day'),summary_metrics={'agents':len(details),'km':round(total_km,2),'sales':total_sales})
+                   points_only=(period!='day'),summary_metrics={'agents':len(details),
+                   'km':round(total_km,2),'delivered':delivered_total,'payments':payments_total})
     return text,html
 
 def dates(start,end):
