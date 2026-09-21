@@ -42,6 +42,13 @@ FLOW={
  'price_set':[('pack','Қайси товар нархини киритасиз?'),('amount','1 дона учун каталог нархини киритинг (USD, масалан 2.50):')],
 }
 
+def redact_access_log_arg(value):
+    value=str(value)
+    value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
+    value=re.sub(r'/map/agent/[0-9]+/[0-9]+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
+    value=re.sub(r'/map/overall/[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
+    return value
+
 def request(url,payload=None,headers=None,timeout=50):
     raw=json.dumps(payload).encode() if payload is not None else None
     r=urllib.request.Request(url,data=raw,headers=headers or {'Content-Type':'application/json'})
@@ -741,15 +748,8 @@ def serve_webhook(db,base_url):
                 self._reply(500,b'Retry');return
             self._reply(200,b'OK')
         def log_message(self,format,*args):
-            # Access logs must not retain webhook secrets or signed map URLs.
-            safe=[]
-            for arg in args:
-                value=str(arg)
-                value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
-                value=re.sub(r'/map/agent/\\d+/\\d+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
-                value=re.sub(r'/map/overall/\\d+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
-                safe.append(value)
-            logging.info('HTTP '+format,*safe)
+            # Request path may contain a webhook secret or a signed GPS map URL.
+            logging.info('HTTP '+format,*(redact_access_log_arg(x) for x in args))
     # SQLite remains single-threaded; Render/PostgreSQL uses one connection per
     # request and per-agent database row locks for ledger consistency.
     server=(ThreadingHTTPServer if postgres else HTTPServer)(('0.0.0.0',port),Handler)
