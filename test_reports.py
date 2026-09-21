@@ -152,6 +152,13 @@ class ReportsTests(unittest.TestCase):
    self.assertIn('Олинган пулнинг умумий суммаси: 0.00 USD',text)
    self.assertIn('сотув қиймати: 12.34 USD',text)
    self.assertIn('Берилган товар жами</span><strong>20.00 USD',txt)
+   self.assertIn('Жами иш вақти</span><strong>1 соат 0 дақиқа',txt)
+   self.assertIn('Агентлар иш вақти',txt)
+   self.assertIn('basemaps.cartocdn.com/light_all/',txt)
+   self.assertIn('rasterFallback()',txt)
+   self.assertTrue(data['agent_work'])
+   agent=next(x for x in data['agent_work'] if x['name']=='B')
+   self.assertEqual(agent['hours'],'1 соат 0 дақиқа')
    self.assertIn('Олинган пул жами</span><strong>0.00 USD',txt)
    self.assertIn('берилган товар 20.00 USD',data['summary'])
    self.assertIn('траекторияси чизилмайди',text)
@@ -159,6 +166,23 @@ class ReportsTests(unittest.TestCase):
   day_json=re.search(r'<script id="data" type="application/json">(.*?)</script>',day_html.decode(),re.S)
   self.assertTrue(json.loads(day_json.group(1))['routes'])
   self.assertIn('1 КУНЛИК',day_text)
+  self.assertIn('Жами иш вақти</span><strong>1 соат 0 дақиқа',day_html.decode('utf-8'))
+  self.assertIn('Агентлар иш вақти',day_html.decode('utf-8'))
+
+ def test_empty_weekly_and_monthly_map_still_has_basemap_and_hours(self):
+  import json,re
+  now=datetime(2026,9,18,12,tzinfo=reports.TZ)
+  for period in ('week','month'):
+   summary,page=reports.overall(self.db,1,now,period=period)
+   txt=page.decode('utf-8')
+   data=json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>',txt,re.S).group(1))
+   self.assertEqual(data['routes'],[])
+   self.assertEqual(data['shops'],[])
+   self.assertTrue(data['points_only'])
+   self.assertIn('Шу даврда локацияси киритилган янги мижоз йўқ',txt)
+   self.assertIn('basemaps.cartocdn.com',txt)
+   self.assertIn('Жами иш вақти</span><strong>0 соат 0 дақиқа',txt)
+   self.assertIn('Жами иш соати: 0 соат 0 дақиқа',summary)
 
  def test_weekly_gross_delivery_and_payment_include_archived_agent_history(self):
   begin=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
