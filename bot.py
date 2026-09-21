@@ -48,7 +48,7 @@ def redact_access_log_arg(value):
     value=str(value)
     value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
     value=re.sub(r'/map/agent/[0-9]+/[0-9]+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
-    value=re.sub(r'/map/overall/(?:day|week|month/)?[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
+    value=re.sub(r'/map/overall/(?:(?:day|week|month)/)?[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
     return value
 
 def format_access_log(fmt,*args):
@@ -477,6 +477,9 @@ def handle(db,update):
         return
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
+    if s.get('action')=='add_product_ready':
+        send(u,'Шу мижозга яна маҳсулот қўшиш учун тугмани босинг ёки менюга қайтинг.',
+             [['➕ Яна маҳсулот қўшиш'],['⬅️ Меню']]);return
     if s.get('action') in FLOW and text=='⬅️ Орқага':
         fields=FLOW[s['action']]
         s.pop('confirm',None)
