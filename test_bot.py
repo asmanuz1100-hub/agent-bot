@@ -300,7 +300,7 @@ class Tests(unittest.TestCase):
   self.db.execute("UPDATE clients SET photo='tg-photo-file-id' WHERE id=1")
   with patch.object(bot,'send') as send,patch.object(bot,'api') as api:
    bot.report_clients(self.db,2)
-   self.assertIn('Мижозни танланг',send.call_args.args[1])
+   self.assertIn('мижозни танланг',send.call_args.args[1])
    bot.show_client_card(self.db,2,1)
    self.assertIn('МИЖОЗ #1',send.call_args.args[1])
   api.assert_called_once()
