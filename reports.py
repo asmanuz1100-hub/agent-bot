@@ -17,17 +17,26 @@ def admin_only(db,actor):
 def _safe_json(obj):
     return json.dumps(obj,ensure_ascii=False,separators=(',',':')).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
 
-def _map_html(title, routes, shops, summary):
+def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=None):
     total_km=round(sum(float(r.get('km') or 0) for r in routes),2)
     gps_points=sum(len(r.get('points') or []) for r in routes)
     active_shops=sum(1 for s in shops if s.get('active'))
-    data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary})
-    cards=[
-        ('Агентлар',len({r.get('agent') for r in routes if r.get('agent')})),
-        ('Жами йўл',f'{total_km} км'),
-        ('GPS нуқталар',gps_points),
-        ('Фаол нуқталар',active_shops),
-    ]
+    data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary,'points_only':points_only})
+    if points_only:
+        metrics=summary_metrics or {}
+        cards=[
+            ('Агентлар',metrics.get('agents',0)),
+            ('Жами йўл',f"{metrics.get('km',0)} км"),
+            ('Янги мижозлар',len(shops)),
+            ('Савдо суммаси',f"{m(metrics.get('sales',0))} USD"),
+        ]
+    else:
+        cards=[
+            ('Агентлар',len({r.get('agent') for r in routes if r.get('agent')})),
+            ('Жами йўл',f'{total_km} км'),
+            ('GPS нуқталар',gps_points),
+            ('Фаол нуқталар',active_shops),
+        ]
     cards_html=''.join(f'<div class="kpi"><span>{escape(str(k))}</span><strong>{escape(str(v))}</strong></div>' for k,v in cards)
     return f'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
@@ -51,7 +60,7 @@ def _map_html(title, routes, shops, summary):
 @media(max-width:820px){{.kpis{{grid-template-columns:repeat(2,1fr)}}.body{{grid-template-columns:1fr;grid-template-rows:auto 1fr}}.side{{max-height:220px}}#map{{min-height:520px}}}}
 </style></head>
 <body><div class="app"><section class="top"><div class="head"><div class="title">{escape(title)}</div><div class="badge">ИЧКИ ФОЙДАЛАНИШ · ТЕСТ</div></div><div class="kpis">{cards_html}</div></section>
-<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="legend" class="legend"></div><div class="hint">Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
+<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="legend" class="legend"></div><div class="hint">{escape('Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
 <script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script><script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
@@ -82,9 +91,9 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   if(last){{L.circleMarker(last,{{radius:7,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги GPS нуқта · '+esc(r.agent)+'<br><a rel="noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+last[0]+','+last[1]+'">Навигаторда очиш</a>');}}
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
-D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(!bounds.length && s.active)bounds.push(p);
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||(!bounds.length&&s.active))bounds.push(p);
   L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'));
+   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+'<br><a target="_blank" rel="noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">Навигаторда очиш</a>');
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);setTimeout(()=>map.invalidateSize(),250);
@@ -192,23 +201,37 @@ def route_map_html(db,actor,agent):
     summary=f"{stats['km']} км · {active} фаол савдо нуқтаси · {len(stats['stops'])} тўхташ · {len(stats['gaps'])} узилиш"
     return _map_html(f'Агент {agent} · смена #{shift["id"]}',[route],shops,summary),stats,active
 
-def overall(db,actor,now=None):
+def overall(db,actor,now=None,period='day'):
+    """Summarize a calendar day/week/month (Tashkent time).
+
+    Day map contains actual GPS trajectories. Week/month maps contain ONLY
+    locations of clients first registered during the requested period.
+    """
     admin_only(db,actor)
-    now=now or datetime.now(TZ);now=now.astimezone(TZ)
-    start=now.replace(hour=0,minute=0,second=0,microsecond=0)
+    now=now or datetime.now(TZ)
+    now=now.astimezone(TZ)
+    if period not in ('day','week','month'):
+        raise ValueError('Таҳлил даври нотўғри.')
+    midnight=now.replace(hour=0,minute=0,second=0,microsecond=0)
+    if period=='day':
+        start=midnight;label='1 КУНЛИК';map_label='кунлик маршрут'
+    elif period=='week':
+        start=midnight-timedelta(days=now.weekday());label='1 ҲАФТАЛИК';map_label='ҳафталик янги савдо нуқталари'
+    else:
+        start=midnight.replace(day=1);label='1 ОЙЛИК';map_label='ойлик янги савдо нуқталари'
     a=int(start.timestamp());b=int(now.timestamp())+1
     agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
     routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0
+    total_hours=0;total_new=0;total_sales=0;unpriced=0
     details=[]
     for ag in agents:
-        aid=ag[0]
+        aid=int(ag[0]);name=ag[1] or str(aid)
         shifts=db.execute('SELECT * FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?) ORDER BY start,id',(aid,b,a)).fetchall()
-        akm=0;astops=agaps=0;segments=[];seen_points=set()
+        akm=0;astops=agaps=0;segments=[];seen_points=set();worked=0
         for sh in shifts:
-            # Clip to this calendar day and keep shifts separate: do not draw a
-            # fictitious straight line between two distinct work sessions.
             lo=max(a,int(sh['start']));hi=min(b-1,int(sh['end'] or b-1))
             if hi<lo:continue
+            worked+=max(0,hi-lo)
             raw=db.execute('SELECT * FROM points WHERE shift=? AND ts>=? AND ts<=? ORDER BY ts,id',(sh['id'],lo,hi)).fetchall()
             pts=[]
             for p in raw:
@@ -218,53 +241,80 @@ def overall(db,actor,now=None):
             if not pts:continue
             stats=route_stats(pts,lo,hi);akm+=stats['km']
             astops+=len(stats['stops']);agaps+=len(stats['gaps']);gps_points+=len(pts)
-            # Break lines on GPS gaps, poor accuracy and implausible jumps.
+            if period!='day':continue
             seg=[];prev=None
             for p in pts:
                 if (p['accuracy'] or 0)>100:
                     if seg:segments.append(seg);seg=[]
                     prev=None;continue
                 if prev and (p['ts']-prev['ts']>300 or p['ts']<=prev['ts'] or
-                    (distance(prev,p)/max(1,p['ts']-prev['ts']))>55):
+                    distance(prev,p)/max(1,p['ts']-prev['ts'])>55):
                     if seg:segments.append(seg)
                     seg=[]
                 seg.append({'lat':p['lat'],'lon':p['lon'],'ts':p['ts']})
                 prev=p
             if seg:segments.append(seg)
-        active={r[0] for r in db.execute(
-            'SELECT DISTINCT client FROM events WHERE agent=? AND client IS NOT NULL AND ts>=? AND ts<?',
-            (aid,a,b)).fetchall()}
-        for shop in db.execute('SELECT id,name,shop_name,address,lat,lon FROM clients WHERE agent=? AND lat IS NOT NULL AND lon IS NOT NULL',(aid,)).fetchall():
-            all_shops.append({'id':shop['id'],'name':shop['name'],'shop':shop['shop_name'],
-                'address':shop['address'],'lat':shop['lat'],'lon':shop['lon'],'active':shop['id'] in active})
-        if segments:
-            routes.append({'agent':ag[1] or str(aid),'agent_id':aid,'km':round(akm,2),
-                'points':[p for seg in segments for p in seg],'segments':segments})
+        if period=='day':
+            active={r[0] for r in db.execute(
+                'SELECT DISTINCT client FROM events WHERE agent=? AND client IS NOT NULL AND ts>=? AND ts<?',
+                (aid,a,b)).fetchall()}
+            shops=db.execute('SELECT id,name,shop_name,address,lat,lon FROM clients WHERE agent=? AND lat IS NOT NULL AND lon IS NOT NULL',(aid,)).fetchall()
+            for shop in shops:
+                all_shops.append({'id':shop['id'],'name':shop['name'],'shop':shop['shop_name'],
+                    'address':shop['address'],'lat':shop['lat'],'lon':shop['lon'],'active':shop['id'] in active})
+            if segments:
+                routes.append({'agent':name,'agent_id':aid,'km':round(akm,2),
+                    'points':[p for seg in segments for p in seg],'segments':segments})
+        else:
+            # New shops only: old customers and every GPS track stay out of
+            # the weekly/monthly map's JSON and HTML.
+            shops=db.execute("""SELECT id,name,shop_name,address,lat,lon FROM clients
+                WHERE agent=? AND created_ts>=? AND created_ts<? AND lat IS NOT NULL AND lon IS NOT NULL
+                ORDER BY created_ts,id""",(aid,a,b)).fetchall()
+            for shop in shops:
+                all_shops.append({'id':shop['id'],'name':shop['name'],'shop':shop['shop_name'],
+                    'address':shop['address'],'lat':shop['lat'],'lon':shop['lon'],'active':True})
         metric=db.execute("""SELECT
             COUNT(DISTINCT client),
-            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
-            COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
+            COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='sold' THEN amount_usd ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='sold' AND amount_usd=0 THEN qty ELSE 0 END),0)
             FROM events WHERE agent=? AND ts>=? AND ts<?""",(aid,a,b)).fetchone()
-        active_count=int(metric[0] or 0);sold=int(metric[1] or 0);paid=int(metric[2] or 0)
-        details.append(f"{ag[1]} ({aid}): {round(akm,2)} км · {active_count} нуқта · топширилди {m(sold)} USD · тўлов {m(paid)} USD")
+        active_count=int(metric[0] or 0);sold_qty=int(metric[1] or 0)
+        sold=int(metric[2] or 0);delivered=int(metric[3] or 0)
+        paid=int(metric[4] or 0);missing=int(metric[5] or 0)
+        new=int(db.execute('SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?',
+                           (aid,a,b)).fetchone()[0])
+        total_hours+=worked;total_new+=new;total_sales+=sold;unpriced+=missing
+        hours=worked//3600;minutes=(worked%3600)//60
+        details.append(f"{name} ({aid}): иш {hours} соат {minutes} дақиқа · {round(akm,2)} км · "
+                       f"янги мижоз {new} та · сотув {sold_qty} дона / {m(sold)} USD · "
+                       f"топширилган товар {m(delivered)} USD · тўлов {m(paid)} USD")
         total_km+=akm;stops+=astops;gaps+=agaps
-    metric=db.execute("""SELECT
-        COUNT(DISTINCT client),
-        COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
+    total_sold=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0)
         FROM events WHERE ts>=? AND ts<?""",(a,b)).fetchone()
-    active_all=int(metric[0] or 0);sold_qty=int(metric[1] or 0);sold=int(metric[2] or 0)
-    delivered=int(metric[3] or 0);paid=int(metric[4] or 0)
-    text=(f"УМУМИЙ ТАҲЛИЛ · {now:%d.%m.%Y %H:%M}\n"
-          f"Жами агент: {len(agents)}\nЖами йўл: {round(total_km,2)} км\nGPS нуқталари: {gps_points}\n"
-          f"Фаол савдо нуқталари: {active_all}\nТўхташлар: {stops}\nЛокация узилишлари (>5 дақ.): {gaps}\n"
-          f"Берилган товар: {delivered} дона · Сотилган: {sold_qty} дона\nТовар ҳисоби: {m(sold)} USD\nОлинган тўлов: {m(paid)} USD\n\n"
-          +"Агентлар:\n"+("\n".join(details) if details else "Агент йўқ"))
-    if gps_points==0:text+='\n\n⚠️ Бугун GPS нуқталари сақланмаган. Агент сменани бошлаб Telegram жонли локациясини юбориши керак.'
-    summary=f"{round(total_km,2)} км · {active_all} фаол нуқта · {m(sold)} USD товар"
-    return text,_map_html(f'Умумий маршрут · {now:%d.%m.%Y}',routes,all_shops,summary)
+    worked=f"{total_hours//3600} соат {(total_hours%3600)//60} дақиқа"
+    text=(f"📊 {label} УМУМИЙ ТАҲЛИЛ · {start:%d.%m.%Y} — {now:%d.%m.%Y %H:%M}\n"
+          f"Жами агент: {len(agents)}\nЖами иш соати: {worked}\nЖами масофа: {round(total_km,2)} км\n"
+          f"Янги мижозлар: {total_new} та\nСавдо суммаси: {m(total_sales)} USD\n"
+          f"Сотилган товар: {int(total_sold[0] or 0)} дона\n"
+          f"Топширилган товар қиймати: {m(int(total_sold[1] or 0))} USD\n"
+          f"Олинган тўлов: {m(int(total_sold[2] or 0))} USD\n"
+          + (f"⚠️ Олдинги версиядаги {unpriced} дона сотувнинг USD баҳоси сақланмаган — сотув жамига кирмаган.\n" if unpriced else '')
+          + ("\nАгентлар:\n"+"\n".join(details) if details else "\nАгент йўқ."))
+    if period=='day':
+        text+=f"\nGPS нуқталари: {gps_points} · тўхташ: {stops} · узилиш: {gaps}"
+        if not gps_points:text+='\n⚠️ Бугун GPS нуқталари сақланмаган.'
+    else:
+        text+='\n🗺 Харитада фақат шу даврда қўшилган янги мижозлар кўринади; агент траекторияси чизилмайди.'
+    summary=f"{worked} иш · {round(total_km,2)} км · {total_new} янги мижоз · {m(total_sales)} USD сотув"
+    html=_map_html(f'{label} · {map_label}',routes if period=='day' else [],all_shops,summary,
+                   points_only=(period!='day'),summary_metrics={'agents':len(agents),'km':round(total_km,2),'sales':total_sales})
+    return text,html
 
 def dates(start,end):
     try:
