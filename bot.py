@@ -347,6 +347,7 @@ def show_client_card(db,u,cid):
     send(u,f"👤 МИЖОЗ #{cid} · {name}\n👨‍💼 Бириктирилган агент: {owner_name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
          f"\n📞 {c['phone'] or 'Телефон йўқ'}\n🏠 {c['address'] or 'Манзил йўқ'}"
          f"\n📝 {c['comment'] or 'Изоҳ йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}"
+         f"\n🗓 Қўшилган сана: {stamp(c['created_ts']) if c['created_ts'] else 'Кўрсатилмаган'}"
          f"\n📦 Мижоздаги товар:\n{stock}\n💵 Мижоз қарзи: {fmt(debt)} USD"
          +(f"\nЭски сўм ҳисоби: {fmt(old_debt)} сўм" if old_debt else '')
          +f"\n📍 {coords}",
