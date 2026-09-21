@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT NULL, old_id INTEGER, new_id INTEGER, action TEXT NOT NULL, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS client_edits(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, actor INTEGER NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT NULL, old_id BIGINT, new_id BIGINT, action TEXT NOT NULL, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS client_edits(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, actor BIGINT NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
@@ -290,6 +292,42 @@ def transfer_agent_account(db,actor,old_id,new_id):
     db.execute("UPDATE users SET role='disabled' WHERE id=?",(old_id,))
     db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
                (actor,old_id,new_id,'agent_transfer',int(time.time())))
+
+CLIENT_EDIT_FIELDS=('name','shop_name','phone','address','comment','payment_due','photo','lat','lon')
+
+def edit_client(db,actor,client_id,values):
+    """Edit the chosen customer profile only; product/receivable history is immutable."""
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    current=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
+    if not identity or not current or not (identity[0]=='admin' or
+        (identity[0]=='agent' and current['agent']==actor)):
+        raise ValueError('Бу мижоз маълумотини ўзгартиришга рухсат йўқ.')
+    if not values or any(field not in CLIENT_EDIT_FIELDS for field in values):
+        raise ValueError('Таҳрирланадиган маълумот нотўғри.')
+    if isinstance(db,PostgresDB):
+        current=db.execute('SELECT * FROM clients WHERE id=? FOR UPDATE',(client_id,)).fetchone()
+    for field,new in values.items():
+        before=current[field]
+        if before==new:continue
+        db.execute(f'UPDATE clients SET {field}=? WHERE id=?',(new,client_id))
+        db.execute('INSERT INTO client_edits(client,actor,field,old_value,new_value,ts) VALUES(?,?,?,?,?,?)',
+                   (client_id,actor,field,str(before) if before is not None else None,
+                    str(new) if new is not None else None,int(time.time())))
+    return True
+
+def deactivate_agent(db,actor,agent_id):
+    """Disable login but never delete customer, stock, cash, GPS or invoice history."""
+    admin=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not admin or admin[0]!='admin':raise ValueError('Фақат админ агент ҳисобини ёпиши мумкин.')
+    agent=db.execute('SELECT role FROM users WHERE id=?',(agent_id,)).fetchone()
+    if not agent or agent[0]!='agent':raise ValueError('Фаол агент топилмади.')
+    if isinstance(db,PostgresDB):db.execute('SELECT id FROM users WHERE id=? FOR UPDATE',(agent_id,)).fetchone()
+    if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(agent_id,)).fetchone():
+        raise ValueError('Аввал агентнинг иш сменасини тугатинг.')
+    db.execute("UPDATE users SET role='disabled' WHERE id=?",(agent_id,))
+    db.execute('DELETE FROM sessions WHERE agent=?',(agent_id,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,agent_id,None,'agent_deactivated',int(time.time())))
 
 def feature_enabled(db,agent,feature):
     if feature not in AGENT_FEATURES:return True
