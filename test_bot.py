@@ -58,12 +58,64 @@ class Tests(unittest.TestCase):
    self.assertTrue(bot.allowed(self.db,123456789,'analytics'))
    self.assertFalse(bot.allowed(self.db,123456789,'admin_add'))
    self.assertNotIn('🔐 Админ қўшиш',[b for row in bot.menu(self.db,123456789) for b in row])
-   self.assertIn('админ сифатида қўшилди',send.call_args.args[1])
+   self.assertIn('Янги админ қўшилди',send.call_args.args[1])
    bot.handle(self.db,msg(15005,123456789,'/start'))
    self.assertIn('Амални танланг',send.call_args.args[1])
    with self.assertRaises(ValueError):
     bot.handle(self.db,msg(15006,123456789,'🔐 Админ қўшиш'))
    self.assertIsNone(self.db.execute('SELECT 1 FROM users WHERE id=123456790').fetchone())
+
+
+ def test_existing_disabled_agent_can_be_promoted_to_secondary_admin(self):
+  uid=1037158726
+  self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'disabled','Эски агент'))
+  self.db.execute('INSERT INTO shifts(agent,start,end) VALUES(?,?,?)',(uid,int(time.time())-7200,int(time.time())-3600))
+  before=self.db.execute('SELECT COUNT(*) FROM shifts WHERE agent=?',(uid,)).fetchone()[0]
+  now=int(time.time())
+  def msg(i,t,actor=1):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':actor},'chat':{'id':actor,'type':'private'},'text':t}}
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send') as send:
+   for i,t in enumerate(['🔐 Админ қўшиш',str(uid),'Янги админ','✅ Тасдиқлаш'],15050):
+    bot.handle(self.db,msg(i,t))
+   self.assertEqual(bot.role(self.db,uid),'admin')
+   self.assertEqual(self.db.execute('SELECT name FROM users WHERE id=?',(uid,)).fetchone()[0],'Янги админ')
+   self.assertIn('Мавжуд аккаунт админга ўтказилди',send.call_args.args[1])
+   self.assertEqual(self.db.execute('SELECT COUNT(*) FROM shifts WHERE agent=?',(uid,)).fetchone()[0],before)
+   audit=self.db.execute("SELECT actor,old_id,new_id,action FROM role_audit WHERE new_id=?",(uid,)).fetchone()
+   self.assertEqual(tuple(audit),(1,uid,uid,'admin_promoted_from_disabled'))
+   self.assertTrue(bot.allowed(self.db,uid,'analytics'))
+   self.assertFalse(bot.allowed(self.db,uid,'admin_add'))
+   bot.handle(self.db,msg(15060,'/start',actor=uid))
+   self.assertIn('🗺 Умумий таҳлил',[x for row in send.call_args.args[2] for x in row])
+   with self.assertRaises(ValueError):
+    bot.handle(self.db,msg(15061,'🔐 Админ қўшиш',actor=uid))
+
+ def test_existing_agent_with_stock_or_clients_cannot_be_promoted(self):
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
+   with self.assertRaisesRegex(ValueError,'мижозлар'):
+    bot.finish(self.db,1,{'action':'admin_add','values':{'id':2,'name':'Bad promotion'}},15100)
+   self.assertEqual(bot.role(self.db,2),'agent')
+   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(123456010,'agent','Inventory'))
+   core.record(self.db,1,123456010,None,'load',1,5,source=15101)
+   with self.assertRaisesRegex(ValueError,'товар қолдиғи'):
+    bot.finish(self.db,1,{'action':'admin_add','values':{'id':123456010,'name':'Inventory'}},15102)
+   self.assertEqual(bot.role(self.db,123456010),'agent')
+   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(123456011,'disabled','Old session'))
+   self.db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(123456011,int(time.time())-100))
+   with self.assertRaisesRegex(ValueError,'очиқ смена'):
+    bot.finish(self.db,1,{'action':'admin_add','values':{'id':123456011,'name':'Old session'}},15103)
+   self.assertEqual(bot.role(self.db,123456011),'disabled')
+   self.assertEqual(self.db.execute('SELECT COUNT(*) FROM role_audit WHERE new_id IN (?,?)',(123456010,123456011)).fetchone()[0],0)
+
+ def test_existing_admin_cannot_be_added_twice_and_secondary_cannot_promote(self):
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
+   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(550,'admin','Secondary'))
+   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(551,'disabled','Disabled'))
+   with self.assertRaisesRegex(ValueError,'аллақачон админ'):
+    bot.finish(self.db,1,{'action':'admin_add','values':{'id':550,'name':'Duplicate'}},15110)
+   with self.assertRaises(ValueError):
+    bot.finish(self.db,550,{'action':'admin_add','values':{'id':551,'name':'Unauthorized'}},15111)
+   self.assertEqual(bot.role(self.db,551),'disabled')
 
  def test_secondary_admin_cannot_escalate_via_saved_wizard(self):
   with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send'):
