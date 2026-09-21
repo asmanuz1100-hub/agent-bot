@@ -483,6 +483,13 @@ def handle(db,update):
         return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
+    if text=='⬅️ Мижозлар':
+        report_clients(db,u);return
+    if text=='⬅️ Мижоз карточкаси':
+        s0=state(db,u)
+        if not s0 or s0.get('action') not in ('client_card','client_edit_field','client_edit_value','client_edit_confirm'):
+            raise ValueError('Аввал «Мижозлар» бўлимидан мижозни танланг.')
+        show_client_card(db,u,s0['values']['client']);return
     if text=='➕ Яна маҳсулот қўшиш':
         pending=state(db,u)
         if r!='agent' or not feature_enabled(db,u,'delivery') or not pending or pending.get('action')!='add_product_ready':
@@ -579,6 +586,27 @@ def handle(db,update):
         return
     s=state(db,u)
     if not s:send(u,'Менюдан амални танланг.',menu(db,u));return
+    if s.get('action')=='client_card':
+        cid=s['values']['client']
+        client_visible(db,u,cid)
+        if text=='✏️ Мижоз маълумотини ўзгартириш':
+            show_client_edit_fields(db,u,cid);return
+        show_client_card(db,u,cid);return
+    if s.get('action')=='client_edit_field':
+        cid=s['values']['client']
+        field=next((key for key,label in CLIENT_EDIT_LABELS.items() if text==label),None)
+        if not field:raise ValueError('Ўзгартириш учун рўйхатдан майдонни танланг.')
+        ask_client_edit(db,u,cid,field);return
+    if s.get('action')=='client_edit_value':
+        process_client_edit(db,u,s,m,text);return
+    if s.get('action')=='client_edit_confirm':
+        if text!='✅ Ўзгаришни сақлаш':
+            raise ValueError('Ўзгаришни сақлашни босинг ёки карточкага қайтинг.')
+        vals=s['values'];field=vals['field'];value=vals['value']
+        changes=value if field=='location' else {field:value}
+        edit_client(db,u,vals['client'],changes)
+        send(u,'✅ Мижоз маълумотлари янгиланди. Молиявий тарих ўзгартирилмади.')
+        show_client_card(db,u,vals['client']);return
     if s.get('action')=='add_product_ready':
         send(u,'Шу мижозга яна маҳсулот қўшиш учун тугмани босинг ёки менюга қайтинг.',
              [['➕ Яна маҳсулот қўшиш'],['⬅️ Меню']]);return
@@ -710,6 +738,8 @@ def handle(db,update):
     s['values'][key]=v;s['step']+=1
     if s['action']=='agent_profile' and key=='agent':
         show_agent_profile(db,u,v);return
+    if s['action']=='client_view' and key=='client':
+        show_client_card(db,u,v);return
     prompt(db,u,s)
 
 def _failure_key(update_id):return f'update_failure:{int(update_id)}'
