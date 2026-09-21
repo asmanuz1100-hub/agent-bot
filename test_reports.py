@@ -132,7 +132,7 @@ class ReportsTests(unittest.TestCase):
   summary,html=reports.overall(self.db,1,datetime(2026,9,18,11,tzinfo=reports.TZ),period='week')
   self.assertIn('Берилган товарнинг умумий суммаси: 15.00 USD',summary)
   self.assertIn('Олинган пулнинг умумий суммаси: 5.50 USD',summary)
-  self.assertIn('Архив',summary)
+  self.assertIn('D (4):',summary)
   self.assertIn('сотув қиймати: 0.00 USD',summary)
   self.assertIn('USD баҳоси сақланмаган',summary)
   import re,json
