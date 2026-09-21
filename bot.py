@@ -123,7 +123,15 @@ def document(uid,filename,content):
 
 def role(db,u):
     row=db.execute('SELECT role FROM users WHERE id=?',(u,)).fetchone()
-    return row[0] if row else None
+    if not row:return None
+    current=row[0]
+    if current!='admin':
+        locked=db.execute('SELECT 1 FROM meta WHERE key=? AND value=?',(f'secondary_admin:{u}','1')).fetchone()
+        if locked:
+            db.execute("UPDATE users SET role='admin' WHERE id=?",(u,))
+            logging.warning('Restored protected secondary admin role for user=%s',u)
+            return 'admin'
+    return current
 
 def allowed(db,u,action):
     r=role(db,u)
@@ -1027,6 +1035,11 @@ def bootstrap_users(db):
             # Bootstrap only: existing roles are authoritative.
             db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING",
                        (u,'agent',f'Агент {u}'))
+    protected=db.execute("SELECT key FROM meta WHERE key LIKE 'secondary_admin:%' AND value='1'").fetchall()
+    for row in protected:
+        try:uid=int(str(row[0]).split(':',1)[1])
+        except (ValueError,IndexError):continue
+        db.execute("UPDATE users SET role='admin' WHERE id=?",(uid,))
     db.commit()
 
 def run():
