@@ -84,6 +84,54 @@ class ReportsTests(unittest.TestCase):
   self.assertIn('GPS нуқталари: 4',text)
   self.assertIn('Навигаторда очиш',html.decode('utf-8'))
 
+ def test_week_and_month_maps_only_show_new_customers_not_agent_tracks(self):
+  import json,re
+  tz=reports.TZ
+  at=lambda y,m,d,h=9: int(datetime(y,m,d,h,tzinfo=tz).timestamp())
+  self.db.execute("UPDATE clients SET lat=41.111,lon=70.111,created_ts=? WHERE id=1",(at(2026,8,15),))
+  self.db.execute("UPDATE clients SET lat=41.222,lon=70.222,created_ts=? WHERE id=2",(at(2026,9,3),))
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name,address,lat,lon,created_ts) VALUES(10,2,'New Shop','+998900000010','New Shop','New Address',41.333,70.333,?)",(at(2026,9,16),))
+  start=at(2026,9,18)
+  self.db.execute('INSERT INTO shifts(agent,start,end) VALUES(?,?,?)',(2,start,start+3600))
+  shift=self.db.execute('SELECT id FROM shifts WHERE agent=2').fetchone()[0]
+  self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',[
+   (shift,start,40.888,71.888,10),(shift,start+100,40.889,71.889,10)
+  ])
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,10,'sold',1,2,1234,?)",(start+100,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,10,'delivery',1,2,2000,?)",(start+50,))
+  now=datetime(2026,9,18,12,tzinfo=tz)
+  for period,expected in (('week',[10]),('month',[2,10])):
+   text,html=reports.overall(self.db,1,now,period=period)
+   txt=html.decode('utf-8')
+   match=re.search(r'<script id="data" type="application/json">(.*?)</script>',txt,re.S)
+   self.assertIsNotNone(match)
+   data=json.loads(match.group(1))
+   self.assertEqual(data['routes'],[])
+   self.assertTrue(data['points_only'])
+   self.assertEqual(sorted(x['id'] for x in data['shops']),expected)
+   self.assertNotIn('40.888',match.group(1))
+   self.assertNotIn('40.889',match.group(1))
+   self.assertIn('Жами иш соати: 1 соат 0 дақиқа',text)
+   self.assertIn('Янги мижозлар:',text)
+   self.assertIn('Савдо суммаси: 12.34 USD',text)
+   self.assertIn('траекторияси чизилмайди',text)
+  day_text,day_html=reports.overall(self.db,1,now,period='day')
+  day_json=re.search(r'<script id="data" type="application/json">(.*?)</script>',day_html.decode(),re.S)
+  self.assertTrue(json.loads(day_json.group(1))['routes'])
+  self.assertIn('1 КУНЛИК',day_text)
+
+ def test_all_time_reconciliation_without_dates(self):
+  self.add('delivery','2026-09-01',4)
+  self.add('sold','2026-09-02',2,20000)
+  self.add('payment','2026-09-18',amount=10000)
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'delivery',1,4,800,?)",
+                  (int(datetime(2026,9,1,9,tzinfo=reports.TZ).timestamp()),))
+  result=reports.reconciliation(self.db,1,1)
+  self.assertEqual(result['start'],'Барча давр')
+  self.assertEqual(result['usd_closing'],800)
+  self.assertEqual(result['closing'],10000)
+  self.assertIn('Барча давр',reports.reconciliation_html(result).decode('utf-8'))
+
  def test_shift_daily_summary(self):
   start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp());end=start+3600
   self.db.execute('INSERT INTO shifts(agent,start,end,live_id) VALUES(2,?,?,99)',(start,end))
