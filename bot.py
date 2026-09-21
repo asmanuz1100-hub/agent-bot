@@ -21,6 +21,8 @@ MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
+BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
+ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
  'reconcile':[('client','Умумий акт сверка учун мижозни танланг:')],
@@ -46,7 +48,7 @@ def redact_access_log_arg(value):
     value=str(value)
     value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
     value=re.sub(r'/map/agent/[0-9]+/[0-9]+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
-    value=re.sub(r'/map/overall/[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
+    value=re.sub(r'/map/overall/(?:day|week|month/)?[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
     return value
 
 def format_access_log(fmt,*args):
@@ -108,10 +110,10 @@ def role(db,u):
 def allowed(db,u,action):
     r=role(db,u)
     if action in ('admin_add','agent_transfer'):return r=='admin' and u in ADMINS
-    return (r=='admin' and action in ('user','load','tracking','analytics','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
-    keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS]
+    keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
     return [keys[i:i+2] for i in range(0,len(keys),2)]
 
 AGENT_WORK_ACTIONS={'client','clients','delivery','sold','order','payment','return','visit','handover'}
@@ -442,11 +444,19 @@ def handle(db,update):
             rows=db.execute("SELECT * FROM handovers WHERE status='pending'").fetchall()
             send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount_usd'])} USD"+(f" · {fmt(x['amount'])} сўм" if x['amount'] else '')+f"\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
         if action=='analytics':
-            logging.info('Overall analytics requested by admin=%s',u)
-            text,map_html=reports.overall(db,u)
-            send(u,text)
-            link=map_link('overall')
-            if link:send_inline(u,'🗺 Барча агентлар маршрути ва савдо нуқталари:',[('🗺 Умумий харитани очиш',link)])
+            send(u,'🗺 Умумий таҳлил учун даврни танланг:',
+                [['📅 1 кунлик таҳлил','📅 1 ҳафталик таҳлил'],['📅 1 ойлик таҳлил'],['⬅️ Меню']])
+            return
+        if action in ANALYTICS_PERIODS:
+            period=ANALYTICS_PERIODS[action]
+            logging.info('Overall analytics requested for %s by admin=%s',period,u)
+            report_text,_=reports.overall(db,u,period=period)
+            send(u,report_text)
+            link=map_link(f'overall/{period}')
+            if link:
+                caption=('🗺 Кунлик агентлар маршрути ва савдо нуқталари:' if period=='day'
+                         else '🗺 Фақат шу даврда қўшилган янги мижозлар харитаси:')
+                send_inline(u,caption,[('🗺 Харитада очиш',link)])
             return
         if action=='summary':
             for row in db.execute("SELECT * FROM users WHERE role='agent'"):
@@ -717,15 +727,17 @@ def serve_webhook(db,base_url):
             path=urlparse(self.path).path
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
-            m=re.fullmatch(r'/map/overall/(\d{10,})/([0-9a-f]{32})',path)
-            if m:
-                expires,sig=m.group(1),m.group(2)
-                if not _map_valid('overall',expires,sig):
+            m=re.fullmatch(r'/map/overall/(day|week|month)/(\d{10,})/([0-9a-f]{32})',path)
+            old_m=re.fullmatch(r'/map/overall/(\d{10,})/([0-9a-f]{32})',path)
+            if m or old_m:
+                period,expires,sig=(m.group(1),m.group(2),m.group(3)) if m else ('day',old_m.group(1),old_m.group(2))
+                scope=f'overall/{period}' if m else 'overall'
+                if not _map_valid(scope,expires,sig):
                     self._reply(410,b'Map link expired or invalid');return
                 try:
                     local=request_db()
                     try:
-                        actor=next(iter(ADMINS));_,html=reports.overall(local,actor)
+                        actor=next(iter(ADMINS));_,html=reports.overall(local,actor,period=period)
                         local.commit()
                     finally:
                         if postgres:local.close()
