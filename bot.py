@@ -315,6 +315,7 @@ def ocr(photo):
     result=json.loads(txt)
     return {k:str(result.get(k,'') or '')[:300] for k in ('name','phone','address')}
 
+DELIVERY_EDIT_LABEL='📦 Берилган товарни тузатиш'
 CLIENT_EDIT_LABELS={
     'name':'👤 Мижоз исми',
     'shop_name':'🏪 Дўкон номи',
@@ -368,8 +369,73 @@ def show_client_edit_fields(db,u,cid):
         raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     save(db,u,{'action':'client_edit_field','step':0,'values':{'client':cid}})
     keys=[[label] for label in CLIENT_EDIT_LABELS.values()]
+    keys.append([DELIVERY_EDIT_LABEL])
     keys.extend([['⬅️ Мижоз карточкаси'],['⬅️ Меню']])
-    send(u,'Қайси маълумотни ўзгартирасиз?\nТовар, қарз ва тўлов тарихи ўзгармайди.',keys)
+    send(u,'Қайси маълумотни ўзгартирасиз?\nПрофил маълумотлари ёки хатолик билан киритилган товар топширишини тузатиш мумкин.',keys)
+
+def _owned_client_for_finance_edit(db,u,cid):
+    c=client_visible(db,u,cid)
+    if role(db,u)!='admin' and c['agent']!=u:
+        raise ValueError('Бошқа агентнинг товар ҳисобини ўзгартириш мумкин эмас.')
+    return c
+
+def show_delivery_edit_list(db,u,cid):
+    c=_owned_client_for_finance_edit(db,u,cid)
+    rows=db.execute("""SELECT id,pack,qty,amount_usd,ts FROM events
+        WHERE client=? AND agent=? AND kind='delivery' ORDER BY id DESC LIMIT 20""",
+        (cid,c['agent'])).fetchall()
+    if not rows:
+        send(u,'Бу мижозга топширилган товар ёзуви йўқ.',[['⬅️ Мижоз карточкаси']]);return
+    save(db,u,{'action':'delivery_edit_choose','step':0,'values':{'client':cid}})
+    keys=[[f"#{row['id']} · {stamp(row['ts'])} · {product_name(row['pack'])} · {row['qty']} дона · {fmt(row['amount_usd'])} USD"] for row in rows]
+    keys.extend([['⬅️ Мижоз карточкаси'],['❌ Бекор қилиш']])
+    send(u,'Тузатмоқчи бўлган товар топширишини танланг:',keys)
+
+def start_delivery_edit(db,u,cid,event_id):
+    c=_owned_client_for_finance_edit(db,u,cid)
+    row=db.execute("""SELECT id,pack,qty,amount_usd,ts FROM events
+        WHERE id=? AND client=? AND agent=? AND kind='delivery'""",
+        (event_id,cid,c['agent'])).fetchone()
+    if not row:raise ValueError('Товар топшириш ёзуви топилмади.')
+    if int(row['amount_usd'] or 0)<=0:
+        raise ValueError('Бу эски топширишда USD нархи сақланмаган. Автомат тузатиб бўлмайди.')
+    save(db,u,{'action':'delivery_edit_pack','step':0,'values':{'client':cid,'event':event_id}})
+    keys=[[product_name(p)] for p in (1,3,5)]
+    keys.extend([['⬅️ Мижоз карточкаси'],['❌ Бекор қилиш']])
+    send(u,f"Танланган ёзув #{event_id}\nҲозир: {product_name(row['pack'])} · {row['qty']} дона · {fmt(row['amount_usd'])} USD\nЯнги товар турини танланг:",keys)
+
+def delivery_edit_choose_pack(db,u,s,text):
+    by_name={product_name(p):p for p in (1,3,5)}
+    if text not in by_name:raise ValueError('Товарни рўйхатдан танланг.')
+    pack=by_name[text]
+    s={'action':'delivery_edit_unit','step':0,'values':{**s['values'],'pack':pack}}
+    save(db,u,s)
+    send(u,f"{product_name(pack)}\nМиқдорни қандай киритасиз?\n1 блок = {units_per_block(pack)} дона.",
+         [['Дона','Блок'],['⬅️ Мижоз карточкаси','❌ Бекор қилиш']])
+
+def delivery_edit_choose_unit(db,u,s,text):
+    if text not in ('Дона','Блок'):raise ValueError('Дона ёки Блокни танланг.')
+    s={'action':'delivery_edit_qty','step':0,'values':{**s['values'],'unit':text}}
+    save(db,u,s)
+    send(u,'Янги миқдорни киритинг:',[['⬅️ Мижоз карточкаси'],['❌ Бекор қилиш']])
+
+def delivery_edit_preview(db,u,s,text):
+    qty=count(text)
+    pack=s['values']['pack']
+    units=qty*(units_per_block(pack) if s['values']['unit']=='Блок' else 1)
+    plan=delivery_correction_plan(db,u,s['values']['event'],pack,units)
+    save(db,u,{'action':'delivery_edit_confirm','step':0,'values':{**s['values'],'qty':qty,'units':units}})
+    delta=plan['new_amount_usd']-plan['old_amount_usd']
+    sign='+' if delta>0 else ''
+    send(u,
+         f"Тузатишни текширинг:\n"
+         f"Эски: {product_name(plan['old_pack'])} · {plan['old_qty']} дона · {fmt(plan['old_amount_usd'])} USD\n"
+         f"Янги: {product_name(plan['new_pack'])} · {plan['new_qty']} дона · {fmt(plan['new_amount_usd'])} USD\n"
+         f"Қарз ўзгариши: {sign}{fmt(delta)} USD\n"
+         f"Тузатишдан кейин қарз: {fmt(plan['debt_after'])} USD\n"
+         "Бу амал аудит журналида сақланади.",
+         [['✅ Товар тузатишни сақлаш'],['⬅️ Мижоз карточкаси','❌ Бекор қилиш']])
+
 
 def ask_client_edit(db,u,cid,field):
     c=client_visible(db,u,cid)
@@ -528,7 +594,9 @@ def handle(db,update):
         report_clients(db,u);return
     if text=='⬅️ Мижоз карточкаси':
         s0=state(db,u)
-        if not s0 or s0.get('action') not in ('client_card','client_edit_field','client_edit_value','client_edit_confirm'):
+        if not s0 or s0.get('action') not in ('client_card','client_edit_field','client_edit_value','client_edit_confirm',
+                                               'delivery_edit_choose','delivery_edit_pack','delivery_edit_unit',
+                                               'delivery_edit_qty','delivery_edit_confirm'):
             raise ValueError('Аввал «Мижозлар» бўлимидан мижозни танланг.')
         show_client_card(db,u,s0['values']['client']);return
     if text=='➕ Яна маҳсулот қўшиш':
@@ -635,9 +703,28 @@ def handle(db,update):
         show_client_card(db,u,cid);return
     if s.get('action')=='client_edit_field':
         cid=s['values']['client']
+        if text==DELIVERY_EDIT_LABEL:
+            show_delivery_edit_list(db,u,cid);return
         field=next((key for key,label in CLIENT_EDIT_LABELS.items() if text==label),None)
         if not field:raise ValueError('Ўзгартириш учун рўйхатдан майдонни танланг.')
         ask_client_edit(db,u,cid,field);return
+    if s.get('action')=='delivery_edit_choose':
+        try:event_id=int(text.split(' · ')[0].lstrip('#'))
+        except ValueError:raise ValueError('Товар топшириш ёзувини рўйхатдан танланг.')
+        start_delivery_edit(db,u,s['values']['client'],event_id);return
+    if s.get('action')=='delivery_edit_pack':
+        delivery_edit_choose_pack(db,u,s,text);return
+    if s.get('action')=='delivery_edit_unit':
+        delivery_edit_choose_unit(db,u,s,text);return
+    if s.get('action')=='delivery_edit_qty':
+        delivery_edit_preview(db,u,s,text);return
+    if s.get('action')=='delivery_edit_confirm':
+        if text!='✅ Товар тузатишни сақлаш':
+            raise ValueError('«✅ Товар тузатишни сақлаш»ни босинг ёки карточкага қайтинг.')
+        vals=s['values']
+        plan=correct_delivery(db,u,vals['event'],vals['pack'],vals['units'])
+        send(u,f"✅ Товар топшириши тузатилди. Янги сумма: {fmt(plan['new_amount_usd'])} USD. Қарз ва қолдиқ қайта ҳисобланди.")
+        show_client_card(db,u,plan['client']);return
     if s.get('action')=='client_edit_value':
         process_client_edit(db,u,s,m,text);return
     if s.get('action')=='client_edit_confirm':
