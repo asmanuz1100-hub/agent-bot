@@ -215,21 +215,21 @@ class Tests(unittest.TestCase):
   self.assertEqual(len(core.route_stats(ps,100,500)['stops']),1)
  def test_full_delivery_ui_and_confirmation(self):
   core.set_product_price(self.db,1,1,core.money('2.00'))
-  self.rec('load',12,actor=1)
+  self.rec('load',25,actor=1)
   now=int(time.time())
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':90,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   with patch.object(bot,'send'):
    for i,t in enumerate(['📦 Товар бериш','1 · Мижоз','1','Блок','2'],100):bot.handle(self.db,msg(i,t))
-   self.assertEqual(core.agent_stock(self.db,2,1),12)
+   self.assertEqual(core.agent_stock(self.db,2,1),25)
    bot.handle(self.db,msg(105,'✅ Тасдиқлаш'))
-   self.assertEqual(core.agent_stock(self.db,2,1),4)
+   self.assertEqual(core.agent_stock(self.db,2,1),5)
    bot.handle(self.db,msg(106,'✅ Тасдиқлаш'))
-   self.assertEqual(core.agent_stock(self.db,2,1),4)
+   self.assertEqual(core.agent_stock(self.db,2,1),5)
  def test_client_onboarding_location_first_and_delivery(self):
   core.set_product_price(self.db,1,1,core.money('2.00'))
-  self.rec('load',12,actor=1)
+  self.rec('load',25,actor=1)
   now=int(time.time())
   self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':80,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
@@ -260,8 +260,8 @@ class Tests(unittest.TestCase):
   self.assertIn('грунтовка',row['comment'])
   self.assertEqual(row['payment_due'],'2026-09-25')
   cid=self.db.execute("SELECT id FROM clients WHERE name='Алишер'").fetchone()[0]
-  self.assertEqual(core.client_stock(self.db,2,cid,1),8)
-  self.assertEqual(core.agent_stock(self.db,2,1),4)
+  self.assertEqual(core.client_stock(self.db,2,cid,1),20)
+  self.assertEqual(core.agent_stock(self.db,2,1),5)
 
  def test_product_catalog_and_admin_price(self):
   self.assertEqual(core.product_name(1),'Грунтовка 7/1 — 1 кг')
@@ -393,7 +393,7 @@ class Tests(unittest.TestCase):
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
   def dmsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
   with patch.object(bot,'send'),patch.object(bot,'document') as document:
-   for i,t in enumerate(['📄 Акт сверка','1',day,day,'✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
+   for i,t in enumerate(['📄 Акт сверка','1','✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
    document.assert_called_once()
    self.assertIn('akt-sverka-1-',document.call_args.args[1])
 
