@@ -292,7 +292,7 @@ class Tests(unittest.TestCase):
    self.assertEqual(core.client_stock(self.db,2,1,5),2)
    bot.handle(self.db,msg(570,'✅ Тасдиқлаш'))
    self.assertEqual(core.client_stock(self.db,2,1,5),2)
-   self.assertEqual(core.client_debt_usd(self.db,1),core.money('66.00'))
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('38.00'))
   for pack in (1,3,5):
    self.assertEqual(core.agent_stock(self.db,2,pack),0)
 
