@@ -93,6 +93,36 @@ class Tests(unittest.TestCase):
   with self.assertRaises(ValueError):
    core.record(self.db,2,2,1,'return',1,3,source=30005,currency='USD')
 
+ def test_sold_goods_cannot_be_credited_as_returned_from_older_usd_lot(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  self.rec('load',12,actor=1)
+  core.record(self.db,2,2,1,'delivery',1,4,source=44001,currency='USD')
+  core.set_product_price(self.db,1,1,core.money('3.00'))
+  core.record(self.db,2,2,1,'delivery',1,4,source=44002,currency='USD')
+  core.record(self.db,2,2,1,'sold',1,4,source=44003,currency='USD')
+  core.record(self.db,2,2,1,'return',1,1,source=44004,currency='USD')
+  allocated=self.db.execute(
+   'SELECT a.delivery_event,a.qty,a.amount_usd FROM return_allocations a '
+   'JOIN events e ON e.id=a.delivery_event WHERE a.return_event=(SELECT id FROM events WHERE source=44004)'
+  ).fetchone()
+  newer=self.db.execute('SELECT id FROM events WHERE source=44002').fetchone()[0]
+  self.assertEqual(tuple(allocated),(newer,1,core.money('3.00')))
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('17.00'))
+  core.record(self.db,2,2,1,'return',1,2,source=44005,currency='USD')
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('11.00'))
+
+ def test_request_logs_redact_webhook_and_signed_map_links(self):
+  webhook='POST /telegram/abcdefABCDEF123456 HTTP/1.1'
+  self.assertNotIn('abcdefABCDEF123456',bot.redact_access_log_arg(webhook))
+  signature='a'*32
+  paths=[
+   'GET /map/overall/1789967211/'+signature+' HTTP/1.1',
+   'GET /map/agent/123456/1789967211/'+signature+' HTTP/1.1'
+  ]
+  for path in paths:
+   self.assertNotIn(signature,bot.redact_access_log_arg(path))
+   self.assertNotIn('1789967211',bot.redact_access_log_arg(path))
+
  def test_failed_update_is_persisted_for_admin_review(self):
   up={'update_id':30010,'message':{'from':{'id':2}}}
   with patch.object(bot,'send') as send:
