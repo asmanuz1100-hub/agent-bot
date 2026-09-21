@@ -458,11 +458,6 @@ def handle(db,update):
                          else '🗺 Фақат шу даврда қўшилган янги мижозлар харитаси:')
                 send_inline(u,caption,[('🗺 Харитада очиш',link)])
             return
-        if action=='summary':
-            for row in db.execute("SELECT * FROM users WHERE role='agent'"):
-                a=row['id'];send(u,f"{row['name']} ({a})\nҚўлида: {fmt(cash_usd(db,a))} USD\n"+'\n'.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5)))
-            orders=db.execute("SELECT agent,client,pack,qty FROM events WHERE kind='order' ORDER BY id DESC LIMIT 30").fetchall()
-            send(u,'Сўнгги буюртмалар (талаб қайди):\n'+'\n'.join(f"Агент {x[0]}, мижоз #{x[1]}: {product_name(x[2])} × {x[3]} дона" for x in orders));return
     if 'location' in m and m['location'].get('live_period'):
         if r!='agent':raise ValueError('Жонли локация агент учун.')
         if point(db,u,m):
