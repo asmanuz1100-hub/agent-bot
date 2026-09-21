@@ -350,6 +350,8 @@ def add_or_promote_admin(db,actor,uid,name):
         row=db.execute('SELECT id,role FROM users WHERE id=? FOR UPDATE',(uid,)).fetchone()
     if not row:
         db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'admin',name.strip()))
+        db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                   (f'secondary_admin:{uid}','1'))
         db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
                    (actor,None,uid,'admin_created',int(time.time())))
         return 'created'
@@ -368,6 +370,8 @@ def add_or_promote_admin(db,actor,uid,name):
     if db.execute("SELECT 1 FROM handovers WHERE agent=? AND status='pending' LIMIT 1",(uid,)).fetchone():
         raise ValueError('Кассирга топшириш тасдиқланмаган. Аввал уни ҳал қилинг.')
     db.execute('UPDATE users SET role=?,name=? WHERE id=?',('admin',name.strip(),uid))
+    db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+               (f'secondary_admin:{uid}','1'))
     db.execute('DELETE FROM sessions WHERE agent=?',(uid,))
     db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
                (actor,uid,uid,'admin_promoted_from_'+row['role'],int(time.time())))
