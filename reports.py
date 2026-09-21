@@ -21,9 +21,10 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
     total_km=round(sum(float(r.get('km') or 0) for r in routes),2)
     gps_points=sum(len(r.get('points') or []) for r in routes)
     active_shops=sum(1 for s in shops if s.get('active'))
-    data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary,'points_only':points_only})
+    metrics=summary_metrics or {}
+    data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary,
+                     'points_only':points_only,'agent_work':metrics.get('agent_work',[])})
     if points_only:
-        metrics=summary_metrics or {}
         cards=[
             ('Агентлар',metrics.get('agents',0)),
             ('Жами йўл',f"{metrics.get('km',0)} км"),
@@ -38,6 +39,10 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('GPS нуқталар',gps_points),
             ('Фаол нуқталар',active_shops),
         ]
+    # Total working time is shown prominently in every period, including day
+    # maps whose route is empty because Telegram GPS was not shared.
+    duration=max(0,int(metrics.get('work_seconds',0)))
+    cards.insert(1,('Жами иш вақти',f'{duration//3600} соат {(duration%3600)//60} дақиқа'))
     cards_html=''.join(f'<div class="kpi"><span>{escape(str(k))}</span><strong>{escape(str(v))}</strong></div>' for k,v in cards)
     return f'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
@@ -54,14 +59,14 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 .body{{min-height:0;display:grid;grid-template-columns:310px 1fr;gap:14px;padding:14px}}
 .side{{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px;overflow:auto}}
 .side h3{{margin:0 0 10px;font-size:15px}} .summary{{font-size:13px;line-height:1.45;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:12px}}
-.legend{{margin-top:14px;display:flex;flex-direction:column;gap:9px}} .legend-row{{display:flex;align-items:center;gap:9px;font-size:13px}}
+.legend{{margin-top:14px;display:flex;flex-direction:column;gap:9px}} .legend-row{{display:flex;align-items:center;gap:9px;font-size:13px}} .work-panel{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}} .work-panel h3{{margin-bottom:8px}} .work-row{{padding:8px 0;font-size:13px;line-height:1.5;border-bottom:1px solid var(--line)}} .work-row strong{{display:block;color:var(--text)}}
 .dot{{width:10px;height:10px;border-radius:50%;flex:none}} .hint{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}}
 .mapwrap{{position:relative;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}} #map{{height:100%;min-height:520px}}
 .leaflet-popup-content{{font-size:13px;line-height:1.45}} #map-status{{position:absolute;top:10px;left:58px;right:10px;z-index:1000;display:none;padding:11px 14px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:13px;line-height:1.4;box-shadow:var(--shadow)}}
 @media(max-width:820px){{.kpis{{grid-template-columns:repeat(2,1fr)}}.body{{grid-template-columns:1fr;grid-template-rows:auto 1fr}}.side{{max-height:220px}}#map{{min-height:520px}}}}
 </style></head>
 <body><div class="app"><section class="top"><div class="head"><div class="title">{escape(title)}</div><div class="badge">ИЧКИ ФОЙДАЛАНИШ · ТЕСТ</div></div><div class="kpis">{cards_html}</div></section>
-<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="legend" class="legend"></div><div class="hint">{escape('Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
+<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
 <script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script><script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
@@ -82,6 +87,16 @@ try{{
 const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48','#0891b2','#9333ea','#475569'];
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
+const workPanel=document.getElementById('agent-work');
+if(D.agent_work.length){{
+  const heading=document.createElement('h3');heading.textContent='Агентлар иш вақти';workPanel.appendChild(heading);
+  D.agent_work.forEach(a=>{{
+    const line=document.createElement('div');line.className='work-row';
+    const who=document.createElement('strong');who.textContent=a.name+' · '+a.hours;
+    const totals=document.createElement('span');totals.textContent=a.km+' км · '+a.new_clients+' янги мижоз';
+    line.appendChild(who);line.appendChild(totals);workPanel.appendChild(line);
+  }});
+}}
 D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const segments=r.segments||[r.points||[]];let first=null,last=null;
   segments.forEach(seg=>{{const pts=seg.map(p=>[p.lat,p.lon]);if(!pts.length)return;
@@ -97,6 +112,11 @@ D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];i
    .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">Навигаторда очиш</a>');
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
+if(D.points_only&&!D.shops.length){{
+  const note=document.createElement('div');note.className='work-row';
+  note.textContent='Шу даврда локацияси киритилган янги мижоз йўқ. Харита фон сифатида очиқ, янги мижоз қўшилганда нуқта пайдо бўлади.';
+  workPanel.appendChild(note);
+}}
 if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);setTimeout(()=>map.invalidateSize(),250);
 </script></body></html>'''.encode('utf-8')
 
@@ -280,7 +300,7 @@ def overall(db,actor,now=None,period='day',card_url=None):
         start=midnight.replace(day=1);label='1 ОЙЛИК';map_label='ойлик янги савдо нуқталари'
     a=int(start.timestamp());b=int(now.timestamp())+1
     agents=db.execute("SELECT id,name,role FROM users WHERE role IN ('agent','disabled') ORDER BY name").fetchall()
-    routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0
+    routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0;agent_work=[]
     total_hours=0;total_new=0;total_sales=0;unpriced=0;unpriced_deliveries=0
     details=[]
     for ag in agents:
@@ -355,6 +375,8 @@ def overall(db,actor,now=None,period='day',card_url=None):
                            (aid,a,b)).fetchone()[0])
         total_hours+=worked;total_new+=new;total_sales+=sold;unpriced+=missing;unpriced_deliveries+=delivery_missing
         hours=worked//3600;minutes=(worked%3600)//60
+        agent_work.append({'name':name,'hours':f'{hours} соат {minutes} дақиқа',
+                           'km':round(akm,2),'new_clients':new})
         details.append(f"{name} ({aid}): иш {hours} соат {minutes} дақиқа · {round(akm,2)} км · "
                        f"янги мижоз {new} та · сотув {sold_qty} дона / {m(sold)} USD · "
                        f"берилган товар жами {m(delivered)} USD · олинган пул жами {m(paid)} USD")
@@ -386,7 +408,8 @@ def overall(db,actor,now=None,period='day',card_url=None):
              f"берилган товар {m(delivered_total)} USD · олинган пул {m(payments_total)} USD")
     html=_map_html(f'{label} · {map_label}',routes if period=='day' else [],all_shops,summary,
                    points_only=(period!='day'),summary_metrics={'agents':len(details),
-                   'km':round(total_km,2),'delivered':delivered_total,'payments':payments_total})
+                   'km':round(total_km,2),'delivered':delivered_total,'payments':payments_total,
+                   'work_seconds':total_hours,'agent_work':agent_work})
     return text,html
 
 def dates(start,end):
