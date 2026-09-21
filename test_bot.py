@@ -305,6 +305,34 @@ class Tests(unittest.TestCase):
   self.assertEqual(api.call_args.args[0],'sendPhoto')
   self.assertEqual(api.call_args.kwargs['photo'],'tg-photo-file-id')
 
+ def test_period_analytics_selector_and_signed_map_links(self):
+  now=int(time.time())
+  def msg(i,t,uid=1):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':uid},'chat':{'id':uid,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send,patch.object(bot,'send_inline') as inline,\
+       patch.object(bot.reports,'overall',return_value=('ҲИСОБОТ',b'<html></html>')) as overall,\
+       patch.object(bot,'map_link',return_value='https://example.test/period') as link:
+   bot.handle(self.db,msg(61001,'🗺 Умумий таҳлил'))
+   options=[x for row in send.call_args.args[2] for x in row]
+   self.assertIn('📅 1 кунлик таҳлил',options)
+   self.assertIn('📅 1 ҳафталик таҳлил',options)
+   self.assertIn('📅 1 ойлик таҳлил',options)
+   for i,label,period in [(61002,'📅 1 кунлик таҳлил','day'),
+                          (61003,'📅 1 ҳафталик таҳлил','week'),
+                          (61004,'📅 1 ойлик таҳлил','month')]:
+    bot.handle(self.db,msg(i,label))
+    self.assertEqual(overall.call_args.kwargs['period'],period)
+    self.assertEqual(link.call_args.args[0],'overall/'+period)
+    self.assertIn('ҲИСОБОТ',send.call_args.args[1])
+    self.assertTrue(inline.called)
+   self.assertFalse(bot.allowed(self.db,2,'analytics_week'))
+  with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'}):
+   url=bot.map_link('overall/week')
+   expires,sig=url.split('/')[-2:]
+   self.assertTrue(bot._map_valid('overall/week',expires,sig))
+   self.assertFalse(bot._map_valid('overall/month',expires,sig))
+   self.assertNotIn(sig,bot.redact_access_log_arg('GET '+url+' HTTP/1.1'))
+
  def test_reconcile_menu_is_all_time_and_summary_button_removed(self):
   self.assertNotIn('📋 Умумий ҳисоб',[x for row in bot.menu(self.db,1) for x in row])
   self.assertEqual([x[0] for x in bot.FLOW['reconcile']],['client'])
