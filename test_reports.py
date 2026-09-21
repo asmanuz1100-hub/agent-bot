@@ -53,6 +53,41 @@ class ReportsTests(unittest.TestCase):
   with self.assertRaises(ValueError):reports.route_map_html(self.db,2,2)
   with self.assertRaises(ValueError):reports.overall(self.db,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
 
+ def test_map_customer_pin_opens_signed_card_and_card_is_read_only(self):
+  import re,json
+  self.db.execute("UPDATE clients SET lat=40.111,lon=71.222,shop_name='<img src=x onerror=alert(1)>',photo='tg-file-id' WHERE id=1")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'delivery',1,3,600,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'payment',0,0,125,?)",(int(datetime(2026,9,18,10,tzinfo=reports.TZ).timestamp()),))
+  card_url=lambda cid:f'https://example.test/map/client/{cid}/2000000000/'+('a'*32)
+  now=datetime(2026,9,18,12,tzinfo=reports.TZ)
+  for period in ('day','week','month'):
+   if period!='day':
+    self.db.execute("UPDATE clients SET created_ts=? WHERE id=1",(int(datetime(2026,9,18,8,tzinfo=reports.TZ).timestamp()),))
+   summary,page=reports.overall(self.db,1,now,period=period,card_url=card_url)
+   html=page.decode()
+   self.assertIn('Мижоз карточкасини очиш',html)
+   payload=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
+   self.assertIsNotNone(payload)
+   data=json.loads(payload.group(1))
+   shop=next(x for x in data['shops'] if x['id']==1)
+   self.assertEqual(shop['card_url'],card_url(1))
+   self.assertNotIn('tg-file-id',html)
+   self.assertNotIn('+998900000001',html)
+  card=reports.client_card_html(self.db,1,1,
+      photo_url='https://example.test/map/client-photo/1/2000000000/'+('b'*32)).decode()
+  self.assertIn('МИЖОЗ #1',card)
+  self.assertIn('4.75 USD',card)
+  self.assertIn('3 дона',card)
+  self.assertIn('+998900000001',card)
+  self.assertIn('МИЖОЗ',card)
+  self.assertIn('client-photo/1',card)
+  self.assertIn('&lt;img src=x onerror=alert(1)&gt;',card)
+  self.assertNotIn('<img src=x onerror=alert(1)>',card)
+  self.assertNotIn('tg-file-id',card)
+  self.assertIn('Карточка фақат кўриш учун',card)
+  with self.assertRaises(ValueError):reports.client_card_html(self.db,2,1)
+  with self.assertRaises(ValueError):reports.client_card_html(self.db,1,999)
+
  def test_multiple_shifts_one_agent_one_daily_route_and_summary(self):
   import json,re
   start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
