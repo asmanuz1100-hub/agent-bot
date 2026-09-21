@@ -52,6 +52,7 @@ def redact_access_log_arg(value):
     value=re.sub(r'/telegram/[A-Za-z0-9_-]+', '/telegram/[redacted]',value)
     value=re.sub(r'/map/agent/[0-9]+/[0-9]+/[a-f0-9]{32}', '/map/agent/[redacted]',value)
     value=re.sub(r'/map/overall/(?:(?:day|week|month)/)?[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
+    value=re.sub(r'/map/client(?:-photo)?/[0-9]+/[0-9]+/[a-f0-9]{32}', '/map/client/[redacted]',value)
     return value
 
 def format_access_log(fmt,*args):
@@ -97,6 +98,20 @@ def map_link(scope,ttl=MAP_TTL_SECONDS):
     if not base:return None
     expires=int(time.time())+max(60,min(int(ttl),3600))
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
+def customer_photo_bytes(file_id):
+    """Fetch a customer photo server-side without disclosing BOT_TOKEN to browsers."""
+    info=api('getFile',file_id=file_id)
+    path=info.get('file_path','')
+    if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\\.jpe?g',path) or
+            '..' in path or int(info.get('file_size') or 0)>8_000_000):
+        raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
+    url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
+    with urllib.request.urlopen(url,timeout=12) as res:
+        content=res.read(8_000_001)
+    if len(content)>8_000_000 or not content.startswith(b'\\xff\\xd8\\xff'):
+        raise ValueError('Фото формати нотўғри.')
+    return content
 
 def document(uid,filename,content):
     mime="text/html" if filename.endswith(".html") else "text/csv"
@@ -887,7 +902,8 @@ def serve_webhook(db,base_url):
                 try:
                     local=request_db()
                     try:
-                        actor=next(iter(ADMINS));_,html=reports.overall(local,actor,period=period)
+                        actor=next(iter(ADMINS));_,html=reports.overall(local,actor,period=period,
+                            card_url=lambda cid:map_link(f'client/{cid}'))
                         local.commit()
                     finally:
                         if postgres:local.close()
@@ -903,13 +919,58 @@ def serve_webhook(db,base_url):
                 try:
                     local=request_db()
                     try:
-                        actor=next(iter(ADMINS));html,_,_=reports.route_map_html(local,actor,agent)
+                        actor=next(iter(ADMINS));html,_,_=reports.route_map_html(local,actor,agent,
+                            card_url=lambda cid:map_link(f'client/{cid}'))
                         local.commit()
                     finally:
                         if postgres:local.close()
                     self._reply(200,html,'text/html; charset=utf-8')
                 except Exception:
                     logging.exception('Agent map failed');self._reply(500,b'Map error')
+                return
+            m=re.fullmatch(r'/map/client/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'client/{cid}',expires,sig):
+                    self._reply(410,b'Customer card link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        actor=next(iter(ADMINS))
+                        client=local.execute('SELECT photo FROM clients WHERE id=?',(cid,)).fetchone()
+                        photo_url=map_link(f'client-photo/{cid}') if client and client['photo'] else None
+                        html=reports.client_card_html(local,actor,cid,photo_url=photo_url)
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
+                    self._reply(200,html,'text/html; charset=utf-8')
+                except ValueError:
+                    self._reply(404,b'Customer not found')
+                except Exception:
+                    logging.exception('Customer card failed');self._reply(500,b'Customer card error')
+                return
+            m=re.fullmatch(r'/map/client-photo/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'client-photo/{cid}',expires,sig):
+                    self._reply(410,b'Customer photo link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        actor=next(iter(ADMINS))
+                        reports.admin_only(local,actor)
+                        client=local.execute('SELECT photo FROM clients WHERE id=?',(cid,)).fetchone()
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
+                    if not client or not client['photo']:
+                        self._reply(404,b'Photo not found');return
+                    photo_data=customer_photo_bytes(client['photo'])
+                    self._reply(200,photo_data,'image/jpeg')
+                except ValueError:
+                    self._reply(404,b'Photo not found')
+                except Exception:
+                    logging.exception('Customer photo failed');self._reply(502,b'Photo temporarily unavailable')
                 return
             self._reply(404,b'Not found')
         def do_POST(self):
