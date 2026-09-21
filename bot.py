@@ -1043,7 +1043,7 @@ def bootstrap_users(db):
         if uid not in ADMINS:
             db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                        (f'secondary_admin:{uid}','1'))
-    protected=db.execute("SELECT key FROM meta WHERE key LIKE 'secondary_admin:%' AND value='1'").fetchall()
+    protected=db.execute("SELECT key FROM meta WHERE key LIKE 'secondary_admin:%%' AND value='1'").fetchall()
     for row in protected:
         try:uid=int(str(row[0]).split(':',1)[1])
         except (ValueError,IndexError):continue
