@@ -331,6 +331,48 @@ def deactivate_agent(db,actor,agent_id):
     db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
                (actor,agent_id,None,'agent_deactivated',int(time.time())))
 
+def add_or_promote_admin(db,actor,uid,name):
+    """Provision an admin without overwriting a registered user's business ledger.
+
+    The bot checks ADMIN_IDS at the entry point; this helper also checks the
+    actor's persisted admin role. Existing users can be promoted only after
+    their agent obligations have been settled.
+    """
+    administrator=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not administrator or administrator[0]!='admin':
+        raise ValueError('Фақат админ.')
+    if not isinstance(uid,int) or uid<=0 or uid==actor:
+        raise ValueError('Янги админ Telegram ID рақами нотўғри.')
+    if not isinstance(name,str) or not name.strip() or len(name)>120:
+        raise ValueError('Янги админ исмини киритинг.')
+    row=db.execute('SELECT id,role FROM users WHERE id=?',(uid,)).fetchone()
+    if isinstance(db,PostgresDB) and row:
+        row=db.execute('SELECT id,role FROM users WHERE id=? FOR UPDATE',(uid,)).fetchone()
+    if not row:
+        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'admin',name.strip()))
+        db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+                   (actor,None,uid,'admin_created',int(time.time())))
+        return 'created'
+    if row['role']=='admin':
+        raise ValueError('Бу Telegram ID аллақачон админ.')
+    if row['role'] not in ('agent','disabled','cashier'):
+        raise ValueError('Бу аккаунт ролини админга ўзгартириш мумкин эмас.')
+    if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(uid,)).fetchone():
+        raise ValueError('Аввал ходимнинг очиқ сменасини ёпинг.')
+    if db.execute('SELECT 1 FROM clients WHERE agent=? LIMIT 1',(uid,)).fetchone():
+        raise ValueError('Бу аккаунтга мижозлар бириктирилган. Аввал уларни бошқа агентга ўтказиш керак.')
+    if any(agent_stock(db,uid,pack)!=0 for pack in PRODUCTS):
+        raise ValueError('Ходимда товар қолдиғи бор. Аввал товар ҳисобини ёпинг.')
+    if cash_usd(db,uid)!=0 or cash(db,uid)!=0:
+        raise ValueError('Ходимнинг касса қолдиғи бор. Аввал кассани ёпинг.')
+    if db.execute("SELECT 1 FROM handovers WHERE agent=? AND status='pending' LIMIT 1",(uid,)).fetchone():
+        raise ValueError('Кассирга топшириш тасдиқланмаган. Аввал уни ҳал қилинг.')
+    db.execute('UPDATE users SET role=?,name=? WHERE id=?',('admin',name.strip(),uid))
+    db.execute('DELETE FROM sessions WHERE agent=?',(uid,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,uid,uid,'admin_promoted_from_'+row['role'],int(time.time())))
+    return 'promoted'
+
 def feature_enabled(db,agent,feature):
     if feature not in AGENT_FEATURES:return True
     row=db.execute('SELECT enabled FROM agent_features WHERE agent=? AND feature=?',(agent,feature)).fetchone()
