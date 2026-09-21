@@ -328,10 +328,15 @@ def auth(db,actor,agent):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not r or not (r[0]=='admin' or (r[0]=='agent' and actor==agent)):raise ValueError('Ҳисоботга рухсат йўқ.')
 
-def reconciliation(db,actor,client,start,end):
+def reconciliation(db,actor,client,start=None,end=None):
     c=db.execute('SELECT * FROM clients WHERE id=?',(client,)).fetchone()
     if not c:raise ValueError('Мижоз топилмади.')
-    auth(db,actor,c['agent']);a,b=dates(start,end)
+    auth(db,actor,c['agent'])
+    if start is None and end is None:
+        a,b=0,int(time.time())+1
+        start,end='Барча давр','Ҳозиргача'
+    elif start is not None and end is not None:a,b=dates(start,end)
+    else:raise ValueError('Иккала санани ҳам киритинг ёки умумий акт сверкадан фойдаланинг.')
     opening_row=db.execute("""SELECT
         COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN pack=1 AND kind='delivery' THEN qty WHEN pack=1 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
