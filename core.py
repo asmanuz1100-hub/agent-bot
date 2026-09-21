@@ -309,6 +309,8 @@ def edit_client(db,actor,client_id,values):
     for field,new in values.items():
         before=current[field]
         if before==new:continue
+        if field=='phone' and db.execute('SELECT 1 FROM clients WHERE phone=? AND id<>?',(new,client_id)).fetchone():
+            raise ValueError('Бу телефон бошқа мижозга бириктирилган.')
         db.execute(f'UPDATE clients SET {field}=? WHERE id=?',(new,client_id))
         db.execute('INSERT INTO client_edits(client,actor,field,old_value,new_value,ts) VALUES(?,?,?,?,?,?)',
                    (client_id,actor,field,str(before) if before is not None else None,
