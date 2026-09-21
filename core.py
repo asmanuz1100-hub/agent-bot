@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, del
 CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT NULL, old_id INTEGER, new_id INTEGER, action TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS client_edits(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, actor INTEGER NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS delivery_edits(id INTEGER PRIMARY KEY, delivery_event INTEGER NOT NULL, client INTEGER NOT NULL, actor INTEGER NOT NULL, old_pack INTEGER NOT NULL, new_pack INTEGER NOT NULL, old_qty INTEGER NOT NULL, new_qty INTEGER NOT NULL, old_amount_usd INTEGER NOT NULL, new_amount_usd INTEGER NOT NULL, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER DEFAULT 0);
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, deli
 CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT NULL, old_id BIGINT, new_id BIGINT, action TEXT NOT NULL, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS client_edits(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, actor BIGINT NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS delivery_edits(id BIGSERIAL PRIMARY KEY, delivery_event BIGINT NOT NULL, client BIGINT NOT NULL, actor BIGINT NOT NULL, old_pack INTEGER NOT NULL, new_pack INTEGER NOT NULL, old_qty BIGINT NOT NULL, new_qty BIGINT NOT NULL, old_amount_usd BIGINT NOT NULL, new_amount_usd BIGINT NOT NULL, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS products(pack INTEGER PRIMARY KEY, name TEXT NOT NULL, price BIGINT DEFAULT 0);
@@ -292,6 +294,68 @@ def transfer_agent_account(db,actor,old_id,new_id):
     db.execute("UPDATE users SET role='disabled' WHERE id=?",(old_id,))
     db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
                (actor,old_id,new_id,'agent_transfer',int(time.time())))
+
+def delivery_correction_plan(db,actor,event_id,new_pack,new_qty):
+    """Validate a correction to one USD delivery without rewriting downstream sales/returns."""
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    row=db.execute("""SELECT e.*,c.agent AS owner FROM events e
+        JOIN clients c ON c.id=e.client WHERE e.id=? AND e.kind='delivery'""",(event_id,)).fetchone()
+    if not identity or not row or not (identity[0]=='admin' or
+        (identity[0]=='agent' and int(row['owner'])==actor)):
+        raise ValueError('Бу товар топширишини ўзгартиришга рухсат йўқ.')
+    if new_pack not in PRODUCTS or not isinstance(new_qty,int) or new_qty<=0:
+        raise ValueError('Товар ёки миқдор нотўғри.')
+    agent=int(row['agent']);client=int(row['client'])
+    if isinstance(db,PostgresDB):
+        lock_agent(db,agent)
+        row=db.execute("""SELECT e.*,c.agent AS owner FROM events e
+            JOIN clients c ON c.id=e.client WHERE e.id=? AND e.kind='delivery' FOR UPDATE""",
+            (event_id,)).fetchone()
+    old_pack=int(row['pack']);old_qty=int(row['qty']);old_amount=int(row['amount_usd'] or 0)
+    if old_qty<=0 or old_amount<=0 or old_amount%old_qty:
+        raise ValueError('Бу эски топширишда USD нархи аниқ сақланмаган. Уни автомат тузатиб бўлмайди.')
+    if new_pack==old_pack and new_qty==old_qty:
+        raise ValueError('Товар ва миқдор ўзгармаган.')
+    # Once a sale/return happened after this delivery, rewriting the earlier lot
+    # can change historical FIFO pricing. Use return/new delivery instead.
+    packs={old_pack,new_pack}
+    placeholders=','.join('?' for _ in packs)
+    downstream=db.execute(f"""SELECT 1 FROM events
+        WHERE client=? AND id>? AND kind IN ('sold','return') AND pack IN ({placeholders})
+        LIMIT 1""",(client,event_id,*sorted(packs))).fetchone()
+    if downstream:
+        raise ValueError('Бу топширишдан кейин сотув ёки қайтариш бор. Тарихни бузмаслик учун бу ёзувни ўзгартириб бўлмайди; қайтариш ёки янги топшириш қилинг.')
+    if new_pack==old_pack:
+        unit=old_amount//old_qty
+        delta=new_qty-old_qty
+        if delta>0 and agent_stock(db,agent,old_pack)<delta:
+            raise ValueError('Агентда қўшимча миқдор учун товар етарли эмас.')
+    else:
+        unit=product_price(db,new_pack)
+        if unit<=0:raise ValueError('Янги товар учун USD нарх киритилмаган.')
+        if agent_stock(db,agent,new_pack)<new_qty:
+            raise ValueError('Агентда танланган янги товардан етарли қолдиқ йўқ.')
+    new_amount=new_qty*unit
+    debt_after=client_debt_usd(db,client)-old_amount+new_amount
+    if debt_after<0:
+        raise ValueError('Тузатишдан кейин мижоз қарзи манфий бўлиб қолади. Аввал тўловни текширинг.')
+    return {'event':int(row['id']),'agent':agent,'client':client,
+            'old_pack':old_pack,'new_pack':new_pack,'old_qty':old_qty,'new_qty':new_qty,
+            'old_amount_usd':old_amount,'new_amount_usd':new_amount,'unit_price':unit,
+            'debt_after':debt_after,'ts':int(row['ts'] or 0)}
+
+def correct_delivery(db,actor,event_id,new_pack,new_qty):
+    plan=delivery_correction_plan(db,actor,event_id,new_pack,new_qty)
+    db.execute("""UPDATE events SET pack=?,qty=?,amount_usd=?,
+        note=COALESCE(note,'') || ? WHERE id=? AND kind='delivery'""",
+        (plan['new_pack'],plan['new_qty'],plan['new_amount_usd'],
+         f" | Тузатилди {int(time.time())}: {plan['old_pack']}кг/{plan['old_qty']} -> {plan['new_pack']}кг/{plan['new_qty']}",
+         event_id))
+    db.execute("""INSERT INTO delivery_edits(delivery_event,client,actor,old_pack,new_pack,
+        old_qty,new_qty,old_amount_usd,new_amount_usd,ts) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (event_id,plan['client'],actor,plan['old_pack'],plan['new_pack'],plan['old_qty'],
+         plan['new_qty'],plan['old_amount_usd'],plan['new_amount_usd'],int(time.time())))
+    return plan
 
 CLIENT_EDIT_FIELDS=('name','shop_name','phone','address','comment','payment_due','photo','lat','lon')
 
