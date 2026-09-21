@@ -336,6 +336,60 @@ class Tests(unittest.TestCase):
    self.assertNotIn(sig,bot.redact_access_log_arg('GET '+url+' HTTP/1.1'))
 
 
+ def test_all_agents_see_every_customer_in_clients_section_only(self):
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name,address) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон','Фарғона')")
+  now=int(time.time())
+  def msg(i,t,uid=2):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':uid},'chat':{'id':uid,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(89001,'👥 Мижозлар',uid=2))
+   choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('1 ·',choices)
+   self.assertIn('42 ·',choices)
+   bot.handle(self.db,msg(89002,'42',uid=2))
+   self.assertIn('МИЖОЗ #42',send.call_args.args[1])
+   self.assertIn('Бириктирилган агент: D',send.call_args.args[1])
+   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
+                    [v for row in send.call_args.args[2] for v in row])
+   with self.assertRaises(ValueError):
+    bot.show_client_edit_fields(self.db,2,42)
+   self.assertEqual(bot.role(self.db,2),'agent')
+   bot.handle(self.db,msg(89003,'⬅️ Мижозлар',uid=2))
+   bot.handle(self.db,msg(89004,'Бошқа',uid=2))
+   options=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('42 ·',options)
+   self.assertNotIn('1 ·',options)
+   bot.handle(self.db,msg(89005,'42',uid=2))
+   self.assertIn('МИЖОЗ #42',send.call_args.args[1])
+   bot.handle(self.db,msg(89006,'👥 Мижозлар',uid=4))
+   options=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('1 ·',options)
+   self.assertIn('42 ·',options)
+   bot.handle(self.db,msg(89007,'1',uid=4))
+   self.assertIn('МИЖОЗ #1',send.call_args.args[1])
+   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
+                    [v for row in send.call_args.args[2] for v in row])
+   bot.handle(self.db,msg(89008,'👥 Мижозлар',uid=1))
+   bot.handle(self.db,msg(89009,'42',uid=1))
+   self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
+                 [v for row in send.call_args.args[2] for v in row])
+
+ def test_cross_agent_financial_flows_remain_restricted(self):
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон')")
+  with patch.object(bot,'send') as send:
+   bot.prompt(self.db,2,{'action':'delivery','step':0,'values':{}})
+   choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('1 ·',choices)
+   self.assertNotIn('42 ·',choices)
+   now=int(time.time())
+   msg={'update_id':89010,'message':{'message_id':89010,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':'42'}}
+   with self.assertRaises(ValueError):
+    bot.handle(self.db,msg)
+   self.assertIsNone(self.db.execute('SELECT 1 FROM events WHERE client=42').fetchone())
+  core.set_agent_feature(self.db,1,2,'clients',False)
+  with self.assertRaises(ValueError):bot.report_clients(self.db,2)
+  with self.assertRaises(ValueError):bot.show_client_card(self.db,2,42)
+
  def test_client_selection_edit_and_photo_preserve_accounting(self):
   core.record(self.db,1,2,None,'load',1,5)
   core.set_product_price(self.db,1,1,core.money('2.00'))
