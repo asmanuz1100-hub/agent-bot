@@ -134,15 +134,17 @@ FEATURE_LABELS={
     'balance':'📊 Ҳисобим',
 }
 
-def admin_agent_menu():
-    return [
+def admin_agent_menu(uid=None):
+    keys=[
         ['📋 Агентлар рўйхати','👤 Агент профили'],
-        ['➕ Агент қўшиш','🗑 Агент ҳисобини ёпиш'],
+        ['➕ Агент қўшиш'],
         ['📍 Агент маршрути','🚚 Агентга товар'],
         ['✏️ Агент номини ўзгартириш'],
         ['💲 Товар ва нархлар'],
         ['⬅️ Админ меню']
     ]
+    if uid in ADMINS:keys.insert(2,['🗑 Агент ҳисобини ёпиш'])
+    return keys
 
 def show_agent_profile(db,u,a):
     if role(db,u)!='admin':raise ValueError('Фақат админ.')
@@ -173,14 +175,14 @@ def show_agent_profile(db,u,a):
 def report_agents(db,u):
     rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
     if not rows:
-        send(u,'Агентлар ҳали қўшилмаган.',admin_agent_menu());return
+        send(u,'Агентлар ҳали қўшилмаган.',admin_agent_menu(u));return
     out=['АГЕНТЛАР БОШҚАРУВИ']
     for row in rows:
         a=row['id']; clients=db.execute('SELECT COUNT(*) FROM clients WHERE agent=?',(a,)).fetchone()[0]
         shift=db.execute('SELECT id FROM shifts WHERE agent=? AND end IS NULL',(a,)).fetchone()
         stock=' | '.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5))
         out.append(f"\n{row['name']} ({a})\nҲолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}\nМижозлар: {clients}\nНақд пул: {fmt(cash_usd(db,a))} USD\n{stock}")
-    send(u,'\n'.join(out),admin_agent_menu())
+    send(u,'\n'.join(out),admin_agent_menu(u))
 
 def report_prices(db,u):
     lines=['ТОВАР ВА НАРХЛАР']
@@ -456,9 +458,9 @@ def finish(db,u,s,source):
              [['➕ Яна маҳсулот қўшиш'],['⬅️ Меню']])
         return
     if a=='agent_add':
-        send(u,f"✅ Агент қўшилди: {v['name']} (ID {v['id']}). Энди /start юборсин.",admin_agent_menu())
+        send(u,f"✅ Агент қўшилди: {v['name']} (ID {v['id']}). Энди /start юборсин.",admin_agent_menu(u))
     elif a=='agent_deactivate':
-        send(u,f"✅ Агент #{v['agent']} кириши ёпилди. Товар, қарз ва тарих ўчирилмади.",admin_agent_menu())
+        send(u,f"✅ Агент #{v['agent']} кириши ёпилди. Товар, қарз ва тарих ўчирилмади.",admin_agent_menu(u))
     elif a=='admin_add':
         send(u,f"✅ {v['name']} (ID: {v['id']}) админ сифатида қўшилди. У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
@@ -522,7 +524,7 @@ def handle(db,update):
                 send(u,'⚠️ '+msg,[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         db.execute('DELETE FROM sessions WHERE agent=?',(u,))
         if action=='agent_admin':
-            send(u,'Агентларни бошқариш бўлими:',admin_agent_menu());return
+            send(u,'Агентларни бошқариш бўлими:',admin_agent_menu(u));return
         if action=='agent_list':
             report_agents(db,u);return
         if action=='prices':
@@ -626,7 +628,7 @@ def handle(db,update):
         if r!='admin':raise ValueError('Фақат админ.')
         if text=='⬅️ Агентлар бошқаруви':
             db.execute('DELETE FROM sessions WHERE agent=?',(u,))
-            send(u,'Агентларни бошқариш бўлими:',admin_agent_menu());return
+            send(u,'Агентларни бошқариш бўлими:',admin_agent_menu(u));return
         agent=s.get('values',{}).get('agent')
         matched=None
         for feature,label in FEATURE_LABELS.items():
