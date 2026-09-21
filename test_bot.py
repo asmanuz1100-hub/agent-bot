@@ -66,6 +66,20 @@ class Tests(unittest.TestCase):
    self.assertIsNone(self.db.execute('SELECT 1 FROM users WHERE id=123456790').fetchone())
 
 
+ def test_test_agent_bootstrap_never_downgrades_existing_admin(self):
+  uid=1037158726
+  self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'admin','Secondary admin'))
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'TEST_AGENTS',{uid,2,999999}):
+   bot.bootstrap_users(self.db)
+  self.assertEqual(bot.role(self.db,uid),'admin')
+  self.assertEqual(bot.role(self.db,2),'agent')
+  self.assertEqual(bot.role(self.db,999999),'agent')
+  self.db.execute("UPDATE users SET role='cashier' WHERE id=?",(999999,))
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'TEST_AGENTS',{uid,999999}):
+   bot.bootstrap_users(self.db)
+  self.assertEqual(bot.role(self.db,uid),'admin')
+  self.assertEqual(bot.role(self.db,999999),'cashier')
+
  def test_existing_disabled_agent_can_be_promoted_to_secondary_admin(self):
   uid=1037158726
   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'disabled','Эски агент'))
