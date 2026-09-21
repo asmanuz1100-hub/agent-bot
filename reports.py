@@ -222,7 +222,7 @@ def overall(db,actor,now=None,period='day'):
     a=int(start.timestamp());b=int(now.timestamp())+1
     agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
     routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0
-    total_hours=0;total_new=0;total_sales=0;unpriced=0
+    total_hours=0;total_new=0;total_sales=0;unpriced=0;unpriced_deliveries=0
     details=[]
     for ag in agents:
         aid=int(ag[0]);name=ag[1] or str(aid)
@@ -280,18 +280,19 @@ def overall(db,actor,now=None,period='day'):
             COALESCE(SUM(CASE WHEN kind='sold' THEN amount_usd ELSE 0 END),0),
             COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
             COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
-            COALESCE(SUM(CASE WHEN kind='sold' AND amount_usd=0 THEN qty ELSE 0 END),0)
+            COALESCE(SUM(CASE WHEN kind='sold' AND amount_usd=0 THEN qty ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN kind='delivery' AND amount_usd=0 THEN qty ELSE 0 END),0)
             FROM events WHERE agent=? AND ts>=? AND ts<?""",(aid,a,b)).fetchone()
         active_count=int(metric[0] or 0);sold_qty=int(metric[1] or 0)
         sold=int(metric[2] or 0);delivered=int(metric[3] or 0)
-        paid=int(metric[4] or 0);missing=int(metric[5] or 0)
+        paid=int(metric[4] or 0);missing=int(metric[5] or 0);delivery_missing=int(metric[6] or 0)
         new=int(db.execute('SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?',
                            (aid,a,b)).fetchone()[0])
-        total_hours+=worked;total_new+=new;total_sales+=sold;unpriced+=missing
+        total_hours+=worked;total_new+=new;total_sales+=sold;unpriced+=missing;unpriced_deliveries+=delivery_missing
         hours=worked//3600;minutes=(worked%3600)//60
         details.append(f"{name} ({aid}): иш {hours} соат {minutes} дақиқа · {round(akm,2)} км · "
                        f"янги мижоз {new} та · сотув {sold_qty} дона / {m(sold)} USD · "
-                       f"топширилган товар {m(delivered)} USD · тўлов {m(paid)} USD")
+                       f"берилган товар жами {m(delivered)} USD · олинган пул жами {m(paid)} USD")
         total_km+=akm;stops+=astops;gaps+=agaps
     total_sold=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
         COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
@@ -300,11 +301,12 @@ def overall(db,actor,now=None,period='day'):
     worked=f"{total_hours//3600} соат {(total_hours%3600)//60} дақиқа"
     text=(f"📊 {label} УМУМИЙ ТАҲЛИЛ · {start:%d.%m.%Y} — {now:%d.%m.%Y %H:%M}\n"
           f"Жами агент: {len(agents)}\nЖами иш соати: {worked}\nЖами масофа: {round(total_km,2)} км\n"
-          f"Янги мижозлар: {total_new} та\nСавдо суммаси: {m(total_sales)} USD\n"
-          f"Сотилган товар: {int(total_sold[0] or 0)} дона\n"
-          f"Топширилган товар қиймати: {m(int(total_sold[1] or 0))} USD\n"
-          f"Олинган тўлов: {m(int(total_sold[2] or 0))} USD\n"
-          + (f"⚠️ Олдинги версиядаги {unpriced} дона сотувнинг USD баҳоси сақланмаган — сотув жамига кирмаган.\n" if unpriced else '')
+          f"Янги мижозлар: {total_new} та\n"
+          f"📦 Берилган товарнинг умумий суммаси: {m(int(total_sold[1] or 0))} USD\n"
+          f"💰 Олинган пулнинг умумий суммаси: {m(int(total_sold[2] or 0))} USD\n"
+          f"Сотилган товар: {int(total_sold[0] or 0)} дона · сотув қиймати: {m(total_sales)} USD\n"
+          + (f"⚠️ Олдинги версиядаги {unpriced} дона сотувнинг USD баҳоси сақланмаган — сотув қиймати жамига кирмаган.\n" if unpriced else '')
+          + (f"⚠️ {unpriced_deliveries} дона аввалги топшириш USD нархисиз сақланган: берилган товар жамига тахминий қўшилмади.\n" if unpriced_deliveries else '')
           + ("\nАгентлар:\n"+"\n".join(details) if details else "\nАгент йўқ."))
     if period=='day':
         text+=f"\nGPS нуқталари: {gps_points} · тўхташ: {stops} · узилиш: {gaps}"
