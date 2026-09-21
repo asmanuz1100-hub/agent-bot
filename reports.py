@@ -45,7 +45,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
     cards.insert(1,('Жами иш вақти',f'{duration//3600} соат {(duration%3600)//60} дақиқа'))
     cards_html=''.join(f'<div class="kpi"><span>{escape(str(k))}</span><strong>{escape(str(v))}</strong></div>' for k,v in cards)
     return f'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+<title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{{--bg:#f4f7fb;--panel:#ffffff;--text:#14213d;--muted:#6b7280;--line:#e6ebf2;--accent:#2563eb;--shadow:0 12px 34px rgba(15,23,42,.10)}}
 *{{box-sizing:border-box}} html,body{{height:100%;margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}}
@@ -67,46 +67,21 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 </style></head>
 <body><div class="app"><section class="top"><div class="head"><div class="title">{escape(title)}</div><div class="badge">ИЧКИ ФОЙДАЛАНИШ · ТЕСТ</div></div><div class="kpis">{cards_html}</div></section>
 <section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
-<script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script><script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
 // OpenFreeMap vector basemap: the volunteer-run OSM raster tile server must not be used here.
 const status=document.getElementById('map-status');
-function mapWarning(){{status.style.display='block';status.textContent='Фон харита ҳозир юкланмаяпти. Интернетни текширинг ёки янги харита ҳаволасини очинг. Мижоз нуқталари ва ҳисобот сақланган.';}}
-let basemap=null,rasterUsed=false,vectorReady=false;
-function rasterFallback(){{
-  if(rasterUsed)return;
-  rasterUsed=true;
-  try{{if(basemap)map.removeLayer(basemap);}}catch(e){{console.warn('Vector background cleanup',e);}}
-  try{{
-    // CARTO raster tiles are an independent fallback, not the volunteer-run
-    // blocked volunteer-operated OSM raster endpoint.
-    const raster=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
-      maxZoom:19,subdomains:'abcd',
-      attribution:'© OpenStreetMap contributors · © CARTO'
-    }});
-    raster.on('tileerror',mapWarning);
-    raster.on('load',()=>{{status.style.display='none';}});
-    raster.addTo(map);
-  }}catch(e){{console.warn('Raster background unavailable',e);mapWarning();}}
-}}
+function mapWarning(){{status.style.display='block';status.textContent='Фон харитани юклаб бўлмади. Интернетни текширинг ва саҳифани янгиланг.';}}
 try{{
-  if(typeof L.maplibreGL!=='function')rasterFallback();
-  else{{
-    basemap=L.maplibreGL({{style:'https://tiles.openfreemap.org/styles/liberty',attribution:'© OpenFreeMap · © OpenStreetMap contributors'}});
-    basemap.addTo(map);
-    const vectorMap=typeof basemap.getMaplibreMap==='function'?basemap.getMaplibreMap():null;
-    if(vectorMap){{
-      vectorMap.on('load',()=>{{vectorReady=true;status.style.display='none';}});
-      vectorMap.on('error',e=>{{
-        const reason=String(e&&e.error&&(e.error.message||e.error)||'');
-        console.warn('Basemap error',reason);
-        if(!vectorReady&&/(403|404|429|network|fetch|load)/i.test(reason))rasterFallback();
-      }});
-      setTimeout(()=>{{if(!vectorReady)rasterFallback();}},7000);
-    }}else setTimeout(rasterFallback,7000);
-  }}
-}}catch(e){{console.warn('Map background unavailable',e);rasterFallback();}}
+  const basemap=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
+    maxZoom:19,subdomains:'abcd',
+    attribution:'© OpenStreetMap contributors · © CARTO'
+  }});
+  basemap.on('tileerror',mapWarning);
+  basemap.on('load',()=>{{status.style.display='none';}});
+  basemap.addTo(map);
+}}catch(e){{console.warn('Map background unavailable',e);mapWarning();}}
 const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48','#0891b2','#9333ea','#475569'];
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
