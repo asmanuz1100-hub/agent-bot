@@ -122,6 +122,25 @@ class ReportsTests(unittest.TestCase):
   self.assertTrue(json.loads(day_json.group(1))['routes'])
   self.assertIn('1 КУНЛИК',day_text)
 
+ def test_weekly_gross_delivery_and_payment_include_archived_agent_history(self):
+  begin=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
+  self.db.execute("UPDATE users SET role='disabled' WHERE id=4")
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,created_ts,lat,lon) VALUES(30,4,'Архив мижоз','+998900000030',?,?,?)",(begin,40.5,71.5))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(4,4,30,'delivery',1,3,1500,?)",(begin+40,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(4,4,30,'payment',0,0,550,?)",(begin+80,))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(4,4,30,'sold',1,1,0,?)",(begin+120,))
+  summary,html=reports.overall(self.db,1,datetime(2026,9,18,11,tzinfo=reports.TZ),period='week')
+  self.assertIn('Берилган товарнинг умумий суммаси: 15.00 USD',summary)
+  self.assertIn('Олинган пулнинг умумий суммаси: 5.50 USD',summary)
+  self.assertIn('Архив',summary)
+  self.assertIn('сотув қиймати: 0.00 USD',summary)
+  self.assertIn('USD баҳоси сақланмаган',summary)
+  import re,json
+  match=re.search(r'<script id="data" type="application/json">(.*?)</script>',html.decode('utf-8'),re.S)
+  data=json.loads(match.group(1))
+  self.assertEqual(data['routes'],[])
+  self.assertIn(30,[x['id'] for x in data['shops']])
+
  def test_all_time_reconciliation_without_dates(self):
   self.add('delivery','2026-09-01',4)
   self.add('sold','2026-09-02',2,20000)
