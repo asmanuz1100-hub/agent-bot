@@ -73,15 +73,31 @@ const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map'
 // OpenFreeMap vector basemap: the volunteer-run OSM raster tile server must not be used here.
 const status=document.getElementById('map-status');
 function mapWarning(){{status.style.display='block';status.textContent='Фон харитани юклаб бўлмади. Интернетни текширинг ва саҳифани янгиланг.';}}
+let fallbackStarted=false;
+function addFallbackTiles(){{
+  if(fallbackStarted)return;
+  fallbackStarted=true;
+  try{{
+    const fallback=L.tileLayer('https://{{s}}.tile.openstreetmap.fr/hot/{{z}}/{{x}}/{{y}}.png',{{
+      maxZoom:19,subdomains:'abc',
+      attribution:'© OpenStreetMap contributors · HOT'
+    }});
+    fallback.on('tileerror',mapWarning);
+    fallback.on('load',()=>{{status.style.display='none';}});
+    fallback.addTo(map);
+  }}catch(e){{console.warn('Fallback map unavailable',e);mapWarning();}}
+}}
 try{{
-  const basemap=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
-    maxZoom:19,subdomains:'abcd',
-    attribution:'© OpenStreetMap contributors · © CARTO'
+  const basemap=L.tileLayer('https://tile.openstreetmap.de/{{z}}/{{x}}/{{y}}.png',{{
+    maxZoom:19,
+    attribution:'© OpenStreetMap contributors'
   }});
-  basemap.on('tileerror',mapWarning);
+  let errors=0;
+  basemap.on('tileerror',()=>{{errors+=1;if(errors>=2)addFallbackTiles();}});
   basemap.on('load',()=>{{status.style.display='none';}});
   basemap.addTo(map);
-}}catch(e){{console.warn('Map background unavailable',e);mapWarning();}}
+  setTimeout(()=>{{if(!map._loaded)addFallbackTiles();}},5000);
+}}catch(e){{console.warn('Primary map unavailable',e);addFallbackTiles();}}
 const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48','#0891b2','#9333ea','#475569'];
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
