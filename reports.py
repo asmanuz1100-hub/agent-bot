@@ -72,18 +72,41 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
 // OpenFreeMap vector basemap: the volunteer-run OSM raster tile server must not be used here.
 const status=document.getElementById('map-status');
-function mapWarning(){{status.style.display='block';status.textContent='Фон харитани юклаб бўлмади. GPS маршрути ва нуқталар мавжуд; харитадаги охирги нуқтани босиб навигаторда очишингиз мумкин.';}}
+function mapWarning(){{status.style.display='block';status.textContent='Фон харита ҳозир юкланмаяпти. Интернетни текширинг ёки янги харита ҳаволасини очинг. Мижоз нуқталари ва ҳисобот сақланган.';}}
+let basemap=null,rasterUsed=false,vectorReady=false;
+function rasterFallback(){{
+  if(rasterUsed)return;
+  rasterUsed=true;
+  try{{if(basemap)map.removeLayer(basemap);}}catch(e){{console.warn('Vector background cleanup',e);}}
+  try{{
+    // CARTO raster tiles are an independent fallback, not the volunteer-run
+    // tile.openstreetmap.org host that previously returned HTTP 403.
+    const raster=L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{
+      maxZoom:19,subdomains:'abcd',
+      attribution:'© OpenStreetMap contributors · © CARTO'
+    }});
+    raster.on('tileerror',mapWarning);
+    raster.on('load',()=>{{status.style.display='none';}});
+    raster.addTo(map);
+  }}catch(e){{console.warn('Raster background unavailable',e);mapWarning();}}
+}}
 try{{
-  if(typeof L.maplibreGL!=='function'){{mapWarning();}}
+  if(typeof L.maplibreGL!=='function')rasterFallback();
   else{{
-    const basemap=L.maplibreGL({{style:'https://tiles.openfreemap.org/styles/liberty',attribution:'© OpenFreeMap · © OpenStreetMap contributors'}});
+    basemap=L.maplibreGL({{style:'https://tiles.openfreemap.org/styles/liberty',attribution:'© OpenFreeMap · © OpenStreetMap contributors'}});
     basemap.addTo(map);
-    if(typeof basemap.getMaplibreMap==='function'){{
-      const vectorMap=basemap.getMaplibreMap();
-      if(vectorMap)vectorMap.on('error',e=>{{if(e&&e.error){{console.warn('Basemap error',e.error.message||e.error);mapWarning();}}}});
-    }}
+    const vectorMap=typeof basemap.getMaplibreMap==='function'?basemap.getMaplibreMap():null;
+    if(vectorMap){{
+      vectorMap.on('load',()=>{{vectorReady=true;status.style.display='none';}});
+      vectorMap.on('error',e=>{{
+        const reason=String(e&&e.error&&(e.error.message||e.error)||'');
+        console.warn('Basemap error',reason);
+        if(!vectorReady&&/(403|404|429|network|fetch|load)/i.test(reason))rasterFallback();
+      }});
+      setTimeout(()=>{{if(!vectorReady)rasterFallback();}},7000);
+    }}else setTimeout(rasterFallback,7000);
   }}
-}}catch(e){{console.warn('Map background unavailable',e);mapWarning();}}
+}}catch(e){{console.warn('Map background unavailable',e);rasterFallback();}}
 const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48','#0891b2','#9333ea','#475569'];
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
