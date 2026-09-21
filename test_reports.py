@@ -49,7 +49,7 @@ class ReportsTests(unittest.TestCase):
   self.assertIn('map-status',txt)
   self.assertIn('Навигаторда очиш',txt)
   text,overall_html=reports.overall(self.db,1,datetime(2026,9,18,12,tzinfo=reports.TZ))
-  self.assertIn('Жами йўл:',text);self.assertIn('Фаол савдо нуқталари: 1',text);self.assertIn('L.polyline',overall_html.decode('utf-8'))
+  self.assertIn('Жами масофа:',text);self.assertIn('GPS нуқталари: 3',text);self.assertIn('L.polyline',overall_html.decode('utf-8'))
   with self.assertRaises(ValueError):reports.route_map_html(self.db,2,2)
   with self.assertRaises(ValueError):reports.overall(self.db,2,datetime(2026,9,18,12,tzinfo=reports.TZ))
 
