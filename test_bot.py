@@ -829,6 +829,73 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,location)
    self.assertIn('админ',send.call_args.args[1])
 
+ def test_delivery_correction_updates_stock_debt_and_audit(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.set_product_price(self.db,1,3,core.money('5.00'))
+  core.record(self.db,1,2,None,'load',1,20,source=91001)
+  core.record(self.db,1,2,None,'load',3,12,source=91002)
+  core.record(self.db,2,2,1,'delivery',1,10,source=91003,currency='USD')
+  event=self.db.execute('SELECT id FROM events WHERE source=91003').fetchone()[0]
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('20.00'))
+  plan=core.correct_delivery(self.db,2,event,1,6)
+  self.assertEqual(plan['new_amount_usd'],core.money('12.00'))
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('12.00'))
+  self.assertEqual(core.client_stock(self.db,2,1,1),6)
+  self.assertEqual(core.agent_stock(self.db,2,1),14)
+  audit=self.db.execute('SELECT old_pack,new_pack,old_qty,new_qty,old_amount_usd,new_amount_usd FROM delivery_edits WHERE delivery_event=?',(event,)).fetchone()
+  self.assertEqual(tuple(audit),(1,1,10,6,core.money('20.00'),core.money('12.00')))
+  core.correct_delivery(self.db,2,event,3,6)
+  self.assertEqual(core.client_stock(self.db,2,1,1),0)
+  self.assertEqual(core.client_stock(self.db,2,1,3),6)
+  self.assertEqual(core.agent_stock(self.db,2,1),20)
+  self.assertEqual(core.agent_stock(self.db,2,3),6)
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('30.00'))
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM delivery_edits WHERE delivery_event=?',(event,)).fetchone()[0],2)
+
+ def test_delivery_correction_rejects_downstream_history_cross_agent_and_negative_debt(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,1,2,None,'load',1,20,source=91101)
+  core.record(self.db,2,2,1,'delivery',1,10,source=91102,currency='USD')
+  event=self.db.execute('SELECT id FROM events WHERE source=91102').fetchone()[0]
+  with self.assertRaisesRegex(ValueError,'рухсат'):
+   core.correct_delivery(self.db,4,event,1,8)
+  core.record(self.db,2,2,1,'payment',value=core.money('19.00'),source=91103,currency='USD')
+  with self.assertRaisesRegex(ValueError,'манфий'):
+   core.correct_delivery(self.db,2,event,1,5)
+  core.record(self.db,2,2,1,'sold',1,1,source=91104,currency='USD')
+  with self.assertRaisesRegex(ValueError,'сотув ёки қайтариш'):
+   core.correct_delivery(self.db,2,event,1,9)
+  self.assertEqual(self.db.execute('SELECT qty FROM events WHERE id=?',(event,)).fetchone()[0],10)
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM delivery_edits').fetchone()[0],0)
+
+ def test_agent_can_correct_delivered_goods_from_customer_edit_menu(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,1,2,None,'load',1,20,source=91201)
+  core.record(self.db,2,2,1,'delivery',1,10,source=91202,currency='USD')
+  event=self.db.execute('SELECT id FROM events WHERE source=91202').fetchone()[0]
+  now=int(time.time())
+  def msg(i,text):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':text}}
+  with patch.object(bot,'send') as send:
+   bot.show_client_card(self.db,2,1)
+   bot.handle(self.db,msg(91210,'✏️ Мижоз маълумотини ўзгартириш'))
+   self.assertIn(bot.DELIVERY_EDIT_LABEL,[x for row in send.call_args.args[2] for x in row])
+   bot.handle(self.db,msg(91211,bot.DELIVERY_EDIT_LABEL))
+   choices=[x for row in send.call_args.args[2] for x in row]
+   delivery_choice=next(x for x in choices if str(x).startswith('#'+str(event)+' ·'))
+   bot.handle(self.db,msg(91212,delivery_choice))
+   bot.handle(self.db,msg(91213,core.product_name(1)))
+   bot.handle(self.db,msg(91214,'Дона'))
+   bot.handle(self.db,msg(91215,'6'))
+   self.assertIn('Эски:',send.call_args.args[1])
+   self.assertIn('Янги:',send.call_args.args[1])
+   self.assertIn('12.00 USD',send.call_args.args[1])
+   bot.handle(self.db,msg(91216,'✅ Товар тузатишни сақлаш'))
+   self.assertEqual(core.client_stock(self.db,2,1,1),6)
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('12.00'))
+   self.assertIn('Қарз ва қолдиқ қайта ҳисобланди',send.call_args_list[-2].args[1])
+   self.assertEqual(self.db.execute('SELECT actor FROM delivery_edits WHERE delivery_event=?',(event,)).fetchone()[0],2)
+
  def test_usd_delivery_debt_sale_return_payment_and_cashier(self):
   core.set_product_price(self.db,1,1,core.money('2.00'))
   self.rec('load',12,actor=1)
