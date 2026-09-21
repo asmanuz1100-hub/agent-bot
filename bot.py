@@ -702,13 +702,14 @@ def handle(db,update):
             pat='%'+term+'%'
             if key=='client':
                 own_only=r=='agent' and s['action']!='client_view'
-                rows=db.execute("""SELECT id,name,shop_name FROM clients
-                    WHERE """+('agent=? AND ' if own_only else '')+"""(
-                      CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ? OR
-                      LOWER(COALESCE(shop_name,'')) LIKE ? OR LOWER(COALESCE(phone,'')) LIKE ? OR
-                      LOWER(COALESCE(address,'')) LIKE ?
-                    ) ORDER BY id DESC LIMIT 20""",
-                    ((u,) if own_only else ())+(pat,pat,pat,pat,pat)).fetchall()
+                # SQLite LOWER() does not case-fold Cyrillic. Search labels with
+                # Python Unicode casefold consistently on SQLite and PostgreSQL.
+                candidates=db.execute("""SELECT id,name,shop_name,phone,address FROM clients"""+
+                    (' WHERE agent=?' if own_only else '')+' ORDER BY id DESC',
+                    (u,) if own_only else ()).fetchall()
+                rows=[(x['id'],x['name'],x['shop_name']) for x in candidates
+                      if any(term in str(value or '').casefold() for value in
+                             (x['id'],x['name'],x['shop_name'],x['phone'],x['address']))][:20]
             else:
                 rows=db.execute("""SELECT id,name FROM users WHERE role='agent' AND
                     (CAST(id AS TEXT) LIKE ? OR LOWER(COALESCE(name,'')) LIKE ?)
