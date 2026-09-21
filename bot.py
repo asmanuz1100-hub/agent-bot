@@ -49,6 +49,11 @@ def redact_access_log_arg(value):
     value=re.sub(r'/map/overall/[0-9]+/[a-f0-9]{32}', '/map/overall/[redacted]',value)
     return value
 
+def format_access_log(fmt,*args):
+    # Format first to preserve integer placeholders used by BaseHTTPRequestHandler
+    # (e.g. "code %d"), then redact secrets before the message reaches the logger.
+    return redact_access_log_arg(fmt % args)
+
 def request(url,payload=None,headers=None,timeout=50):
     raw=json.dumps(payload).encode() if payload is not None else None
     r=urllib.request.Request(url,data=raw,headers=headers or {'Content-Type':'application/json'})
@@ -676,6 +681,13 @@ def serve_webhook(db,base_url):
     class Handler(BaseHTTPRequestHandler):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8'):
             self.send_response(code);self.send_header('Content-Type',ctype);self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+        def do_HEAD(self):
+            # Render and browser clients may probe HEAD / before GET /health.
+            code=200 if urlparse(self.path).path in ('/','/health') else 404
+            self.send_response(code)
+            self.send_header('Content-Length','0')
+            self.send_header('Cache-Control','no-store')
+            self.end_headers()
         def do_GET(self):
             path=urlparse(self.path).path
             if path in ('/','/health'):
@@ -749,7 +761,7 @@ def serve_webhook(db,base_url):
             self._reply(200,b'OK')
         def log_message(self,format,*args):
             # Request path may contain a webhook secret or a signed GPS map URL.
-            logging.info('HTTP '+format,*(redact_access_log_arg(x) for x in args))
+            logging.info('HTTP %s',format_access_log(format,*args))
     # SQLite remains single-threaded; Render/PostgreSQL uses one connection per
     # request and per-agent database row locks for ledger consistency.
     server=(ThreadingHTTPServer if postgres else HTTPServer)(('0.0.0.0',port),Handler)
