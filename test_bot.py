@@ -335,6 +335,92 @@ class Tests(unittest.TestCase):
    self.assertFalse(bot._map_valid('overall/month',expires,sig))
    self.assertNotIn(sig,bot.redact_access_log_arg('GET '+url+' HTTP/1.1'))
 
+
+ def test_client_selection_edit_and_photo_preserve_accounting(self):
+  core.record(self.db,1,2,None,'load',1,5)
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,2,2,1,'delivery',1,2,source=87001,currency='USD')
+  now=int(time.time())
+  def msg(i,text=None,uid=2,photo=None,location=None):
+   m={'message_id':i,'date':now,'from':{'id':uid},'chat':{'id':uid,'type':'private'}}
+   if text is not None:m['text']=text
+   if photo is not None:m['photo']=[{'file_id':photo}]
+   if location is not None:m['location']=location
+   return {'update_id':i,'message':m}
+  initial=core.client_debt_usd(self.db,1)
+  with patch.object(bot,'send') as send,patch.object(bot,'api') as api:
+   bot.handle(self.db,msg(87010,'👥 Мижозлар'))
+   self.assertIn('мижозни танланг',send.call_args.args[1])
+   bot.handle(self.db,msg(87011,'1'))
+   self.assertIn('МИЖОЗ #1',send.call_args.args[1])
+   bot.handle(self.db,msg(87012,'✏️ Мижоз маълумотини ўзгартириш'))
+   bot.handle(self.db,msg(87013,'🏪 Дўкон номи'))
+   bot.handle(self.db,msg(87014,'Янги дўкон'))
+   self.assertIn('Тасдиқлайсизми?',send.call_args.args[1])
+   self.assertEqual(self.db.execute('SELECT shop_name FROM clients WHERE id=1').fetchone()[0],'Тест дўкон')
+   bot.handle(self.db,msg(87015,'✅ Ўзгаришни сақлаш'))
+   self.assertEqual(self.db.execute('SELECT shop_name FROM clients WHERE id=1').fetchone()[0],'Янги дўкон')
+   self.assertIn('Янги дўкон',send.call_args_list[-1].args[1])
+   bot.handle(self.db,msg(87016,'✏️ Мижоз маълумотини ўзгартириш'))
+   bot.handle(self.db,msg(87017,'📷 Фото'))
+   bot.handle(self.db,msg(87018,photo='new-telegram-file-id'))
+   bot.handle(self.db,msg(87019,'✅ Ўзгаришни сақлаш'))
+   self.assertEqual(self.db.execute('SELECT photo FROM clients WHERE id=1').fetchone()[0],'new-telegram-file-id')
+   self.assertTrue(any(call.args[0]=='sendPhoto' for call in api.call_args_list))
+   bot.handle(self.db,msg(87020,'✏️ Мижоз маълумотини ўзгартириш'))
+   bot.handle(self.db,msg(87021,'📍 Дўкон локацияси'))
+   bot.handle(self.db,msg(87022,location={'latitude':40.55,'longitude':71.55}))
+   bot.handle(self.db,msg(87023,'✅ Ўзгаришни сақлаш'))
+   point=self.db.execute('SELECT lat,lon FROM clients WHERE id=1').fetchone()
+   self.assertEqual(tuple(point),(40.55,71.55))
+  self.assertEqual(core.client_debt_usd(self.db,1),initial)
+  self.assertEqual(core.client_stock(self.db,2,1,1),2)
+  audited=self.db.execute('SELECT field FROM client_edits WHERE client=1 ORDER BY id').fetchall()
+  self.assertEqual([x[0] for x in audited],['shop_name','photo','lat','lon'])
+
+ def test_client_edit_guards_agent_scope_and_duplicate_phone(self):
+  self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(20,4,'Бошқа мижоз','+998901234567')")
+  with self.assertRaises(ValueError):core.edit_client(self.db,2,20,{'name':'Чет мижоз'})
+  with self.assertRaises(ValueError):core.edit_client(self.db,2,1,{'agent':4})
+  with self.assertRaises(ValueError):
+   core.edit_client(self.db,2,1,{'phone':'+998901234567'})
+  self.assertEqual(self.db.execute('SELECT phone FROM clients WHERE id=1').fetchone()[0],'+998900000001')
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_edits').fetchone()[0],0)
+
+ def test_agent_add_then_deactivate_preserves_all_existing_records(self):
+  now=int(time.time())
+  def msg(i,t,uid=1):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':uid},'chat':{'id':uid,'type':'private'},'text':t}}
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(87101,'👥 Агентлар бошқаруви'))
+   self.assertIn('➕ Агент қўшиш',[x for row in send.call_args.args[2] for x in row])
+   for i,t in enumerate(['➕ Агент қўшиш','123456789','Янги агент','✅ Тасдиқлаш'],87102):
+    bot.handle(self.db,msg(i,t))
+   self.assertEqual(bot.role(self.db,123456789),'agent')
+   self.assertIn('қўшилди',send.call_args.args[1])
+   core.record(self.db,1,123456789,None,'load',1,10,source=87110)
+   self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(30,123456789,'Client','+998900000030')")
+   core.set_product_price(self.db,1,1,core.money('2.00'))
+   core.record(self.db,123456789,123456789,30,'delivery',1,2,source=87111,currency='USD')
+   debt=core.client_debt_usd(self.db,30)
+   self.db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(123456789,now-5))
+   with self.assertRaises(ValueError):core.deactivate_agent(self.db,1,123456789)
+   self.db.execute('UPDATE shifts SET end=? WHERE agent=?',(now,123456789))
+   for i,t in enumerate(['🗑 Агент ҳисобини ёпиш','123456789','✅ Тасдиқлаш'],87120):
+    bot.handle(self.db,msg(i,t))
+   self.assertEqual(bot.role(self.db,123456789),'disabled')
+   self.assertFalse(bot.allowed(self.db,123456789,'delivery'))
+   self.assertEqual(core.client_debt_usd(self.db,30),debt)
+   self.assertEqual(core.agent_stock(self.db,123456789,1),8)
+   self.assertEqual(self.db.execute('SELECT agent FROM clients WHERE id=30').fetchone()[0],123456789)
+   self.assertEqual(self.db.execute("SELECT action FROM role_audit WHERE old_id=123456789").fetchone()[0],'agent_deactivated')
+   bot.handle(self.db,msg(87130,'/start',uid=123456789))
+   self.assertIn('ёпилган',send.call_args.args[1])
+  with patch.object(bot,'ADMINS',{1}):
+   self.db.execute("INSERT INTO users(id,role,name) VALUES(500,'admin','Иккинчи админ')")
+   self.assertFalse(bot.allowed(self.db,500,'agent_deactivate'))
+   self.assertTrue(bot.allowed(self.db,500,'agent_add'))
+
  def test_reconcile_menu_is_all_time_and_summary_button_removed(self):
   self.assertNotIn('📋 Умумий ҳисоб',[x for row in bot.menu(self.db,1) for x in row])
   self.assertEqual([x[0] for x in bot.FLOW['reconcile']],['client'])
