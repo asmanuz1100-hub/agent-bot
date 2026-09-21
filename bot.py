@@ -39,7 +39,7 @@ FLOW={
  'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
  'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
- 'admin_add':[('id','Янги админнинг Telegram ID рақамини киритинг:'),('name','Янги админнинг исмини киритинг:')],
+ 'admin_add':[('id','Админ қиладиган ходимнинг Telegram ID рақамини киритинг (аввал рўйхатдан ўтган бўлса ҳам бўлади):'),('name','Админ сифатида кўринадиган исмини киритинг:')],
  'agent_transfer':[('agent','Эски агентни танланг (аввал сменаси тугаган бўлсин):'),('id','Янги Telegram ID рақамини киритинг:')],
  'tracking':[('agent','Агентни танланг:')],
  'agent_profile':[('agent','Профилини бошқариш учун агентни танланг:')],
@@ -235,6 +235,9 @@ def prompt(db,u,s):
             shown=product_name(v) if k=='pack' else v
             lines.append(f'{names.get(k,k).rstrip(":")} {shown}')
         if s['action']=='client' and s['values'].get('photo'):lines.append('📷 Фото: бириктирилди')
+        if s['action']=='admin_add':
+            existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
+            if existing:lines.append(f'Аввалги мақом: {existing[0]} → админ. Эски ҳисоб тарихи сақланади.')
         if 'qty' in s['values']:
             n=s['values']['qty']*(units_per_block(s['values']['pack']) if s['values'].get('unit')=='Блок' else 1)
             lines.append(f'Ҳисобга: {n} дона')
@@ -249,6 +252,9 @@ def prompt(db,u,s):
         keys=[['Дона','Блок']]
         msg+=f'\n1 блок = {units_per_block(s["values"]["pack"])} дона ({product_name(s["values"]["pack"])}).'
     if key=='role':keys=[['agent','cashier']]
+    if key=='name' and s['action']=='admin_add':
+        existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
+        if existing:msg+=f'\nℹ️ Бу ID базада {existing[0]} роли билан сақланган. Тасдиқлаганда ўша аккаунт админга ўтказилади; очиқ смена ёки товар-пул қолдиғи бор бўлса, амал тўхтатилади.'
     if key=='payment_due':keys=[['Аниқ эмас']]
     if key=='qty' and s['action']=='sold':
         msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
@@ -451,11 +457,9 @@ def finish(db,u,s,source):
         if u not in ADMINS:raise ValueError('Агент аккаунтини фақат асосий админ алмаштиради.')
         transfer_agent_account(db,u,v['agent'],v['id'])
     elif a=='admin_add':
-        if u not in ADMINS:raise ValueError('Янги админ қўшиш ҳуқуқи фақат асосий админда.')
-        if v['id'] in ADMINS:raise ValueError('Бу фойдаланувчи аллақачон асосий админ.')
-        old=db.execute('SELECT role FROM users WHERE id=?',(v['id'],)).fetchone()
-        if old:raise ValueError('Бу ID аввал рўйхатдан ўтган. Мавжуд ходимнинг ролини автомат ўзгартирмаймиз.')
-        db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(v['id'],'admin',v['name']))
+        if u not in ADMINS:raise ValueError('Админ қўшиш ҳуқуқи фақат асосий админда.')
+        if v['id'] in ADMINS:raise ValueError('Бу Telegram ID аллақачон асосий админ.')
+        admin_result=add_or_promote_admin(db,u,v['id'],v['name'])
     elif a=='handover':handover(db,u,money(v['amount']),source,currency='USD')
     elif a=='tracking':tracking(db,u,v['agent'])
     else:
@@ -473,7 +477,8 @@ def finish(db,u,s,source):
     elif a=='agent_deactivate':
         send(u,f"✅ Агент #{v['agent']} кириши ёпилди. Товар, қарз ва тарих ўчирилмади.",admin_agent_menu(u))
     elif a=='admin_add':
-        send(u,f"✅ {v['name']} (ID: {v['id']}) админ сифатида қўшилди. У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
+        operation='Мавжуд аккаунт админга ўтказилди' if admin_result=='promoted' else 'Янги админ қўшилди'
+        send(u,f"✅ {operation}: {v['name']} (ID: {v['id']}). У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
     else:
