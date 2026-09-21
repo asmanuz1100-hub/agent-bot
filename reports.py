@@ -94,11 +94,67 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||(!bounds.length&&s.active))bounds.push(p);
   L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+'<br><a target="_blank" rel="noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">Навигаторда очиш</a>');
+   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">Навигаторда очиш</a>');
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);setTimeout(()=>map.invalidateSize(),250);
 </script></body></html>'''.encode('utf-8')
+
+def client_card_html(db,actor,client_id,photo_url=None):
+    """Read-only customer card for administrators holding a short-lived URL.
+
+    Card endpoints verify their own signature before calling this function.
+    No Telegram credentials or user-supplied HTML are embedded in the page.
+    """
+    admin_only(db,actor)
+    customer=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
+    if not customer:raise ValueError('Мижоз топилмади.')
+    from core import client_debt_usd,legacy_debt_uzs,client_stock
+    owner=db.execute('SELECT name FROM users WHERE id=?',(customer['agent'],)).fetchone()
+    owner_name=(owner[0] if owner else None) or str(customer['agent'])
+    e=lambda value:escape(str(value if value is not None else ''),quote=True)
+    name=e(customer['name'] or 'Номсиз мижоз')
+    shop=e(customer['shop_name'] or 'Дўкон номи киритилмаган')
+    full_name=e(owner_name)
+    phone=e(customer['phone'] or 'Телефон киритилмаган')
+    address=e(customer['address'] or 'Манзил киритилмаган')
+    comment=e(customer['comment'] or 'Изоҳ киритилмаган')
+    due=e(customer['payment_due'] or 'Аниқ эмас')
+    products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
+                     str(int(client_stock(db,customer['agent'],client_id,pack)))+
+                     ' дона</td></tr>' for pack in (1,3,5))
+    debt=client_debt_usd(db,client_id)
+    old=legacy_debt_uzs(db,client_id)
+    legacy=('<div class="field">Эски сўм ҳисоби: <strong>'+f'{old/100:,.2f} сўм'+'</strong></div>') if old else ''
+    loc=''
+    if customer['lat'] is not None and customer['lon'] is not None:
+        lat=float(customer['lat']);lon=float(customer['lon'])
+        loc='<a class="action" rel="noopener noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+str(lat)+','+str(lon)+'">📍 Навигаторда очиш</a>'
+    photo=('<img class="photo" src="'+e(photo_url)+'" alt="Мижозга бириктирилган фото" loading="lazy">' if customer['photo'] and photo_url else
+           '<div class="subtle">Фото ботдаги мижоз карточкасида мавжуд.</div>' if customer['photo'] else
+           '<div class="subtle">Фото бириктирилмаган.</div>')
+    content=f"""<!doctype html><html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Мижоз #{int(client_id)} · {shop}</title>
+<style>
+*{{box-sizing:border-box}}body{{margin:0;background:#f3f6fb;color:#15243b;font-family:Arial,sans-serif}}
+main{{max-width:780px;margin:32px auto;padding:0 14px}}article{{background:white;border:1px solid #e4eaf3;border-radius:20px;padding:24px;box-shadow:0 12px 35px #1c365010}}
+h1{{margin:0 0 8px;font-size:24px}}.subtle{{color:#64748b;font-size:13px;margin:8px 0 18px}}.field{{margin:13px 0;line-height:1.5}}
+.tag{{display:inline-block;background:#eaf3ff;padding:6px 11px;border-radius:24px;color:#1d4ed8;font-weight:600}}
+.photo{{width:100%;max-height:380px;object-fit:contain;border:1px solid #e4eaf3;border-radius:14px;margin:14px 0}}
+table{{border-collapse:collapse;width:100%;margin:12px 0}}td{{border-bottom:1px solid #e4eaf3;padding:12px 5px}}td:last-child{{text-align:right;font-weight:600}}
+.action{{display:inline-block;margin:16px 0;padding:11px 16px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:10px}}
+</style></head><body><main><article><span class="tag">👤 МИЖОЗ #{int(client_id)}</span>
+<h1>{shop}</h1><div class="subtle">{name}</div>{photo}
+<div class="field">👨‍💼 Бириктирилган агент: <strong>{full_name}</strong></div>
+<div class="field">📞 Телефон: <strong>{phone}</strong></div>
+<div class="field">🏠 Манзил: {address}</div>
+<div class="field">📝 Изоҳ: {comment}</div>
+<div class="field">📅 Тўлов санаси: {due}</div>
+<h2>📦 Мижоздаги товар</h2><table>{products}</table>
+<div class="field">💵 Мижоз қарзи: <strong>{debt/100:,.2f} USD</strong></div>
+{legacy}{loc}<p class="subtle">Карточка фақат кўриш учун. Маълумотни ўзгартириш — ботнинг «👥 Мижозлар» бўлимида.</p>
+</article></main></body></html>"""
+    return content.encode('utf-8')
 
 def shift_route_data(db,agent,shift):
     end=shift['end'] or int(time.time())
@@ -194,15 +250,17 @@ def shift_summary(db,agent,shift_id):
         'text':text
     }
 
-def route_map_html(db,actor,agent):
+def route_map_html(db,actor,agent,card_url=None):
     admin_only(db,actor)
     shift=db.execute('SELECT * FROM shifts WHERE agent=? ORDER BY id DESC LIMIT 1',(agent,)).fetchone()
     if not shift:raise ValueError('Бу агент ҳали иш бошламаган.')
     route,shops,stats,active=shift_route_data(db,agent,shift)
+    if card_url:
+        for shop in shops:shop['card_url']=card_url(int(shop['id']))
     summary=f"{stats['km']} км · {active} фаол савдо нуқтаси · {len(stats['stops'])} тўхташ · {len(stats['gaps'])} узилиш"
     return _map_html(f'Агент {agent} · смена #{shift["id"]}',[route],shops,summary),stats,active
 
-def overall(db,actor,now=None,period='day'):
+def overall(db,actor,now=None,period='day',card_url=None):
     """Summarize a calendar day/week/month (Tashkent time).
 
     Day map contains actual GPS trajectories. Week/month maps contain ONLY
@@ -322,6 +380,8 @@ def overall(db,actor,now=None,period='day'):
         text+='\n🗺 Харитада фақат шу даврда қўшилган янги мижозлар кўринади; агент траекторияси чизилмайди.'
     delivered_total=int(total_sold[1] or 0)
     payments_total=int(total_sold[2] or 0)
+    if card_url:
+        for shop in all_shops:shop['card_url']=card_url(int(shop['id']))
     summary=(f"{worked} иш · {round(total_km,2)} км · {total_new} янги мижоз · "
              f"берилган товар {m(delivered_total)} USD · олинган пул {m(payments_total)} USD")
     html=_map_html(f'{label} · {map_label}',routes if period=='day' else [],all_shops,summary,
