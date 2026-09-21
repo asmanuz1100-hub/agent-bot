@@ -123,6 +123,16 @@ class Tests(unittest.TestCase):
    self.assertNotIn(signature,bot.redact_access_log_arg(path))
    self.assertNotIn('1789967211',bot.redact_access_log_arg(path))
 
+ def test_access_log_formatting_keeps_integer_placeholders(self):
+  self.assertEqual(
+   bot.format_access_log('code %d, message %s',501,"Unsupported method ('HEAD')"),
+   "code 501, message Unsupported method ('HEAD')"
+  )
+  raw='GET /map/agent/123456/1789967211/'+'a'*32+' HTTP/1.1'
+  self.assertNotIn('1789967211',bot.format_access_log('"%s" %s %s',raw,200,'-'))
+  source=__import__('inspect').getsource(bot.serve_webhook)
+  self.assertIn('def do_HEAD(self):',source)
+
  def test_failed_update_is_persisted_for_admin_review(self):
   up={'update_id':30010,'message':{'from':{'id':2}}}
   with patch.object(bot,'send') as send:
