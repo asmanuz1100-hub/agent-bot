@@ -220,12 +220,18 @@ def overall(db,actor,now=None,period='day'):
     else:
         start=midnight.replace(day=1);label='1 ОЙЛИК';map_label='ойлик янги савдо нуқталари'
     a=int(start.timestamp());b=int(now.timestamp())+1
-    agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
+    agents=db.execute("SELECT id,name,role FROM users WHERE role IN ('agent','disabled') ORDER BY name").fetchall()
     routes=[];all_shops=[];total_km=0;stops=gaps=0;gps_points=0
     total_hours=0;total_new=0;total_sales=0;unpriced=0;unpriced_deliveries=0
     details=[]
     for ag in agents:
         aid=int(ag[0]);name=ag[1] or str(aid)
+        if ag[2]=='disabled':
+            historically_active=db.execute("""SELECT 1 FROM events WHERE agent=? AND ts>=? AND ts<?
+                UNION SELECT 1 FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?)
+                UNION SELECT 1 FROM clients WHERE agent=? AND created_ts>=? AND created_ts<? LIMIT 1""",
+                (aid,a,b,aid,b,a,aid,a,b)).fetchone()
+            if not historically_active:continue
         shifts=db.execute('SELECT * FROM shifts WHERE agent=? AND start<? AND (end IS NULL OR end>=?) ORDER BY start,id',(aid,b,a)).fetchall()
         akm=0;astops=agaps=0;segments=[];seen_points=set();worked=0
         for sh in shifts:
@@ -315,7 +321,7 @@ def overall(db,actor,now=None,period='day'):
         text+='\n🗺 Харитада фақат шу даврда қўшилган янги мижозлар кўринади; агент траекторияси чизилмайди.'
     summary=f"{worked} иш · {round(total_km,2)} км · {total_new} янги мижоз · {m(total_sales)} USD сотув"
     html=_map_html(f'{label} · {map_label}',routes if period=='day' else [],all_shops,summary,
-                   points_only=(period!='day'),summary_metrics={'agents':len(agents),'km':round(total_km,2),'sales':total_sales})
+                   points_only=(period!='day'),summary_metrics={'agents':len(details),'km':round(total_km,2),'sales':total_sales})
     return text,html
 
 def dates(start,end):
