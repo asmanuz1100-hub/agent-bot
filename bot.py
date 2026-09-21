@@ -103,13 +103,13 @@ def customer_photo_bytes(file_id):
     """Fetch a customer photo server-side without disclosing BOT_TOKEN to browsers."""
     info=api('getFile',file_id=file_id)
     path=info.get('file_path','')
-    if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\\.jpe?g',path) or
+    if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\.jpe?g',path) or
             '..' in path or int(info.get('file_size') or 0)>8_000_000):
         raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
     url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
     with urllib.request.urlopen(url,timeout=12) as res:
         content=res.read(8_000_001)
-    if len(content)>8_000_000 or not content.startswith(b'\\xff\\xd8\\xff'):
+    if len(content)>8_000_000 or not content.startswith(b'\xff\xd8\xff'):
         raise ValueError('Фото формати нотўғри.')
     return content
 
@@ -928,7 +928,7 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Agent map failed');self._reply(500,b'Map error')
                 return
-            m=re.fullmatch(r'/map/client/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/client/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
                 if not _map_valid(f'client/{cid}',expires,sig):
@@ -949,7 +949,7 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Customer card failed');self._reply(500,b'Customer card error')
                 return
-            m=re.fullmatch(r'/map/client-photo/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/client-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
                 if not _map_valid(f'client-photo/{cid}',expires,sig):
