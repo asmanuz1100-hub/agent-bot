@@ -80,6 +80,22 @@ class Tests(unittest.TestCase):
   self.assertEqual(bot.role(self.db,uid),'admin')
   self.assertEqual(bot.role(self.db,999999),'cashier')
 
+ def test_secondary_admin_role_lock_survives_test_agent_bootstrap_and_self_heals(self):
+  uid=1037158726
+  self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'admin','Offes'))
+  with patch.object(bot,'ADMINS',{1}),patch.object(bot,'TEST_AGENTS',{uid,2}):
+   bot.bootstrap_users(self.db)
+   self.assertEqual(bot.role(self.db,uid),'admin')
+   self.assertIsNotNone(self.db.execute('SELECT 1 FROM meta WHERE key=? AND value=?',
+                                       (f'secondary_admin:{uid}','1')).fetchone())
+   self.db.execute("UPDATE users SET role='agent' WHERE id=?",(uid,))
+   self.assertEqual(self.db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()[0],'agent')
+   self.assertEqual(bot.role(self.db,uid),'admin')
+   self.assertEqual(self.db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()[0],'admin')
+   self.db.execute("UPDATE users SET role='agent' WHERE id=?",(uid,))
+   bot.bootstrap_users(self.db)
+   self.assertEqual(self.db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()[0],'admin')
+
  def test_existing_disabled_agent_can_be_promoted_to_secondary_admin(self):
   uid=1037158726
   self.db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'disabled','Эски агент'))
