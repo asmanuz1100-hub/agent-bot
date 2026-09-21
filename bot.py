@@ -1031,7 +1031,10 @@ def run():
         db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role',(u,'admin','Админ'))
     for u in TEST_AGENTS:
         if u not in ADMINS:
-            db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET role=excluded.role WHERE users.role!='disabled'",(u,'agent',f'Агент {u}'))
+            # TEST_AGENT_IDS is bootstrap-only. Never downgrade an existing
+            # admin/cashier/disabled user back to agent on Render restart.
+            db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING",
+                       (u,'agent',f'Агент {u}'))
     db.commit()
     api('getMe')
     print('Internal Agent test bot started',flush=True)
