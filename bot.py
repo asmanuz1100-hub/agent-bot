@@ -1035,6 +1035,14 @@ def bootstrap_users(db):
             # Bootstrap only: existing roles are authoritative.
             db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING",
                        (u,'agent',f'Агент {u}'))
+    # Persist every currently valid non-primary admin before restoring locks.
+    # This also migrates secondary admins created by older bot versions.
+    current_admins=db.execute("SELECT id FROM users WHERE role='admin'").fetchall()
+    for row in current_admins:
+        uid=int(row[0])
+        if uid not in ADMINS:
+            db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (f'secondary_admin:{uid}','1'))
     protected=db.execute("SELECT key FROM meta WHERE key LIKE 'secondary_admin:%' AND value='1'").fetchall()
     for row in protected:
         try:uid=int(str(row[0]).split(':',1)[1])
