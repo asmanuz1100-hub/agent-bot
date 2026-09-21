@@ -205,23 +205,55 @@ def lock_agent(db,agent):
         db.execute('SELECT id FROM users WHERE id=? FOR UPDATE',(agent,)).fetchone()
 
 def _delivery_return_allocations(db,client,pack,qty):
-    deliveries=db.execute("""SELECT d.id,d.qty,d.amount_usd,
-        COALESCE((SELECT SUM(a.qty) FROM return_allocations a
-                  WHERE a.delivery_event=d.id),0) returned
-        FROM events d
-        WHERE d.client=? AND d.pack=? AND d.kind='delivery' AND d.amount_usd>0
-        ORDER BY d.id""",(client,pack)).fetchall()
-    remaining=qty;allocated=[]
-    for d in deliveries:
-        available=int(d['qty'])-int(d['returned'] or 0)
-        if available<=0:continue
-        take=min(available,remaining)
-        unit=int(d['amount_usd'])//int(d['qty'])
-        allocated.append((int(d['id']),take,take*unit))
-        remaining-=take
+    """Return unsold units against their original USD delivery prices (FIFO).
+
+    A sold unit stays billed but cannot be returned as unsold stock. Reconstruct
+    lots in event order, deducting previous sales and explicitly allocated
+    returns before choosing available units for the new return.
+    """
+    events=db.execute("""SELECT id,kind,qty,amount_usd FROM events
+        WHERE client=? AND pack=? AND kind IN ('delivery','sold','return')
+        ORDER BY id""",(client,pack)).fetchall()
+    prior=db.execute("""SELECT a.return_event,a.delivery_event,a.qty
+        FROM return_allocations a JOIN events e ON e.id=a.return_event
+        WHERE e.client=? AND e.pack=?""",(client,pack)).fetchall()
+    assigned={}
+    for row in prior:
+        assigned.setdefault(int(row['return_event']),[]).append(
+            (int(row['delivery_event']),int(row['qty'])))
+    lots=[]
+    for e in events:
+        kind=e['kind']
+        if kind=='delivery' and int(e['amount_usd'] or 0)>0:
+            units=int(e['qty']);amount=int(e['amount_usd'])
+            if units<=0 or amount%units:
+                raise ValueError('USD топшириш партияси нархини текширинг.')
+            lots.append({'id':int(e['id']),'available':units,'unit':amount//units})
+        elif kind=='sold':
+            remaining=int(e['qty'])
+            for lot in lots:
+                n=min(remaining,lot['available'])
+                lot['available']-=n;remaining-=n
+                if not remaining:break
+        elif kind=='return' and int(e['amount_usd'] or 0)>0:
+            allocations=assigned.get(int(e['id']))
+            if not allocations:
+                raise ValueError('Олдинги USD қайтаришда партия белгиланмаган. Админ текширсин.')
+            for delivery_id,units in allocations:
+                lot=next((lot for lot in lots if lot['id']==delivery_id),None)
+                if lot is None or units<=0 or units>lot['available']:
+                    raise ValueError('Товар қайтариш партиясида мос келмаслик бор.')
+                lot['available']-=units
+    remaining=qty;result=[]
+    for lot in lots:
+        take=min(remaining,lot['available'])
+        if take:
+            result.append((lot['id'],take,take*lot['unit']))
+            remaining-=take
         if not remaining:break
-    if remaining:raise ValueError('Қайтаришни USD партияларига боғлаб бўлмади. Админ қолдиқни текширсин.')
-    return allocated
+    if remaining:
+        raise ValueError('Қайтарилган товар учун USD партия қолдиғи етарли эмас. Админ ҳисобни текширсин.')
+    return result
 
 def transfer_agent_account(db,actor,old_id,new_id):
     """Replace an agent's Telegram login, preserving client, stock and ledger history.
