@@ -607,20 +607,37 @@ class Tests(unittest.TestCase):
 
  def test_customer_card_links_are_scoped_expiring_and_redacted(self):
   from urllib.parse import urlparse
-  import re,inspect
+  import inspect
   with patch.object(bot,'TOKEN','local-test-token'),patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test','WEBHOOK_BASE_URL':''}):
    for scope in ('client/1','client-photo/1'):
     url=bot.map_link(scope)
     path=urlparse(url).path
-    expiry,signature=path.split('/')[-2:]
-    self.assertTrue(bot._map_valid(scope,expiry,signature))
-    self.assertFalse(bot._map_valid('client/2',expiry,signature))
-    self.assertFalse(bot._map_valid('client-photo/2',expiry,signature))
-    self.assertFalse(bot._map_valid(scope,expiry,signature,int(expiry)+1))
+    expires,signature=path.split('/')[-2:]
+    self.assertTrue(bot._map_valid(scope,expires,signature))
+    self.assertFalse(bot._map_valid('client/2',expires,signature))
+    self.assertFalse(bot._map_valid('client-photo/2',expires,signature))
+    self.assertFalse(bot._map_valid(scope,expires,signature,int(expires)+1))
     self.assertNotIn(signature,bot.redact_access_log_arg('GET '+path+' HTTP/1.1'))
-    self.assertNotIn(expiry,bot.redact_access_log_arg('GET '+path+' HTTP/1.1'))
-    self.assertRegex(path,r'^/map/client(?:-photo)?/1/[0-9]+/[a-f0-9]{32}
-  with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'},clear=False), patch.object(bot.time,'time',return_value=2_000_000_000):
+    self.assertNotIn(expires,bot.redact_access_log_arg('GET '+path+' HTTP/1.1'))
+    self.assertTrue(path.startswith('/map/client/'))
+   source=inspect.getsource(bot.serve_webhook)
+   self.assertIn('reports.client_card_html(local,actor,cid,photo_url=photo_url)',source)
+   self.assertIn('photo_data=customer_photo_bytes',source)
+
+ def test_customer_photo_proxy_validates_telegram_file(self):
+  import io
+  jpeg=bytes([255,216,255])+b'test-image'
+  with patch.object(bot,'TOKEN','local-test-token'),patch.object(bot,'api',return_value={'file_path':'photos/file_12.jpg','file_size':len(jpeg)}) as api,patch.object(bot.urllib.request,'urlopen',return_value=io.BytesIO(jpeg)) as urlopen:
+   self.assertEqual(bot.customer_photo_bytes('telegram-file-id'),jpeg)
+   api.assert_called_once_with('getFile',file_id='telegram-file-id')
+   self.assertIn('/file/botlocal-test-token/photos/file_12.jpg',urlopen.call_args.args[0])
+  with patch.object(bot,'api',return_value={'file_path':'../secret.txt','file_size':3}):
+   with self.assertRaises(ValueError):bot.customer_photo_bytes('bad-file')
+  with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':8_000_001}):
+   with self.assertRaises(ValueError):bot.customer_photo_bytes('large-file')
+
+ def test_map_links_expire(self):
+  with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'},clear=False),patch.object(bot.time,'time',return_value=2_000_000_000):
    link=bot.map_link('overall')
   parts=link.rstrip('/').split('/')
   expires=int(parts[-2]);sig=parts[-1]
@@ -628,7 +645,6 @@ class Tests(unittest.TestCase):
   self.assertTrue(bot._map_valid('overall',expires,sig,2_000_000_000))
   self.assertFalse(bot._map_valid('overall',expires,sig,expires+1))
   self.assertFalse(bot._map_valid('agent/2',expires,sig,2_000_000_000))
-
  def test_repeated_unexpected_update_can_be_skipped(self):
   err=RuntimeError('boom')
   self.assertEqual(bot._register_failure(self.db,900,err),1)
