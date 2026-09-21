@@ -381,6 +381,10 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         elif kind=='return':
             allocations=_delivery_return_allocations(db,client,pack,qty)
             usd=sum(a[2] for a in allocations)
+        elif kind=='sold':
+            # Sale is recognition of inventory revenue at the original delivered
+            # USD lot price. The client debt was already booked at delivery.
+            usd=sum(a[2] for a in _delivery_return_allocations(db,client,pack,qty))
         elif kind=='payment':usd=value
         # Sale is physical confirmation only: delivery already generated the USD receivable.
         value=0
