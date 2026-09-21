@@ -263,6 +263,56 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.client_stock(self.db,2,cid,1),20)
   self.assertEqual(core.agent_stock(self.db,2,1),5)
 
+ def test_block_pack_sizes_and_multi_product_same_client(self):
+  for pack,mult in ((1,10),(3,6),(5,2)):
+   self.assertEqual(core.units_per_block(pack),mult)
+   core.set_product_price(self.db,1,pack,core.money(str(pack)))
+   core.record(self.db,1,2,None,'load',pack,mult)
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':540,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,text):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':text}}
+  with patch.object(bot,'send') as send:
+   for n,t in enumerate(['📦 Товар бериш','1','Грунтовка 7/1 — 1 кг','Блок','1','✅ Тасдиқлаш'],541):
+    bot.handle(self.db,msg(n,t))
+   self.assertEqual(core.client_stock(self.db,2,1,1),10)
+   self.assertIn('➕ Яна маҳсулот қўшиш',[x for row in send.call_args.args[2] for x in row])
+   bot.handle(self.db,msg(550,'➕ Яна маҳсулот қўшиш'))
+   self.assertEqual(bot.state(self.db,2)['values']['client'],1)
+   self.assertEqual(bot.state(self.db,2)['step'],1)
+   bot.handle(self.db,msg(551,'Грунтовка 7/1 — 3 кг'))
+   self.assertIn('1 блок = 6 дона',send.call_args.args[1])
+   for n,t in enumerate(['Блок','1','✅ Тасдиқлаш'],552):bot.handle(self.db,msg(n,t))
+   self.assertEqual(core.client_stock(self.db,2,1,3),6)
+   bot.handle(self.db,msg(560,'➕ Яна маҳсулот қўшиш'))
+   bot.handle(self.db,msg(561,'Грунтовка 7/1 — 5 кг'))
+   self.assertIn('1 блок = 2 дона',send.call_args.args[1])
+   for n,t in enumerate(['Блок','1','✅ Тасдиқлаш'],562):bot.handle(self.db,msg(n,t))
+   self.assertEqual(core.client_stock(self.db,2,1,5),2)
+   bot.handle(self.db,msg(570,'✅ Тасдиқлаш'))
+   self.assertEqual(core.client_stock(self.db,2,1,5),2)
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('66.00'))
+  for pack in (1,3,5):
+   self.assertEqual(core.agent_stock(self.db,2,pack),0)
+
+ def test_client_photo_is_sent_with_customer_card(self):
+  self.db.execute("UPDATE clients SET photo='tg-photo-file-id' WHERE id=1")
+  with patch.object(bot,'send') as send,patch.object(bot,'api') as api:
+   bot.report_clients(self.db,2)
+  self.assertIn('Фото бор',send.call_args.args[1])
+  api.assert_called_once()
+  self.assertEqual(api.call_args.args[0],'sendPhoto')
+  self.assertEqual(api.call_args.kwargs['photo'],'tg-photo-file-id')
+
+ def test_reconcile_menu_is_all_time_and_summary_button_removed(self):
+  self.assertNotIn('📋 Умумий ҳисоб',[x for row in bot.menu(self.db,1) for x in row])
+  self.assertEqual([x[0] for x in bot.FLOW['reconcile']],['client'])
+  self.assertFalse(bot.allowed(self.db,1,'summary'))
+  self.assertEqual(core.units_per_block(1),10)
+  self.assertEqual(core.units_per_block(3),6)
+  self.assertEqual(core.units_per_block(5),2)
+
  def test_product_catalog_and_admin_price(self):
   self.assertEqual(core.product_name(1),'Грунтовка 7/1 — 1 кг')
   self.assertEqual(core.product_name(3),'Грунтовка 7/1 — 3 кг')
