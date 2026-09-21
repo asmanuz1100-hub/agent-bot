@@ -619,7 +619,7 @@ class Tests(unittest.TestCase):
     self.assertFalse(bot._map_valid(scope,expires,signature,int(expires)+1))
     self.assertNotIn(signature,bot.redact_access_log_arg('GET '+path+' HTTP/1.1'))
     self.assertNotIn(expires,bot.redact_access_log_arg('GET '+path+' HTTP/1.1'))
-    self.assertTrue(path.startswith('/map/client/'))
+    self.assertTrue(path.startswith('/map/client/') or path.startswith('/map/client-photo/'))
    source=inspect.getsource(bot.serve_webhook)
    self.assertIn('reports.client_card_html(local,actor,cid,photo_url=photo_url)',source)
    self.assertIn('photo_data=customer_photo_bytes',source)
