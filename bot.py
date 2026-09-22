@@ -176,7 +176,7 @@ def allowed(db,u,action):
     r=role(db,u)
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    if action=='agent_clients_map':return r=='agent' and feature_enabled(db,u,'clients')
+    if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
@@ -787,15 +787,26 @@ def handle(db,update):
                 send(u,'Иш тугади ✅ Бот координаталарни қабул қилишни автомат тўхтатди. Кунлик ҳисоботни тайёрлашда хато бўлди.',menu(db,u))
             return
         if action=='agent_clients_map':
-            rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
-                AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                    AND e.agent=? AND e.kind='delivery')""",(u,u)).fetchone()[0]
+            if r=='admin':
+                rows=db.execute("""SELECT COUNT(*) FROM clients c
+                    WHERE EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                        AND e.kind='delivery')""").fetchone()[0]
+                link=map_link(f'admin-clients/{u}')
+                description=(f'🗺 Барча агентлар аввал товар берган {rows} та дўкон харитаси. '
+                             'Мижоз нуқтасини босиб жойлашуви, USD қарзи ва товар қолдиғини кўринг; '
+                             'навигатор ва мижоз карточкаси очилади. Харита фақат кўриш учун. '
+                             'Ҳавола 15 дақиқа амал қилади.')
+            else:
+                rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
+                    AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                        AND e.agent=? AND e.kind='delivery')""",(u,u)).fetchone()[0]
+                link=map_link(f'agent-clients/{u}')
+                description=(f'🗺 Аввал товар берилган {rows} та дўкон харитаси. '
+                             'Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. '
+                             'Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.')
             if not rows:
-                send(u,'Ҳали товар топширилган мижоз йўқ. Аввал мижозга товар беринг.',menu(db,u));return
-            link=map_link(f'agent-clients/{u}')
-            if link:
-                send_inline(u,f'🗺 Аввал товар берилган {rows} та дўкон харитаси. Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.',
-                            [('🗺 Мижозлар харитасини очиш',link)])
+                send(u,'Ҳали товар топширилган мижоз йўқ.',menu(db,u));return
+            if link:send_inline(u,description,[('🗺 Мижозлар харитасини очиш',link)])
             else:send(u,'Харита сервер ҳаволаси ҳали созланмаган.')
             return
         if action=='clients':report_clients(db,u);return
@@ -1145,6 +1156,27 @@ def serve_webhook(db,base_url):
                     self._reply(200,html,'text/html; charset=utf-8')
                 except Exception:
                     logging.exception('Overall map failed');self._reply(500,b'Map error')
+                return
+            m=re.fullmatch(r'/map/admin-clients/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                admin=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'admin-clients/{admin}',expires,sig):
+                    self._reply(410,b'Admin customer map link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        if role(local,admin)!='admin':
+                            self._reply(403,b'Admin access revoked');return
+                        html=reports.admin_clients_map_html(local,admin,
+                            card_url=lambda cid:map_link(f'client/{cid}'))
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
+                    self._reply(200,html,'text/html; charset=utf-8')
+                except ValueError:
+                    self._reply(403,b'Admin customer map unavailable')
+                except Exception:
+                    logging.exception('Admin customers map failed');self._reply(500,b'Admin customer map error')
                 return
             m=re.fullmatch(r'/map/agent-clients/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
             if m:
