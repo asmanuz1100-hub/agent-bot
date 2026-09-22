@@ -19,6 +19,7 @@ DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
+CLIENT_PAGE_SIZE=20
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','👤 Битта мижоз — Excel':'reconcile_client_xlsx','👤 Битта мижоз — PDF':'reconcile_client_pdf','📊 Барча мижозлар — Excel':'reconcile_all_xlsx','📄 Барча мижозлар — PDF':'reconcile_all_pdf','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
@@ -322,13 +323,26 @@ def prompt(db,u,s):
         if key=='client':
             all_clients=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
             own_only=role(db,u)=='agent' and not all_clients
-            rows=db.execute('SELECT id,name,shop_name FROM clients'+(' WHERE agent=?' if own_only else '')+
-                            ' ORDER BY id DESC LIMIT 20',(u,) if own_only else ()).fetchall()
+            where=' WHERE agent=?' if own_only else ''
+            base_params=(u,) if own_only else ()
+            total=db.execute('SELECT COUNT(*) FROM clients'+where,base_params).fetchone()[0]
+            page=max(0,int(s.get('page',0)))
+            last_page=max(0,(total-1)//CLIENT_PAGE_SIZE)
+            page=min(page,last_page);s['page']=page
+            rows=db.execute('SELECT id,name,shop_name FROM clients'+where+
+                            ' ORDER BY id DESC LIMIT ? OFFSET ?',base_params+(CLIENT_PAGE_SIZE,page*CLIENT_PAGE_SIZE)).fetchall()
             search_button='🔎 Мижоз қидириш'
         else:
             rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 20").fetchall()
             search_button='🔎 Агент қидириш'
         keys=[[f"{r[0]} · {(r[1] or 'Номсиз')[:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"] for r in rows]
+        if key=='client' and total>CLIENT_PAGE_SIZE:
+            nav=[]
+            if page>0:nav.append('⬅️ Олдинги 20')
+            if (page+1)*CLIENT_PAGE_SIZE<total:nav.append('Кейинги 20 ➡️')
+            if nav:keys.append(nav)
+            first=page*CLIENT_PAGE_SIZE+1;last=min(total,(page+1)*CLIENT_PAGE_SIZE)
+            msg+=f'\nЖами {total} та мижоз · {first}–{last} кўрсатилмоқда.'
         keys.append([search_button])
         msg+='\nРўйхатда топилмаса, қидириш тугмасини босинг.'
         if not rows:msg+='\nҲозирча рўйхат бўш. Аввал қўшинг.'
@@ -877,6 +891,10 @@ def handle(db,update):
             v=text
     elif key in ('client','agent','id'):
         search_button='🔎 Мижоз қидириш' if key=='client' else '🔎 Агент қидириш'
+        if key=='client' and text in ('⬅️ Олдинги 20','Кейинги 20 ➡️'):
+            delta=-1 if text.startswith('⬅️') else 1
+            s['page']=max(0,int(s.get('page',0))+delta)
+            save(db,u,s);prompt(db,u,s);return
         if key in ('client','agent') and text==search_button:
             save(db,u,s)
             send(u,'Қидириш учун исм, дўкон номи, телефон, манзил ёки IDдан камида 2 та белги киритинг.',[['❌ Бекор қилиш']]);return
