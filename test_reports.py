@@ -22,7 +22,8 @@ class ReportsTests(unittest.TestCase):
   self.assertEqual(len(r['rows']),3)
   html=reports.reconciliation_html(r).decode();self.assertIn('&lt;script&gt;',html);self.assertNotIn('<script>',html)
  def test_report_permissions(self):
-  for uid in (3,4,99):
+  self.assertEqual(reports.reconciliation(self.db,4,1,'2026-09-01','2026-09-18')['client']['id'],1)
+  for uid in (3,99):
    with self.assertRaises(ValueError):reports.reconciliation(self.db,uid,1,'2026-09-01','2026-09-18')
  def test_period_validation(self):
   with self.assertRaises(ValueError):reports.dates('2026-09-20','2026-09-18')
@@ -243,9 +244,9 @@ class ReportsTests(unittest.TestCase):
   self.assertNotIn('Тахминий йўл',r['text'])
   self.assertIsNotNone(r['first']);self.assertIsNotNone(r['last'])
 
- def test_agent_report_flow_no_other_agent(self):
+ def test_agent_can_open_shared_reconciliation_reports(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
-  self.assertFalse(bot.allowed(self.db,2,'reconcile'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile'))
 
  def test_all_clients_reconciliation_exports(self):
   self.db.execute("UPDATE clients SET shop_name='Дўкон',address='Манзил' WHERE id=1")
@@ -256,11 +257,18 @@ class ReportsTests(unittest.TestCase):
   self.assertEqual(rows[0]['debt'],20000)
   self.assertTrue(reports.all_clients_xlsx(self.db,1).startswith(b'PK'))
   self.assertTrue(reports.all_clients_pdf(self.db,1).startswith(b'%PDF'))
-  with self.assertRaises(ValueError):reports.all_clients_statement_rows(self.db,2)
+  self.assertEqual(len(reports.all_clients_statement_rows(self.db,2)),2)
+  act=reports.reconciliation(self.db,2,1)
+  self.assertTrue(reports.reconciliation_xlsx(act).startswith(b'PK'))
+  self.assertTrue(reports.reconciliation_pdf(act).startswith(b'%PDF'))
+  with self.assertRaises(ValueError):reports.all_clients_statement_rows(self.db,3)
 
  def test_reconciliation_export_permissions(self):
   self.assertTrue(bot.allowed(self.db,1,'reconcile_all_xlsx'))
   self.assertTrue(bot.allowed(self.db,1,'reconcile_all_pdf'))
-  self.assertFalse(bot.allowed(self.db,2,'reconcile_all_xlsx'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_all_xlsx'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_all_pdf'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_client_xlsx'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_client_pdf'))
 
 if __name__=='__main__':unittest.main()
