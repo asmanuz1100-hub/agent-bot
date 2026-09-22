@@ -17,14 +17,21 @@ def admin_only(db,actor):
 def _safe_json(obj):
     return json.dumps(obj,ensure_ascii=False,separators=(',',':')).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
 
-def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=None):
+def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=None,agent_clients=False):
     total_km=round(sum(float(r.get('km') or 0) for r in routes),2)
     gps_points=sum(len(r.get('points') or []) for r in routes)
     active_shops=sum(1 for s in shops if s.get('active'))
     metrics=summary_metrics or {}
     data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary,
-                     'points_only':points_only,'agent_work':metrics.get('agent_work',[])})
-    if points_only:
+                     'points_only':points_only,'agent_clients':agent_clients,'agent_work':metrics.get('agent_work',[])})
+    if agent_clients:
+        cards=[
+            ('Дўконлар',len(shops)),
+            ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
+            ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
+            ('Локациясиз',metrics.get('missing_location',0)),
+        ]
+    elif points_only:
         cards=[
             ('Агентлар',metrics.get('agents',0)),
             ('Жами йўл',f"{metrics.get('km',0)} км"),
@@ -42,7 +49,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
     # Total working time is shown prominently in every period, including day
     # maps whose route is empty because Telegram GPS was not shared.
     duration=max(0,int(metrics.get('work_seconds',0)))
-    cards.insert(1,('Жами иш вақти',f'{duration//3600} соат {(duration%3600)//60} дақиқа'))
+    if not agent_clients:cards.insert(1,('Жами иш вақти',f'{duration//3600} соат {(duration%3600)//60} дақиқа'))
     cards_html=''.join(f'<div class="kpi"><span>{escape(str(k))}</span><strong>{escape(str(v))}</strong></div>' for k,v in cards)
     return f'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -66,7 +73,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 @media(max-width:820px){{html,body{{height:auto;min-height:100vh;overflow-y:auto}}.app{{height:auto;min-height:100vh;display:block}}.top{{padding:12px}}.title{{font-size:18px}}.kpis{{grid-template-columns:repeat(2,minmax(0,1fr))}}.body{{display:flex;flex-direction:column;padding:10px;gap:10px;min-height:auto}}.mapwrap{{order:0;min-height:55vh;height:55vh}}#map{{height:55vh;min-height:55vh}}.side{{order:1;max-height:none;overflow:visible}}}}
 </style></head>
 <body><div class="app"><section class="top"><div class="head"><div class="title">{escape(title)}</div><div class="badge">ИЧКИ ФОЙДАЛАНИШ · ТЕСТ</div></div><div class="kpis">{cards_html}</div></section>
-<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
+<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Мижоз локацияси агент киритган манзил асосида кўринади. «Пул олиш» ва «Товар қайтариш» Telegram ботга ўтади; операция фақат GPS фаол бўлганда ва агент тасдиқлагандан кейин сақланади. Бу ҳаволани бошқаларга юборманг.' if agent_clients else 'Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
 <script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
@@ -121,9 +128,9 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   if(last){{L.circleMarker(last,{{radius:7,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги GPS нуқта · '+esc(r.agent)+'<br><a rel="noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+last[0]+','+last[1]+'">Навигаторда очиш</a>');}}
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
-D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||(!bounds.length&&s.active))bounds.push(p);
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
   L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">Навигаторда очиш</a>');
+   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':''));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(D.points_only&&!D.shops.length){{
@@ -133,6 +140,46 @@ if(D.points_only&&!D.shops.length){{
 }}
 if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.setView([41.3,69.24],7);setTimeout(()=>map.invalidateSize(),250);
 </script></body></html>'''.encode('utf-8')
+
+def agent_clients_map_html(db,agent,action_url=None):
+    """All previously supplied shops belonging to this agent, not only today.
+
+    The signed HTTP endpoint checks the agent's role and customers feature
+    before rendering; Telegram actions independently recheck ownership.
+    """
+    from core import client_debt_usd,client_stock,feature_enabled
+    r=db.execute("SELECT role,name FROM users WHERE id=?",(agent,)).fetchone()
+    if not r or r['role']!='agent' or not feature_enabled(db,agent,'clients'):
+        raise ValueError('Мижозлар харитасига рухсат йўқ.')
+    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon
+        FROM clients c WHERE c.agent=?
+        AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.agent=? AND e.kind='delivery')
+        ORDER BY c.id DESC""",(agent,agent)).fetchall()
+    shops=[];missing=0;debt_total=0;stock_total=0
+    for row in rows:
+        cid=int(row['id'])
+        debt=int(client_debt_usd(db,cid))
+        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        debt_total+=debt;stock_total+=stock
+        lat,lon=row['lat'],row['lon']
+        if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
+            missing+=1;continue
+        shop={'id':cid,'name':row['name'],'shop':row['shop_name'],
+              'address':row['address'],'lat':float(lat),'lon':float(lon),
+              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt)}
+        if action_url:
+            shop['pay_url']=action_url('pay',cid)
+            shop['return_url']=action_url('return',cid)
+        shops.append(shop)
+    summary=(f'Товар топширилган {len(rows)} та дўкондан {len(shops)} тасининг '
+             f'манзили харитада бор. Жами қарз: {m(debt_total)} USD. '
+             f'Мижоз нуқтасини босинг: навигатор, пул олиш ва товар қайтариш.')
+    return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
+                     summary_metrics={'debt_usd':debt_total,'stock':stock_total,
+                                      'missing_location':missing},
+                     agent_clients=True)
+
 
 def client_card_html(db,actor,client_id,photo_url=None):
     """Read-only customer card for administrators holding a short-lived URL.
