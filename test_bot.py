@@ -272,6 +272,36 @@ class Tests(unittest.TestCase):
   self.assertIn('return connect(database_url,initialize=False) if postgres else db',
                 __import__('inspect').getsource(bot.serve_webhook))
 
+ def test_admin_can_open_all_customer_map_and_agent_link_routes_match(self):
+  import ast,inspect,re
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,1,2,None,'load',1,10,currency='USD')
+  core.record(self.db,2,2,1,'delivery',1,3,currency='USD')
+  def msg(i,u,txt):
+   return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),
+      'from':{'id':u},'chat':{'id':u,'type':'private'},'text':txt}}
+  with patch.object(bot,'ADMINS',{1}),patch.dict(bot.os.environ,{'WEBHOOK_BASE_URL':'https://example.test'}),patch.object(bot,'send'),patch.object(bot,'send_inline') as inline:
+   self.assertTrue(bot.allowed(self.db,1,'agent_clients_map'))
+   self.assertTrue(bot.allowed(self.db,2,'agent_clients_map'))
+   self.assertFalse(bot.allowed(self.db,3,'agent_clients_map'))
+   self.assertIn('🗺 Мижозлар харитаси',[x for row in bot.menu(self.db,1) for x in row])
+   bot.handle(self.db,msg(987001,1,'🗺 Мижозлар харитаси'))
+   admin_url=inline.call_args.args[2][0][1]
+   self.assertIn('/map/admin-clients/1/',admin_url)
+   self.assertNotIn('start=',admin_url)
+   bot.handle(self.db,msg(987002,2,'🗺 Мижозлар харитаси'))
+   agent_url=inline.call_args.args[2][0][1]
+   self.assertIn('/map/agent-clients/2/',agent_url)
+   source=ast.parse(inspect.getsource(bot.serve_webhook))
+   patterns=[n.value for n in ast.walk(source) if isinstance(n,ast.Constant)
+             and isinstance(n.value,str) and '/map/' in n.value
+             and ('admin-clients/' in n.value or 'agent-clients/' in n.value)
+             and n.value.startswith('/map/')]
+   self.assertEqual(len(patterns),2)
+   self.assertTrue(any(re.fullmatch(p,admin_url.replace('https://example.test','')) for p in patterns))
+   self.assertTrue(any(re.fullmatch(p,agent_url.replace('https://example.test','')) for p in patterns))
+   self.assertFalse(bot._map_valid('admin-clients/2',admin_url.split('/')[-2],admin_url.split('/')[-1]))
+
  def test_agent_customer_map_link_and_signed_payment_return(self):
   core.set_product_price(self.db,1,1,core.money('2.00'))
   core.record(self.db,1,2,None,'load',1,10,currency='USD')
