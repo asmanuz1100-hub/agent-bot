@@ -436,7 +436,7 @@ def dates(start,end):
 
 def auth(db,actor,agent):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not r or not (r[0]=='admin' or (r[0]=='agent' and actor==agent)):raise ValueError('Ҳисоботга рухсат йўқ.')
+    if not r or r[0] not in ('admin','agent'):raise ValueError('Ҳисоботга рухсат йўқ.')
 
 def reconciliation(db,actor,client,start=None,end=None):
     c=db.execute('SELECT * FROM clients WHERE id=?',(client,)).fetchone()
@@ -477,10 +477,82 @@ def reconciliation(db,actor,client,start=None,end=None):
         rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
     return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
+def reconciliation_xlsx(r):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment,Font,PatternFill,Border,Side
+    c=r['client'];wb=Workbook();ws=wb.active;ws.title='Акт сверка'
+    ws.merge_cells('A1:H1');ws['A1']='ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА'
+    ws['A1'].font=Font(bold=True,size=15,color='FFFFFF');ws['A1'].fill=PatternFill('solid',fgColor='123747')
+    ws['A1'].alignment=Alignment(horizontal='center',vertical='center');ws.row_dimensions[1].height=28
+    details=[
+        ('Мижоз номи',c.get('name') or 'Номсиз'),('Магазин номи',c.get('shop_name') or '—'),
+        ('Манзил',c.get('address') or '—'),('Телефон',c.get('phone') or '—'),
+        ('Давр',f"{r['start']} — {r['end']}"),('Якуний қарз',r['usd_closing']/100)
+    ]
+    for idx,(label,value) in enumerate(details,3):
+        ws.cell(idx,1,label).font=Font(bold=True,color='38515E');ws.merge_cells(start_row=idx,start_column=2,end_row=idx,end_column=8)
+        ws.cell(idx,2,value);ws.cell(idx,2).alignment=Alignment(wrap_text=True)
+    ws.cell(8,2).number_format='#,##0.00 "USD"'
+    headers=['№','Сана','Амал','Товар','Дона','Топширилган, USD','Тўлов/қайтариш, USD','Қарз, USD']
+    header_row=10
+    for col,title in enumerate(headers,1):
+        cell=ws.cell(header_row,col,title);cell.font=Font(bold=True,color='FFFFFF');cell.fill=PatternFill('solid',fgColor='087F8C');cell.alignment=Alignment(horizontal='center',vertical='center',wrap_text=True)
+    thin=Side(style='thin',color='D8E2E7')
+    for index,row in enumerate(r['rows'],1):
+        values=[row['id'],row['time'],row['kind'],product_name(row['pack']) if row['pack'] else '—',row['qty'] or '—',row['usd_charge']/100,row['usd_credit']/100,row['usd_balance']/100]
+        excel_row=header_row+index
+        for col,value in enumerate(values,1):
+            cell=ws.cell(excel_row,col,value);cell.alignment=Alignment(vertical='top',wrap_text=True);cell.border=Border(bottom=thin)
+        for col in (6,7,8):ws.cell(excel_row,col).number_format='#,##0.00'
+    if not r['rows']:
+        ws.merge_cells(start_row=11,start_column=1,end_row=11,end_column=8);ws.cell(11,1,'Операциялар йўқ')
+    stock_row=header_row+max(1,len(r['rows']))+3
+    ws.merge_cells(start_row=stock_row,start_column=1,end_row=stock_row,end_column=8)
+    ws.cell(stock_row,1,'МИЖОЗДАГИ СОТИЛМАГАН ТОВАР');ws.cell(stock_row,1).font=Font(bold=True,color='FFFFFF');ws.cell(stock_row,1).fill=PatternFill('solid',fgColor='123747')
+    for offset,pack in enumerate((1,3,5),1):
+        ws.cell(stock_row+offset,1,product_name(pack));ws.merge_cells(start_row=stock_row+offset,start_column=1,end_row=stock_row+offset,end_column=6)
+        ws.cell(stock_row+offset,7,'Қолдиқ');ws.cell(stock_row+offset,8,r['closing_stock'][pack])
+    widths=[9,20,30,30,10,21,23,18]
+    for idx,width in enumerate(widths,1):ws.column_dimensions[chr(64+idx)].width=width
+    ws.freeze_panes='A11';ws.sheet_view.showGridLines=False
+    out=io.BytesIO();wb.save(out);return out.getvalue()
+
+def reconciliation_pdf(r):
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER,TA_RIGHT
+    from reportlab.lib.pagesizes import A4,landscape
+    from reportlab.lib.styles import ParagraphStyle,getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate,Table,TableStyle,Paragraph,Spacer
+    font=_pdf_font();out=io.BytesIO();c=r['client'];esc=lambda value:escape(str(value or '—'),quote=True)
+    doc=SimpleDocTemplate(out,pagesize=landscape(A4),leftMargin=10*mm,rightMargin=10*mm,topMargin=10*mm,bottomMargin=10*mm,
+                          title='ASMAN SILICAT — Мижоз акт сверка')
+    styles=getSampleStyleSheet();title=ParagraphStyle('ClientActTitle',parent=styles['Title'],fontName=font,fontSize=15,leading=19,textColor=colors.HexColor('#123747'),alignment=TA_CENTER)
+    normal=ParagraphStyle('ClientActNormal',parent=styles['BodyText'],fontName=font,fontSize=7.5,leading=10)
+    right=ParagraphStyle('ClientActRight',parent=normal,alignment=TA_RIGHT)
+    info=[[Paragraph('<b>Мижоз номи</b>',normal),Paragraph(esc(c.get('name') or 'Номсиз'),normal),Paragraph('<b>Магазин номи</b>',normal),Paragraph(esc(c.get('shop_name')),normal)],
+          [Paragraph('<b>Манзил</b>',normal),Paragraph(esc(c.get('address')),normal),Paragraph('<b>Телефон</b>',normal),Paragraph(esc(c.get('phone')),normal)],
+          [Paragraph('<b>Давр</b>',normal),Paragraph(f"{esc(r['start'])} — {esc(r['end'])}",normal),Paragraph('<b>Якуний қарз</b>',normal),Paragraph(f"<b>{m(r['usd_closing'])} USD</b>",right)]]
+    info_table=Table(info,colWidths=[27*mm,83*mm,29*mm,83*mm])
+    info_table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(0,-1),colors.HexColor('#EDF5F6')),('BACKGROUND',(2,0),(2,-1),colors.HexColor('#EDF5F6')),('GRID',(0,0),(-1,-1),0.3,colors.HexColor('#D8E2E7')),('VALIGN',(0,0),(-1,-1),'TOP'),('PADDING',(0,0),(-1,-1),5)]))
+    headers=['№','Сана','Амал','Товар','Дона','Топширилган, USD','Тўлов/қайтариш, USD','Қарз, USD']
+    data=[[Paragraph(f'<b>{esc(x)}</b>',normal) for x in headers]]
+    for row in r['rows']:
+        data.append([Paragraph(str(row['id']),normal),Paragraph(esc(row['time']),normal),Paragraph(esc(row['kind']),normal),Paragraph(esc(product_name(row['pack']) if row['pack'] else '—'),normal),Paragraph(esc(row['qty'] or '—'),normal),Paragraph(m(row['usd_charge']),right),Paragraph(m(row['usd_credit']),right),Paragraph(m(row['usd_balance']),right)])
+    if len(data)==1:data.append([Paragraph('Операциялар йўқ',normal),'','','','','','',''])
+    operations=Table(data,colWidths=[10*mm,28*mm,42*mm,45*mm,13*mm,28*mm,31*mm,25*mm],repeatRows=1)
+    operations.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#087F8C')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+    stock=[[Paragraph('<b>Товар</b>',normal),Paragraph('<b>Қолдиқ, дона</b>',normal)]]+[[Paragraph(esc(product_name(pack)),normal),Paragraph(str(r['closing_stock'][pack]),right)] for pack in (1,3,5)]
+    stock_table=Table(stock,colWidths=[90*mm,30*mm])
+    stock_table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#123747')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('PADDING',(0,0),(-1,-1),5)]))
+    story=[Paragraph('ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА',title),Spacer(1,3*mm),info_table,Spacer(1,4*mm),operations,Spacer(1,4*mm),stock_table,Spacer(1,3*mm),Paragraph('Масъул ходим: ____________________     Мижоз: ____________________',normal)]
+    doc.build(story);return out.getvalue()
+
 
 def all_clients_statement_rows(db,actor):
-    """Return the manager-only all-customer reconciliation table."""
-    admin_only(db,actor)
+    """Return the manager and agent all-customer reconciliation table."""
+    role=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not role or role[0] not in ('admin','agent'):raise ValueError('Ҳисоботга рухсат йўқ.')
     clients=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.phone,c.agent,
         COALESCE(u.name,CAST(c.agent AS TEXT)) AS agent_name
         FROM clients c LEFT JOIN users u ON u.id=c.agent
