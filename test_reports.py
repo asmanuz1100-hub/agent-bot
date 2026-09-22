@@ -92,6 +92,32 @@ class ReportsTests(unittest.TestCase):
   with self.assertRaises(ValueError):reports.client_card_html(self.db,2,1)
   with self.assertRaises(ValueError):reports.client_card_html(self.db,1,999)
 
+ def test_admin_map_sees_all_agents_and_is_read_only(self):
+  import re,json
+  self.db.execute("UPDATE clients SET lat=40.111,lon=71.222,shop_name='<script>alert(1)</script>' WHERE id=1")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'delivery',1,3,600,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,2,'delivery',1,1,200,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,address,lat,lon,shop_name) VALUES(3,4,'Other agent','+998900000003','Private',40.5,71.5,'Other shop')")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(4,4,3,'delivery',1,1,200,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  url=lambda cid:'https://example.test/map/client/'+str(cid)+'/2000000000/'+'a'*32
+  html=reports.admin_clients_map_html(self.db,1,card_url=url).decode()
+  self.assertIn('Админ · Мижозлар харитаси',html)
+  self.assertIn('Навигаторда очиш',html)
+  self.assertIn('Агент:',html)
+  self.assertNotIn('<script>alert(1)</script>',html)
+  self.assertNotIn('+998900000001',html)
+  found=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
+  data=json.loads(found.group(1))
+  self.assertEqual({x['id'] for x in data['shops']},{1,3})
+  self.assertEqual({x['owner'] for x in data['shops']},{'B','D'})
+  self.assertEqual(sum(x['stock'] for x in data['shops']),4)
+  self.assertEqual(sum(float(x['debt']) for x in data['shops']),8.0)
+  self.assertTrue(all('pay_url' not in x and 'return_url' not in x for x in data['shops']))
+  self.assertTrue(all(x['card_url']==url(x['id']) for x in data['shops']))
+  self.assertIn('Локациясиз',html)
+  for uid in (2,3,4,99):
+   with self.assertRaises(ValueError):reports.admin_clients_map_html(self.db,uid)
+
  def test_agent_previous_deliveries_map_and_private_quick_actions(self):
   import json,re
   self.db.execute("UPDATE clients SET lat=40.111,lon=71.222,shop_name='<img onerror=alert(1)>' WHERE id=1")
