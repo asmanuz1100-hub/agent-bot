@@ -17,13 +17,13 @@ def admin_only(db,actor):
 def _safe_json(obj):
     return json.dumps(obj,ensure_ascii=False,separators=(',',':')).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
 
-def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=None,agent_clients=False):
+def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=None,agent_clients=False,admin_clients=False):
     total_km=round(sum(float(r.get('km') or 0) for r in routes),2)
     gps_points=sum(len(r.get('points') or []) for r in routes)
     active_shops=sum(1 for s in shops if s.get('active'))
     metrics=summary_metrics or {}
     data=_safe_json({'title':title,'routes':routes,'shops':shops,'summary':summary,
-                     'points_only':points_only,'agent_clients':agent_clients,'agent_work':metrics.get('agent_work',[])})
+                     'points_only':points_only,'agent_clients':agent_clients,'admin_clients':admin_clients,'agent_work':metrics.get('agent_work',[])})
     if agent_clients:
         cards=[
             ('Дўконлар',metrics.get('total_clients',len(shops))),
@@ -73,7 +73,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 @media(max-width:820px){{html,body{{height:auto;min-height:100vh;overflow-y:auto}}.app{{height:auto;min-height:100vh;display:block}}.top{{padding:12px}}.title{{font-size:18px}}.kpis{{grid-template-columns:repeat(2,minmax(0,1fr))}}.body{{display:flex;flex-direction:column;padding:10px;gap:10px;min-height:auto}}.mapwrap{{order:0;min-height:55vh;height:55vh}}#map{{height:55vh;min-height:55vh}}.side{{order:1;max-height:none;overflow:visible}}}}
 </style></head>
 <body><div class="app"><section class="top"><div class="head"><div class="title">{escape(title)}</div><div class="badge">ИЧКИ ФОЙДАЛАНИШ · ТЕСТ</div></div><div class="kpis">{cards_html}</div></section>
-<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Мижоз локацияси агент киритган манзил асосида кўринади. «Пул олиш» ва «Товар қайтариш» Telegram ботга ўтади; операция фақат GPS фаол бўлганда ва агент тасдиқлагандан кейин сақланади. Бу ҳаволани бошқаларга юборманг.' if agent_clients else 'Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
+<section class="body"><aside class="side"><h3>Қисқа таҳлил</h3><div id="summary" class="summary"></div><div id="agent-work" class="work-panel"></div><div id="legend" class="legend"></div><div class="hint">{escape('Админ фақат кўради: барча агентларнинг аввал товар берилган дўконлари, USD қарзи, қолдиғи ва манзили. Пул олиш ва товар қайтариш агент томонидан тасдиқланади. Харита ҳаволасини бошқаларга юборманг.' if admin_clients else 'Мижоз локацияси агент киритган манзил асосида кўринади. «Пул олиш» ва «Товар қайтариш» Telegram ботга ўтади; операция фақат GPS фаол бўлганда ва агент тасдиқлагандан кейин сақланади. Бу ҳаволани бошқаларга юборманг.' if agent_clients else 'Ҳафталик ва ойлик харитада агент траекторияси кўрсатилмайди — фақат шу даврда қўшилган янги мижозлар жойлашуви.' if points_only else 'Маршрут GPS нуқталари асосида қурилади. Масофа ва тўхташлар тахминий. Савдо нуқталари агент киритган мижоз локацияларидан олинади.')}</div></aside><div class="mapwrap"><div id="map"></div><div id="map-status" role="status"></div></div></section></div>
 <script id="data" type="application/json">{data}</script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent), map=L.map('map',{{zoomControl:true}});
@@ -222,7 +222,7 @@ def admin_clients_map_html(db,actor,card_url=None):
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows)},
-                     agent_clients=True)
+                     agent_clients=True,admin_clients=True)
 
 
 def client_card_html(db,actor,client_id,photo_url=None):
