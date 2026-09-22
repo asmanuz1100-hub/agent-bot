@@ -26,7 +26,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
                      'points_only':points_only,'agent_clients':agent_clients,'agent_work':metrics.get('agent_work',[])})
     if agent_clients:
         cards=[
-            ('Дўконлар',len(shops)),
+            ('Дўконлар',metrics.get('total_clients',len(shops))),
             ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
             ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
             ('Локациясиз',metrics.get('missing_location',0)),
@@ -169,15 +169,18 @@ def agent_clients_map_html(db,agent,action_url=None):
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt)}
         if action_url:
-            shop['pay_url']=action_url('pay',cid)
-            shop['return_url']=action_url('return',cid)
+            pay=action_url('pay',cid)
+            back=action_url('return',cid)
+            if pay and back:
+                shop['pay_url']=pay
+                shop['return_url']=back
         shops.append(shop)
     summary=(f'Товар топширилган {len(rows)} та дўкондан {len(shops)} тасининг '
              f'манзили харитада бор. Жами қарз: {m(debt_total)} USD. '
              f'Мижоз нуқтасини босинг: навигатор, пул олиш ва товар қайтариш.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
-                                      'missing_location':missing},
+                                      'missing_location':missing,'total_clients':len(rows)},
                      agent_clients=True)
 
 
