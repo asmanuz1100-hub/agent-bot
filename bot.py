@@ -18,9 +18,10 @@ TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.stri
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
+BOT_USERNAME=''  # Populated from Telegram getMe at startup.
 MAX_UPDATE_RETRIES=3
 CLIENT_PAGE_SIZE=20
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','🗺 Мижозлар харитаси':'agent_clients_map','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','👤 Битта мижоз — Excel':'reconcile_client_xlsx','👤 Битта мижоз — PDF':'reconcile_client_pdf','📊 Барча мижозлар — Excel':'reconcile_all_xlsx','📄 Барча мижозлар — PDF':'reconcile_all_pdf','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
 ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
@@ -117,6 +118,39 @@ def customer_photo_bytes(file_id):
         raise ValueError('Фото формати нотўғри.')
     return content
 
+def agent_action_payload(verb,agent,client,ttl=8*3600):
+    if verb not in ('p','r'):raise ValueError('Хизмат тури нотўғри.')
+    expires=int(time.time())+int(ttl)
+    scope=f'client-action/{verb}/{int(agent)}/{int(client)}'
+    return f'{verb}_{int(agent)}_{int(client)}_{expires}_{_map_sig(scope,expires)[:16]}'
+
+def agent_action_link(verb,agent,client):
+    if not re.fullmatch(r'[A-Za-z0-9_]{5,32}',BOT_USERNAME):return None
+    return f'https://t.me/{BOT_USERNAME}?start='+agent_action_payload(verb,agent,client)
+
+def open_agent_client_action(db,u,payload):
+    match=re.fullmatch(r'([pr])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
+    if not match:raise ValueError('Мижозга ўтиш ҳаволаси нотўғри.')
+    verb,agent,client,expires,sig=match.groups()
+    agent=int(agent);client=int(client)
+    scope=f'client-action/{verb}/{agent}/{client}'
+    if agent!=u or int(expires)<int(time.time()) or not hmac.compare_digest(sig,_map_sig(scope,expires)[:16]):
+        raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
+    action='payment' if verb=='p' else 'return'
+    if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
+    row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=? AND agent=?
+        AND EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
+                    AND events.kind='delivery')""",(client,u)).fetchone()
+    if not row:raise ValueError('Бу дўкон сизга бириктирилмаган.')
+    ok,msg=live_ready(db,u)
+    if not ok:raise ValueError(msg)
+    s={'action':action,'step':1,'values':{'client':client}}
+    db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+    send(u,f"🏪 {row['shop_name'] or row['name']} · #{client}\\n"+(
+         'Мижоздан олинган нақд пулни киритинг:' if verb=='p'
+         else 'Қайтарилган товарни танланг:' ))
+    prompt(db,u,s)
+
 def document(uid,filename,content):
     mime_types={'.html':'text/html','.csv':'text/csv','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pdf':'application/pdf'}
     ext=os.path.splitext(filename.lower())[1]
@@ -143,6 +177,7 @@ def allowed(db,u,action):
     r=role(db,u)
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
+    if action=='agent_clients_map':return r=='agent' and feature_enabled(db,u,'clients')
     return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
@@ -563,6 +598,11 @@ def tracking(db,u,a):
 def finish(db,u,s,source):
     a=s['action']; v=s['values']
     if not allowed(db,u,a):raise ValueError('Рухсат йўқ.')
+    if a in ('payment','return') and role(db,u)=='agent':
+        owner=db.execute('SELECT 1 FROM clients WHERE id=? AND agent=?',(v.get('client'),u)).fetchone()
+        if not owner:raise ValueError('Мижоз бу агентга бириктирилмаган.')
+        ok,msg=live_ready(db,u)
+        if not ok:raise ValueError(msg)
     if a in RECONCILE_CLIENT_ACTIONS:
         result=reports.reconciliation(db,u,v['client'])
         legacy=(f"\nЭски UZS ҳисоби: {fmt(result['closing'])} сўм (USDга қўшилмайди)" if result['opening'] or result['sales'] or result['payments'] else '')
@@ -656,6 +696,8 @@ def handle(db,update):
             ok=point(db,u,m,True)
             if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
+    if text.startswith('/start '):
+        open_agent_client_action(db,u,text[7:].strip());return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
         db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
     if text=='⬅️ Мижозлар':
@@ -744,6 +786,18 @@ def handle(db,update):
             except Exception:
                 logging.exception('End-of-shift summary failed agent=%s shift=%s',u,shift['id'])
                 send(u,'Иш тугади ✅ Бот координаталарни қабул қилишни автомат тўхтатди. Кунлик ҳисоботни тайёрлашда хато бўлди.',menu(db,u))
+            return
+        if action=='agent_clients_map':
+            rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
+                AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.agent=? AND e.kind='delivery')""",(u,u)).fetchone()[0]
+            if not rows:
+                send(u,'Ҳали товар топширилган мижоз йўқ. Аввал мижозга товар беринг.',menu(db,u));return
+            link=map_link(f'agent-clients/{u}')
+            if link:
+                send_inline(u,f'🗺 Аввал товар берилган {rows} та дўкон харитаси. Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.',
+                            [('🗺 Мижозлар харитасини очиш',link)])
+            else:send(u,'Харита сервер ҳаволаси ҳали созланмаган.')
             return
         if action=='clients':report_clients(db,u);return
         if action=='balance':
@@ -1093,6 +1147,26 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Overall map failed');self._reply(500,b'Map error')
                 return
+            m=re.fullmatch(r'/map/agent-clients/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                agent=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'agent-clients/{agent}',expires,sig):
+                    self._reply(410,b'Customer map link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        html=reports.agent_clients_map_html(local,agent,
+                            action_url=lambda verb,cid:agent_action_link(
+                                'p' if verb=='pay' else 'r',agent,cid))
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
+                    self._reply(200,html,'text/html; charset=utf-8')
+                except ValueError:
+                    self._reply(403,b'Customer map unavailable')
+                except Exception:
+                    logging.exception('Agent customers map failed');self._reply(500,b'Customer map error')
+                return
             m=re.fullmatch(r'/map/agent/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 agent=int(m.group(1));expires=m.group(2);sig=m.group(3);scope=f'agent/{agent}'
@@ -1234,7 +1308,11 @@ def run():
     backend='postgres' if str(dsn).startswith(('postgres://','postgresql://')) else 'sqlite'
     logging.warning('Database backend: %s%s',backend,' (Render local files are ephemeral)' if backend=='sqlite' and os.getenv('RENDER_EXTERNAL_URL') else '')
     bootstrap_users(db)
-    api('getMe')
+    global BOT_USERNAME
+    identity=api('getMe')
+    BOT_USERNAME=str(identity.get('username') or '')
+    if not re.fullmatch(r'[A-Za-z0-9_]{5,32}',BOT_USERNAME):
+        logging.warning('Telegram bot username missing: map quick actions will not be linked')
     print('Internal Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
     signal.signal(signal.SIGINT,stop_signal)
