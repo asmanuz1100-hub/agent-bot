@@ -559,7 +559,7 @@ class Tests(unittest.TestCase):
 
  def test_reconcile_menu_is_all_time_and_summary_button_removed(self):
   self.assertNotIn('📋 Умумий ҳисоб',[x for row in bot.menu(self.db,1) for x in row])
-  self.assertEqual([x[0] for x in bot.FLOW['reconcile']],['client'])
+  self.assertEqual([x[0] for x in bot.FLOW['reconcile_client']],['client'])
   self.assertFalse(bot.allowed(self.db,1,'summary'))
   self.assertEqual(core.units_per_block(1),10)
   self.assertEqual(core.units_per_block(3),6)
@@ -725,7 +725,7 @@ class Tests(unittest.TestCase):
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
   def dmsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
   with patch.object(bot,'send'),patch.object(bot,'document') as document:
-   for i,t in enumerate(['📄 Акт сверка','1','✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
+   for i,t in enumerate(['📄 Акт сверка','👤 Битта мижоз акти','1','✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
    document.assert_called_once()
    self.assertIn('akt-sverka-1-',document.call_args.args[1])
 
