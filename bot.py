@@ -146,9 +146,8 @@ def open_agent_client_action(db,u,payload):
     if not ok:raise ValueError(msg)
     s={'action':action,'step':1,'values':{'client':client}}
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
-    send(u,f"🏪 {row['shop_name'] or row['name']} · #{client}\\n"+(
-         'Мижоздан олинган нақд пулни киритинг:' if verb=='p'
-         else 'Қайтарилган товарни танланг:' ))
+    send(u,f"🏪 {row['shop_name'] or row['name']} · #{client} — "+(
+         'пул олиш' if verb=='p' else 'товар қайтариш'))
     prompt(db,u,s)
 
 def document(uid,filename,content):
