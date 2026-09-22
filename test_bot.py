@@ -468,6 +468,27 @@ class Tests(unittest.TestCase):
    self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
                  [v for row in send.call_args.args[2] for v in row])
 
+ def test_clients_section_paginates_without_hiding_older_customers(self):
+  rows=[(i,4,f'Мижоз {i}',f'+99890{i:07d}',f'Дўкон {i}') for i in range(10,55)]
+  self.db.executemany('INSERT INTO clients(id,agent,name,phone,shop_name) VALUES(?,?,?,?,?)',rows)
+  now=int(time.time())
+  def msg(i,t):
+   return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
+  with patch.object(bot,'send') as send:
+   bot.handle(self.db,msg(89100,'👥 Мижозлар'))
+   first=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('54 ·',first);self.assertNotIn('10 ·',first)
+   self.assertIn('Кейинги 20 ➡️',first)
+   self.assertIn('Жами 46 та мижоз · 1–20',send.call_args.args[1])
+   bot.handle(self.db,msg(89101,'Кейинги 20 ➡️'))
+   second=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('34 ·',second);self.assertNotIn('54 ·',second)
+   self.assertIn('⬅️ Олдинги 20',second);self.assertIn('Кейинги 20 ➡️',second)
+   bot.handle(self.db,msg(89102,'Кейинги 20 ➡️'))
+   third=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('10 ·',third);self.assertIn('1 ·',third)
+   self.assertNotIn('Кейинги 20 ➡️',third)
+
  def test_cross_agent_financial_flows_remain_restricted(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон')")
   with patch.object(bot,'send') as send:
