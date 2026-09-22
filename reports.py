@@ -477,6 +477,99 @@ def reconciliation(db,actor,client,start=None,end=None):
         rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
     return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
+
+def all_clients_statement_rows(db,actor):
+    """Return the manager-only all-customer reconciliation table."""
+    admin_only(db,actor)
+    clients=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.phone,c.agent,
+        COALESCE(u.name,CAST(c.agent AS TEXT)) AS agent_name
+        FROM clients c LEFT JOIN users u ON u.id=c.agent
+        ORDER BY c.id""").fetchall()
+    result=[]
+    for c in clients:
+        products=db.execute("""SELECT pack,COALESCE(SUM(qty),0) AS qty
+            FROM events WHERE client=? AND kind='delivery' AND qty>0
+            GROUP BY pack ORDER BY pack""",(c['id'],)).fetchall()
+        debt=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
+            WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0)
+            FROM events WHERE client=?""",(c['id'],)).fetchone()[0]
+        result.append({
+            'id':int(c['id']),'name':c['name'] or 'Номсиз',
+            'shop_name':c['shop_name'] or '—','address':c['address'] or '—',
+            'phone':c['phone'] or '—','agent_name':c['agent_name'] or str(c['agent']),
+            'products':[(product_name(p['pack']),int(p['qty'] or 0)) for p in products],
+            'debt':int(debt or 0)
+        })
+    return result
+
+def all_clients_xlsx(db,actor):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment,Font,PatternFill,Border,Side
+    rows=all_clients_statement_rows(db,actor)
+    wb=Workbook();ws=wb.active;ws.title='Барча мижозлар'
+    ws.merge_cells('A1:H1');ws['A1']='ASMAN SILICAT — БАРЧА МИЖОЗЛАР АКТ СВЕРКА'
+    ws['A1'].font=Font(bold=True,size=15,color='FFFFFF');ws['A1'].fill=PatternFill('solid',fgColor='123747')
+    ws['A1'].alignment=Alignment(horizontal='center',vertical='center');ws.row_dimensions[1].height=28
+    headers=['№','Мижоз номи','Магазин номи','Манзил','Телефон','Агент','Олган товарлари','Қарзи, USD']
+    for col,title in enumerate(headers,1):
+        cell=ws.cell(3,col,title);cell.font=Font(bold=True,color='FFFFFF');cell.fill=PatternFill('solid',fgColor='087F8C');cell.alignment=Alignment(horizontal='center',vertical='center',wrap_text=True)
+    thin=Side(style='thin',color='D8E2E7')
+    for number,row in enumerate(rows,1):
+        products='\n'.join(f'{name} — {qty} дона' for name,qty in row['products']) or 'Товар берилмаган'
+        values=[number,row['name'],row['shop_name'],row['address'],row['phone'],row['agent_name'],products,row['debt']/100]
+        excel_row=number+3
+        for col,value in enumerate(values,1):
+            cell=ws.cell(excel_row,col,value);cell.alignment=Alignment(vertical='top',wrap_text=True)
+            cell.border=Border(bottom=thin)
+        ws.cell(excel_row,8).number_format='#,##0.00'
+        ws.row_dimensions[excel_row].height=max(30,15*(products.count('\n')+1))
+    total_row=len(rows)+4
+    ws.merge_cells(start_row=total_row,start_column=1,end_row=total_row,end_column=7)
+    ws.cell(total_row,1,'Жами қарздорлик');ws.cell(total_row,8,sum(x['debt'] for x in rows)/100)
+    for col in range(1,9):
+        cell=ws.cell(total_row,col);cell.font=Font(bold=True,color='9C2631');cell.fill=PatternFill('solid',fgColor='FDECEF')
+    ws.cell(total_row,8).number_format='#,##0.00'
+    widths=[7,24,24,35,20,22,42,16]
+    for idx,width in enumerate(widths,1):ws.column_dimensions[chr(64+idx)].width=width
+    ws.freeze_panes='A4';ws.auto_filter.ref=f'A3:H{max(3,total_row-1)}';ws.sheet_view.showGridLines=False
+    out=io.BytesIO();wb.save(out);return out.getvalue()
+
+def _pdf_font():
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    candidates=[os.getenv('PDF_FONT_PATH',''),'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf','/usr/share/fonts/dejavu/DejaVuSans.ttf']
+    for path in candidates:
+        if path and os.path.exists(path):
+            if 'ASMANDejaVu' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('ASMANDejaVu',path))
+            return 'ASMANDejaVu'
+    raise RuntimeError('PDF учун кирилл шрифти топилмади.')
+
+def all_clients_pdf(db,actor):
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER,TA_RIGHT
+    from reportlab.lib.pagesizes import A4,landscape
+    from reportlab.lib.styles import ParagraphStyle,getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate,Table,TableStyle,Paragraph,Spacer
+    rows=all_clients_statement_rows(db,actor);font=_pdf_font();out=io.BytesIO()
+    doc=SimpleDocTemplate(out,pagesize=landscape(A4),leftMargin=9*mm,rightMargin=9*mm,topMargin=10*mm,bottomMargin=10*mm,
+                          title='ASMAN SILICAT — Барча мижозлар акт сверка')
+    styles=getSampleStyleSheet();title=ParagraphStyle('AsmanTitle',parent=styles['Title'],fontName=font,fontSize=15,leading=19,textColor=colors.HexColor('#123747'),alignment=TA_CENTER)
+    normal=ParagraphStyle('AsmanNormal',parent=styles['BodyText'],fontName=font,fontSize=7.4,leading=10)
+    right=ParagraphStyle('AsmanRight',parent=normal,alignment=TA_RIGHT)
+    esc=lambda value:escape(str(value or '—'),quote=True)
+    data=[[Paragraph(f'<b>{esc(x)}</b>',normal) for x in ['№','Мижоз номи','Магазин номи','Манзил','Телефон','Агент','Олган товарлари','Қарзи, USD']]]
+    for number,row in enumerate(rows,1):
+        products='<br/>'.join(f'{esc(name)} — {qty} дона' for name,qty in row['products']) or 'Товар берилмаган'
+        data.append([Paragraph(str(number),normal),Paragraph(esc(row['name']),normal),Paragraph(esc(row['shop_name']),normal),Paragraph(esc(row['address']),normal),Paragraph(esc(row['phone']),normal),Paragraph(esc(row['agent_name']),normal),Paragraph(products,normal),Paragraph(m(row['debt']),right)])
+    data.append([Paragraph('<b>Жами қарздорлик</b>',normal),'','','','','','',Paragraph(f'<b>{m(sum(x["debt"] for x in rows))}</b>',right)])
+    table=Table(data,colWidths=[8*mm,29*mm,29*mm,43*mm,27*mm,27*mm,68*mm,22*mm],repeatRows=1)
+    table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#087F8C')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-2),0.25,colors.HexColor('#D8E2E7')),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FDECEF')),('SPAN',(0,-1),(6,-1)),('ALIGN',(7,1),(7,-1),'RIGHT'),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+    generated=datetime.now(TZ).strftime('%d.%m.%Y %H:%M')
+    story=[Paragraph('ASMAN SILICAT — БАРЧА МИЖОЗЛАР АКТ СВЕРКА',title),Spacer(1,4*mm),table,Spacer(1,3*mm),Paragraph(f'Мижозлар: {len(rows)} та · Тузилган вақт: {generated} · Тошкент вақти',normal)]
+    doc.build(story);return out.getvalue()
+
 def m(x):return f'{x/100:,.2f}'.replace(',',' ')
 
 def reconciliation_html(r):
