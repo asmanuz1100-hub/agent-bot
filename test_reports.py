@@ -247,4 +247,20 @@ class ReportsTests(unittest.TestCase):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':100,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':t}}
   self.assertFalse(bot.allowed(self.db,2,'reconcile'))
 
+ def test_all_clients_reconciliation_exports(self):
+  self.db.execute("UPDATE clients SET shop_name='Дўкон',address='Манзил' WHERE id=1")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts,source) VALUES(2,2,1,'delivery',1,10,25000,1,9001)")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source) VALUES(2,2,1,'payment',5000,2,9002)")
+  rows=reports.all_clients_statement_rows(self.db,1)
+  self.assertEqual(rows[0]['products'],[(core.product_name(1),10)])
+  self.assertEqual(rows[0]['debt'],20000)
+  self.assertTrue(reports.all_clients_xlsx(self.db,1).startswith(b'PK'))
+  self.assertTrue(reports.all_clients_pdf(self.db,1).startswith(b'%PDF'))
+  with self.assertRaises(ValueError):reports.all_clients_statement_rows(self.db,2)
+
+ def test_reconciliation_export_permissions(self):
+  self.assertTrue(bot.allowed(self.db,1,'reconcile_all_xlsx'))
+  self.assertTrue(bot.allowed(self.db,1,'reconcile_all_pdf'))
+  self.assertFalse(bot.allowed(self.db,2,'reconcile_all_xlsx'))
+
 if __name__=='__main__':unittest.main()
