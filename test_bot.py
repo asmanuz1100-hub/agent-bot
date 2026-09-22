@@ -325,11 +325,11 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(200,'🏪 Мижоз қўшиш'))
    self.assertEqual(bot.state(self.db,2)['step'],0)
    bot.handle(self.db,msg(201,loc={'latitude':40.5,'longitude':71.5}))
-   bot.handle(self.db,msg(202,'Алишер'))
-   bot.handle(self.db,msg(203,'ASMAN SHOP'))
-   bot.handle(self.db,msg(204,'+998901234567'))
-   bot.handle(self.db,msg(205,'Қўқон, Марказ'))
-   bot.handle(self.db,msg(206,photo='photo-file-id'))
+   bot.handle(self.db,msg(202,photo='photo-file-id'))
+   bot.handle(self.db,msg(203,'+998901234567, +998911234567 / +998931234567'))
+   bot.handle(self.db,msg(204,'Алишер'))
+   bot.handle(self.db,msg(205,'ASMAN SHOP'))
+   bot.handle(self.db,msg(206,'Қўқон, Марказ'))
    bot.handle(self.db,msg(207,'1 кг грунтовкадан кўпроқ олишни хоҳлади'))
    bot.handle(self.db,msg(208,'2026-09-25'))
    bot.handle(self.db,msg(209,'1'))
@@ -337,13 +337,23 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(211,'2'))
    bot.handle(self.db,msg(212,'✅ Тасдиқлаш'))
   row=self.db.execute("SELECT name,shop_name,phone,address,photo,comment,payment_due FROM clients WHERE name='Алишер'").fetchone()
-  self.assertEqual((row['name'],row['shop_name'],row['phone'],row['address']),('Алишер','ASMAN SHOP','+998901234567','Қўқон, Марказ'))
+  self.assertEqual((row['name'],row['shop_name'],row['phone'],row['address']),
+                   ('Алишер','ASMAN SHOP','+998901234567 / +998911234567 / +998931234567','Қўқон, Марказ'))
   self.assertEqual(row['photo'],'photo-file-id')
   self.assertIn('грунтовка',row['comment'])
   self.assertEqual(row['payment_due'],'2026-09-25')
   cid=self.db.execute("SELECT id FROM clients WHERE name='Алишер'").fetchone()[0]
   self.assertEqual(core.client_stock(self.db,2,cid,1),20)
   self.assertEqual(core.agent_stock(self.db,2,1),5)
+
+ def test_parse_one_to_three_phone_numbers(self):
+  self.assertEqual(bot.parse_phones('90 123-45-67'),['+998901234567'])
+  self.assertEqual(bot.parse_phones('+998 90 123 45 67 / 998911234567'),
+                   ['+998901234567','+998911234567'])
+  self.assertEqual(bot.parse_phones('+998901234567, +998911234567\n+998931234567'),
+                   ['+998901234567','+998911234567','+998931234567'])
+  with self.assertRaisesRegex(ValueError,'3 та'):
+   bot.parse_phones('+998901234567,+998911234567,+998931234567,+998941234567')
 
  def test_block_pack_sizes_and_multi_product_same_client(self):
   for pack,mult in ((1,10),(3,6),(5,2)):
@@ -356,23 +366,25 @@ class Tests(unittest.TestCase):
   def msg(i,text):
    return {'update_id':i,'message':{'message_id':i,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':text}}
   with patch.object(bot,'send') as send:
-   for n,t in enumerate(['📦 Товар бериш','1','Грунтовка 7/1 — 1 кг','Блок','1','✅ Тасдиқлаш'],541):
+   for n,t in enumerate(['📦 Товар бериш','1','Грунтовка 7/1 — 1 кг','Блок','1'],541):
     bot.handle(self.db,msg(n,t))
-   self.assertEqual(core.client_stock(self.db,2,1,1),10)
+   self.assertEqual(core.client_stock(self.db,2,1,1),0)
    self.assertIn('➕ Яна маҳсулот қўшиш',[x for row in send.call_args.args[2] for x in row])
    bot.handle(self.db,msg(550,'➕ Яна маҳсулот қўшиш'))
    self.assertEqual(bot.state(self.db,2)['values']['client'],1)
    self.assertEqual(bot.state(self.db,2)['step'],1)
    bot.handle(self.db,msg(551,'Грунтовка 7/1 — 3 кг'))
    self.assertIn('1 блок = 6 дона',send.call_args.args[1])
-   for n,t in enumerate(['Блок','1','✅ Тасдиқлаш'],552):bot.handle(self.db,msg(n,t))
-   self.assertEqual(core.client_stock(self.db,2,1,3),6)
+   for n,t in enumerate(['Блок','1'],552):bot.handle(self.db,msg(n,t))
+   self.assertEqual(core.client_stock(self.db,2,1,3),0)
    bot.handle(self.db,msg(560,'➕ Яна маҳсулот қўшиш'))
    bot.handle(self.db,msg(561,'Грунтовка 7/1 — 5 кг'))
    self.assertIn('1 блок = 2 дона',send.call_args.args[1])
-   for n,t in enumerate(['Блок','1','✅ Тасдиқлаш'],562):bot.handle(self.db,msg(n,t))
-   self.assertEqual(core.client_stock(self.db,2,1,5),2)
+   for n,t in enumerate(['Блок','1'],562):bot.handle(self.db,msg(n,t))
+   self.assertEqual(core.client_stock(self.db,2,1,5),0)
    bot.handle(self.db,msg(570,'✅ Тасдиқлаш'))
+   self.assertEqual(core.client_stock(self.db,2,1,1),10)
+   self.assertEqual(core.client_stock(self.db,2,1,3),6)
    self.assertEqual(core.client_stock(self.db,2,1,5),2)
    self.assertEqual(core.client_debt_usd(self.db,1),core.money('38.00'))
   for pack in (1,3,5):
@@ -559,7 +571,14 @@ class Tests(unittest.TestCase):
 
  def test_reconcile_menu_is_all_time_and_summary_button_removed(self):
   self.assertNotIn('📋 Умумий ҳисоб',[x for row in bot.menu(self.db,1) for x in row])
-  self.assertEqual([x[0] for x in bot.FLOW['reconcile_client']],['client'])
+  self.assertEqual([x[0] for x in bot.FLOW['reconcile_client_pdf']],['client'])
+  admin_menu=[x for row in bot.menu(self.db,1) for x in row]
+  agent_menu=[x for row in bot.menu(self.db,2) for x in row]
+  self.assertIn('📄 Акт сверка',admin_menu);self.assertIn('📄 Акт сверка',agent_menu)
+  self.assertNotIn('📊 Барча мижозлар — Excel',admin_menu)
+  self.assertNotIn('📄 Барча мижозлар — PDF',agent_menu)
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_all_xlsx'))
+  self.assertTrue(bot.allowed(self.db,2,'reconcile_all_pdf'))
   self.assertFalse(bot.allowed(self.db,1,'summary'))
   self.assertEqual(core.units_per_block(1),10)
   self.assertEqual(core.units_per_block(3),6)
@@ -725,51 +744,52 @@ class Tests(unittest.TestCase):
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
   def dmsg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
   with patch.object(bot,'send'),patch.object(bot,'document') as document:
-   for i,t in enumerate(['📄 Акт сверка','👤 Битта мижоз акти','1','✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
+   for i,t in enumerate(['📄 Акт сверка','👤 Битта мижоз — PDF','1','✅ Тасдиқлаш'],730):bot.handle(self.db,dmsg(i,t))
    document.assert_called_once()
-   self.assertIn('akt-sverka-1-',document.call_args.args[1])
+   self.assertEqual(document.call_args.args[1],'ASMAN-mijoz-1-akt-sverka.pdf')
 
  def test_back_button_preserves_previous_client_data(self):
   self.rec('load',12,actor=1)
   now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':800,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
-  def msg(i,text=None,loc=None):
+  def msg(i,text=None,loc=None,photo=None):
    m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
    if text is not None:m['text']=text
    if loc is not None:m['location']=loc
+   if photo is not None:m['photo']=[{'file_id':photo}]
    return {'update_id':i,'message':m}
   with patch.object(bot,'send') as send:
    bot.handle(self.db,msg(801,'🏪 Мижоз қўшиш'))
    bot.handle(self.db,msg(802,loc={'latitude':40.5,'longitude':71.5}))
-   bot.handle(self.db,msg(803,'Алишер'))
+   bot.handle(self.db,msg(803,photo='shop-photo'))
    self.assertEqual(bot.state(self.db,2)['step'],2)
    bot.handle(self.db,msg(804,'⬅️ Орқага'))
    s=bot.state(self.db,2)
    self.assertEqual(s['step'],1)
-   self.assertNotIn('name',s['values'])
+   self.assertNotIn('photo',s['values'])
    self.assertEqual(s['values']['lat'],40.5);self.assertEqual(s['values']['lon'],71.5)
-   self.assertIn('Мижоз исми',send.call_args.args[1])
+   self.assertIn('расмини',send.call_args.args[1])
 
  def test_validation_error_repeats_current_question(self):
   self.rec('load',12,actor=1)
   now=int(time.time());self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
   self.assertTrue(core.point(self.db,2,{'message_id':810,'date':now,'location':{'latitude':40,'longitude':71,'live_period':3600}}))
-  def msg(i,text=None,loc=None):
+  def msg(i,text=None,loc=None,photo=None):
    m={'message_id':i,'date':int(time.time()),'from':{'id':2},'chat':{'id':2,'type':'private'}}
    if text is not None:m['text']=text
    if loc is not None:m['location']=loc
+   if photo is not None:m['photo']=[{'file_id':photo}]
    return {'update_id':i,'message':m}
   with patch.object(bot,'send') as send:
    bot.process_update(self.db,msg(811,'🏪 Мижоз қўшиш'))
    bot.process_update(self.db,msg(812,loc={'latitude':40.5,'longitude':71.5}))
-   bot.process_update(self.db,msg(813,'Алишер'))
-   bot.process_update(self.db,msg(814,'Дўкон'))
+   bot.process_update(self.db,msg(813,photo='shop-photo'))
    send.reset_mock()
-   bot.process_update(self.db,msg(815,'123'))
+   bot.process_update(self.db,msg(814,'123'))
    texts=[call.args[1] for call in send.call_args_list]
    self.assertTrue(any('Телефонни +998' in x for x in texts))
-   self.assertTrue(any('Мижоз телефон рақами' in x for x in texts))
-   self.assertEqual(bot.state(self.db,2)['step'],3)
+   self.assertTrue(any('1–3 та телефон' in x for x in texts))
+   self.assertEqual(bot.state(self.db,2)['step'],2)
 
  def test_location_help_does_not_cancel_current_wizard(self):
   self.rec('load',12,actor=1)
