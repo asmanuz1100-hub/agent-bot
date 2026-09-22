@@ -130,7 +130,7 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
   L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+'<br>'+(D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':''));
+   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+'<br>'+(D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':''));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(D.points_only&&!D.shops.length){{
@@ -179,6 +179,47 @@ def agent_clients_map_html(db,agent,action_url=None):
              f'манзили харитада бор. Жами қарз: {m(debt_total)} USD. '
              f'Мижоз нуқтасини босинг: навигатор, пул олиш ва товар қайтариш.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
+                     summary_metrics={'debt_usd':debt_total,'stock':stock_total,
+                                      'missing_location':missing,'total_clients':len(rows)},
+                     agent_clients=True)
+
+
+def admin_clients_map_html(db,actor,card_url=None):
+    """All shops that have received goods from any agent, regardless of date.
+
+    Unlike an agent's map, this administrator view has no payment or return
+    actions: the customer's assigned agent must confirm those in Telegram.
+    """
+    from core import client_debt_usd,client_stock
+    admin_only(db,actor)
+    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,
+        u.name AS agent_name FROM clients c
+        LEFT JOIN users u ON u.id=c.agent
+        WHERE EXISTS (SELECT 1 FROM events e
+            WHERE e.client=c.id AND e.kind='delivery')
+        ORDER BY c.id DESC""").fetchall()
+    shops=[];missing=0;debt_total=0;stock_total=0
+    for row in rows:
+        cid=int(row['id']);agent=int(row['agent'])
+        debt=int(client_debt_usd(db,cid))
+        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        debt_total+=debt;stock_total+=stock
+        lat,lon=row['lat'],row['lon']
+        if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
+            missing+=1;continue
+        item={'id':cid,'name':row['name'],'shop':row['shop_name'],
+              'address':row['address'],'lat':float(lat),'lon':float(lon),
+              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
+              'owner':row['agent_name'] or str(agent)}
+        if card_url:
+            url=card_url(cid)
+            if url:item['card_url']=url
+        shops.append(item)
+    summary=(f'Барча агентлар аввал товар топширган {len(rows)} та дўкондан '
+             f'{len(shops)} таси харитада. Жами USD қарз: {m(debt_total)}. '
+             f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
+             f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
+    return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows)},
                      agent_clients=True)
