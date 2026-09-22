@@ -272,6 +272,62 @@ class Tests(unittest.TestCase):
   self.assertIn('return connect(database_url,initialize=False) if postgres else db',
                 __import__('inspect').getsource(bot.serve_webhook))
 
+ def test_agent_customer_map_link_and_signed_payment_return(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,1,2,None,'load',1,10,currency='USD')
+  core.record(self.db,2,2,1,'delivery',1,4,currency='USD')
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  core.point(self.db,2,{'message_id':99701,'date':now,
+      'location':{'latitude':40,'longitude':71,'live_period':3600}})
+  def msg(i,uid,txt):
+   return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),
+      'from':{'id':uid},'chat':{'id':uid,'type':'private'},'text':txt}}
+  with patch.object(bot,'BOT_USERNAME','asman_agent_test_bot'),patch.dict(bot.os.environ,{'WEBHOOK_BASE_URL':'https://example.test'}),patch.object(bot,'send'),patch.object(bot,'send_inline') as inline:
+   self.assertIn('🗺 Мижозлар харитаси',[x for row in bot.menu(self.db,2) for x in row])
+   self.assertNotIn('🗺 Мижозлар харитаси',[x for row in bot.menu(self.db,4) for x in row] if not core.feature_enabled(self.db,4,'clients') else [])
+   bot.handle(self.db,msg(99702,2,'🗺 Мижозлар харитаси'))
+   self.assertIn('/map/agent-clients/2/',inline.call_args.args[2][0][1])
+   self.assertNotIn('token=',inline.call_args.args[2][0][1])
+   payload=bot.agent_action_payload('p',2,1)
+   self.assertLessEqual(len(payload),64)
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(99703,4,'/start '+payload))
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(99704,2,'/start '+payload[:-1]+'0' if payload[-1]!='0' else '/start '+payload[:-1]+'1'))
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(99705,2,'/start '+bot.agent_action_payload('p',2,1,ttl=-10)))
+   bot.handle(self.db,msg(99706,2,'/start '+payload))
+   self.assertEqual(bot.state(self.db,2)['values']['client'],1)
+   self.assertEqual(bot.state(self.db,2)['action'],'payment')
+   for i,t in enumerate(['3.00','✅ Тасдиқлаш'],99707):bot.handle(self.db,msg(i,2,t))
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('5.00'))
+   self.assertEqual(core.cash_usd(self.db,2),core.money('3.00'))
+   bot.handle(self.db,msg(99709,2,'/start '+bot.agent_action_payload('r',2,1)))
+   self.assertEqual(bot.state(self.db,2)['action'],'return')
+   self.assertEqual(bot.state(self.db,2)['values']['client'],1)
+   for i,t in enumerate(['Грунтовка 7/1 — 1 кг','Дона','1','✅ Тасдиқлаш'],99710):
+    bot.handle(self.db,msg(i,2,t))
+   self.assertEqual(core.client_stock(self.db,2,1,1),3)
+   self.assertEqual(core.client_debt_usd(self.db,1),core.money('3.00'))
+   core.set_agent_feature(self.db,1,2,'payment',False)
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(99715,2,'/start '+bot.agent_action_payload('p',2,1)))
+
+ def test_customer_map_transactions_require_fresh_gps_at_confirmation(self):
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  core.record(self.db,1,2,None,'load',1,3,currency='USD')
+  core.record(self.db,2,2,1,'delivery',1,2,currency='USD')
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  core.point(self.db,2,{'message_id':99720,'date':now,
+      'location':{'latitude':40,'longitude':71,'live_period':3600}})
+  def msg(i,txt):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),
+           'from':{'id':2},'chat':{'id':2,'type':'private'},'text':txt}}
+  with patch.object(bot,'send'):
+   bot.handle(self.db,msg(99721,'/start '+bot.agent_action_payload('p',2,1)))
+   bot.handle(self.db,msg(99722,'1.00'))
+   self.db.execute('UPDATE shifts SET end=? WHERE agent=2 AND end IS NULL',(now,))
+   with self.assertRaises(ValueError):bot.handle(self.db,msg(99723,'✅ Тасдиқлаш'))
+  self.assertEqual(core.cash_usd(self.db,2),0)
+  self.assertEqual(core.client_debt_usd(self.db,1),core.money('4.00'))
+
  def test_privacy(self):
   self.assertFalse(bot.allowed(self.db,2,'tracking'));self.assertFalse(bot.allowed(self.db,3,'tracking'))
   with self.assertRaises(ValueError):bot.tracking(self.db,3,2)
