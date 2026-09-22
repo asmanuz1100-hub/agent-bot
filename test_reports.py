@@ -92,6 +92,35 @@ class ReportsTests(unittest.TestCase):
   with self.assertRaises(ValueError):reports.client_card_html(self.db,2,1)
   with self.assertRaises(ValueError):reports.client_card_html(self.db,1,999)
 
+ def test_agent_previous_deliveries_map_and_private_quick_actions(self):
+  import json,re
+  self.db.execute("UPDATE clients SET lat=40.111,lon=71.222,shop_name='<img onerror=alert(1)>' WHERE id=1")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'delivery',1,3,600,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,2,'delivery',1,2,400,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  self.db.execute("INSERT INTO clients(id,agent,name,phone,address,lat,lon,shop_name) VALUES(3,4,'Other agent','+998900000003','Private',40.5,71.5,'Other shop')")
+  self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(4,4,3,'delivery',1,1,200,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
+  html=reports.agent_clients_map_html(self.db,2,action_url=lambda verb,cid:'https://t.me/asman_agent_test_bot?start='+verb+'_'+str(cid)).decode()
+  self.assertIn('Мижозлар харитаси',html)
+  self.assertIn('Навигаторда очиш',html)
+  self.assertIn('Пул олиш',html)
+  self.assertIn('Товар қайтариш',html)
+  self.assertNotIn('+998900000001',html)
+  self.assertNotIn('Other shop',html)
+  self.assertNotIn('<img onerror=alert(1)>',html)
+  found=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
+  data=json.loads(found.group(1))
+  self.assertTrue(data['agent_clients'])
+  self.assertEqual(len(data['shops']),1)
+  self.assertEqual(data['shops'][0]['id'],1)
+  self.assertEqual(data['shops'][0]['stock'],3)
+  self.assertEqual(data['shops'][0]['debt'],'6.00')
+  self.assertIn('start=pay_1',data['shops'][0]['pay_url'])
+  self.assertIn('start=return_1',data['shops'][0]['return_url'])
+  self.assertIn('Локациясиз',html)
+  for agent in (1,3,4):
+   if agent!=4:
+    with self.assertRaises(ValueError):reports.agent_clients_map_html(self.db,agent)
+
  def test_multiple_shifts_one_agent_one_daily_route_and_summary(self):
   import json,re
   start=int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp())
