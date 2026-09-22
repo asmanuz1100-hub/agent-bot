@@ -20,12 +20,12 @@ TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 MAX_UPDATE_RETRIES=3
 BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','📥 Касса':'cashbox','🗺 Умумий таҳлил':'analytics'}
-BTN.update({'📄 Акт сверка':'reconcile','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
+BTN.update({'📄 Акт сверка':'reconcile','👤 Битта мижоз акти':'reconcile_client','📊 Барча мижозлар — Excel':'reconcile_all_xlsx','📄 Барча мижозлар — PDF':'reconcile_all_pdf','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
 ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','agent_add','agent_deactivate','tracking','load','agent_rename','prices','price_set','home'}
 FLOW={
- 'reconcile':[('client','Умумий акт сверка учун мижозни танланг:')],
+ 'reconcile_client':[('client','Умумий акт сверка учун мижозни танланг:')],
  'client_view':[('client','Маълумотини кўриш учун мижозни танланг:')],
  'agent_add':[('id','Янги агентнинг Telegram ID рақами:'),('name','Янги агентнинг исми:')],
  'agent_deactivate':[('agent','Ҳисобини ёпиш учун агентни танланг:')],
@@ -114,7 +114,9 @@ def customer_photo_bytes(file_id):
     return content
 
 def document(uid,filename,content):
-    mime="text/html" if filename.endswith(".html") else "text/csv"
+    mime_types={'.html':'text/html','.csv':'text/csv','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.pdf':'application/pdf'}
+    ext=os.path.splitext(filename.lower())[1]
+    mime=mime_types.get(ext,'application/octet-stream')
     boundary=uuid.uuid4().hex
     body=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{uid}\r\n--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{filename}"\r\nContent-Type: {mime}\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
     req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendDocument',data=body,headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
@@ -137,7 +139,7 @@ def allowed(db,u,action):
     r=role(db,u)
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','reconcile','reconcile_client','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -515,7 +517,7 @@ def tracking(db,u,a):
 def finish(db,u,s,source):
     a=s['action']; v=s['values']
     if not allowed(db,u,a):raise ValueError('Рухсат йўқ.')
-    if a=='reconcile':
+    if a=='reconcile_client':
         result=reports.reconciliation(db,u,v['client'])
         legacy=(f"\nЭски UZS ҳисоби: {fmt(result['closing'])} сўм (USDга қўшилмайди)" if result['opening'] or result['sales'] or result['payments'] else '')
         send(u,f"Акт сверка: {result['client']['name']}\nТопширилган товар: {fmt(result['usd_sales'])} USD\nҚайтарилган: {fmt(result['usd_returns'])} USD\nТўлов: {fmt(result['usd_payments'])} USD\nЯкуний қарз: {fmt(result['usd_closing'])} USD"+legacy)
@@ -639,6 +641,18 @@ def handle(db,update):
             report_prices(db,u);return
         if action=='home':
             send(u,'Админ меню:',menu(db,u));return
+        if action=='reconcile':
+            send(u,'📄 АКТ СВЕРКА\nКеракли ҳисобот турини танланг:',
+                [['👤 Битта мижоз акти'],['📊 Барча мижозлар — Excel','📄 Барча мижозлар — PDF'],['⬅️ Меню']])
+            return
+        if action=='reconcile_all_xlsx':
+            send(u,'⏳ Excel жадвал тайёрланмоқда...')
+            document(u,f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.xlsx',reports.all_clients_xlsx(db,u))
+            send(u,'✅ Барча мижозлар Excel жадвали тайёр.',menu(db,u));return
+        if action=='reconcile_all_pdf':
+            send(u,'⏳ PDF жадвал тайёрланмоқда...')
+            document(u,f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.pdf',reports.all_clients_pdf(db,u))
+            send(u,'✅ Барча мижозлар PDF жадвали тайёр.',menu(db,u));return
         if action in FLOW:
             s={'action':action,'step':0,'values':{}}
             prompt(db,u,s);return
