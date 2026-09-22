@@ -1157,7 +1157,7 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Overall map failed');self._reply(500,b'Map error')
                 return
-            m=re.fullmatch(r'/map/admin-clients/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/admin-clients/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 admin=int(m.group(1));expires=m.group(2);sig=m.group(3)
                 if not _map_valid(f'admin-clients/{admin}',expires,sig):
@@ -1178,7 +1178,7 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Admin customers map failed');self._reply(500,b'Admin customer map error')
                 return
-            m=re.fullmatch(r'/map/agent-clients/(\\d+)/(\\d{10,})/([0-9a-f]{32})',path)
+            m=re.fullmatch(r'/map/agent-clients/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 agent=int(m.group(1));expires=m.group(2);sig=m.group(3)
                 if not _map_valid(f'agent-clients/{agent}',expires,sig):
