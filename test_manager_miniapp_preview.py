@@ -1,4 +1,4 @@
-"""Manager Mini App smoke tests for the optimized five-screen interactive build."""
+"""Manager Mini App smoke tests for the optimized Telegram UI Kit build."""
 from pathlib import Path
 import re, shutil, subprocess, unittest
 
@@ -11,11 +11,10 @@ class ManagerMiniAppTests(unittest.TestCase):
 
     def test_complete_design_and_navigation(self):
         for term in (
-            "ASMAN - Rahbar paneli (To'liq versiya)",
+            "ASMAN - Telegram Mini App UI Kit",
             "page-home","page-map","page-customers","page-cash","page-report",
-            "Rahbar paneli","Agentlar xaritasi","Mijozlar ro'yxati",
-            "Kassa nazorati","Hisobotlar",
-            "8+ kun tashrifsiz mijozlar",
+            "Rahbar paneli","Agentlar xaritasi","Mijozlar","Kassa","Hisobot",
+            "Tezkor ogohlantirishlar",
             'data-page="home"','data-page="map"','data-page="customers"',
             'data-page="cash"','data-page="report"',
         ):
@@ -24,9 +23,9 @@ class ManagerMiniAppTests(unittest.TestCase):
     def test_interactions_exist(self):
         for term in (
             "function switchPage(","function renderCustomers(","function renderCash(",
-            "function renderReport(","function initMap(","function customerDetail(",
-            "data-agent-filter","data-customer-filter","data-approve",
-            "customerSearch","notifyBtn","profileBtn",
+            "function renderReport(","function initMap(","function showCustomer(",
+            "data-agent-filter","data-customer-filter","data-cash-tab",
+            "data-report-tab","data-approve","customer-search",
         ):
             self.assertIn(term,self.html)
 
@@ -34,7 +33,7 @@ class ManagerMiniAppTests(unittest.TestCase):
         self.assertNotIn("cdn.tailwindcss.com",self.html)
         self.assertNotIn("font-awesome",self.html.lower())
         self.assertNotIn("unsplash.com",self.html)
-        self.assertIn("loadLeaflet()",self.html)
+        self.assertIn("function loadLeaflet()",self.html)
         self.assertIn("telegram.org/js/telegram-web-app.js",self.html)
         self.assertNotIn("BOT_TOKEN",self.html)
         self.assertNotIn("fetch('/api/",self.html)
