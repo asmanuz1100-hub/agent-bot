@@ -21,6 +21,8 @@ services:
         sync: false
       - key: DB_SCHEMA
         value: agentbot
+      - key: MANAGER_MINIAPP_URL
+        value: https://asman-manager-miniapp-test.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: asman-accounting-db-v2
