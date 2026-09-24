@@ -289,6 +289,81 @@ def state(db,u):
 def fmt(cents):return f'{cents/100:,.2f}'.replace(',',' ')
 def stamp(t):return datetime.fromtimestamp(t,TZ).strftime('%d.%m %H:%M')
 
+def _staff_name(db,uid):
+    row=db.execute('SELECT name FROM users WHERE id=?',(uid,)).fetchone()
+    return (row[0] if row and row[0] else str(uid))
+
+def _safe_send_many(user_ids,text):
+    for target in set(int(x) for x in user_ids if x is not None):
+        try:send(target,text)
+        except Exception:logging.exception('Notification failed user=%s',target)
+
+def cashier_ids(db):
+    return [int(r[0]) for r in db.execute("SELECT id FROM users WHERE role='cashier'").fetchall()]
+
+def notify_cashiers_payment(db,agent,client,amount_usd):
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
+    if not c:return
+    label=c['shop_name'] or c['name'] or f'Мижоз #{client}'
+    debt=client_debt_usd(db,client)
+    text=(f"💰 МИЖОЗДАН ПУЛ ОЛИНДИ\n"
+          f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
+          f"🏪 Мижоз: {label} · #{client}\n"
+          f"💵 Олинди: {fmt(amount_usd)} USD\n"
+          f"📉 Қолган қарз: {fmt(debt)} USD\n"
+          f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
+    _safe_send_many(cashier_ids(db),text)
+
+def notify_cashiers_handover(db,agent,hid,amount_usd):
+    text=(f"🏦 КАССАГА ПУЛ ТОПШИРИШ\n"
+          f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
+          f"💵 Сумма: {fmt(amount_usd)} USD\n"
+          f"🧾 Топшириш: #{hid}\n"
+          f"⏳ Тасдиқ кутилмоқда.\n"
+          f"Қабул: /accept {hid}\nРад: /reject {hid}")
+    _safe_send_many(cashier_ids(db),text)
+
+def cashbox_report(db,u):
+    if role(db,u) not in ('admin','cashier'):raise ValueError('Касса бўлимига рухсат йўқ.')
+    today=int(datetime.now(TZ).replace(hour=0,minute=0,second=0,microsecond=0).timestamp())
+    pending=db.execute("""SELECT h.*,ua.name AS agent_name FROM handovers h
+        LEFT JOIN users ua ON ua.id=h.agent WHERE h.status='pending' ORDER BY h.id DESC LIMIT 20""").fetchall()
+    recent=db.execute("""SELECT h.*,ua.name AS agent_name,uc.name AS cashier_name FROM handovers h
+        LEFT JOIN users ua ON ua.id=h.agent LEFT JOIN users uc ON uc.id=h.cashier
+        WHERE h.status<>'pending' ORDER BY COALESCE(h.accepted_ts,h.ts) DESC,h.id DESC LIMIT 12""").fetchall()
+    payments=db.execute("""SELECT e.id,e.ts,e.agent,e.client,e.amount_usd,
+        ua.name AS agent_name,c.name AS client_name,c.shop_name
+        FROM events e LEFT JOIN users ua ON ua.id=e.agent LEFT JOIN clients c ON c.id=e.client
+        WHERE e.kind='payment' ORDER BY e.id DESC LIMIT 12""").fetchall()
+    pending_total=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='pending'").fetchone()[0] or 0)
+    accepted_today=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted' AND accepted_ts>=?",(today,)).fetchone()[0] or 0)
+    payments_today=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM events WHERE kind='payment' AND ts>=?",(today,)).fetchone()[0] or 0)
+    out=['📥 КАССА НАЗОРАТИ',
+         f"Бугун мижозлардан олинган: {fmt(payments_today)} USD",
+         f"Бугун кассир қабул қилган: {fmt(accepted_today)} USD",
+         f"Тасдиқ кутаётган: {fmt(pending_total)} USD",
+         '',
+         '⏳ КУТИЛАЁТГАН ТОПШИРИШЛАР']
+    if pending:
+        for x in pending:
+            out.append(f"#{x['id']} · {x['agent_name'] or x['agent']} · {fmt(x['amount_usd'])} USD · {stamp(x['ts'])}"
+                       +(f"\nҚабул: /accept {x['id']} · Рад: /reject {x['id']}" if role(db,u)=='cashier' else ''))
+    else:out.append('Йўқ.')
+    out.extend(['','✅/❌ ОХИРГИ КАССИР ҲАРАКАТЛАРИ'])
+    if recent:
+        for x in recent:
+            icon='✅' if x['status']=='accepted' else '❌'
+            out.append(f"{icon} #{x['id']} · {x['agent_name'] or x['agent']} · {fmt(x['amount_usd'])} USD"
+                       f" · Кассир: {x['cashier_name'] or x['cashier'] or '—'} · {stamp(x['accepted_ts'] or x['ts'])}")
+    else:out.append('Ҳали ҳаракат йўқ.')
+    out.extend(['','💰 ОХИРГИ МИЖОЗ ТЎЛОВЛАРИ'])
+    if payments:
+        for x in payments:
+            client=x['shop_name'] or x['client_name'] or f"#{x['client']}"
+            out.append(f"• {stamp(x['ts'])} · {x['agent_name'] or x['agent']} · {client} · {fmt(x['amount_usd'])} USD")
+    else:out.append('Ҳали тўлов йўқ.')
+    send(u,'\n'.join(out),menu(db,u))
+
 def parse_phones(text):
     pattern=r'(?<!\d)(?:\+?998[\s().-]*)?\d(?:[\s().-]*\d){8}(?!\d)'
     found=[]
