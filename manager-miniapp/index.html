@@ -243,7 +243,7 @@ function showCustomer(id){var c=customers.find(function(x){return x.id===id});if
 function renderCash(){
  var list=txns.filter(function(t){return state.cashTab==="pending"?t.state==="pending":state.cashTab==="today"?t.period==="today":true});var accepted=txns.filter(function(t){return t.state==="accepted"});var total=accepted.reduce(function(a,t){return a+t.amount},0);
  $("cash-total").textContent="$"+total.toLocaleString("en-US")+".00";$("cash-summary").textContent=accepted.length+" ta tasdiqlangan to'lov";
- $("txn-list").innerHTML=list.map(function(t){return '<div class="txn"><span>💵</span><div class="txn-main"><b>'+t.agent+'</b><small>'+t.time+'</small></div><div style="text-align:right"><b style="font-size:11px">'+t.amount+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span></div></div>'}).join("")||'<div class="empty">Operatsiya yo‘q</div>';
+ $("txn-list").innerHTML=list.map(function(t){return '<div class="txn"><span>💵</span><div class="txn-main"><b>'+t.agent+'</b><small>'+t.time+'</small></div><div style="text-align:right"><b style="font-size:11px">'+t.amount+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span>'+(t.state==="pending"?'<br><button class="mini-btn" style="margin-top:5px;padding:5px 7px" data-approve="'+t.id+'">Tasdiqlash</button>':'')+'</div></div>'}).join("")||'<div class="empty">Operatsiya yo‘q</div>';
 }
 function renderReport(){
  var plans=state.reportTab==="month"?[42,48,51,55,58,62,60]:state.reportTab==="agents"?[18,22,15,25,20,17,23]:[8,12,10,14,13,15,11],done=plans.map(function(x,i){return Math.max(3,x-[2,1,3,2,1,1,2][i])}),max=Math.max.apply(null,plans);
@@ -258,6 +258,7 @@ document.addEventListener("click",function(e){var b=e.target.closest("button");i
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
  if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.approve){var t=txns.find(function(x){return x.id===Number(b.dataset.approve)});if(t){t.state="accepted";renderCash();toast("Test: topshirish tasdiqlandi")}return}
  if(b.dataset.agentProfile){showAgent(Number(b.dataset.agentProfile));return}
  if(b.dataset.agentRoute){toast("Marshrut xaritada ko‘rsatildi");return}
  if(b.dataset.demoNav){toast("Test rejimi: navigatsiya hali real manzilga ulanmagan");return}
