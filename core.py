@@ -144,6 +144,7 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT ''")
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_due TEXT')
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_ts BIGINT')
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_only INTEGER NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         for pack,name in PRODUCTS.items():
@@ -168,6 +169,8 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN payment_due TEXT')
     if 'created_ts' not in client_cols:
         db.execute('ALTER TABLE clients ADD COLUMN created_ts INTEGER')
+    if 'map_only' not in client_cols:
+        db.execute('ALTER TABLE clients ADD COLUMN map_only INTEGER NOT NULL DEFAULT 0')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(events)')}:
         db.execute('ALTER TABLE events ADD COLUMN amount_usd INTEGER DEFAULT 0')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
