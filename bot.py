@@ -938,6 +938,10 @@ def handle(db,update):
         prompt(db,u,s);return
     if s.get('basket_ready'):
         if text=='✅ Тасдиқлаш':finish(db,u,s,update['update_id']);return
+        if text=='⬅️ Орқага' and s.get('map_only'):
+            s.pop('basket_ready',None);s.pop('map_only',None)
+            s['step']=next(i for i,(key,_) in enumerate(FLOW['client']) if key=='pack')
+            prompt(db,u,s);return
         send(u,'Барча товарларни киритиб бўлсангиз «✅ Тасдиқлаш»ни, яна товар бўлса «➕ Яна маҳсулот қўшиш»ни босинг.',
              [['➕ Яна маҳсулот қўшиш'],['✅ Тасдиқлаш'],['❌ Бекор қилиш']]);return
     if s.get('confirm'):
@@ -945,6 +949,12 @@ def handle(db,update):
         if text=='✏️ Бошидан киритиш':s={'action':s['action'],'step':0,'values':{}};prompt(db,u,s);return
         send(u,'Тасдиқланг ёки қайта киритинг.');return
     key=FLOW[s['action']][s['step']][0]
+    if (s['action']=='client' and key in ('payment_due','pack')
+            and text=='🗺 Товарсиз харитага сақлаш'):
+        s['values'].setdefault('payment_due','Аниқ эмас')
+        s['map_only']=True
+        s['step']=len(FLOW['client'])
+        prompt(db,u,s);return
     if text=='Ўқилганини олиш' and key in ('name','address'):text=s.get('suggestion',{}).get(key,'')
     if key=='location':
         loc=m.get('location')
