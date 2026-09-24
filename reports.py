@@ -167,17 +167,22 @@ def agent_clients_map_html(db,agent,action_url=None):
             missing+=1;continue
         shop={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
-              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt)}
+              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
+              'prospect':bool(row['map_only'])}
         if action_url:
-            pay=action_url('pay',cid)
-            back=action_url('return',cid)
-            if pay and back:
-                shop['pay_url']=pay
-                shop['return_url']=back
+            if row['map_only']:
+                delivery=action_url('delivery',cid)
+                if delivery:shop['delivery_url']=delivery
+            else:
+                pay=action_url('pay',cid)
+                back=action_url('return',cid)
+                if pay and back:
+                    shop['pay_url']=pay
+                    shop['return_url']=back
         shops.append(shop)
-    summary=(f'Товар топширилган {len(rows)} та дўкондан {len(shops)} тасининг '
-             f'манзили харитада бор. Жами қарз: {m(debt_total)} USD. '
-             f'Мижоз нуқтасини босинг: навигатор, пул олиш ва товар қайтариш.')
+    summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
+             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
+             f'Жами қарз: {m(debt_total)} USD. Потенциал мижозга харитадан товар бериш мумкин.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows)},
@@ -210,13 +215,14 @@ def admin_clients_map_html(db,actor,card_url=None):
         item={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
+              'prospect':bool(row['map_only']),
               'owner':row['agent_name'] or str(agent)}
         if card_url:
             url=card_url(cid)
             if url:item['card_url']=url
         shops.append(item)
-    summary=(f'Барча агентлар аввал товар топширган {len(rows)} та дўкондан '
-             f'{len(shops)} таси харитада. Жами USD қарз: {m(debt_total)}. '
+    summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
+             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
              f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
