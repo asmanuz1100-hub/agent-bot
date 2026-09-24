@@ -120,7 +120,7 @@ def customer_photo_bytes(file_id):
     return content
 
 def agent_action_payload(verb,agent,client,ttl=8*3600):
-    if verb not in ('p','r','d'):raise ValueError('Хизмат тури нотўғри.')
+    if verb not in ('p','r','d','v'):raise ValueError('Хизмат тури нотўғри.')
     expires=int(time.time())+int(ttl)
     scope=f'client-action/{verb}/{int(agent)}/{int(client)}'
     return f'{verb}_{int(agent)}_{int(client)}_{expires}_{_map_sig(scope,expires)[:16]}'
@@ -130,17 +130,17 @@ def agent_action_link(verb,agent,client):
     return f'https://t.me/{BOT_USERNAME}?start='+agent_action_payload(verb,agent,client)
 
 def open_agent_client_action(db,u,payload):
-    match=re.fullmatch(r'([prd])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
+    match=re.fullmatch(r'([prdv])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
     if not match:raise ValueError('Мижозга ўтиш ҳаволаси нотўғри.')
     verb,agent,client,expires,sig=match.groups()
     agent=int(agent);client=int(client)
     scope=f'client-action/{verb}/{agent}/{client}'
     if agent!=u or int(expires)<int(time.time()) or not hmac.compare_digest(sig,_map_sig(scope,expires)[:16]):
         raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
-    action={'p':'payment','r':'return','d':'delivery'}[verb]
+    action={'p':'payment','r':'return','d':'delivery','v':'visit'}[verb]
     if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
     row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=? AND agent=?
-        AND ((?='d' AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
+        AND ((? IN ('d','v') AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
                     AND events.kind='delivery'))""",(client,u,verb)).fetchone()
     if not row:raise ValueError('Бу дўкон сизга бириктирилмаган.')
     ok,msg=live_ready(db,u)
@@ -148,7 +148,7 @@ def open_agent_client_action(db,u,payload):
     s={'action':action,'step':1,'values':{'client':client}}
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     send(u,f"🏪 {row['shop_name'] or row['name']} · #{client} — "+(
-         'пул олиш' if verb=='p' else 'товар қайтариш' if verb=='r' else 'товар бериш'))
+         'пул олиш' if verb=='p' else 'товар қайтариш' if verb=='r' else 'ташрифни қайд этиш' if verb=='v' else 'товар бериш'))
     prompt(db,u,s)
 
 def document(uid,filename,content):
@@ -446,14 +446,18 @@ def show_client_card(db,u,cid):
     owner=db.execute('SELECT name FROM users WHERE id=?',(a,)).fetchone()
     owner_name=owner[0] if owner else str(a)
     can_edit=role(db,u)=='admin' or (role(db,u)=='agent' and a==u)
+    visit=cs.summary(db,cid,bool(c['map_only']))
+    recent=cs.timeline_text(db,cid,5)
     send(u,f"👤 МИЖОЗ #{cid} · {name}\n👨‍💼 Бириктирилган агент: {owner_name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
          f"\n📞 {c['phone'] or 'Телефон йўқ'}\n🏠 {c['address'] or 'Манзил йўқ'}"
-         f"\n📝 {c['comment'] or 'Изоҳ йўқ'}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}"
+         f"\n{visit['label']} · Охирги суҳбат: {visit['note'] or c['comment'] or 'Изоҳ йўқ'}"
+         +(f"\n⏳ Қайта бориш: {visit['followup']}" if visit['followup'] else '')
+         +f"\n📜 Ташрифлар тарихи:\n{recent}\n📅 Тўлов: {c['payment_due'] or 'Аниқ эмас'}"
          f"\n🗓 Қўшилган сана: {stamp(c['created_ts']) if c['created_ts'] else 'Кўрсатилмаган'}"
          f"\n📦 Мижоздаги товар:\n{stock}\n💵 Мижоз қарзи: {fmt(debt)} USD"
          +(f"\nЭски сўм ҳисоби: {fmt(old_debt)} сўм" if old_debt else '')
          +f"\n📍 {coords}",
-         ([['✏️ Мижоз маълумотини ўзгартириш']] if can_edit else [])+
+         ([['📝 Ташрифни қайд этиш'],['✏️ Мижоз маълумотини ўзгартириш']] if can_edit else [])+
          [['⬅️ Мижозлар','⬅️ Меню']])
     save(db,u,{'action':'client_card','step':0,'values':{'client':cid}})
     if c['photo']:
@@ -875,6 +879,14 @@ def handle(db,update):
         client_visible(db,u,cid)
         if text=='✏️ Мижоз маълумотини ўзгартириш':
             show_client_edit_fields(db,u,cid);return
+        if text=='📝 Ташрифни қайд этиш':
+            if not allowed(db,u,'visit'):raise ValueError('Ташриф ёзиш ҳуқуқи йўқ.')
+            if r!='admin':
+                owner=db.execute('SELECT agent FROM clients WHERE id=?',(cid,)).fetchone()
+                if not owner or owner[0]!=u:raise ValueError('Бу дўкон бошқа агентга бириктирилган.')
+                ok,msg=live_ready(db,u)
+                if not ok:raise ValueError(msg)
+            prompt(db,u,{'action':'visit','step':1,'values':{'client':cid}});return
         show_client_card(db,u,cid);return
     if s.get('action')=='client_edit_field':
         cid=s['values']['client']
@@ -1247,7 +1259,7 @@ def serve_webhook(db,base_url):
                     try:
                         html=reports.agent_clients_map_html(local,agent,
                             action_url=lambda verb,cid:agent_action_link(
-                                {'pay':'p','return':'r','delivery':'d'}[verb],agent,cid))
+                                {'pay':'p','return':'r','delivery':'d','visit':'v'}[verb],agent,cid))
                         local.commit()
                     finally:
                         if postgres:local.close()
