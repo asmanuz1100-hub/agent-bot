@@ -85,7 +85,7 @@ class ProspectsTests(unittest.TestCase):
             with patch.object(bot, 'BOT_USERNAME', 'agent_bot_test'):
                 agent = self.map_data(reports.agent_clients_map_html(
                     self.db, 2, action_url=lambda verb, customer: bot.agent_action_link(
-                        {'pay': 'p', 'return': 'r', 'delivery': 'd'}[verb], 2, customer)))
+                        {'pay': 'p', 'return': 'r', 'delivery': 'd', 'visit': 'v'}[verb], 2, customer)))
             self.assertEqual([x['id'] for x in agent['shops']], [cid])
             self.assertEqual(agent['shops'][0]['icon'],'🟠')
             self.assertIn('Кейинроқ оламан',agent['shops'][0]['history'])
