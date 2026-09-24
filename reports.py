@@ -151,10 +151,10 @@ def agent_clients_map_html(db,agent,action_url=None):
     r=db.execute("SELECT role,name FROM users WHERE id=?",(agent,)).fetchone()
     if not r or r['role']!='agent' or not feature_enabled(db,agent,'clients'):
         raise ValueError('Мижозлар харитасига рухсат йўқ.')
-    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon
+    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only
         FROM clients c WHERE c.agent=?
-        AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                    AND e.agent=? AND e.kind='delivery')
+        AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.agent=? AND e.kind='delivery'))
         ORDER BY c.id DESC""",(agent,agent)).fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
@@ -192,10 +192,10 @@ def admin_clients_map_html(db,actor,card_url=None):
     """
     from core import client_debt_usd,client_stock
     admin_only(db,actor)
-    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,
+    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
         u.name AS agent_name FROM clients c
         LEFT JOIN users u ON u.id=c.agent
-        WHERE EXISTS (SELECT 1 FROM events e
+        WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e
             WHERE e.client=c.id AND e.kind='delivery')
         ORDER BY c.id DESC""").fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0
