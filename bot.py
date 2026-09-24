@@ -315,7 +315,7 @@ def prompt(db,u,s):
                 s['basket_ready']=True;save(db,u,s)
                 send(u,'🗺 ПОТЕНЦИАЛ МИЖОЗНИ САҚЛАШ\n'
                      f"🏪 {values.get('shop_name','')} · 👤 {values.get('name','')}\n"
-                     f"📞 {values.get('phone','')}\n📍 Локация ва фото сақланади.\n"
+                     f"📞 {values.get('phone','')}\n📍 Локация ва фото сақланади.\n" +
                      ('Мақом: '+cs.LABELS[values.get('prospect_status','interested')]+ '\n' +
                       ('Қайта ташриф: '+values['prospect_due']+'\n' if values.get('prospect_due') else '')+
                       'Товар берилмайди, қарз ёзилмайди. Мижоз харита ва мижозлар рўйхатида кўринади.'),
