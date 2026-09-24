@@ -28,7 +28,7 @@ def normalize(status, followup=None):
 def add_visit(db,actor,client,status,note,followup=None):
     person=db.execute('SELECT agent FROM clients WHERE id=?',(client,)).fetchone()
     who=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not person or not who or not (who[0]=='admin' or (who[0]=='agent' and person[0]==actor)):
+    if not person or not who or who[0] not in ('admin','agent'):
         raise ValueError('Бу дўконнинг ташрифини қайд этишга рухсат йўқ.')
     note=str(note or '').strip()
     if not note or len(note)>1000:
