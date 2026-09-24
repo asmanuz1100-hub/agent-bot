@@ -17,7 +17,7 @@ TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
-MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com').strip()
+MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260924-2').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
