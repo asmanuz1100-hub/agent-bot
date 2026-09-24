@@ -103,7 +103,7 @@ class ReportsTests(unittest.TestCase):
   html=reports.admin_clients_map_html(self.db,1,card_url=url).decode()
   self.assertIn('Админ · Мижозлар харитаси',html)
   self.assertIn('Навигаторда очиш',html)
-  self.assertIn('Агент:',html)
+  self.assertIn('Қўшган агент:',html)
   self.assertNotIn('<script>alert(1)</script>',html)
   self.assertNotIn('+998900000001',html)
   found=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
