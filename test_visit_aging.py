@@ -54,14 +54,14 @@ class VisitAgingTests(unittest.TestCase):
         by_id={s['id']:s for s in agent}
         self.assertEqual(by_id[3]['visit_level'],'yellow')
         self.assertEqual(by_id[4]['visit_level'],'red')
-        self.assertEqual(by_id[3]['visit_color'],'#d97706')
+        self.assertEqual(by_id[3]['visit_color'],'#b45309')
         self.assertEqual(by_id[4]['visit_color'],'#dc2626')
         admin=self.shops(reports.admin_clients_map_html(self.db,1))
         self.assertEqual({s['visit_level'] for s in admin},{'yellow','red'})
         html=reports.agent_clients_map_html(self.db,2).decode()
         self.assertIn('3–7 кун · ташриф керак',html)
         self.assertIn('8+ кун · устувор ташриф',html)
-        self.assertIn('🟡 3–7 кун',html)
+        self.assertIn('🟠 3–7 кун',html)
         self.assertIn('🔴 8+ кун',html)
 
 
