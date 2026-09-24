@@ -138,7 +138,7 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  const visitIcon=s.visit_level==='yellow'?'🟠':s.visit_level==='red'?'🔴':s.visit_level==='fresh'?'🟢':s.visit_level==='scheduled'?'🔵':(s.icon||'🟠');
+  const visitIcon=s.visit_level==='yellow'?'🟡':s.visit_level==='red'?'🔴':s.visit_level==='fresh'?'🟢':s.visit_level==='scheduled'?'🔵':(s.icon||'🟠');
   const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker" style="border-color:'+esc(s.visit_color||'#94a3b8')+';background:'+esc(s.visit_background||'white')+'">'+visitIcon+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
     L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
   const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
@@ -165,20 +165,17 @@ if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.s
 </script></body></html>'''.encode('utf-8')
 
 def agent_clients_map_html(db,agent,action_url=None):
-    """All previously supplied shops belonging to this agent, not only today.
-
-    The signed HTTP endpoint checks the agent's role and customers feature
-    before rendering; Telegram actions independently recheck ownership.
-    """
-    from core import client_debt_usd,client_stock,feature_enabled
+    """Shared customer map: every active agent can see every customer."""
+    from core import client_debt_usd,client_stock_total,feature_enabled
     r=db.execute("SELECT role,name FROM users WHERE id=?",(agent,)).fetchone()
     if not r or r['role']!='agent' or not feature_enabled(db,agent,'clients'):
         raise ValueError('Мижозлар харитасига рухсат йўқ.')
-    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only
-        FROM clients c WHERE c.agent=?
-        AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                    AND e.agent=? AND e.kind='delivery'))
-        ORDER BY c.id DESC""",(agent,agent)).fetchall()
+    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
+        u.name AS agent_name
+        FROM clients c LEFT JOIN users u ON u.id=c.agent
+        WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.kind='delivery')
+        ORDER BY c.id DESC""").fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0;visit_yellow=0;visit_red=0
     for row in rows:
         cid=int(row['id'])
@@ -188,7 +185,7 @@ def agent_clients_map_html(db,agent,action_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -202,25 +199,25 @@ def agent_clients_map_html(db,agent,action_url=None):
                'history':history,'visit_level':attention['level'],
                'visit_label':attention['label'],'visit_color':attention['color'],
                'visit_background':attention['background'],
-               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else ''}
+               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
+               'owner':row['agent_name'] or str(row['agent'])}
         if action_url:
             visit=action_url('visit',cid)
             if visit:shop['visit_url']=visit
-            if row['map_only']:
-                delivery=action_url('delivery',cid)
-                if delivery:shop['delivery_url']=delivery
-            else:
+            delivery=action_url('delivery',cid)
+            if delivery:shop['delivery_url']=delivery
+            if not row['map_only']:
                 pay=action_url('pay',cid)
                 back=action_url('return',cid)
                 if pay and back:
                     shop['pay_url']=pay
                     shop['return_url']=back
         shops.append(shop)
-    summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
+    summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
              f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
-    return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
+    return _map_html(f'Умумий мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows),
                                       'visit_yellow':visit_yellow,'visit_red':visit_red},
@@ -233,7 +230,7 @@ def admin_clients_map_html(db,actor,card_url=None):
     Unlike an agent's map, this administrator view has no payment or return
     actions: the customer's assigned agent must confirm those in Telegram.
     """
-    from core import client_debt_usd,client_stock
+    from core import client_debt_usd,client_stock_total
     admin_only(db,actor)
     rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
         u.name AS agent_name FROM clients c
@@ -250,7 +247,7 @@ def admin_clients_map_html(db,actor,card_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -275,7 +272,7 @@ def admin_clients_map_html(db,actor,card_url=None):
              f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
-             f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
+             f'Агентлар мижозлар билан умумий ишлайди; операцияни бажарган агент тарихда алоҳида сақланади.')
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows),
@@ -292,7 +289,7 @@ def client_card_html(db,actor,client_id,photo_url=None):
     admin_only(db,actor)
     customer=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
     if not customer:raise ValueError('Мижоз топилмади.')
-    from core import client_debt_usd,legacy_debt_uzs,client_stock
+    from core import client_debt_usd,legacy_debt_uzs,client_stock_total
     owner=db.execute('SELECT name FROM users WHERE id=?',(customer['agent'],)).fetchone()
     owner_name=(owner[0] if owner else None) or str(customer['agent'])
     e=lambda value:escape(str(value if value is not None else ''),quote=True)
@@ -308,7 +305,7 @@ def client_card_html(db,actor,client_id,photo_url=None):
     visits=e(cs.timeline_text(db,client_id,5))
     due=e(customer['payment_due'] or 'Аниқ эмас')
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
-                     str(int(client_stock(db,customer['agent'],client_id,pack)))+
+                     str(int(client_stock_total(db,client_id,pack)))+
                      ' дона</td></tr>' for pack in (1,3,5))
     debt=client_debt_usd(db,client_id)
     old=legacy_debt_uzs(db,client_id)
