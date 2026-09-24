@@ -1,6 +1,7 @@
 import json
 import re
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import bot
@@ -85,7 +86,8 @@ class SharedClientsTests(unittest.TestCase):
         self.db.execute("""INSERT INTO clients(
             id,agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts,map_only
         ) VALUES(2,2,'Prospect','+998900002222','Prospect address',40.6,71.3,'','Prospect Shop','Later','Аниқ эмас',1000,1)""")
-        cs.add_visit(self.db,2,2,'waiting','Next month','2099-01-01')
+        followup=(date.today()+timedelta(days=30)).isoformat()
+        cs.add_visit(self.db,2,2,'waiting','Next month',followup)
         data=self.map_data(reports.agent_clients_map_html(
             self.db,3,action_url=lambda verb,cid:f'{verb}-{cid}'))
         shop=next(x for x in data['shops'] if x['id']==2)
