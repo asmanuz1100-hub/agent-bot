@@ -16,4 +16,4 @@
 - `reports.py`: include map-only customers in the agent/admin map queries, label prospect markers and expose the delivery deep link only to the assigned agent.
 - Add regression tests for prospect save (zero debt and stock movement), both maps, list exclusion, conversion on first delivery, and authorization of deep links.
 
-**Status:** design only. This branch does not contain deployed code changes.
+**Status:** Implemented in this branch with regression coverage in `test_prospects.py`. GitHub Actions unit suite passed. Production deployment status must be verified separately in Render.
