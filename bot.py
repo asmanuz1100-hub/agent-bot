@@ -1016,8 +1016,8 @@ def handle(db,update):
         except ValueError:raise ValueError('Рўйхатдан танланг ёки қидиришдан фойдаланинг.')
         if v<=0:raise ValueError('ID нотўғри.')
         if key=='client':
-            row=db.execute('SELECT agent FROM clients WHERE id=?',(v,)).fetchone()
-            if not row or (r!='admin' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS and row[0]!=u):
+            row=db.execute('SELECT agent,map_only FROM clients WHERE id=?',(v,)).fetchone()
+            if not row or ((s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS) and row['map_only']) or (r!='admin' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS and row[0]!=u):
                 raise ValueError('Мижоз топилмади.')
         if key=='agent' and not db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v,)).fetchone():raise ValueError('Агент топилмади.')
     elif key=='pack':
@@ -1382,4 +1382,3 @@ def run():
 
 if __name__=='__main__':run()
 
-# Prospective-customer map flow: implementation forthcoming.
