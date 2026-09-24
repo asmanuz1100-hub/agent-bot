@@ -92,8 +92,8 @@ def visit_attention(db,client,map_only=False,now=None):
         return {'level':'red','days':days,'last_ts':last,'color':'#dc2626',
                 'background':'#fee2e2','label':f'🔴 {days} кундан бери ташриф йўқ'}
     if days>=3:
-        return {'level':'yellow','days':days,'last_ts':last,'color':'#d97706',
-                'background':'#fef3c7','label':f'🟡 {days} кундан бери ташриф йўқ'}
+        return {'level':'yellow','days':days,'last_ts':last,'color':'#b45309',
+                'background':'#fde68a','label':f'🟠 {days} кундан бери ташриф йўқ'}
     return {'level':'fresh','days':days,'last_ts':last,'color':'#16a34a',
             'background':'#f0fdf4','label':f'🟢 Охирги ташриф: {days} кун олдин'}
 

@@ -30,7 +30,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('Дўконлар',metrics.get('total_clients',len(shops))),
             ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
             ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
-            ('🟡 3–7 кун',metrics.get('visit_yellow',0)),
+            ('🟠 3–7 кун',metrics.get('visit_yellow',0)),
             ('🔴 8+ кун',metrics.get('visit_red',0)),
             ('Локациясиз',metrics.get('missing_location',0)),
         ]
@@ -113,7 +113,7 @@ function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'
 const legend=document.getElementById('legend');
 const workPanel=document.getElementById('agent-work');
 if(D.agent_clients){{
-  [['#16a34a','0–2 кун · яқинда ташриф'],['#d97706','3–7 кун · ташриф керак'],['#dc2626','8+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
+  [['#16a34a','0–2 кун · яқинда ташриф'],['#b45309','3–7 кун · ташриф керак'],['#dc2626','8+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
     const row=document.createElement('div');row.className='legend-row';
     row.innerHTML='<span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span>';legend.appendChild(row);
   }});
@@ -138,7 +138,8 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker" style="border-color:'+esc(s.visit_color||'#94a3b8')+';background:'+esc(s.visit_background||'white')+'">'+esc(s.icon||'🟠')+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
+  const visitIcon=s.visit_level==='yellow'?'🟠':s.visit_level==='red'?'🔴':s.visit_level==='fresh'?'🟢':s.visit_level==='scheduled'?'🔵':(s.icon||'🟠');
+  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker" style="border-color:'+esc(s.visit_color||'#94a3b8')+';background:'+esc(s.visit_background||'white')+'">'+visitIcon+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
     L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
   const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
   const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
@@ -217,7 +218,7 @@ def agent_clients_map_html(db,agent,action_url=None):
         shops.append(shop)
     summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟡 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
              f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
@@ -271,7 +272,7 @@ def admin_clients_map_html(db,actor,card_url=None):
         shops.append(item)
     summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟡 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
              f'Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
              f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
