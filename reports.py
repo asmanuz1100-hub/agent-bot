@@ -129,9 +129,20 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   if(last){{L.circleMarker(last,{{radius:7,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги GPS нуқта · '+esc(r.agent)+'<br><a rel="noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+last[0]+','+last[1]+'">Навигаторда очиш</a>');}}
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
-D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.prospect?'#c2410c':s.active?'#0f766e':'#64748b',fillColor:s.prospect?'#fdba74':s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+'<br>'+(s.prospect?'🟠 Потенциал мижоз · товар олмаган':D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':'')+(D.agent_clients && s.delivery_url?'<br><a href="'+esc(s.delivery_url)+'">📦 Товар бериш</a>':''));
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
+  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker">'+esc(s.icon||'🟠')+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
+    L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
+  const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
+  const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
+  const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+
+    '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
+    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+last+when+history+
+    (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
+    '<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+
+    (D.agent_clients && s.visit_url?'<br><a href="'+esc(s.visit_url)+'">📝 Янги ташриф / изоҳ</a>':'')+
+    (D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':'')+
+    (D.agent_clients && s.delivery_url?'<br><a href="'+esc(s.delivery_url)+'">📦 Товар бериш</a>':''));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(D.points_only&&!D.shops.length){{
