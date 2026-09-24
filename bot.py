@@ -1215,7 +1215,7 @@ def serve_webhook(db,base_url):
                     try:
                         html=reports.agent_clients_map_html(local,agent,
                             action_url=lambda verb,cid:agent_action_link(
-                                'p' if verb=='pay' else 'r',agent,cid))
+                                {'pay':'p','return':'r','delivery':'d'}[verb],agent,cid))
                         local.commit()
                     finally:
                         if postgres:local.close()
