@@ -119,7 +119,7 @@ def customer_photo_bytes(file_id):
     return content
 
 def agent_action_payload(verb,agent,client,ttl=8*3600):
-    if verb not in ('p','r'):raise ValueError('Хизмат тури нотўғри.')
+    if verb not in ('p','r','d'):raise ValueError('Хизмат тури нотўғри.')
     expires=int(time.time())+int(ttl)
     scope=f'client-action/{verb}/{int(agent)}/{int(client)}'
     return f'{verb}_{int(agent)}_{int(client)}_{expires}_{_map_sig(scope,expires)[:16]}'
@@ -129,25 +129,25 @@ def agent_action_link(verb,agent,client):
     return f'https://t.me/{BOT_USERNAME}?start='+agent_action_payload(verb,agent,client)
 
 def open_agent_client_action(db,u,payload):
-    match=re.fullmatch(r'([pr])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
+    match=re.fullmatch(r'([prd])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
     if not match:raise ValueError('Мижозга ўтиш ҳаволаси нотўғри.')
     verb,agent,client,expires,sig=match.groups()
     agent=int(agent);client=int(client)
     scope=f'client-action/{verb}/{agent}/{client}'
     if agent!=u or int(expires)<int(time.time()) or not hmac.compare_digest(sig,_map_sig(scope,expires)[:16]):
         raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
-    action='payment' if verb=='p' else 'return'
+    action={'p':'payment','r':'return','d':'delivery'}[verb]
     if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
     row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=? AND agent=?
-        AND EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
-                    AND events.kind='delivery')""",(client,u)).fetchone()
+        AND ((?='d' AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
+                    AND events.kind='delivery'))""",(client,u,verb)).fetchone()
     if not row:raise ValueError('Бу дўкон сизга бириктирилмаган.')
     ok,msg=live_ready(db,u)
     if not ok:raise ValueError(msg)
     s={'action':action,'step':1,'values':{'client':client}}
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     send(u,f"🏪 {row['shop_name'] or row['name']} · #{client} — "+(
-         'пул олиш' if verb=='p' else 'товар қайтариш'))
+         'пул олиш' if verb=='p' else 'товар қайтариш' if verb=='r' else 'товар бериш'))
     prompt(db,u,s)
 
 def document(uid,filename,content):
