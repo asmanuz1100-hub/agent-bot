@@ -301,6 +301,10 @@ def _safe_send_many(user_ids,text):
 def cashier_ids(db):
     return [int(r[0]) for r in db.execute("SELECT id FROM users WHERE role='cashier'").fetchall()]
 
+def admin_ids(db):
+    ids=[int(r[0]) for r in db.execute("SELECT id FROM users WHERE role='admin'").fetchall()]
+    return list(set(ids)|set(ADMINS))
+
 def notify_cashiers_payment(db,agent,client,amount_usd):
     c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
     if not c:return
@@ -853,7 +857,23 @@ def handle(db,update):
         send(u,msg+'\n\nБу ёзувлар автомат қайта ўтказилмайди. Товар ва пул ҳолатини текшириб, зарур бўлса тузатиш киритинг.')
         return
     if text.startswith('/accept ') or text.startswith('/reject '):
-        accept(db,u,int(text.split()[1]),text.startswith('/accept'));send(u,'✅ Қайд қилинди.',menu(db,u));return
+        hid=int(text.split()[1]);accepted=text.startswith('/accept ')
+        row=db.execute("""SELECT h.*,ua.name AS agent_name FROM handovers h
+            LEFT JOIN users ua ON ua.id=h.agent WHERE h.id=? AND h.status='pending'""",(hid,)).fetchone()
+        if not row:raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
+        accept(db,u,hid,accepted)
+        status='✅ ҚАБУЛ ҚИЛИНДИ' if accepted else '❌ РАД ЭТИЛДИ'
+        amount_text=(f"{fmt(row['amount_usd'])} USD" if row['amount_usd'] else f"{fmt(row['amount'])} сўм")
+        cashier=_staff_name(db,u);agent_name=row['agent_name'] or str(row['agent'])
+        detail=(f"{status}\n🧾 Топшириш: #{hid}\n👨‍💼 Агент: {agent_name}\n"
+                f"💵 Сумма: {amount_text}\n👤 Кассир: {cashier}\n"
+                f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
+        send(u,detail,menu(db,u))
+        try:send(int(row['agent']),detail+'\n\nКасса ҳолати янгиланди.')
+        except Exception:logging.exception('Handover result notification failed agent=%s',row['agent'])
+        _safe_send_many([x for x in admin_ids(db) if x!=u],
+                        '📥 КАССА ҲАРАКАТИ\n'+detail)
+        return
     action=BTN.get(text)
     if action:
         if not allowed(db,u,action):raise ValueError('Бу амалга рухсат йўқ.')
