@@ -16,8 +16,8 @@ class ManagerMiniAppTests(unittest.TestCase):
             "Rahbar paneli","Agentlar xaritasi","Mijozlar ro'yxati",
             "Kassa nazorati","Hisobotlar",
             "8+ kun tashrifsiz mijozlar",
-            "data-page="home"","data-page="map"","data-page="customers"",
-            "data-page="cash"","data-page="report"",
+            'data-page="home"','data-page="map"','data-page="customers"',
+            'data-page="cash"','data-page="report"',
         ):
             self.assertIn(term,self.html)
 
