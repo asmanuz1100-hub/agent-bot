@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
 from core import route_stats,product_name,distance
+import customer_status as cs
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
@@ -67,7 +68,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 .side{{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px;overflow:auto}}
 .side h3{{margin:0 0 10px;font-size:15px}} .summary{{font-size:13px;line-height:1.45;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:12px}}
 .legend{{margin-top:14px;display:flex;flex-direction:column;gap:9px}} .legend-row{{display:flex;align-items:center;gap:9px;font-size:13px}} .work-panel{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}} .work-panel h3{{margin-bottom:8px}} .work-row{{padding:8px 0;font-size:13px;line-height:1.5;border-bottom:1px solid var(--line)}} .work-row strong{{display:block;color:var(--text)}}
-.dot{{width:10px;height:10px;border-radius:50%;flex:none}} .hint{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}}
+.status-marker{{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:white;border:2px solid #94a3b8;box-shadow:0 2px 9px #0f172a44;font-size:19px}} .dot{{width:10px;height:10px;border-radius:50%;flex:none}} .hint{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}}
 .mapwrap{{position:relative;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}} #map{{height:100%;min-height:520px}}
 .leaflet-popup-content{{font-size:13px;line-height:1.45}} #map-status{{position:absolute;top:10px;left:58px;right:10px;z-index:1000;display:none;padding:11px 14px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:13px;line-height:1.4;box-shadow:var(--shadow)}}
 @media(max-width:820px){{html,body{{height:auto;min-height:100vh;overflow-y:auto}}.app{{height:auto;min-height:100vh;display:block}}.top{{padding:12px}}.title{{font-size:18px}}.kpis{{grid-template-columns:repeat(2,minmax(0,1fr))}}.body{{display:flex;flex-direction:column;padding:10px;gap:10px;min-height:auto}}.mapwrap{{order:0;min-height:55vh;height:55vh}}#map{{height:55vh;min-height:55vh}}.side{{order:1;max-height:none;overflow:visible}}}}
@@ -159,6 +160,8 @@ def agent_clients_map_html(db,agent,action_url=None):
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
         cid=int(row['id'])
+        status=cs.summary(db,cid,bool(row['map_only']))
+        history=cs.timeline_text(db,cid,5)
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -168,8 +171,13 @@ def agent_clients_map_html(db,agent,action_url=None):
         shop={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
-              'prospect':bool(row['map_only'])}
+              'prospect':bool(row['map_only']),
+               'status':status['label'],'icon':status['icon'],
+               'last_note':status['note'] or '', 'followup':status['followup'],
+               'history':history}
         if action_url:
+            visit=action_url('visit',cid)
+            if visit:shop['visit_url']=visit
             if row['map_only']:
                 delivery=action_url('delivery',cid)
                 if delivery:shop['delivery_url']=delivery
@@ -206,6 +214,8 @@ def admin_clients_map_html(db,actor,card_url=None):
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
         cid=int(row['id']);agent=int(row['agent'])
+        status=cs.summary(db,cid,bool(row['map_only']))
+        history=cs.timeline_text(db,cid,5)
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -216,6 +226,9 @@ def admin_clients_map_html(db,actor,card_url=None):
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
               'prospect':bool(row['map_only']),
+              'status':status['label'],'icon':status['icon'],
+              'last_note':status['note'] or '', 'followup':status['followup'],
+              'history':history,
               'owner':row['agent_name'] or str(agent)}
         if card_url:
             url=card_url(cid)
