@@ -937,6 +937,19 @@ def handle(db,update):
             show_agent_profile(db,u,agent);return
         send(u,'Хизматни ёқиш ёки ўчириш учун тугмани босинг.')
         show_agent_profile(db,u,agent);return
+    if s.get('prospect_select'):
+        status=next((k for k in ('declined','waiting','interested') if text==cs.LABELS[k]),None)
+        if not status:raise ValueError('Дўкон ҳолатини тугмалардан танланг.')
+        s.pop('prospect_select',None);s['values']['prospect_status']=status
+        if status=='waiting':
+            s['prospect_due_entry']=True;save(db,u,s)
+            send(u,'⏳ Қайта ташриф санасини YYYY-MM-DD шаклида киритинг (масалан, 2026-10-01).')
+            return
+        prompt(db,u,s);return
+    if s.get('prospect_due_entry'):
+        cs.normalize('waiting',text)
+        s['values']['prospect_due']=text;s.pop('prospect_due_entry',None)
+        prompt(db,u,s);return
     if s['action']=='client' and m.get('photo'):
         current_key=FLOW[s['action']][s['step']][0] if s['step']<len(FLOW[s['action']]) else None
         photo=m['photo'][-1]['file_id']
@@ -969,7 +982,9 @@ def handle(db,update):
         s['values'].setdefault('payment_due','Аниқ эмас')
         s['map_only']=True
         s['step']=len(FLOW['client'])
-        prompt(db,u,s);return
+        s['prospect_select']=True;save(db,u,s)
+        send(u,'Товар олмаган дўконнинг ҳолатини танланг:',[[cs.LABELS[k]] for k in ('declined','waiting','interested')])
+        return
     if text=='Ўқилганини олиш' and key in ('name','address'):text=s.get('suggestion',{}).get(key,'')
     if key=='location':
         loc=m.get('location')
@@ -1037,6 +1052,11 @@ def handle(db,update):
             try:v=int(text)
             except ValueError:raise ValueError('Товарни рўйхатдан танланг.')
         if v not in (1,3,5):raise ValueError('Товарни рўйхатдан танланг.')
+    elif key=='status':
+        v=next((k for k,label in cs.LABELS.items() if text==label),None)
+        if not v:raise ValueError('Ҳолатни тугмадан танланг.')
+    elif key=='followup':
+        v=cs.normalize(s['values']['status'],text)
     elif key=='qty':v=count(text)
     elif key=='amount':money(text);v=text
     elif key=='unit':
@@ -1049,6 +1069,8 @@ def handle(db,update):
         if not text or len(text)>1000:raise ValueError('1–1000 белгидан иборат матн киритинг.')
         v=text
     s['values'][key]=v;s['step']+=1
+    if s['action']=='visit' and key=='note' and s['values']['status']!='waiting':
+        s['step']=len(FLOW['visit'])
     if s['action']=='agent_profile' and key=='agent':
         show_agent_profile(db,u,v);return
     if s['action']=='client_view' and key=='client':
