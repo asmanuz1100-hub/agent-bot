@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASMAN - Rahbar paneli va Xarita</title>
+    <title>ASMAN - Rahbar paneli (To'liq versiya)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -30,7 +30,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 pb-20">
+<body class="bg-gray-100 text-gray-800 pb-24">
 
     <!-- Header (Sarlavha) -->
     <header class="bg-[#0f2a4a] text-white px-4 py-3 sticky top-0 z-50 shadow-md">
@@ -39,7 +39,7 @@
                 <span class="text-xl font-black tracking-wider">ASMAN</span>
             </div>
             <div class="flex items-center space-x-3">
-                <span id="header-title" class="text-sm font-medium bg-blue-900/60 px-3 py-1 rounded-full">Rahbar paneli</span>
+                <span id="header-title" class="text-xs font-medium bg-blue-900/60 px-3 py-1 rounded-full">Rahbar paneli</span>
                 <div class="relative">
                     <i class="fa-regular fa-bell text-lg"></i>
                     <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -53,12 +53,10 @@
 
     <!-- 1. BOSH SAHIFA -->
     <div id="page-home" class="page-content active max-w-md mx-auto p-4 space-y-4">
-        <!-- Salomlashuv bloki -->
         <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <h1 class="text-lg font-bold text-gray-900">Assalomu alaykum, Rahbar!</h1>
             <p class="text-xs text-gray-500 mt-0.5">Bugun, 24 sentabr 2026</p>
 
-            <!-- Statistik kartalar (2x2 grid) -->
             <div class="grid grid-cols-2 gap-3 mt-4">
                 <div class="bg-blue-50/60 p-3 rounded-xl border border-blue-100">
                     <div class="flex items-center space-x-2">
@@ -112,17 +110,12 @@
             </div>
         </div>
 
-        <!-- Bugungi nazorat bo'limi -->
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-sm font-bold text-gray-900">Bugungi nazorat</h2>
-                <a href="#" class="text-xs text-blue-600 font-semibold hover:underline">Barchasini ko'rish <i class="fa-solid fa-chevron-right text-[10px]"></i></a>
-            </div>
-
+            <h2 class="text-sm font-bold text-gray-900 mb-3">Bugungi nazorat</h2>
             <div class="space-y-2.5">
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl">
                     <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center font-bold text-xs">
+                        <div class="w-8 h-8 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xs">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                         </div>
                         <div>
@@ -132,14 +125,13 @@
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </div>
-
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl">
                     <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold text-xs">
+                        <div class="w-8 h-8 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xs">
                             <i class="fa-solid fa-file-invoice-dollar"></i>
                         </div>
                         <div>
-                            <h4 class="text-xs font-bold text-gray-900">Kassa tasdigʻini kutayotgan</h4>
+                            <h4 class="text-xs font-bold text-gray-900">Kassa tasdig'ini kutayotgan</h4>
                             <p class="text-[11px] text-gray-500">5 ta to'lov (1,250 USD)</p>
                         </div>
                     </div>
@@ -149,21 +141,16 @@
         </div>
     </div>
 
-    <!-- 2. AGENTLAR XARITASI -->
-    <div id="page-map" class="page-content">
-        <!-- Filtrlar paneli -->
-        <div class="bg-white px-4 py-2.5 shadow-sm border-b border-gray-200 flex items-center space-x-2 overflow-x-auto z-40 relative whitespace-nowrap">
-            <button class="bg-[#0f2a4a] text-white text-xs px-3 py-1.5 rounded-full font-medium shadow-sm">Barcha agentlar (28)</button>
+    <!-- 2. AGENTLAR (Xarita) -->
+    <div id="page-map" class="page-content max-w-md mx-auto">
+        <div class="bg-white px-4 py-2.5 shadow-sm border-b border-gray-200 flex items-center space-x-2 overflow-x-auto whitespace-nowrap">
+            <button class="bg-[#0f2a4a] text-white text-xs px-3 py-1.5 rounded-full font-medium">Barcha agentlar (28)</button>
             <button class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-3 py-1.5 rounded-full font-medium">🟢 Faol 22</button>
             <button class="bg-amber-50 text-amber-700 border border-amber-200 text-xs px-3 py-1.5 rounded-full font-medium">🟠 Tashrif kechikkan 3</button>
         </div>
-
-        <!-- Xarita -->
         <div class="relative w-full">
             <div id="map"></div>
-
-            <!-- Qalqib turuvchi agent kartasi -->
-            <div class="absolute bottom-4 left-4 right-4 z-30 max-w-md mx-auto bg-white rounded-2xl p-3.5 shadow-xl border border-gray-100">
+            <div class="absolute bottom-4 left-4 right-4 z-30 bg-white rounded-2xl p-3.5 shadow-xl border border-gray-100">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-3">
                         <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces" alt="Agent" class="w-11 h-11 rounded-full object-cover border-2 border-emerald-500">
@@ -175,25 +162,81 @@
                             <p class="text-[11px] text-gray-500 mt-0.5">📍 Chilonzor tumani</p>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <span class="text-xs font-bold text-blue-600">12 ta reja</span>
-                    </div>
+                    <span class="text-xs font-bold text-blue-600">12 ta reja</span>
                 </div>
+            </div>
+        </div>
+    </div>
 
-                <div class="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
-                    <span>🔄 Bugun: <strong class="text-gray-900">12 / 14</strong></span>
-                    <span class="text-rose-600 font-medium">⚠️ Kechikkan mijoz: 3 ta</span>
+    <!-- 3. MIJOZLAR (Ro'yxat) -->
+    <div id="page-customers" class="page-content max-w-md mx-auto p-4 space-y-3">
+        <div class="relative">
+            <input type="text" placeholder="Mijoz nomi yoki manzil..." class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-600 shadow-sm">
+            <i class="fa-solid fa-search absolute right-4 top-3 text-gray-400 text-xs"></i>
+        </div>
+        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold">🏪</div>
+                <div>
+                    <h4 class="text-xs font-bold text-gray-900">Baraka do'koni</h4>
+                    <p class="text-[10px] text-gray-500">Buroq ko'chasi, Qo'qon</p>
                 </div>
+            </div>
+            <span class="bg-amber-50 text-amber-700 text-[10px] px-2 py-1 rounded-lg font-semibold">3 kun</span>
+        </div>
+        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 font-bold">🏢</div>
+                <div>
+                    <h4 class="text-xs font-bold text-gray-900">Ideal qurilish</h4>
+                    <p class="text-[10px] text-gray-500">Navbahor ko'chasi</p>
+                </div>
+            </div>
+            <span class="bg-emerald-50 text-emerald-700 text-[10px] px-2 py-1 rounded-lg font-semibold">Yangi</span>
+        </div>
+    </div>
 
-                <div class="grid grid-cols-2 gap-2 mt-3">
-                    <button class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs py-2 rounded-xl font-semibold transition flex items-center justify-center space-x-1.5">
-                        <i class="fa-solid fa-user"></i>
-                        <span>Profil</span>
-                    </button>
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-xl font-semibold transition flex items-center justify-center space-x-1.5 shadow-sm">
-                        <i class="fa-solid fa-route"></i>
-                        <span>Marshrut</span>
-                    </button>
+    <!-- 4. KASSA -->
+    <div id="page-cash" class="page-content max-w-md mx-auto p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-[11px] text-gray-500 font-medium">Qabul qilingan</p>
+                <h3 class="text-sm font-bold text-emerald-600 mt-1">12,450 USD</h3>
+                <span class="text-[10px] text-gray-400">28 ta to'lov</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-[11px] text-gray-500 font-medium">Tasdiq kutyotgan</p>
+                <h3 class="text-sm font-bold text-amber-600 mt-1">1,250 USD</h3>
+                <span class="text-[10px] text-gray-400">5 ta topshirish</span>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+            <h3 class="text-xs font-bold text-gray-900">So'nggi topshirishlar</h3>
+            <div class="flex justify-between items-center text-xs pb-2 border-b border-gray-100">
+                <div>
+                    <p class="font-bold text-gray-900">Alibek Karimov</p>
+                    <span class="text-[10px] text-gray-500">14:20</span>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-emerald-600">450.00 USD</p>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Qabul qilindi</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. HISOBOT -->
+    <div id="page-report" class="page-content max-w-md mx-auto p-4 space-y-4">
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+            <h3 class="text-xs font-bold text-gray-900">Umumiy ko'rsatkichlar</h3>
+            <div class="grid grid-cols-2 gap-3 text-center">
+                <div class="bg-gray-50 p-3 rounded-xl">
+                    <p class="text-[10px] text-gray-500">Jami tashriflar</p>
+                    <p class="text-base font-bold text-gray-900 mt-1">892 <span class="text-xs text-emerald-600">+12%</span></p>
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl">
+                    <p class="text-[10px] text-gray-500">Yangi mijozlar</p>
+                    <p class="text-base font-bold text-gray-900 mt-1">48 <span class="text-xs text-emerald-600">+28%</span></p>
                 </div>
             </div>
         </div>
@@ -202,23 +245,23 @@
     <!-- Bottom Navigation Bar (Pastki menyu) -->
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 z-50 max-w-md mx-auto shadow-lg">
         <div class="flex justify-between items-center text-center">
-            <button onclick="switchPage('home')" id="nav-home" class="flex flex-col items-center text-blue-600 focus:outline-none">
+            <button onclick="switchPage('home', 'Rahbar paneli')" id="nav-home" class="flex flex-col items-center text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-house text-lg"></i>
                 <span class="text-[10px] mt-1 font-semibold">Bosh sahifa</span>
             </button>
-            <button onclick="switchPage('map')" id="nav-map" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
+            <button onclick="switchPage('map', 'Agentlar xaritasi')" id="nav-map" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-user-shield text-lg"></i>
                 <span class="text-[10px] mt-1">Agentlar</span>
             </button>
-            <button onclick="switchPage('home')" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
+            <button onclick="switchPage('customers', 'Mijozlar ro\'yxati')" id="nav-customers" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-users text-lg"></i>
                 <span class="text-[10px] mt-1">Mijozlar</span>
             </button>
-            <button onclick="switchPage('home')" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
+            <button onclick="switchPage('cash', 'Kassa nazorati')" id="nav-cash" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-wallet text-lg"></i>
                 <span class="text-[10px] mt-1">Kassa</span>
             </button>
-            <button onclick="switchPage('home')" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
+            <button onclick="switchPage('report', 'Hisobotlar')" id="nav-report" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-chart-pie text-lg"></i>
                 <span class="text-[10px] mt-1">Hisobot</span>
             </button>
@@ -230,7 +273,7 @@
     <script>
         let map = null;
 
-        function switchPage(page) {
+        function switchPage(pageId, titleText) {
             document.querySelectorAll('.page-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => {
                 el.classList.remove('text-blue-600');
@@ -239,28 +282,19 @@
                 if(span) span.classList.remove('font-semibold');
             });
 
-            if (page === 'home') {
-                document.getElementById('page-home').classList.add('active');
-                document.getElementById('header-title').innerText = "Rahbar paneli";
-                let btn = document.getElementById('nav-home');
-                btn.classList.add('text-blue-600');
-                btn.classList.remove('text-gray-400');
-                btn.querySelector('span').classList.add('font-semibold');
-            } else if (page === 'map') {
-                document.getElementById('page-map').classList.add('active');
-                document.getElementById('header-title').innerText = "Agentlar xaritasi";
-                let btn = document.getElementById('nav-map');
-                btn.classList.add('text-blue-600');
-                btn.classList.remove('text-gray-400');
-                btn.querySelector('span').classList.add('font-semibold');
+            document.getElementById('page-' + pageId).classList.add('active');
+            document.getElementById('header-title').innerText = titleText;
+            
+            let activeBtn = document.getElementById('nav-' + pageId);
+            activeBtn.classList.add('text-blue-600');
+            activeBtn.classList.remove('text-gray-400');
+            activeBtn.querySelector('span').classList.add('font-semibold');
 
-                // Xaritani qayta yuklash (render xatoligining oldini olish uchun)
+            if (pageId === 'map') {
                 setTimeout(() => {
                     if (!map) {
                         map = L.map('map', {zoomControl: false}).setView([41.2995, 69.2401], 13);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 19,
-                        }).addTo(map);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
                         L.marker([41.2995, 69.2401]).addTo(map);
                     } else {
                         map.invalidateSize();
@@ -269,7 +303,6 @@
             }
         }
 
-        // Telegram Web App
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
     </script>
