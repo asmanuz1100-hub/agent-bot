@@ -30,6 +30,8 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('Дўконлар',metrics.get('total_clients',len(shops))),
             ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
             ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
+            ('🟡 3–7 кун',metrics.get('visit_yellow',0)),
+            ('🔴 8+ кун',metrics.get('visit_red',0)),
             ('Локациясиз',metrics.get('missing_location',0)),
         ]
     elif points_only:
@@ -110,6 +112,12 @@ const bounds=[]; const colors=['#2563eb','#f59e0b','#16a34a','#7c3aed','#e11d48'
 function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[m]));}}
 const legend=document.getElementById('legend');
 const workPanel=document.getElementById('agent-work');
+if(D.agent_clients){{
+  [['#16a34a','0–2 кун · яқинда ташриф'],['#d97706','3–7 кун · ташриф керак'],['#dc2626','8+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
+    const row=document.createElement('div');row.className='legend-row';
+    row.innerHTML='<span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span>';legend.appendChild(row);
+  }});
+}}
 if(D.agent_work.length){{
   const heading=document.createElement('h3');heading.textContent='Агентлар иш вақти';workPanel.appendChild(heading);
   D.agent_work.forEach(a=>{{
@@ -130,14 +138,16 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker">'+esc(s.icon||'🟠')+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
+  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker" style="border-color:'+esc(s.visit_color||'#94a3b8')+';background:'+esc(s.visit_background||'white')+'">'+esc(s.icon||'🟠')+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
     L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
   const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
   const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
   const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  const visitPlan=s.visit_label?'<br><b>'+esc(s.visit_label)+'</b>':'';
+  const lastVisit=s.last_visit?'<br>🕐 Охирги ташриф: '+esc(s.last_visit):'';
   marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+
     '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
-    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+last+when+history+
+    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+visitPlan+lastVisit+last+when+history+
     (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
     '<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+
     (D.agent_clients && s.visit_url?'<br><a href="'+esc(s.visit_url)+'">📝 Янги ташриф / изоҳ</a>':'')+
@@ -168,11 +178,14 @@ def agent_clients_map_html(db,agent,action_url=None):
         AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
                     AND e.agent=? AND e.kind='delivery'))
         ORDER BY c.id DESC""",(agent,agent)).fetchall()
-    shops=[];missing=0;debt_total=0;stock_total=0
+    shops=[];missing=0;debt_total=0;stock_total=0;visit_yellow=0;visit_red=0
     for row in rows:
         cid=int(row['id'])
         status=cs.summary(db,cid,bool(row['map_only']))
+        attention=cs.visit_attention(db,cid,bool(row['map_only']))
         history=cs.timeline_text(db,cid,5)
+        if attention['level']=='yellow':visit_yellow+=1
+        elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -185,7 +198,10 @@ def agent_clients_map_html(db,agent,action_url=None):
               'prospect':bool(row['map_only']),
                'status':status['label'],'icon':status['icon'],
                'last_note':status['note'] or '', 'followup':status['followup'],
-               'history':history}
+               'history':history,'visit_level':attention['level'],
+               'visit_label':attention['label'],'visit_color':attention['color'],
+               'visit_background':attention['background'],
+               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else ''}
         if action_url:
             visit=action_url('visit',cid)
             if visit:shop['visit_url']=visit
@@ -201,10 +217,12 @@ def agent_clients_map_html(db,agent,action_url=None):
         shops.append(shop)
     summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'Жами қарз: {m(debt_total)} USD. Потенциал мижозга харитадан товар бериш мумкин.')
+             f'🟡 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
-                                      'missing_location':missing,'total_clients':len(rows)},
+                                      'missing_location':missing,'total_clients':len(rows),
+                                      'visit_yellow':visit_yellow,'visit_red':visit_red},
                      agent_clients=True)
 
 
@@ -222,11 +240,14 @@ def admin_clients_map_html(db,actor,card_url=None):
         WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e
             WHERE e.client=c.id AND e.kind='delivery')
         ORDER BY c.id DESC""").fetchall()
-    shops=[];missing=0;debt_total=0;stock_total=0
+    shops=[];missing=0;debt_total=0;stock_total=0;visit_yellow=0;visit_red=0
     for row in rows:
         cid=int(row['id']);agent=int(row['agent'])
         status=cs.summary(db,cid,bool(row['map_only']))
+        attention=cs.visit_attention(db,cid,bool(row['map_only']))
         history=cs.timeline_text(db,cid,5)
+        if attention['level']=='yellow':visit_yellow+=1
+        elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -239,19 +260,25 @@ def admin_clients_map_html(db,actor,card_url=None):
               'prospect':bool(row['map_only']),
               'status':status['label'],'icon':status['icon'],
               'last_note':status['note'] or '', 'followup':status['followup'],
-              'history':history,
+              'history':history,'visit_level':attention['level'],
+              'visit_label':attention['label'],'visit_color':attention['color'],
+              'visit_background':attention['background'],
+              'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
               'owner':row['agent_name'] or str(agent)}
         if card_url:
             url=card_url(cid)
             if url:item['card_url']=url
         shops.append(item)
     summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
-             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. Жами USD қарз: {m(debt_total)}. '
+             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
+             f'🟡 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
              f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
-                                      'missing_location':missing,'total_clients':len(rows)},
+                                      'missing_location':missing,'total_clients':len(rows),
+                                      'visit_yellow':visit_yellow,'visit_red':visit_red},
                      agent_clients=True,admin_clients=True)
 
 

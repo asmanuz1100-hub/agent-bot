@@ -1,6 +1,9 @@
 """Sales visit status and follow-up dates; no effect on inventory or debt."""
 import time
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+TZ=ZoneInfo('Asia/Tashkent')
 
 LABELS={'declined':'❌ Ҳозирча олмайди','waiting':'⏳ Кутишда','interested':'🟠 Таклиф берилган','active':'🟢 Товар олган'}
 ICONS={'declined':'❌','waiting':'⏳','interested':'🟠','active':'🟢'}
@@ -49,6 +52,50 @@ def summary(db,client,map_only=False):
     status='interested' if map_only else 'active'
     return {'status':status,'icon':ICONS[status],'label':LABELS[status],
             'note':'','followup':None,'actor':'','ts':None}
+
+def last_contact_ts(db,client):
+    """Best available physical-contact timestamp for visit planning."""
+    values=[]
+    row=db.execute('SELECT MAX(ts) FROM client_visits WHERE client=?',(client,)).fetchone()
+    if row and row[0]:values.append(int(row[0]))
+    row=db.execute("""SELECT MAX(ts) FROM events WHERE client=?
+        AND kind IN ('visit','delivery','payment','return')""",(client,)).fetchone()
+    if row and row[0]:values.append(int(row[0]))
+    row=db.execute('SELECT created_ts FROM clients WHERE id=?',(client,)).fetchone()
+    if row and row[0]:values.append(int(row[0]))
+    return max(values) if values else None
+
+def visit_attention(db,client,map_only=False,now=None):
+    """Map urgency: fresh <3d, yellow 3–7d, red >7d.
+
+    A future explicit follow-up date keeps a waiting customer in scheduled mode
+    so the agent is not pushed back to the shop before the agreed date.
+    """
+    now=int(time.time() if now is None else now)
+    status=summary(db,client,map_only)
+    last=last_contact_ts(db,client)
+    current_date=datetime.fromtimestamp(now,TZ).date()
+    followup=status.get('followup')
+    if followup:
+        try:planned=date.fromisoformat(followup)
+        except ValueError:planned=None
+        if planned and planned>current_date:
+            days_until=(planned-current_date).days
+            return {'level':'scheduled','days':None if last is None else max(0,(now-last)//86400),
+                    'last_ts':last,'color':'#0284c7','background':'#e0f2fe',
+                    'label':f'⏳ Режада: {followup} ({days_until} кундан кейин)'}
+    if last is None:
+        return {'level':'unknown','days':None,'last_ts':None,'color':'#64748b',
+                'background':'#f8fafc','label':'⚪ Ташриф санаси аниқ эмас'}
+    days=max(0,(now-last)//86400)
+    if days>7:
+        return {'level':'red','days':days,'last_ts':last,'color':'#dc2626',
+                'background':'#fee2e2','label':f'🔴 {days} кундан бери ташриф йўқ'}
+    if days>=3:
+        return {'level':'yellow','days':days,'last_ts':last,'color':'#d97706',
+                'background':'#fef3c7','label':f'🟡 {days} кундан бери ташриф йўқ'}
+    return {'level':'fresh','days':days,'last_ts':last,'color':'#16a34a',
+            'background':'#f0fdf4','label':f'🟢 Охирги ташриф: {days} кун олдин'}
 
 def timeline_text(db,client,limit=5):
     rows=history(db,client,limit)
