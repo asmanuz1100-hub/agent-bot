@@ -309,7 +309,15 @@ def prompt(db,u,s):
             if all(key in values for key in ('pack','unit','qty')):
                 units=values['qty']*(units_per_block(values['pack']) if values['unit']=='Блок' else 1)
                 products.append({'pack':values.pop('pack'),'unit':values.pop('unit'),'qty':values.pop('qty'),'units':units})
-            if not products:raise ValueError('Камида битта товар киритинг.')
+            if not products and not s.get('map_only'):raise ValueError('Камида битта товар киритинг.')
+            if s.get('map_only'):
+                s['basket_ready']=True;save(db,u,s)
+                send(u,'🗺 ПОТЕНЦИАЛ МИЖОЗНИ САҚЛАШ\n'
+                     f"🏪 {values.get('shop_name','')} · 👤 {values.get('name','')}\n"
+                     f"📞 {values.get('phone','')}\n📍 Локация ва фото сақланади.\n"
+                     'Товар берилмайди, қарз ёзилмайди. Мижоз фақат харитада кўринади.',
+                     [['✅ Тасдиқлаш'],['⬅️ Орқага','❌ Бекор қилиш']])
+                return
             s['basket_ready']=True;save(db,u,s)
             lines=[]
             if s['action']=='client':
@@ -343,6 +351,7 @@ def prompt(db,u,s):
     key,msg=fields[i]; keys=[]
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if key=='pack':keys=[[product_name(p)] for p in (1,3,5)]
+    if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
         keys=[['Дона','Блок']]
         msg+=f'\n1 блок = {units_per_block(s["values"]["pack"])} дона ({product_name(s["values"]["pack"])}).'
@@ -350,7 +359,9 @@ def prompt(db,u,s):
     if key=='name' and s['action']=='admin_add':
         existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
         if existing:msg+=f'\nℹ️ Бу ID базада {existing[0]} роли билан сақланган. Тасдиқлаганда ўша аккаунт админга ўтказилади; очиқ смена ёки товар-пул қолдиғи бор бўлса, амал тўхтатилади.'
-    if key=='payment_due':keys=[['Аниқ эмас']]
+    if key=='payment_due':
+        keys=[['Аниқ эмас']]
+        if s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='qty' and s['action']=='sold':
         msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
     if key in ('client','agent'):
