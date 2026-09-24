@@ -274,6 +274,10 @@ def client_card_html(db,actor,client_id,photo_url=None):
     phone=e(customer['phone'] or 'Телефон киритилмаган')
     address=e(customer['address'] or 'Манзил киритилмаган')
     comment=e(customer['comment'] or 'Изоҳ киритилмаган')
+    status_info=cs.summary(db,client_id,bool(customer['map_only']))
+    status_text=e(status_info['label'])
+    followup_text=e(status_info['followup'] or 'Белгиланмаган')
+    visits=e(cs.timeline_text(db,client_id,5))
     due=e(customer['payment_due'] or 'Аниқ эмас')
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
                      str(int(client_stock(db,customer['agent'],client_id,pack)))+
@@ -303,7 +307,9 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}}td{{border-bottom:1px 
 <div class="field">👨‍💼 Бириктирилган агент: <strong>{full_name}</strong></div>
 <div class="field">📞 Телефон: <strong>{phone}</strong></div>
 <div class="field">🏠 Манзил: {address}</div>
-<div class="field">📝 Изоҳ: {comment}</div>
+<div class="field">{status_text} · 📅 Қайта ташриф: {followup_text}</div>
+<div class="field">📝 Дастлабки изоҳ: {comment}</div>
+<h2>📜 Ташрифлар тарихи</h2><div class="field" style="white-space:pre-line">{visits}</div>
 <div class="field">📅 Тўлов санаси: {due}</div>
 <h2>📦 Мижоздаги товар</h2><table>{products}</table>
 <div class="field">💵 Мижоз қарзи: <strong>{debt/100:,.2f} USD</strong></div>
