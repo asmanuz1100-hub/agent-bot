@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
 from core import route_stats,product_name,distance
+import customer_status as cs
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
@@ -67,7 +68,7 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
 .side{{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px;overflow:auto}}
 .side h3{{margin:0 0 10px;font-size:15px}} .summary{{font-size:13px;line-height:1.45;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:12px}}
 .legend{{margin-top:14px;display:flex;flex-direction:column;gap:9px}} .legend-row{{display:flex;align-items:center;gap:9px;font-size:13px}} .work-panel{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}} .work-panel h3{{margin-bottom:8px}} .work-row{{padding:8px 0;font-size:13px;line-height:1.5;border-bottom:1px solid var(--line)}} .work-row strong{{display:block;color:var(--text)}}
-.dot{{width:10px;height:10px;border-radius:50%;flex:none}} .hint{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}}
+.status-marker{{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:white;border:2px solid #94a3b8;box-shadow:0 2px 9px #0f172a44;font-size:19px}} .dot{{width:10px;height:10px;border-radius:50%;flex:none}} .hint{{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}}
 .mapwrap{{position:relative;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}} #map{{height:100%;min-height:520px}}
 .leaflet-popup-content{{font-size:13px;line-height:1.45}} #map-status{{position:absolute;top:10px;left:58px;right:10px;z-index:1000;display:none;padding:11px 14px;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:13px;line-height:1.4;box-shadow:var(--shadow)}}
 @media(max-width:820px){{html,body{{height:auto;min-height:100vh;overflow-y:auto}}.app{{height:auto;min-height:100vh;display:block}}.top{{padding:12px}}.title{{font-size:18px}}.kpis{{grid-template-columns:repeat(2,minmax(0,1fr))}}.body{{display:flex;flex-direction:column;padding:10px;gap:10px;min-height:auto}}.mapwrap{{order:0;min-height:55vh;height:55vh}}#map{{height:55vh;min-height:55vh}}.side{{order:1;max-height:none;overflow:visible}}}}
@@ -128,9 +129,20 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   if(last){{L.circleMarker(last,{{radius:7,color,fillOpacity:1}}).addTo(map).bindPopup('Охирги GPS нуқта · '+esc(r.agent)+'<br><a rel="noreferrer" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+last[0]+','+last[1]+'">Навигаторда очиш</a>');}}
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
-D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.prospect?'#c2410c':s.active?'#0f766e':'#64748b',fillColor:s.prospect?'#fdba74':s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+'<br>'+(s.prospect?'🟠 Потенциал мижоз · товар олмаган':D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':'')+(D.agent_clients && s.delivery_url?'<br><a href="'+esc(s.delivery_url)+'">📦 Товар бериш</a>':''));
+D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
+  const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker">'+esc(s.icon||'🟠')+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
+    L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
+  const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
+  const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
+  const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+
+    '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
+    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+last+when+history+
+    (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
+    '<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+
+    (D.agent_clients && s.visit_url?'<br><a href="'+esc(s.visit_url)+'">📝 Янги ташриф / изоҳ</a>':'')+
+    (D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':'')+
+    (D.agent_clients && s.delivery_url?'<br><a href="'+esc(s.delivery_url)+'">📦 Товар бериш</a>':''));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(D.points_only&&!D.shops.length){{
@@ -159,6 +171,8 @@ def agent_clients_map_html(db,agent,action_url=None):
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
         cid=int(row['id'])
+        status=cs.summary(db,cid,bool(row['map_only']))
+        history=cs.timeline_text(db,cid,5)
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -168,8 +182,13 @@ def agent_clients_map_html(db,agent,action_url=None):
         shop={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
-              'prospect':bool(row['map_only'])}
+              'prospect':bool(row['map_only']),
+               'status':status['label'],'icon':status['icon'],
+               'last_note':status['note'] or '', 'followup':status['followup'],
+               'history':history}
         if action_url:
+            visit=action_url('visit',cid)
+            if visit:shop['visit_url']=visit
             if row['map_only']:
                 delivery=action_url('delivery',cid)
                 if delivery:shop['delivery_url']=delivery
@@ -206,6 +225,8 @@ def admin_clients_map_html(db,actor,card_url=None):
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
         cid=int(row['id']);agent=int(row['agent'])
+        status=cs.summary(db,cid,bool(row['map_only']))
+        history=cs.timeline_text(db,cid,5)
         debt=int(client_debt_usd(db,cid))
         stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
         debt_total+=debt;stock_total+=stock
@@ -216,6 +237,9 @@ def admin_clients_map_html(db,actor,card_url=None):
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
               'prospect':bool(row['map_only']),
+              'status':status['label'],'icon':status['icon'],
+              'last_note':status['note'] or '', 'followup':status['followup'],
+              'history':history,
               'owner':row['agent_name'] or str(agent)}
         if card_url:
             url=card_url(cid)
@@ -250,6 +274,10 @@ def client_card_html(db,actor,client_id,photo_url=None):
     phone=e(customer['phone'] or 'Телефон киритилмаган')
     address=e(customer['address'] or 'Манзил киритилмаган')
     comment=e(customer['comment'] or 'Изоҳ киритилмаган')
+    status_info=cs.summary(db,client_id,bool(customer['map_only']))
+    status_text=e(status_info['label'])
+    followup_text=e(status_info['followup'] or 'Белгиланмаган')
+    visits=e(cs.timeline_text(db,client_id,5))
     due=e(customer['payment_due'] or 'Аниқ эмас')
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
                      str(int(client_stock(db,customer['agent'],client_id,pack)))+
@@ -279,7 +307,9 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}}td{{border-bottom:1px 
 <div class="field">👨‍💼 Бириктирилган агент: <strong>{full_name}</strong></div>
 <div class="field">📞 Телефон: <strong>{phone}</strong></div>
 <div class="field">🏠 Манзил: {address}</div>
-<div class="field">📝 Изоҳ: {comment}</div>
+<div class="field">{status_text} · 📅 Қайта ташриф: {followup_text}</div>
+<div class="field">📝 Дастлабки изоҳ: {comment}</div>
+<h2>📜 Ташрифлар тарихи</h2><div class="field" style="white-space:pre-line">{visits}</div>
 <div class="field">📅 Тўлов санаси: {due}</div>
 <h2>📦 Мижоздаги товар</h2><table>{products}</table>
 <div class="field">💵 Мижоз қарзи: <strong>{debt/100:,.2f} USD</strong></div>

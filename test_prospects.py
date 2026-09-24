@@ -51,12 +51,13 @@ class ProspectsTests(unittest.TestCase):
             ('Қўқон', {}),
             ('Кейинроқ оламан', {}),
             ('🗺 Товарсиз харитага сақлаш', {}),
+            ('🟠 Таклиф берилган', {}),
             ('✅ Тасдиқлаш', {}),
         ]
         with patch.object(bot, 'send') as send:
             for offset, (text, extra) in enumerate(values):
                 bot.handle(self.db, self.message(beginning + offset, text, **extra))
-        self.assertIn('Потенциал мижоз', send.call_args.args[1])
+        self.assertIn('товарсиз сақланди', send.call_args.args[1])
         return self.db.execute("SELECT id FROM clients WHERE name='Мижоз Алишер'").fetchone()[0]
 
     @staticmethod
@@ -80,12 +81,14 @@ class ProspectsTests(unittest.TestCase):
             self.assertEqual(self.db.execute('SELECT COUNT(*) FROM clients WHERE map_only=0').fetchone()[0], 0)
             with patch.object(bot, 'send') as send:
                 bot.report_clients(self.db, 2)
-                self.assertIn('Мижозлар ҳали қўшилмаган', send.call_args.args[1])
+                self.assertIn(str(cid)+' ·',str(send.call_args.args[2]))
             with patch.object(bot, 'BOT_USERNAME', 'agent_bot_test'):
                 agent = self.map_data(reports.agent_clients_map_html(
                     self.db, 2, action_url=lambda verb, customer: bot.agent_action_link(
-                        {'pay': 'p', 'return': 'r', 'delivery': 'd'}[verb], 2, customer)))
+                        {'pay': 'p', 'return': 'r', 'delivery': 'd', 'visit': 'v'}[verb], 2, customer)))
             self.assertEqual([x['id'] for x in agent['shops']], [cid])
+            self.assertEqual(agent['shops'][0]['icon'],'🟠')
+            self.assertIn('Кейинроқ оламан',agent['shops'][0]['history'])
             shop = agent['shops'][0]
             self.assertTrue(shop['prospect'])
             self.assertEqual((shop['debt'], shop['stock']), ('0.00', 0))
