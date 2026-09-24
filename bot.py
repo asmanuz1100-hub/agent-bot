@@ -386,7 +386,13 @@ def prompt(db,u,s):
         else:
             rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 20").fetchall()
             search_button='🔎 Агент қидириш'
-        keys=[[f"{r[0]} · {(r[1] or 'Номсиз')[:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"+((' · '+cs.summary(db,r[0],r[3])['icon']) if key=='client' and s['action']=='client_view' else '')] for r in rows]
+        keys=[]
+        for item in rows:
+            choice=f"{item[0]} · {(item[1] or 'Номсиз')[:22]}{(' — '+item[2][:18]) if len(item)>2 and item[2] else ''}"
+            if key=='client' and s['action']=='client_view':
+                result=cs.summary(db,item[0],bool(item[3]))
+                choice+=' · '+result['icon']+((' '+result['followup']) if result['followup'] else '')
+            keys.append([choice])
         if key=='client' and total>CLIENT_PAGE_SIZE:
             nav=[]
             if page>0:nav.append('⬅️ Олдинги 20')
