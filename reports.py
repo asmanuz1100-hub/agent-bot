@@ -146,7 +146,7 @@ D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if
   const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
   const visitPlan=s.visit_label?'<br><b>'+esc(s.visit_label)+'</b>':'';
   const lastVisit=s.last_visit?'<br>🕐 Охирги ташриф: '+esc(s.last_visit):'';
-  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+
+  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Қўшган агент: '+esc(s.owner):'')+
     '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
     (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+visitPlan+lastVisit+last+when+history+
     (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
@@ -217,7 +217,7 @@ def agent_clients_map_html(db,agent,action_url=None):
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
              f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
-    return _map_html(f'Умумий мижозлар харитаси · {r["name"]}',[],shops,summary,
+    return _map_html(f'Мижозлар харитаси · умумий · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows),
                                       'visit_yellow':visit_yellow,'visit_red':visit_red},
