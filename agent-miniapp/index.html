@@ -52,6 +52,94 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
 .map-preview{margin-top:-72px;position:relative;z-index:500;padding:0 10px 9px;pointer-events:none}.map-preview-card{pointer-events:auto;background:#fff;border:1px solid #dfe8f5;border-radius:14px;padding:10px;box-shadow:0 7px 24px #173f7022;display:grid;grid-template-columns:56px 1fr;gap:9px}.map-preview-card .store-art{height:56px;width:56px}.map-preview-info{min-width:0}.map-preview-info .topline{display:flex;align-items:center;justify-content:space-between;gap:5px}.map-preview-info b{font-size:13px}.map-preview-info small{display:block;color:#7f8fa3;font-size:10px;margin-top:3px}.map-preview-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:2px}.map-preview-actions button{border-radius:9px;padding:9px;border:1px solid #bcd5f6;background:#fff;color:#0a5fca;font-weight:800;font-size:11px}.map-preview-actions button:last-child{background:#0b66df;color:#fff;border-color:#0b66df}
 .report-visuals{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:center;margin-top:12px}.donut-wrap{display:grid;place-items:center}.donut{width:116px;height:116px;border-radius:50%;display:grid;place-content:center;text-align:center;background:conic-gradient(#22a861 0 55%,#e29522 55% 72%,#e74b50 72% 88%,#2f83dc 88% 100%);position:relative}.donut:before{content:"";position:absolute;inset:17px;background:#fff;border-radius:50%}.donut b,.donut span{position:relative;z-index:1}.donut b{font-size:22px;line-height:1}.donut span{font-size:10px;color:#77879b;margin-top:2px}.bars{height:145px;display:flex;align-items:end;gap:8px;padding:8px 4px 20px;border-bottom:1px solid #e8eef6}.bar-col{flex:1;display:flex;align-items:end;justify-content:center;gap:2px;height:100%;position:relative}.bar-col i{display:block;width:9px;border-radius:3px 3px 0 0;background:#b6d5fb}.bar-col i.done{background:#2183e8}.bar-col span{position:absolute;bottom:-18px;font-size:9px;color:#8998aa}
 @media(max-width:360px){.page-caption{font-size:12px}.report-visuals{grid-template-columns:110px 1fr}.donut{width:96px;height:96px}}
+
+/* === 1:1 reference pass — ASMAN Agent approved board === */
+@media(max-width:760px){
+  body{background:#fff}
+  .app{max-width:390px;width:100%;box-shadow:none;background:#fff}
+  .header{
+    min-height:64px;
+    padding:calc(9px + env(safe-area-inset-top)) 13px 8px;
+    background:linear-gradient(180deg,#07529f 0%,#0a4a91 100%);
+    border-radius:0;
+    box-shadow:none
+  }
+  .headerline{min-height:44px;grid-template-columns:auto 1fr auto;gap:7px}
+  .brand{font-size:18px!important;font-weight:900}
+  .page-caption{font-size:13px;max-width:none;color:#fff;font-weight:650}
+  .avatar{width:31px;height:31px;font-size:12px;background:#ad8cea;border:0}
+  .notify{font-size:17px;width:26px;height:30px}
+  .surface{
+    min-height:calc(100vh - 64px);
+    padding:11px 12px calc(72px + env(safe-area-inset-bottom));
+    background:#fff;border-radius:0
+  }
+  .home-greeting{padding:1px 1px 10px}
+  .home-greeting strong{font-size:16px}
+  .home-greeting span{font-size:10.5px;margin-top:2px}
+  .metrics{gap:8px}
+  .metric{min-height:76px!important;padding:9px!important;border-radius:11px!important}
+  .metric .mname{font-size:10.5px}
+  .metric .iconbox{width:31px!important;height:31px!important;border-radius:8px!important;font-size:15px!important}
+  .metric strong{font-size:17px!important}
+  .metric .muted{font-size:9px!important}
+  .sectionline{margin:11px 0 7px}
+  .sectionline h2,.panel h2{font-size:14px!important}
+  .panel{border-radius:11px!important;padding:10px!important;margin-bottom:9px!important;box-shadow:none!important}
+  .plan{padding:8px 0;gap:8px}
+  .plan .dot{width:20px;height:20px}
+  .plantext b{font-size:12px}
+  .plantext small,.plan .date{font-size:9.5px}
+  #page-home .route-banner,#page-home .plan-summary{display:none!important}
+  #page-home .quick{grid-template-columns:1fr 1fr}
+  #page-home .quick button:nth-child(n+3){display:none}
+  .primary{padding:11px 12px!important;border-radius:9px!important}
+  .quick button{padding:10px 6px!important;border-radius:9px!important;font-size:11px!important}
+  .notice{font-size:9.5px!important;padding:8px 10px!important}
+  #page-home .notice{display:none}
+  .chips{gap:5px;padding-bottom:7px}
+  .chip{padding:6px 8px;font-size:9.5px}
+  .searchrow{height:40px;border-radius:10px;margin-bottom:8px}
+  .searchrow input{font-size:12px;padding:9px 0}
+  .customer{padding:7px!important;border-radius:10px!important;margin-bottom:7px!important;gap:8px}
+  .store-art{width:50px!important;height:50px!important;flex-basis:50px!important;border-radius:9px!important}
+  .customer-info b{font-size:12px}
+  .customer-info small{font-size:9.5px;margin-top:2px}
+  .age{font-size:9px;padding:4px 6px}
+  #demoMap{height:420px!important;min-height:420px!important;border-radius:0!important;margin:0 -12px;border-left:0;border-right:0}
+  #page-map .route-banner,#page-map #priorityTitle,#page-map #priorityList,#page-map>.notice,#page-map .map-actions,#page-map .legend{display:none!important}
+  .map-preview{margin-top:-118px;padding:0 9px 9px}
+  .map-preview-card{border-radius:12px;padding:9px;grid-template-columns:54px 1fr}
+  .map-preview-actions button{padding:8px;font-size:10px}
+  .detail-cover{height:155px!important;border-radius:0!important;margin:-11px -12px 10px!important;border-left:0!important;border-right:0!important}
+  #page-detail>.linkbtn{position:absolute;z-index:4;color:#fff;margin-top:-54px;font-size:0}
+  #page-detail>.linkbtn:before{content:"‹";font-size:30px;text-shadow:0 1px 3px #0008}
+  .detail-title h2{font-size:17px!important}
+  .tabs{margin:10px 0 7px}
+  .tabs button{font-size:10px!important}
+  .info-line{padding:8px 0!important;font-size:11px!important}
+  #detailPlan{display:none}
+  .split{gap:7px}
+  .split button{padding:10px 7px!important;font-size:11px}
+  .segmented{border-radius:10px}
+  .segmented button{padding:7px 3px;font-size:10px}
+  .statement{padding:9px 0;gap:8px}
+  .statement .coin{width:31px;height:31px;border-radius:9px}
+  .statement b,.statement strong{font-size:11px}
+  .statement small{font-size:9.5px}
+  .report-visuals{grid-template-columns:116px 1fr;gap:8px}
+  .donut{width:100px;height:100px}
+  .bars{height:125px}
+  .bottom{
+    width:min(100%,390px);
+    padding:5px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow:0 -1px 5px #17385d12
+  }
+  .bottom button{font-size:8.5px;padding:2px 0}
+  .bottom button .navicon{font-size:16px;height:20px}
+  .sheet{width:min(100%,390px)}
+}
+
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head>
