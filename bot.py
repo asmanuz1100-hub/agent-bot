@@ -17,6 +17,7 @@ TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
+MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -182,7 +183,10 @@ def allowed(db,u,action):
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
-    return [keys[i:i+2] for i in range(0,len(keys),2)]
+    rows=[keys[i:i+2] for i in range(0,len(keys),2)]
+    if role(db,u)=='admin' and MANAGER_MINIAPP_URL:
+        rows.insert(0,[{'text':'📱 Раҳбар Mini App','web_app':{'url':MANAGER_MINIAPP_URL}}])
+    return rows
 
 AGENT_WORK_ACTIONS={'client','delivery','sold','order','payment','return','visit','handover'}
 FEATURE_LABELS={
