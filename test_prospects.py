@@ -57,7 +57,7 @@ class ProspectsTests(unittest.TestCase):
         with patch.object(bot, 'send') as send:
             for offset, (text, extra) in enumerate(values):
                 bot.handle(self.db, self.message(beginning + offset, text, **extra))
-        self.assertIn('Потенциал мижоз', send.call_args.args[1])
+        self.assertIn('товарсиз сақланди', send.call_args.args[1])
         return self.db.execute("SELECT id FROM clients WHERE name='Мижоз Алишер'").fetchone()[0]
 
     @staticmethod
