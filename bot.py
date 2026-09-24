@@ -139,10 +139,10 @@ def open_agent_client_action(db,u,payload):
         raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
     action={'p':'payment','r':'return','d':'delivery','v':'visit'}[verb]
     if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
-    row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=? AND agent=?
+    row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=?
         AND ((? IN ('d','v') AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
-                    AND events.kind='delivery'))""",(client,u,verb)).fetchone()
-    if not row:raise ValueError('Бу дўкон сизга бириктирилмаган.')
+                    AND events.kind='delivery'))""",(client,verb)).fetchone()
+    if not row:raise ValueError('Мижоз топилмади ёки бу амал учун ҳали товар тарихи йўқ.')
     ok,msg=live_ready(db,u)
     if not ok:raise ValueError(msg)
     s={'action':action,'step':1,'values':{'client':client}}
@@ -449,12 +449,11 @@ def prompt(db,u,s):
         msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
     if key in ('client','agent'):
         if key=='client':
-            all_clients=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
-            own_only=role(db,u)=='agent' and not all_clients
-            regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS
-            predicates=(['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])
+            own_only=False
+            regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS or s['action'] in ('payment','return','sold')
+            predicates=(['map_only=0'] if regular_only else [])
             where=' WHERE '+' AND '.join(predicates) if predicates else ''
-            base_params=(u,) if own_only else ()
+            base_params=()
             total=db.execute('SELECT COUNT(*) FROM clients'+where,base_params).fetchone()[0]
             page=max(0,int(s.get('page',0)))
             last_page=max(0,(total-1)//CLIENT_PAGE_SIZE)
@@ -524,16 +523,16 @@ def client_visible(db,u,cid):
 def show_client_card(db,u,cid):
     c=client_visible(db,u,cid)
     a=c['agent'];debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
-    stock='\n'.join(f'• {product_name(p)}: {client_stock(db,a,cid,p)} дона' for p in (1,3,5))
+    stock='\n'.join(f'• {product_name(p)}: {client_stock_total(db,cid,p)} дона' for p in (1,3,5))
     coords=(f"https://www.google.com/maps?q={c['lat']},{c['lon']}"
             if c['lat'] is not None and c['lon'] is not None else 'Локация киритилмаган')
     name=c['name'] or 'Номсиз'
     owner=db.execute('SELECT name FROM users WHERE id=?',(a,)).fetchone()
     owner_name=owner[0] if owner else str(a)
-    can_edit=role(db,u)=='admin' or (role(db,u)=='agent' and a==u)
+    can_edit=role(db,u)=='admin' or (role(db,u)=='agent' and feature_enabled(db,u,'clients'))
     visit=cs.summary(db,cid,bool(c['map_only']))
     recent=cs.timeline_text(db,cid,5)
-    send(u,f"👤 МИЖОЗ #{cid} · {name}\n👨‍💼 Бириктирилган агент: {owner_name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
+    send(u,f"👤 МИЖОЗ #{cid} · {name}\n👨‍💼 Мижозни қўшган агент: {owner_name}\n🏪 {c['shop_name'] or 'Дўкон номи йўқ'}"
          f"\n📞 {c['phone'] or 'Телефон йўқ'}\n🏠 {c['address'] or 'Манзил йўқ'}"
          f"\n{visit['label']} · Охирги суҳбат: {visit['note'] or c['comment'] or 'Изоҳ йўқ'}"
          +(f"\n⏳ Қайта бориш: {visit['followup']}" if visit['followup'] else '')
@@ -557,11 +556,10 @@ def report_clients(db,u):
 
 def show_client_edit_fields(db,u,cid):
     c=client_visible(db,u,cid)
-    if role(db,u)!='admin' and c['agent']!=u:
-        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     save(db,u,{'action':'client_edit_field','step':0,'values':{'client':cid}})
     keys=[[label] for label in CLIENT_EDIT_LABELS.values()]
-    keys.append([DELIVERY_EDIT_LABEL])
+    if role(db,u)=='admin' or c['agent']==u:
+        keys.append([DELIVERY_EDIT_LABEL])
     keys.extend([['⬅️ Мижоз карточкаси'],['⬅️ Меню']])
     send(u,'Қайси маълумотни ўзгартирасиз?\nПрофил маълумотлари ёки хатолик билан киритилган товар топширишини тузатиш мумкин.',keys)
 
@@ -631,8 +629,6 @@ def delivery_edit_preview(db,u,s,text):
 
 def ask_client_edit(db,u,cid,field):
     c=client_visible(db,u,cid)
-    if role(db,u)!='admin' and c['agent']!=u:
-        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     if field not in CLIENT_EDIT_LABELS:raise ValueError('Майдон топилмади.')
     old=(f"{c['lat']}, {c['lon']}" if field=='location' else c[field])
     save(db,u,{'action':'client_edit_value','step':0,'values':{'client':cid,'field':field}})
@@ -650,8 +646,6 @@ def ask_client_edit(db,u,cid,field):
 def process_client_edit(db,u,s,m,text):
     cid=s['values']['client'];field=s['values']['field']
     c=client_visible(db,u,cid)
-    if role(db,u)!='admin' and c['agent']!=u:
-        raise ValueError('Бошқа агентнинг мижоз карточкасини фақат кўриш мумкин.')
     if field=='photo':
         if not m.get('photo'):raise ValueError('Янги расмни фото сифатида юборинг.')
         value=m['photo'][-1]['file_id']
@@ -704,8 +698,8 @@ def finish(db,u,s,source):
     a=s['action']; v=s['values']
     if not allowed(db,u,a):raise ValueError('Рухсат йўқ.')
     if a in ('payment','return') and role(db,u)=='agent':
-        owner=db.execute('SELECT 1 FROM clients WHERE id=? AND agent=?',(v.get('client'),u)).fetchone()
-        if not owner:raise ValueError('Мижоз бу агентга бириктирилмаган.')
+        if not db.execute('SELECT 1 FROM clients WHERE id=?',(v.get('client'),)).fetchone():
+            raise ValueError('Мижоз топилмади.')
         ok,msg=live_ready(db,u)
         if not ok:raise ValueError(msg)
     if a in RECONCILE_CLIENT_ACTIONS:
@@ -842,7 +836,7 @@ def handle(db,update):
         if not ok:raise ValueError(msg)
         if pending['action']=='delivery':
             selected=pending['values']['client']
-            if not db.execute('SELECT 1 FROM clients WHERE id=? AND agent=?',(selected,u)).fetchone():
+            if not db.execute('SELECT 1 FROM clients WHERE id=?',(selected,)).fetchone():
                 raise ValueError('Мижоз топилмади.')
         pending.pop('basket_ready',None)
         pending['step']=next(i for i,(key,_) in enumerate(FLOW[pending['action']]) if key=='pack')
@@ -938,12 +932,12 @@ def handle(db,update):
                              'навигатор ва мижоз карточкаси очилади. Харита фақат кўриш учун. '
                              'Ҳавола 15 дақиқа амал қилади.')
             else:
-                rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
-                    AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                        AND e.agent=? AND e.kind='delivery'))""",(u,u)).fetchone()[0]
+                rows=db.execute("""SELECT COUNT(*) FROM clients c
+                    WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                        AND e.kind='delivery')""").fetchone()[0]
                 link=map_link(f'agent-clients/{u}')
-                description=(f'🗺 Жами {rows} та дўкон харитаси, шу жумладан потенциал мижозлар. '
-                             'Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. '
+                description=(f'🗺 Барча агентлар бўйича {rows} та дўкон харитаси, шу жумладан потенциал мижозлар. '
+                             'Дўкон нуқтасини босинг: навигатор, ташриф, товар бериш, пул олиш ёки товар қайтариш. '
                              'Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.')
             if not rows:
                 send(u,'Ҳали харитага мижоз қўшилмаган.',menu(db,u));return
@@ -991,8 +985,6 @@ def handle(db,update):
         if text=='📝 Ташрифни қайд этиш':
             if not allowed(db,u,'visit'):raise ValueError('Ташриф ёзиш ҳуқуқи йўқ.')
             if r!='admin':
-                owner=db.execute('SELECT agent FROM clients WHERE id=?',(cid,)).fetchone()
-                if not owner or owner[0]!=u:raise ValueError('Бу дўкон бошқа агентга бириктирилган.')
                 ok,msg=live_ready(db,u)
                 if not ok:raise ValueError(msg)
             prompt(db,u,{'action':'visit','step':1,'values':{'client':cid}});return
@@ -1139,13 +1131,12 @@ def handle(db,update):
             if len(term)<2:raise ValueError('Қидириш учун камида 2 та белги киритинг.')
             pat='%'+term+'%'
             if key=='client':
-                own_only=r=='agent' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS
-                regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS
+                own_only=False
+                regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS or s['action'] in ('payment','return','sold')
                 # SQLite LOWER() does not case-fold Cyrillic. Search labels with
                 # Python Unicode casefold consistently on SQLite and PostgreSQL.
                 candidates=db.execute("""SELECT id,name,shop_name,phone,address FROM clients"""+
-                    (' WHERE '+' AND '.join((['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])) if own_only or regular_only else '')+' ORDER BY id DESC',
-                    (u,) if own_only else ()).fetchall()
+                    (' WHERE map_only=0' if regular_only else '')+' ORDER BY id DESC').fetchall()
                 rows=[(x['id'],x['name'],x['shop_name']) for x in candidates
                       if any(term in str(value or '').casefold() for value in
                              (x['id'],x['name'],x['shop_name'],x['phone'],x['address']))][:20]
@@ -1162,9 +1153,10 @@ def handle(db,update):
         except ValueError:raise ValueError('Рўйхатдан танланг ёки қидиришдан фойдаланинг.')
         if v<=0:raise ValueError('ID нотўғри.')
         if key=='client':
-            row=db.execute('SELECT agent FROM clients WHERE id=?',(v,)).fetchone()
-            if not row or (r!='admin' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS and row[0]!=u):
-                raise ValueError('Мижоз топилмади.')
+            row=db.execute('SELECT map_only FROM clients WHERE id=?',(v,)).fetchone()
+            regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS or s['action'] in ('payment','return','sold')
+            if not row or (regular_only and bool(row[0])):
+                raise ValueError('Мижоз топилмади ёки бу амал учун ҳали товар берилмаган.')
         if key=='agent' and not db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v,)).fetchone():raise ValueError('Агент топилмади.')
     elif key=='pack':
         by_name={product_name(p):p for p in (1,3,5)}
