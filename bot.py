@@ -178,7 +178,7 @@ def allowed(db,u,action):
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashbox')) or (r=='cashier' and action=='cashbox') or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -763,11 +763,17 @@ def finish(db,u,s,source):
         if u not in ADMINS:raise ValueError('Админ қўшиш ҳуқуқи фақат асосий админда.')
         if v['id'] in ADMINS:raise ValueError('Бу Telegram ID аллақачон асосий админ.')
         admin_result=add_or_promote_admin(db,u,v['id'],v['name'])
-    elif a=='handover':handover(db,u,money(v['amount']),source,currency='USD')
+    elif a=='handover':
+        value=money(v['amount'])
+        handover(db,u,value,source,currency='USD')
+        row=db.execute('SELECT id FROM handovers WHERE agent=? AND source=?',(u,source)).fetchone()
+        if row:notify_cashiers_handover(db,u,int(row[0]),value)
     elif a=='tracking':tracking(db,u,v['agent'])
     else:
         q=v.get('qty',0)*(units_per_block(v['pack']) if v.get('unit')=='Блок' else 1)
-        record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
+        value=money(v['amount']) if 'amount' in v else 0
+        record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,value,v.get('note',''),source,currency='USD')
+        if a=='payment':notify_cashiers_payment(db,v.get('agent',u),v['client'],value)
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     if a=='client' and s.get('map_only'):
         send(u,f'✅ Мижоз #{cid} товарсиз сақланди. Қарз йўқ. Харита ва «Мижозлар» бўлимида {cs.LABELS[v.get("prospect_status","interested")]} мақомида кўринади.',menu(db,u))
@@ -788,6 +794,10 @@ def finish(db,u,s,source):
         send(u,f"✅ {operation}: {v['name']} (ID: {v['id']}). У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
+    elif a=='handover':
+        send(u,'✅ Кассага пул топшириш юборилди. Кассир тасдиғи кутилмоқда.',menu(db,u))
+    elif a=='payment':
+        send(u,f"✅ Мижоздан {fmt(money(v['amount']))} USD тўлов сақланди. Кассирга хабар юборилди.",menu(db,u))
     else:
         send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
@@ -923,9 +933,7 @@ def handle(db,update):
         if action=='clients':report_clients(db,u);return
         if action=='balance':
             send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
-        if action=='cashbox':
-            rows=db.execute("SELECT * FROM handovers WHERE status='pending'").fetchall()
-            send(u,'\n\n'.join(f"#{x['id']} • Агент {x['agent']} • {fmt(x['amount_usd'])} USD"+(f" · {fmt(x['amount'])} сўм" if x['amount'] else '')+f"\nҚабул: /accept {x['id']}\nРад: /reject {x['id']}" for x in rows) or 'Кутилаётган пул топширишлар йўқ.');return
+        if action=='cashbox':cashbox_report(db,u);return
         if action=='analytics':
             send(u,'🗺 Умумий таҳлил учун даврни танланг:',
                 [['📅 1 кунлик таҳлил','📅 1 ҳафталик таҳлил'],['📅 1 ойлик таҳлил'],['⬅️ Меню']])
