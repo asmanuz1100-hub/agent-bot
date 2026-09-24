@@ -30,8 +30,8 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('Дўконлар',metrics.get('total_clients',len(shops))),
             ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
             ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
-            ('🟠 3–7 кун',metrics.get('visit_yellow',0)),
-            ('🔴 8+ кун',metrics.get('visit_red',0)),
+            ('🟡 3–4 кун',metrics.get('visit_yellow',0)),
+            ('🔴 5+ кун',metrics.get('visit_red',0)),
             ('Локациясиз',metrics.get('missing_location',0)),
         ]
     elif points_only:
@@ -113,7 +113,7 @@ function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'
 const legend=document.getElementById('legend');
 const workPanel=document.getElementById('agent-work');
 if(D.agent_clients){{
-  [['#16a34a','0–2 кун · яқинда ташриф'],['#b45309','3–7 кун · ташриф керак'],['#dc2626','8+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
+  [['#16a34a','0–2 кун · яқинда ташриф'],['#b45309','3–4 кун · ташриф керак'],['#dc2626','5+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
     const row=document.createElement('div');row.className='legend-row';
     row.innerHTML='<span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span>';legend.appendChild(row);
   }});
@@ -218,7 +218,7 @@ def agent_clients_map_html(db,agent,action_url=None):
         shops.append(shop)
     summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
@@ -272,7 +272,7 @@ def admin_clients_map_html(db,actor,card_url=None):
         shops.append(item)
     summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
              f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
