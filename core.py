@@ -543,6 +543,8 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         value=0
     cur=db.execute('INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',
                (actor,agent,client,kind,pack,qty,value,usd,note,int(time.time()),source))
+    if kind=='delivery':
+        db.execute('UPDATE clients SET map_only=0 WHERE id=? AND map_only<>0',(client,))
     if allocations:
         return_id=cur.fetchone()[0]
         for delivery_id,count,cents in allocations:
