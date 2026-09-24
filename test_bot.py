@@ -432,6 +432,65 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.client_stock(self.db,2,cid,1),20)
   self.assertEqual(core.agent_stock(self.db,2,1),5)
 
+ def test_map_only_prospect_save_and_first_delivery(self):
+  import json,re
+  import reports
+  core.set_product_price(self.db,1,1,core.money('2.00'))
+  now=int(time.time())
+  self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(now-10,))
+  self.assertTrue(core.point(self.db,2,{'message_id':88000,'date':now,
+       'location':{'latitude':40,'longitude':71,'live_period':3600}}))
+  def msg(i,t=None,loc=None,photo=None,uid=2):
+   m={'message_id':i,'date':int(time.time()),'from':{'id':uid},
+      'chat':{'id':uid,'type':'private'}}
+   if t is not None:m['text']=t
+   if loc is not None:m['location']=loc
+   if photo is not None:m['photo']=[{'file_id':photo}]
+   return {'update_id':i,'message':m}
+  with patch.object(bot,'send') as send,patch.object(bot,'send_inline') as inline,patch.dict(bot.os.environ,{'WEBHOOK_BASE_URL':'https://example.test'}),patch.object(bot,'BOT_USERNAME','asman_test_bot'):
+   entries=[msg(88001,'🏪 Мижоз қўшиш'),msg(88002,loc={'latitude':40.5,'longitude':71.5}),
+       msg(88003,photo='test-photo'),msg(88004,'+998901234568'),
+       msg(88005,'Харита мижози'),msg(88006,'Кейинроқ дўкон'),
+       msg(88007,'Қўқон'),msg(88008,'Кейинроқ ишлаймиз'),
+       msg(88009,'🗺 Товарсиз харитага сақлаш'),msg(88010,'✅ Тасдиқлаш')]
+   for entry in entries:bot.handle(self.db,entry)
+   prospect=self.db.execute("SELECT * FROM clients WHERE name='Харита мижози'").fetchone()
+   self.assertIsNotNone(prospect)
+   self.assertEqual(prospect['map_only'],1)
+   self.assertEqual(prospect['photo'],'test-photo')
+   cid=prospect['id']
+   self.assertEqual(self.db.execute('SELECT COUNT(*) FROM events WHERE client=?',(cid,)).fetchone()[0],0)
+   self.assertEqual(core.client_debt_usd(self.db,cid),0)
+   self.assertEqual(core.agent_stock(self.db,2,1),0)
+   bot.handle(self.db,msg(88011,'👥 Мижозлар'))
+   self.assertNotIn(str(cid)+' ·',' '.join(str(v) for row in send.call_args.args[2] for v in row))
+   bot.handle(self.db,msg(88012,'🗺 Мижозлар харитаси'))
+   self.assertIn('/map/agent-clients/2/',inline.call_args.args[2][0][1])
+   html=reports.agent_clients_map_html(self.db,2,action_url=lambda verb,item:'https://example.test/'+verb+'/'+str(item)).decode()
+   match=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
+   shops=json.loads(match.group(1))['shops']
+   item=next(x for x in shops if x['id']==cid)
+   self.assertTrue(item['prospect'])
+   self.assertIn('/delivery/',item['delivery_url'])
+   self.assertNotIn('pay_url',item)
+   self.assertNotIn('return_url',item)
+   admin_html=reports.admin_clients_map_html(self.db,1).decode()
+   self.assertIn('Потенциал мижоз',admin_html)
+   payload=bot.agent_action_payload('d',2,cid)
+   with self.assertRaises(ValueError):bot.open_agent_client_action(self.db,4,payload)
+   with self.assertRaises(ValueError):bot.open_agent_client_action(self.db,2,payload[:-1]+'0' if payload[-1]!='0' else payload[:-1]+'1')
+   core.record(self.db,1,2,None,'load',1,4,currency='USD')
+   bot.handle(self.db,msg(88013,'/start '+payload))
+   self.assertEqual(bot.state(self.db,2)['action'],'delivery')
+   self.assertEqual(bot.state(self.db,2)['values']['client'],cid)
+   for i,t in enumerate(['Грунтовка 7/1 — 1 кг','Дона','1','✅ Тасдиқлаш'],88014):
+    bot.handle(self.db,msg(i,t))
+   self.assertEqual(self.db.execute('SELECT map_only FROM clients WHERE id=?',(cid,)).fetchone()[0],0)
+   self.assertEqual(core.client_stock(self.db,2,cid,1),1)
+   self.assertEqual(core.client_debt_usd(self.db,cid),core.money('2.00'))
+   bot.handle(self.db,msg(88018,'👥 Мижозлар'))
+   self.assertIn(str(cid)+' ·',' '.join(str(v) for row in send.call_args.args[2] for v in row))
+
  def test_parse_one_to_three_phone_numbers(self):
   self.assertEqual(bot.parse_phones('90 123-45-67'),['+998901234567'])
   self.assertEqual(bot.parse_phones('+998 90 123 45 67 / 998911234567'),
