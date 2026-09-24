@@ -140,6 +140,38 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
   .sheet{width:min(100%,390px)}
 }
 
+
+/* Pixel-close pass based on the approved ASMAN mobile mockups */
+:root{--blue:#0b63d8;--navy:#064b9c;--ink:#14233d;--muted:#7c8ba0;--line:#e8edf5;--bg:#ffffff;--green:#18a957;--orange:#f2a01b;--red:#ef3e45}
+html,body{background:#eef5ff}.app{max-width:430px;background:#fff;box-shadow:none}
+.header{height:auto;min-height:62px;padding:calc(8px + env(safe-area-inset-top)) 13px 9px;background:linear-gradient(90deg,#0751aa,#0868d7);border-radius:0;box-shadow:none}
+.headerline{grid-template-columns:auto 1fr auto;min-height:38px}.brand{font-size:17px!important;font-weight:900}.page-caption{font-size:13px;font-weight:700;max-width:100%}.avatar{width:29px;height:29px;font-size:11px;background:#b98df4;border:0}.notify{font-size:16px}
+.surface{background:#fff;border-radius:0;padding:11px 11px calc(78px + env(safe-area-inset-bottom))!important;min-height:calc(100vh - 62px)}
+.home-greeting{padding:0 2px 10px}.home-greeting strong{font-size:18px}.home-greeting span{font-size:11px}
+.metrics{gap:8px}.metric{min-height:78px!important;border-radius:11px!important;padding:9px!important;display:grid;grid-template-columns:38px 1fr;grid-template-rows:auto auto;align-items:center;column-gap:8px;border:0!important;box-shadow:none!important}
+.metric .mname{grid-column:1/-1;display:none}.metric .iconbox{display:grid!important;grid-column:1;grid-row:1/3;width:38px!important;height:38px!important;border-radius:9px!important;color:#fff!important;font-size:18px!important;box-shadow:none!important}
+.metric strong{grid-column:2;grid-row:1;font-size:19px!important;align-self:end}.metric .muted{grid-column:2;grid-row:2;font-size:10px!important;align-self:start}
+.metric.blue{background:#eaf3ff!important}.metric.blue .iconbox{background:#1676ee!important}.metric.green{background:#eaf9ef!important}.metric.green .iconbox{background:#16b560!important}.metric.orange{background:#fff3e3!important}.metric.orange .iconbox{background:#ff9e14!important}.metric.purple{background:#f3ecff!important}.metric.purple .iconbox{background:#8253df!important}
+.sectionline{margin:12px 1px 8px}.sectionline h2{font-size:15px}.linkbtn{font-size:11px;color:#0c66dc}
+.route-extra,.map-extra{display:none!important}.plan-summary{display:none}
+.panel{border-radius:11px;padding:0 10px;border:1px solid #edf1f6;box-shadow:none;margin-bottom:9px}
+.plan{padding:9px 0;gap:9px}.plan .dot{width:25px;height:25px;flex:0 0 25px}.plantext b{font-size:12px}.plantext small{font-size:10px}.plan .linkbtn{display:none}
+.primary{border-radius:8px;padding:11px 14px;font-size:13px}.quick{gap:8px}.quick button{border-radius:8px;padding:10px 7px;background:#eaf3ff;border:0}
+.notice{display:none}
+.bottom{width:min(100%,430px);padding:5px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 #e9eef5}.bottom button{font-size:8.5px;gap:0;padding:2px 0}.bottom button .navicon{font-size:16px;height:21px}
+.chips{gap:5px;padding:2px 0 8px}.chip{padding:6px 8px;font-size:9px;border-radius:99px}.chip.active{background:#0b5ec4}
+#demoMap{height:calc(100vh - 240px);min-height:360px;border-radius:0;margin:0 -11px;border-left:0;border-right:0}
+.map-actions{display:none}.legend{display:none}.map-preview{margin-top:-117px;padding:0 10px 8px}.map-preview-card{border-radius:12px;padding:9px;grid-template-columns:60px 1fr}.map-preview-card .store-art{width:60px;height:60px}.map-preview-info b{font-size:13px}.map-preview-actions button{padding:8px}
+.searchrow{border-radius:10px;padding:0 10px;margin-bottom:8px}.searchrow input{padding:11px 0;font-size:12px}
+.customer{border:0;border-bottom:1px solid #edf1f6;border-radius:0;padding:9px 2px;margin:0;box-shadow:none}.store-art{width:52px;height:52px;flex-basis:52px;border-radius:9px}.customer-info b{font-size:12px}.customer-info small{font-size:9.5px}.age{font-size:9px;padding:4px 6px}
+#page-detail>.linkbtn{font-size:11px;margin-bottom:2px}.detail-cover{height:148px;border-radius:0;margin:-11px -11px 10px}.detail-title h2{font-size:17px}.tabs{margin:11px 0 6px}.tabs button{font-size:10px;padding:8px 2px}.info-line{padding:8px 0;font-size:11px}
+#page-detail>.panel{padding:10px;border:0}.detail-title{padding:0 1px}.split{gap:7px}.outline{border-radius:8px;padding:10px 12px;font-size:12px}
+.sheet{width:min(100%,430px)}.sheethead{background:#fff;color:#15233f;border-bottom:1px solid #e7edf5;margin:-14px -17px 14px;border-radius:0;padding:12px 15px}.sheethead .cross{background:#edf2f8;color:#445975}.sheethead h2{font-size:15px}
+.formlabel{font-size:11px;margin:9px 0 4px}.field{border-radius:8px;padding:10px 11px;font-size:13px}.status-cards span{min-height:66px;font-size:9px}
+.segmented{border-radius:9px;padding:2px}.segmented button{padding:7px 2px;font-size:10px}.statement{padding:9px 0}.statement b,.statement strong{font-size:11px}.statement small{font-size:9.5px}
+.report-visuals{grid-template-columns:115px 1fr}.donut{width:104px;height:104px}.bars{height:130px}
+@media(min-width:760px){.app{margin:18px auto;border-radius:18px;overflow:hidden;box-shadow:0 16px 50px #13386824}.header{border-radius:18px 18px 0 0}.bottom{bottom:18px;border-radius:0 0 18px 18px}.sheet{max-height:88vh}}
+
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head>
@@ -163,7 +195,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
   <div class="metric purple"><div class="mname"><span class="iconbox">📦</span> Товар берилди</div><strong id="kpiGoods">12 дона</strong><span class="muted">Грунтовка 7/1</span></div>
  </div>
  <div class="sectionline"><h2>Бугунги ташриф режаси</h2><button class="linkbtn" type="button" data-nav="map">Харитада кўриш ›</button></div>
- <div class="route-banner"><div><strong>📌 Бугунги ташриф режам</strong><small id="routeCount">Ҳали дўкон танланмаган</small></div><button type="button" data-showplan="1">Харитада ›</button></div>
+ <div class="route-banner route-extra"><div><strong>📌 Бугунги ташриф режам</strong><small id="routeCount">Ҳали дўкон танланмаган</small></div><button type="button" data-showplan="1">Харитада ›</button></div>
   <div class="panel" id="planList"></div><div class="plan-summary" id="planSummary" aria-live="polite"></div>
  <button class="primary full" type="button" data-open="customer">＋ Янги мижоз қўшиш</button>
  <div class="quick"><button type="button" data-nav="map">📍 Харита</button><button type="button" data-nav="clients">👥 Мижозлар</button><button type="button" data-open="product">➕ Янги товар қўшиш</button><button type="button" data-open="visit">📅 Ташриф қўшиш</button></div>
@@ -176,8 +208,8 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
  <div class="map-preview" id="mapPreview"></div>
  <div class="map-actions"><span class="muted">📍 Нуқтани босиб мижозни очинг</span><button class="linkbtn" id="mapReset" type="button">↻ Янгилаш</button></div>
  <div class="legend"><span><i style="background:#19a65e"></i>0–2 кун</span><span><i style="background:#c47a0e"></i>3–7 кун</span><span><i style="background:#e24a51"></i>8+ кун</span><span><i style="background:#2b85d5"></i>Режада</span></div>
- <div class="route-banner"><div><strong>📌 Танланган маршрут</strong><small id="mapRouteCount">Ҳали дўкон танланмаган</small></div><button type="button" data-showplan="1">Режам ›</button></div>
-  <div class="sectionline"><h2 id="priorityTitle">Қайта ташриф керак</h2><button class="linkbtn" type="button" data-nav="clients">Рўйхат ›</button></div><div id="priorityList"></div><div class="notice">🔵 Келишилган келгуси санагача дўкон қизил рўйхатга кирмайди. Харита реал мижозлар координаталарини кўрсатмайди.</div>
+ <div class="route-banner route-extra"><div><strong>📌 Танланган маршрут</strong><small id="mapRouteCount">Ҳали дўкон танланмаган</small></div><button type="button" data-showplan="1">Режам ›</button></div>
+  <div class="map-extra"><div class="sectionline"><h2 id="priorityTitle">Қайта ташриф керак</h2><button class="linkbtn" type="button" data-nav="clients">Рўйхат ›</button></div><div id="priorityList"></div><div class="notice">🔵 Келишилган келгуси санагача дўкон қизил рўйхатга кирмайди. Харита реал мижозлар координаталарини кўрсатмайди.</div></div>
 </section>
 <section class="page" id="page-clients">
  <div class="searchrow"><span>🔎</span><input id="clientSearch" type="search" placeholder="Дўкон номи ёки манзил..."><span class="muted">⌕</span></div>
