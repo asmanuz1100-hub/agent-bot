@@ -368,7 +368,9 @@ def prompt(db,u,s):
         if key=='client':
             all_clients=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
             own_only=role(db,u)=='agent' and not all_clients
-            where=' WHERE agent=?' if own_only else ''
+            regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
+            predicates=(['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])
+            where=' WHERE '+' AND '.join(predicates) if predicates else ''
             base_params=(u,) if own_only else ()
             total=db.execute('SELECT COUNT(*) FROM clients'+where,base_params).fetchone()[0]
             page=max(0,int(s.get('page',0)))
@@ -456,7 +458,7 @@ def show_client_card(db,u,cid):
 
 def report_clients(db,u):
     if not allowed(db,u,'client_view'):raise ValueError('Мижозлар рўйхатига рухсат йўқ.')
-    if not db.execute('SELECT 1 FROM clients LIMIT 1').fetchone():
+    if not db.execute('SELECT 1 FROM clients WHERE map_only=0 LIMIT 1').fetchone():
         send(u,'Мижозлар ҳали қўшилмаган.',menu(db,u));return
     prompt(db,u,{'action':'client_view','step':0,'values':{}})
 
@@ -992,10 +994,11 @@ def handle(db,update):
             pat='%'+term+'%'
             if key=='client':
                 own_only=r=='agent' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS
+                regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
                 # SQLite LOWER() does not case-fold Cyrillic. Search labels with
                 # Python Unicode casefold consistently on SQLite and PostgreSQL.
                 candidates=db.execute("""SELECT id,name,shop_name,phone,address FROM clients"""+
-                    (' WHERE agent=?' if own_only else '')+' ORDER BY id DESC',
+                    (' WHERE '+' AND '.join((['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])) if own_only or regular_only else '')+' ORDER BY id DESC',
                     (u,) if own_only else ()).fetchall()
                 rows=[(x['id'],x['name'],x['shop_name']) for x in candidates
                       if any(term in str(value or '').casefold() for value in
