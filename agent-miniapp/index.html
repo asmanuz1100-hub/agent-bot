@@ -48,17 +48,26 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
 .status-cards input:checked+span{background:#dceaff;border-color:#0a61cc;color:#074c9c;box-shadow:0 0 0 1px #0a61cc}
 .photo-upload{display:block;text-align:center;margin:6px 0 0;border-style:dashed;background:#f4f9ff;color:#0966ce}
 .route-choice{display:flex;gap:7px;align-items:stretch;margin-bottom:8px}.route-choice .customer{flex:1;min-width:0;margin:0}.route-add{flex:0 0 82px;border-radius:11px;border:1px solid #b9d3f5;background:#eff6ff;color:#0958af;font-weight:800;font-size:11px;padding:7px 4px}.route-add.chosen{border-color:#a8d9bf;background:#e0f7e9;color:#137444}.route-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px;border:1px solid #d8e8ff;border-radius:12px;background:linear-gradient(120deg,#eaf3ff,#f9fcff);margin:10px 0}.route-banner strong{display:block;font-size:13px;color:#124f9b}.route-banner small{display:block;color:#637e9f;margin-top:2px;font-size:11px}.route-banner button{border:0;background:#105dc9;color:white;font-weight:800;padding:9px 10px;border-radius:9px;font-size:11px}.route-add:focus-visible,.route-banner button:focus-visible{outline:3px solid #4b9bf4;outline-offset:2px}
+.page-caption{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52%;text-align:center}.head-actions{display:flex;align-items:center;gap:8px}.notify{position:relative;border:0;background:transparent;color:#fff;font-size:18px;width:30px;height:30px;padding:0}.notify span{position:absolute;width:6px;height:6px;border-radius:50%;background:#ff5661;right:4px;top:3px;border:1px solid #fff}.header-desc{display:none}.headerline{display:grid;grid-template-columns:auto 1fr auto}.brand{font-size:16px!important;letter-spacing:.25px!important}.brand:before{content:none!important}.surface{padding-top:10px!important}.home-greeting{padding:3px 2px 10px}.home-greeting strong{display:block;font-size:17px;line-height:1.2;color:#15294a}.home-greeting span{display:block;color:#7c8da4;font-size:11px;margin-top:3px}
+.map-preview{margin-top:-72px;position:relative;z-index:500;padding:0 10px 9px;pointer-events:none}.map-preview-card{pointer-events:auto;background:#fff;border:1px solid #dfe8f5;border-radius:14px;padding:10px;box-shadow:0 7px 24px #173f7022;display:grid;grid-template-columns:56px 1fr;gap:9px}.map-preview-card .store-art{height:56px;width:56px}.map-preview-info{min-width:0}.map-preview-info .topline{display:flex;align-items:center;justify-content:space-between;gap:5px}.map-preview-info b{font-size:13px}.map-preview-info small{display:block;color:#7f8fa3;font-size:10px;margin-top:3px}.map-preview-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:2px}.map-preview-actions button{border-radius:9px;padding:9px;border:1px solid #bcd5f6;background:#fff;color:#0a5fca;font-weight:800;font-size:11px}.map-preview-actions button:last-child{background:#0b66df;color:#fff;border-color:#0b66df}
+.report-visuals{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:center;margin-top:12px}.donut-wrap{display:grid;place-items:center}.donut{width:116px;height:116px;border-radius:50%;display:grid;place-content:center;text-align:center;background:conic-gradient(#22a861 0 55%,#e29522 55% 72%,#e74b50 72% 88%,#2f83dc 88% 100%);position:relative}.donut:before{content:"";position:absolute;inset:17px;background:#fff;border-radius:50%}.donut b,.donut span{position:relative;z-index:1}.donut b{font-size:22px;line-height:1}.donut span{font-size:10px;color:#77879b;margin-top:2px}.bars{height:145px;display:flex;align-items:end;gap:8px;padding:8px 4px 20px;border-bottom:1px solid #e8eef6}.bar-col{flex:1;display:flex;align-items:end;justify-content:center;gap:2px;height:100%;position:relative}.bar-col i{display:block;width:9px;border-radius:3px 3px 0 0;background:#b6d5fb}.bar-col i.done{background:#2183e8}.bar-col span{position:absolute;bottom:-18px;font-size:9px;color:#8998aa}
+@media(max-width:360px){.page-caption{font-size:12px}.report-visuals{grid-template-columns:110px 1fr}.donut{width:96px;height:96px}}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head>
 <body>
 <div class="app">
 <header class="header">
- <div class="headerline"><div class="brand">Агент панели</div><span class="demo">● ДЕМО · ТЕСТ</span><button class="avatar" type="button" id="profileBtn" aria-label="Профиль">A</button></div>
- <h1 id="headTitle">Ассалому алайкум, Али!</h1><p id="headDescription">Бугунги савдо режангиз ва мижозлар</p>
+ <div class="headerline">
+  <div class="brand">ASMAN</div>
+  <div class="page-caption" id="headTitle">Агент панели</div>
+  <div class="head-actions"><button class="notify" type="button" id="notifyBtn" aria-label="Хабарномалар">♧<span></span></button><button class="avatar" type="button" id="profileBtn" aria-label="Профиль">A</button></div>
+ </div>
+ <p id="headDescription" class="header-desc">Бугунги савдо режангиз ва мижозлар</p>
 </header>
 <main class="surface">
 <section class="page active" id="page-home">
+ <div class="home-greeting"><strong>Ассалому алайкум, Али!</strong><span>Бугун, 24 сентябрь 2026</span></div>
  <div class="metrics">
   <div class="metric blue"><div class="mname"><span class="iconbox">👤</span> Ташрифлар</div><strong id="kpiVisits">5 / 8</strong><span class="muted">Бугунги режа</span></div>
   <div class="metric green"><div class="mname"><span class="iconbox">🏪</span> Янги мижоз</div><strong id="kpiClients">2 та</strong><span class="muted">Бугун қўшилди</span></div>
@@ -76,6 +85,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
  <div class="sectionline" style="margin-top:0"><h2>Мижозлар харитаси</h2><span class="badge" id="mapCount">7 дўкон</span></div>
  <div class="chips" id="mapFilters"><button class="chip active" data-mapfilter="all">Барчаси</button><button class="chip" data-mapfilter="fresh">🟢 0–2 кун</button><button class="chip warn" data-mapfilter="yellow">🟠 3–7 кун</button><button class="chip red" data-mapfilter="red">🔴 8+ кун</button><button class="chip" data-mapfilter="scheduled">🔵 Режада</button><button class="chip" data-mapfilter="planned">📌 Режам</button></div>
  <div id="demoMap" aria-label="Намунавий мижозлар харитаси"></div>
+ <div class="map-preview" id="mapPreview"></div>
  <div class="map-actions"><span class="muted">📍 Нуқтани босиб мижозни очинг</span><button class="linkbtn" id="mapReset" type="button">↻ Янгилаш</button></div>
  <div class="legend"><span><i style="background:#19a65e"></i>0–2 кун</span><span><i style="background:#c47a0e"></i>3–7 кун</span><span><i style="background:#e24a51"></i>8+ кун</span><span><i style="background:#2b85d5"></i>Режада</span></div>
  <div class="route-banner"><div><strong>📌 Танланган маршрут</strong><small id="mapRouteCount">Ҳали дўкон танланмаган</small></div><button type="button" data-showplan="1">Режам ›</button></div>
@@ -105,7 +115,8 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#eaf2f
 <section class="page" id="page-reports">
  <div class="segmented" id="reportSegment"><button class="active" data-reporttab="agents">Агентлар</button><button data-reporttab="clients">Мижозлар</button><button data-reporttab="goods">Товарлар</button></div>
  <div class="panel" style="margin-top:12px"><div class="sectionline" style="margin-top:0"><h2>Савдо назорати</h2><span class="badge">Намунавий</span></div><div class="metrics"><div class="metric blue"><div class="mname">Мижозлар</div><strong id="reportClients">7 та</strong></div><div class="metric green"><div class="mname">Нақд пул</div><strong id="reportCash">450 USD</strong></div></div><div id="reportContent" style="margin-top:14px"></div></div>
- <div class="panel"><h2>Мижозлар ташриф ҳолати</h2><div id="reportStatus" style="margin-top:15px"></div></div>
+ <div class="panel"><h2>Мижозлар ташриф ҳолати</h2><div class="report-visuals"><div class="donut-wrap"><div class="donut" id="donutChart"><b id="donutTotal">0</b><span>мижоз</span></div></div><div id="reportStatus"></div></div></div>
+ <div class="panel"><div class="sectionline" style="margin-top:0"><h2>Ташрифлар динамикаси</h2><span class="badge">Ҳафта</span></div><div class="bars" id="barChart"></div></div>
 </section>
 </main>
 <nav class="bottom" aria-label="Асосий меню">
