@@ -370,8 +370,7 @@ def edit_client(db,actor,client_id,values):
     """Edit the chosen customer profile only; product/receivable history is immutable."""
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     current=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
-    if not identity or not current or not (identity[0]=='admin' or
-        (identity[0]=='agent' and current['agent']==actor)):
+    if not identity or not current or identity[0] not in ('admin','agent'):
         raise ValueError('Бу мижоз маълумотини ўзгартиришга рухсат йўқ.')
     if not values or any(field not in CLIENT_EDIT_FIELDS for field in values):
         raise ValueError('Таҳрирланадиган маълумот нотўғри.')
@@ -504,6 +503,13 @@ def agent_stock(db,a,p):
 def client_stock(db,a,c,p):
     return amount(db,a,['delivery'],c,p)-amount(db,a,['sold','return'],c,p)
 
+def client_stock_total(db,c,p):
+    """Physical stock held by a customer across all agents."""
+    row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
+        WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0)
+        FROM events WHERE client=? AND pack=?""",(c,p)).fetchone()
+    return int(row[0] or 0)
+
 def cash(db,a):
     collected=amount(db,a,['payment'],field='amount')
     paid=db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='accepted'",(a,)).fetchone()[0]
@@ -519,12 +525,12 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
     lock_agent(db,agent)
     if kind=='load' and role[0]!='admin': raise ValueError('Товарни фақат админ беради.')
     if kind!='load':
-        c=db.execute('SELECT agent FROM clients WHERE id=?',(client,)).fetchone()
-        if not c or c[0]!=agent: raise ValueError('Мижоз бу агентга тегишли эмас.')
+        c=db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone()
+        if not c: raise ValueError('Мижоз топилмади.')
     if kind in ('load','delivery','sold','return','order'):
         if pack not in (1,3,5) or not isinstance(qty,int) or qty<=0: raise ValueError('Қадоқ ёки миқдор нотўғри.')
     if kind=='delivery' and agent_stock(db,agent,pack)<qty: raise ValueError('Агентда етарли товар йўқ. Админ кирим қилсин.')
-    if kind in ('sold','return') and client_stock(db,agent,client,pack)<qty: raise ValueError('Мижозда етарли товар йўқ.')
+    if kind in ('sold','return') and client_stock_total(db,client,pack)<qty: raise ValueError('Мижозда етарли товар йўқ.')
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
     if kind=='payment' and (not isinstance(value,int) or value<=0): raise ValueError('Сумма киритилмаган.')
     if currency=='UZS' and kind=='sold' and (not isinstance(value,int) or value<=0):
