@@ -805,23 +805,23 @@ def handle(db,update):
         if action=='agent_clients_map':
             if r=='admin':
                 rows=db.execute("""SELECT COUNT(*) FROM clients c
-                    WHERE EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
                         AND e.kind='delivery')""").fetchone()[0]
                 link=map_link(f'admin-clients/{u}')
-                description=(f'🗺 Барча агентлар аввал товар берган {rows} та дўкон харитаси. '
+                description=(f'🗺 Жами {rows} та дўкон харитаси (товар олмаган мижозлар ҳам бор). '
                              'Мижоз нуқтасини босиб жойлашуви, USD қарзи ва товар қолдиғини кўринг; '
                              'навигатор ва мижоз карточкаси очилади. Харита фақат кўриш учун. '
                              'Ҳавола 15 дақиқа амал қилади.')
             else:
                 rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
-                    AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                        AND e.agent=? AND e.kind='delivery')""",(u,u)).fetchone()[0]
+                    AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                        AND e.agent=? AND e.kind='delivery'))""",(u,u)).fetchone()[0]
                 link=map_link(f'agent-clients/{u}')
-                description=(f'🗺 Аввал товар берилган {rows} та дўкон харитаси. '
+                description=(f'🗺 Жами {rows} та дўкон харитаси, шу жумладан потенциал мижозлар. '
                              'Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. '
                              'Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.')
             if not rows:
-                send(u,'Ҳали товар топширилган мижоз йўқ.',menu(db,u));return
+                send(u,'Ҳали харитага мижоз қўшилмаган.',menu(db,u));return
             if link:send_inline(u,description,[('🗺 Мижозлар харитасини очиш',link)])
             else:send(u,'Харита сервер ҳаволаси ҳали созланмаган.')
             return
