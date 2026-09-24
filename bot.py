@@ -316,7 +316,9 @@ def prompt(db,u,s):
                 send(u,'🗺 ПОТЕНЦИАЛ МИЖОЗНИ САҚЛАШ\n'
                      f"🏪 {values.get('shop_name','')} · 👤 {values.get('name','')}\n"
                      f"📞 {values.get('phone','')}\n📍 Локация ва фото сақланади.\n"
-                     'Товар берилмайди, қарз ёзилмайди. Мижоз фақат харитада кўринади.',
+                     ('Мақом: '+cs.LABELS[values.get('prospect_status','interested')]+ '\n' +
+                      ('Қайта ташриф: '+values['prospect_due']+'\n' if values.get('prospect_due') else '')+
+                      'Товар берилмайди, қарз ёзилмайди. Мижоз харита ва мижозлар рўйхатида кўринади.'),
                      [['✅ Тасдиқлаш'],['⬅️ Орқага','❌ Бекор қилиш']])
                 return
             s['basket_ready']=True;save(db,u,s)
@@ -644,8 +646,11 @@ def finish(db,u,s,source):
             if entered & existing:raise ValueError('Телефон рақамларидан бири аввал бошқа мижозга киритилган.')
         cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts,map_only) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time()),int(bool(s.get('map_only')))))
         cid=cur.fetchone()[0]
+        cs.add_visit(db,u,cid,v.get('prospect_status','interested') if s.get('map_only') else 'active',v['comment'],v.get('prospect_due'))
         for index,item in enumerate(products,1):
             record(db,u,u,cid,'delivery',item['pack'],item['units'],0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",-(int(source)*100+index),currency='USD')
+    elif a=='visit':
+        cs.add_visit(db,u,v['client'],v['status'],v['note'],v.get('followup'))
     elif a=='delivery':
         products=v.get('products') or []
         required={}
@@ -654,6 +659,7 @@ def finish(db,u,s,source):
             if agent_stock(db,u,pack)<qty:raise ValueError(f'Агентда {product_name(pack)}дан етарли миқдор йўқ.')
         for index,item in enumerate(products,1):
             record(db,u,u,v['client'],'delivery',item['pack'],item['units'],0,'',-(int(source)*100+index),currency='USD')
+        cs.add_visit(db,u,v['client'],'active','Товар берилди: '+', '.join(product_name(item['pack'])+' '+str(item['units'])+' дона' for item in products))
     elif a=='agent_add':
         if role(db,u)!='admin':raise ValueError('Фақат админ.')
         if db.execute('SELECT 1 FROM users WHERE id=?',(v['id'],)).fetchone():
@@ -679,13 +685,15 @@ def finish(db,u,s,source):
         record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     if a=='client' and s.get('map_only'):
-        send(u,f'✅ Потенциал мижоз #{cid} товарсиз сақланди. Қарз йўқ. Мижоз харитасидан топасиз.',menu(db,u))
+        send(u,f'✅ Мижоз #{cid} товарсиз сақланди. Қарз йўқ. Харита ва «Мижозлар» бўлимида {cs.LABELS[v.get("prospect_status","interested")]} мақомида кўринади.',menu(db,u))
         return
     if a in ('client','delivery'):
         selected=cid if a=='client' else v['client']
         count_products=len(v.get('products') or [])
         send(u,f'✅ Мижоз #{selected} учун {count_products} хил товар биргаликда сақланди.',menu(db,u))
         return
+    if a=='visit':
+        send(u,'✅ Ташриф ва суҳбат изоҳи сақланди. Мақом харита ва мижозлар рўйхатида янгиланди.',menu(db,u));return
     if a=='agent_add':
         send(u,f"✅ Агент қўшилди: {v['name']} (ID {v['id']}). Энди /start юборсин.",admin_agent_menu(u))
     elif a=='agent_deactivate':
