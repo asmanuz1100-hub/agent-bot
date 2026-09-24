@@ -13,7 +13,7 @@ class ManagerMiniAppTests(unittest.TestCase):
         for term in (
             "ASMAN - Rahbar paneli (To'liq versiya)",
             "page-home","page-map","page-customers","page-cash","page-report",
-            "Rahbar paneli","Agentlar xaritasi","Mijozlar ro'yxati",
+            "Rahbar paneli","Agentlar xaritasi","Mijozlar",
             "Kassa nazorati","Hisobotlar",
             "8+ kun tashrifsiz mijozlar",
             "Telegram.WebApp.ready()","Telegram.WebApp.expand()",
