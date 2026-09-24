@@ -129,8 +129,8 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return; const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
-   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+'<br>'+(D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':''));
+  L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.prospect?'#c2410c':s.active?'#0f766e':'#64748b',fillColor:s.prospect?'#fdba74':s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}})
+   .addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+'<br>'+(s.prospect?'🟠 Потенциал мижоз · товар олмаган':D.agent_clients?'💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':D.points_only?'🆕 Янги мижоз':(s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси'))+(s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+'<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+(D.agent_clients && s.pay_url?'<br><a href="'+esc(s.pay_url)+'">💰 Пул олиш</a> · <a href="'+esc(s.return_url)+'">↩️ Товар қайтариш</a>':'')+(D.agent_clients && s.delivery_url?'<br><a href="'+esc(s.delivery_url)+'">📦 Товар бериш</a>':''));
 }});
 document.getElementById('summary').textContent=D.summary||'Маълумот йўқ';
 if(D.points_only&&!D.shops.length){{
@@ -151,10 +151,10 @@ def agent_clients_map_html(db,agent,action_url=None):
     r=db.execute("SELECT role,name FROM users WHERE id=?",(agent,)).fetchone()
     if not r or r['role']!='agent' or not feature_enabled(db,agent,'clients'):
         raise ValueError('Мижозлар харитасига рухсат йўқ.')
-    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon
+    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only
         FROM clients c WHERE c.agent=?
-        AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                    AND e.agent=? AND e.kind='delivery')
+        AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.agent=? AND e.kind='delivery'))
         ORDER BY c.id DESC""",(agent,agent)).fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0
     for row in rows:
@@ -167,17 +167,22 @@ def agent_clients_map_html(db,agent,action_url=None):
             missing+=1;continue
         shop={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
-              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt)}
+              'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
+              'prospect':bool(row['map_only'])}
         if action_url:
-            pay=action_url('pay',cid)
-            back=action_url('return',cid)
-            if pay and back:
-                shop['pay_url']=pay
-                shop['return_url']=back
+            if row['map_only']:
+                delivery=action_url('delivery',cid)
+                if delivery:shop['delivery_url']=delivery
+            else:
+                pay=action_url('pay',cid)
+                back=action_url('return',cid)
+                if pay and back:
+                    shop['pay_url']=pay
+                    shop['return_url']=back
         shops.append(shop)
-    summary=(f'Товар топширилган {len(rows)} та дўкондан {len(shops)} тасининг '
-             f'манзили харитада бор. Жами қарз: {m(debt_total)} USD. '
-             f'Мижоз нуқтасини босинг: навигатор, пул олиш ва товар қайтариш.')
+    summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
+             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
+             f'Жами қарз: {m(debt_total)} USD. Потенциал мижозга харитадан товар бериш мумкин.')
     return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows)},
@@ -192,10 +197,10 @@ def admin_clients_map_html(db,actor,card_url=None):
     """
     from core import client_debt_usd,client_stock
     admin_only(db,actor)
-    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,
+    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
         u.name AS agent_name FROM clients c
         LEFT JOIN users u ON u.id=c.agent
-        WHERE EXISTS (SELECT 1 FROM events e
+        WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e
             WHERE e.client=c.id AND e.kind='delivery')
         ORDER BY c.id DESC""").fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0
@@ -210,13 +215,14 @@ def admin_clients_map_html(db,actor,card_url=None):
         item={'id':cid,'name':row['name'],'shop':row['shop_name'],
               'address':row['address'],'lat':float(lat),'lon':float(lon),
               'active':stock>0 or debt>0,'stock':stock,'debt':m(debt),
+              'prospect':bool(row['map_only']),
               'owner':row['agent_name'] or str(agent)}
         if card_url:
             url=card_url(cid)
             if url:item['card_url']=url
         shops.append(item)
-    summary=(f'Барча агентлар аввал товар топширган {len(rows)} та дўкондан '
-             f'{len(shops)} таси харитада. Жами USD қарз: {m(debt_total)}. '
+    summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
+             f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
              f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,

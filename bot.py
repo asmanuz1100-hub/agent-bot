@@ -119,7 +119,7 @@ def customer_photo_bytes(file_id):
     return content
 
 def agent_action_payload(verb,agent,client,ttl=8*3600):
-    if verb not in ('p','r'):raise ValueError('Хизмат тури нотўғри.')
+    if verb not in ('p','r','d'):raise ValueError('Хизмат тури нотўғри.')
     expires=int(time.time())+int(ttl)
     scope=f'client-action/{verb}/{int(agent)}/{int(client)}'
     return f'{verb}_{int(agent)}_{int(client)}_{expires}_{_map_sig(scope,expires)[:16]}'
@@ -129,25 +129,25 @@ def agent_action_link(verb,agent,client):
     return f'https://t.me/{BOT_USERNAME}?start='+agent_action_payload(verb,agent,client)
 
 def open_agent_client_action(db,u,payload):
-    match=re.fullmatch(r'([pr])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
+    match=re.fullmatch(r'([prd])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
     if not match:raise ValueError('Мижозга ўтиш ҳаволаси нотўғри.')
     verb,agent,client,expires,sig=match.groups()
     agent=int(agent);client=int(client)
     scope=f'client-action/{verb}/{agent}/{client}'
     if agent!=u or int(expires)<int(time.time()) or not hmac.compare_digest(sig,_map_sig(scope,expires)[:16]):
         raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
-    action='payment' if verb=='p' else 'return'
+    action={'p':'payment','r':'return','d':'delivery'}[verb]
     if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
     row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=? AND agent=?
-        AND EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
-                    AND events.kind='delivery')""",(client,u)).fetchone()
+        AND ((?='d' AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
+                    AND events.kind='delivery'))""",(client,u,verb)).fetchone()
     if not row:raise ValueError('Бу дўкон сизга бириктирилмаган.')
     ok,msg=live_ready(db,u)
     if not ok:raise ValueError(msg)
     s={'action':action,'step':1,'values':{'client':client}}
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
     send(u,f"🏪 {row['shop_name'] or row['name']} · #{client} — "+(
-         'пул олиш' if verb=='p' else 'товар қайтариш'))
+         'пул олиш' if verb=='p' else 'товар қайтариш' if verb=='r' else 'товар бериш'))
     prompt(db,u,s)
 
 def document(uid,filename,content):
@@ -309,7 +309,15 @@ def prompt(db,u,s):
             if all(key in values for key in ('pack','unit','qty')):
                 units=values['qty']*(units_per_block(values['pack']) if values['unit']=='Блок' else 1)
                 products.append({'pack':values.pop('pack'),'unit':values.pop('unit'),'qty':values.pop('qty'),'units':units})
-            if not products:raise ValueError('Камида битта товар киритинг.')
+            if not products and not s.get('map_only'):raise ValueError('Камида битта товар киритинг.')
+            if s.get('map_only'):
+                s['basket_ready']=True;save(db,u,s)
+                send(u,'🗺 ПОТЕНЦИАЛ МИЖОЗНИ САҚЛАШ\n'
+                     f"🏪 {values.get('shop_name','')} · 👤 {values.get('name','')}\n"
+                     f"📞 {values.get('phone','')}\n📍 Локация ва фото сақланади.\n"
+                     'Товар берилмайди, қарз ёзилмайди. Мижоз фақат харитада кўринади.',
+                     [['✅ Тасдиқлаш'],['⬅️ Орқага','❌ Бекор қилиш']])
+                return
             s['basket_ready']=True;save(db,u,s)
             lines=[]
             if s['action']=='client':
@@ -343,6 +351,7 @@ def prompt(db,u,s):
     key,msg=fields[i]; keys=[]
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if key=='pack':keys=[[product_name(p)] for p in (1,3,5)]
+    if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
         keys=[['Дона','Блок']]
         msg+=f'\n1 блок = {units_per_block(s["values"]["pack"])} дона ({product_name(s["values"]["pack"])}).'
@@ -350,14 +359,18 @@ def prompt(db,u,s):
     if key=='name' and s['action']=='admin_add':
         existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
         if existing:msg+=f'\nℹ️ Бу ID базада {existing[0]} роли билан сақланган. Тасдиқлаганда ўша аккаунт админга ўтказилади; очиқ смена ёки товар-пул қолдиғи бор бўлса, амал тўхтатилади.'
-    if key=='payment_due':keys=[['Аниқ эмас']]
+    if key=='payment_due':
+        keys=[['Аниқ эмас']]
+        if s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='qty' and s['action']=='sold':
         msg+='\nℹ️ Мижозга товар берилганда USD қарз ёзилган. Бу ерда сотилган миқдор қайд этилади, қарз икки марта ҳисобланмайди.'
     if key in ('client','agent'):
         if key=='client':
             all_clients=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
             own_only=role(db,u)=='agent' and not all_clients
-            where=' WHERE agent=?' if own_only else ''
+            regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
+            predicates=(['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])
+            where=' WHERE '+' AND '.join(predicates) if predicates else ''
             base_params=(u,) if own_only else ()
             total=db.execute('SELECT COUNT(*) FROM clients'+where,base_params).fetchone()[0]
             page=max(0,int(s.get('page',0)))
@@ -445,7 +458,7 @@ def show_client_card(db,u,cid):
 
 def report_clients(db,u):
     if not allowed(db,u,'client_view'):raise ValueError('Мижозлар рўйхатига рухсат йўқ.')
-    if not db.execute('SELECT 1 FROM clients LIMIT 1').fetchone():
+    if not db.execute('SELECT 1 FROM clients WHERE map_only=0 LIMIT 1').fetchone():
         send(u,'Мижозлар ҳали қўшилмаган.',menu(db,u));return
     prompt(db,u,{'action':'client_view','step':0,'values':{}})
 
@@ -627,7 +640,7 @@ def finish(db,u,s,source):
             try:existing=set(parse_phones(row[0]))
             except ValueError:continue
             if entered & existing:raise ValueError('Телефон рақамларидан бири аввал бошқа мижозга киритилган.')
-        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time())))
+        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts,map_only) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time()),int(bool(s.get('map_only')))))
         cid=cur.fetchone()[0]
         for index,item in enumerate(products,1):
             record(db,u,u,cid,'delivery',item['pack'],item['units'],0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",-(int(source)*100+index),currency='USD')
@@ -663,6 +676,9 @@ def finish(db,u,s,source):
         q=v.get('qty',0)*(units_per_block(v['pack']) if v.get('unit')=='Блок' else 1)
         record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+    if a=='client' and s.get('map_only'):
+        send(u,f'✅ Потенциал мижоз #{cid} товарсиз сақланди. Қарз йўқ. Мижоз харитасидан топасиз.',menu(db,u))
+        return
     if a in ('client','delivery'):
         selected=cid if a=='client' else v['client']
         count_products=len(v.get('products') or [])
@@ -789,23 +805,23 @@ def handle(db,update):
         if action=='agent_clients_map':
             if r=='admin':
                 rows=db.execute("""SELECT COUNT(*) FROM clients c
-                    WHERE EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
                         AND e.kind='delivery')""").fetchone()[0]
                 link=map_link(f'admin-clients/{u}')
-                description=(f'🗺 Барча агентлар аввал товар берган {rows} та дўкон харитаси. '
+                description=(f'🗺 Жами {rows} та дўкон харитаси (товар олмаган мижозлар ҳам бор). '
                              'Мижоз нуқтасини босиб жойлашуви, USD қарзи ва товар қолдиғини кўринг; '
                              'навигатор ва мижоз карточкаси очилади. Харита фақат кўриш учун. '
                              'Ҳавола 15 дақиқа амал қилади.')
             else:
                 rows=db.execute("""SELECT COUNT(*) FROM clients c WHERE c.agent=?
-                    AND EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                        AND e.agent=? AND e.kind='delivery')""",(u,u)).fetchone()[0]
+                    AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                        AND e.agent=? AND e.kind='delivery'))""",(u,u)).fetchone()[0]
                 link=map_link(f'agent-clients/{u}')
-                description=(f'🗺 Аввал товар берилган {rows} та дўкон харитаси. '
+                description=(f'🗺 Жами {rows} та дўкон харитаси, шу жумладан потенциал мижозлар. '
                              'Дўкон нуқтасини босинг: навигатор, пул олиш ёки товар қайтариш. '
                              'Харита ҳаволаси 15 дақиқа амал қилади; амал Telegramда тасдиқланади.')
             if not rows:
-                send(u,'Ҳали товар топширилган мижоз йўқ.',menu(db,u));return
+                send(u,'Ҳали харитага мижоз қўшилмаган.',menu(db,u));return
             if link:send_inline(u,description,[('🗺 Мижозлар харитасини очиш',link)])
             else:send(u,'Харита сервер ҳаволаси ҳали созланмаган.')
             return
@@ -927,6 +943,10 @@ def handle(db,update):
         prompt(db,u,s);return
     if s.get('basket_ready'):
         if text=='✅ Тасдиқлаш':finish(db,u,s,update['update_id']);return
+        if text=='⬅️ Орқага' and s.get('map_only'):
+            s.pop('basket_ready',None);s.pop('map_only',None)
+            s['step']=next(i for i,(key,_) in enumerate(FLOW['client']) if key=='pack')
+            prompt(db,u,s);return
         send(u,'Барча товарларни киритиб бўлсангиз «✅ Тасдиқлаш»ни, яна товар бўлса «➕ Яна маҳсулот қўшиш»ни босинг.',
              [['➕ Яна маҳсулот қўшиш'],['✅ Тасдиқлаш'],['❌ Бекор қилиш']]);return
     if s.get('confirm'):
@@ -934,6 +954,12 @@ def handle(db,update):
         if text=='✏️ Бошидан киритиш':s={'action':s['action'],'step':0,'values':{}};prompt(db,u,s);return
         send(u,'Тасдиқланг ёки қайта киритинг.');return
     key=FLOW[s['action']][s['step']][0]
+    if (s['action']=='client' and key in ('payment_due','pack')
+            and text=='🗺 Товарсиз харитага сақлаш'):
+        s['values'].setdefault('payment_due','Аниқ эмас')
+        s['map_only']=True
+        s['step']=len(FLOW['client'])
+        prompt(db,u,s);return
     if text=='Ўқилганини олиш' and key in ('name','address'):text=s.get('suggestion',{}).get(key,'')
     if key=='location':
         loc=m.get('location')
@@ -968,10 +994,11 @@ def handle(db,update):
             pat='%'+term+'%'
             if key=='client':
                 own_only=r=='agent' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS
+                regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
                 # SQLite LOWER() does not case-fold Cyrillic. Search labels with
                 # Python Unicode casefold consistently on SQLite and PostgreSQL.
                 candidates=db.execute("""SELECT id,name,shop_name,phone,address FROM clients"""+
-                    (' WHERE agent=?' if own_only else '')+' ORDER BY id DESC',
+                    (' WHERE '+' AND '.join((['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])) if own_only or regular_only else '')+' ORDER BY id DESC',
                     (u,) if own_only else ()).fetchall()
                 rows=[(x['id'],x['name'],x['shop_name']) for x in candidates
                       if any(term in str(value or '').casefold() for value in
@@ -1188,7 +1215,7 @@ def serve_webhook(db,base_url):
                     try:
                         html=reports.agent_clients_map_html(local,agent,
                             action_url=lambda verb,cid:agent_action_link(
-                                'p' if verb=='pay' else 'r',agent,cid))
+                                {'pay':'p','return':'r','delivery':'d'}[verb],agent,cid))
                         local.commit()
                     finally:
                         if postgres:local.close()
@@ -1354,3 +1381,5 @@ def run():
     finally:db.close()
 
 if __name__=='__main__':run()
+
+# Prospective-customer map flow: implementation forthcoming.

@@ -20,7 +20,7 @@ AGENT_FEATURES=(
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts INTEGER);
+CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts INTEGER, map_only INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(agent INTEGER PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS shifts(id INTEGER PRIMARY KEY, agent INTEGER, start INTEGER, end INTEGER, live_id INTEGER);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_handovers_agent_status ON handovers(agent,status)
 
 PG_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id BIGINT PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts BIGINT);
+CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts BIGINT, map_only INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(agent BIGINT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS shifts(id BIGSERIAL PRIMARY KEY, agent BIGINT, start BIGINT, end BIGINT, live_id BIGINT);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
@@ -144,6 +144,7 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT ''")
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_due TEXT')
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_ts BIGINT')
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_only INTEGER NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         for pack,name in PRODUCTS.items():
@@ -168,6 +169,8 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN payment_due TEXT')
     if 'created_ts' not in client_cols:
         db.execute('ALTER TABLE clients ADD COLUMN created_ts INTEGER')
+    if 'map_only' not in client_cols:
+        db.execute('ALTER TABLE clients ADD COLUMN map_only INTEGER NOT NULL DEFAULT 0')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(events)')}:
         db.execute('ALTER TABLE events ADD COLUMN amount_usd INTEGER DEFAULT 0')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
@@ -540,6 +543,8 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         value=0
     cur=db.execute('INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',
                (actor,agent,client,kind,pack,qty,value,usd,note,int(time.time()),source))
+    if kind=='delivery':
+        db.execute('UPDATE clients SET map_only=0 WHERE id=? AND map_only<>0',(client,))
     if allocations:
         return_id=cur.fetchone()[0]
         for delivery_id,count,cents in allocations:
