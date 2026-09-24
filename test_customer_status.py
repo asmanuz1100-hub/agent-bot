@@ -85,10 +85,13 @@ class CustomerStatusTests(unittest.TestCase):
                 self.assertIn('Old Agent',send.call_args.args[1])
                 self.assertIn('Янги ойдан олади',send.call_args.args[1])
             self.assertEqual(core.client_debt_usd(self.db,cid),0)
-    def test_waiting_requires_valid_followup_and_other_agent_cannot_edit(self):
+    def test_waiting_requires_followup_and_other_agent_can_record_visit(self):
         cid=self.new_shop(5400,'interested')
         with self.assertRaises(ValueError):cs.add_visit(self.db,2,cid,'waiting','Кейин',None)
-        with self.assertRaises(ValueError):cs.add_visit(self.db,3,cid,'declined','Йўқ')
-        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_visits WHERE client=?',(cid,)).fetchone()[0],1)
+        cs.add_visit(self.db,3,cid,'declined','Йўқ')
+        last=cs.history(self.db,cid,1)[0]
+        self.assertEqual(last['actor'],3)
+        self.assertEqual(last['status'],'declined')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_visits WHERE client=?',(cid,)).fetchone()[0],2)
         self.assertEqual(core.client_debt_usd(self.db,cid),0)
 if __name__=='__main__':unittest.main()
