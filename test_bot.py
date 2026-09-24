@@ -516,7 +516,7 @@ class Tests(unittest.TestCase):
    self.assertNotIn(sig,bot.redact_access_log_arg('GET '+url+' HTTP/1.1'))
 
 
- def test_all_agents_see_every_customer_in_clients_section_only(self):
+ def test_all_agents_see_every_customer_and_can_edit_profile(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name,address) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон','Фарғона')")
   now=int(time.time())
   def msg(i,t,uid=2):
@@ -528,11 +528,13 @@ class Tests(unittest.TestCase):
    self.assertIn('42 ·',choices)
    bot.handle(self.db,msg(89002,'42',uid=2))
    self.assertIn('МИЖОЗ #42',send.call_args.args[1])
-   self.assertIn('Бириктирилган агент: D',send.call_args.args[1])
-   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
-                    [v for row in send.call_args.args[2] for v in row])
-   with self.assertRaises(ValueError):
-    bot.show_client_edit_fields(self.db,2,42)
+   self.assertIn('Мижозни қўшган агент: D',send.call_args.args[1])
+   self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
+                 [v for row in send.call_args.args[2] for v in row])
+   bot.show_client_edit_fields(self.db,2,42)
+   edit_choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('🏠 Манзил',edit_choices)
+   self.assertNotIn(bot.DELIVERY_EDIT_LABEL,edit_choices)
    self.assertEqual(bot.role(self.db,2),'agent')
    bot.handle(self.db,msg(89003,'⬅️ Мижозлар',uid=2))
    bot.handle(self.db,msg(89004,'Бошқа',uid=2))
@@ -547,8 +549,8 @@ class Tests(unittest.TestCase):
    self.assertIn('42 ·',options)
    bot.handle(self.db,msg(89007,'1',uid=4))
    self.assertIn('МИЖОЗ #1',send.call_args.args[1])
-   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
-                    [v for row in send.call_args.args[2] for v in row])
+   self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
+                 [v for row in send.call_args.args[2] for v in row])
    bot.handle(self.db,msg(89008,'👥 Мижозлар',uid=1))
    bot.handle(self.db,msg(89009,'42',uid=1))
    self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
@@ -575,18 +577,20 @@ class Tests(unittest.TestCase):
    self.assertIn('10 ·',third);self.assertIn('1 ·',third)
    self.assertNotIn('Кейинги 20 ➡️',third)
 
- def test_cross_agent_financial_flows_remain_restricted(self):
+ def test_cross_agent_customer_flows_are_shared(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон')")
   with patch.object(bot,'send') as send:
    bot.prompt(self.db,2,{'action':'delivery','step':0,'values':{}})
    choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
    self.assertIn('1 ·',choices)
-   self.assertNotIn('42 ·',choices)
+   self.assertIn('42 ·',choices)
    now=int(time.time())
    msg={'update_id':89010,'message':{'message_id':89010,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':'42'}}
-   with self.assertRaises(ValueError):
-    bot.handle(self.db,msg)
-   self.assertIsNone(self.db.execute('SELECT 1 FROM events WHERE client=42').fetchone())
+   bot.handle(self.db,msg)
+   state=bot.state(self.db,2)
+   self.assertEqual(state['action'],'delivery')
+   self.assertEqual(state['values']['client'],42)
+   self.assertEqual(state['step'],1)
   core.set_agent_feature(self.db,1,2,'clients',False)
   with self.assertRaises(ValueError):bot.report_clients(self.db,2)
   with self.assertRaises(ValueError):bot.show_client_card(self.db,2,42)
@@ -633,14 +637,15 @@ class Tests(unittest.TestCase):
   audited=self.db.execute('SELECT field FROM client_edits WHERE client=1 ORDER BY id').fetchall()
   self.assertEqual([x[0] for x in audited],['shop_name','photo','lat','lon'])
 
- def test_client_edit_guards_agent_scope_and_duplicate_phone(self):
+ def test_client_edit_is_shared_but_protected_fields_and_duplicate_phone_are_blocked(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(20,4,'Бошқа мижоз','+998901234567')")
-  with self.assertRaises(ValueError):core.edit_client(self.db,2,20,{'name':'Чет мижоз'})
+  core.edit_client(self.db,2,20,{'name':'Чет мижоз'})
+  self.assertEqual(self.db.execute('SELECT name FROM clients WHERE id=20').fetchone()[0],'Чет мижоз')
   with self.assertRaises(ValueError):core.edit_client(self.db,2,1,{'agent':4})
   with self.assertRaises(ValueError):
    core.edit_client(self.db,2,1,{'phone':'+998901234567'})
   self.assertEqual(self.db.execute('SELECT phone FROM clients WHERE id=1').fetchone()[0],'+998900000001')
-  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_edits').fetchone()[0],0)
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_edits').fetchone()[0],1)
 
  def test_agent_add_then_deactivate_preserves_all_existing_records(self):
   now=int(time.time())
