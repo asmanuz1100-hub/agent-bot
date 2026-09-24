@@ -66,7 +66,7 @@ def last_contact_ts(db,client):
     return max(values) if values else None
 
 def visit_attention(db,client,map_only=False,now=None):
-    """Map urgency: fresh <3d, yellow 3–7d, red >7d.
+    """Map urgency: fresh <3d, yellow 3–4d, red 5+d.
 
     A future explicit follow-up date keeps a waiting customer in scheduled mode
     so the agent is not pushed back to the shop before the agreed date.
@@ -88,7 +88,7 @@ def visit_attention(db,client,map_only=False,now=None):
         return {'level':'unknown','days':None,'last_ts':None,'color':'#64748b',
                 'background':'#f8fafc','label':'⚪ Ташриф санаси аниқ эмас'}
     days=max(0,(now-last)//86400)
-    if days>7:
+    if days>=5:
         return {'level':'red','days':days,'last_ts':last,'color':'#dc2626',
                 'background':'#fee2e2','label':f'🔴 {days} кундан бери ташриф йўқ'}
     if days>=3:
