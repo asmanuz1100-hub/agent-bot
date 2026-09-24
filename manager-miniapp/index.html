@@ -1,310 +1,250 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="uz">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASMAN - Rahbar paneli (To'liq versiya)</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Leaflet CSS (Xarita uchun) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Telegram Web App Script -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f6f9;
-        }
-        .page-content {
-            display: none;
-        }
-        .page-content.active {
-            display: block;
-        }
-        #map {
-            height: calc(100vh - 145px);
-            width: 100%;
-            z-index: 10;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f2a4a">
+<title>ASMAN - Rahbar paneli (To'liq versiya)</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --navy:#0f2a4a;--blue:#0b67d8;--blue2:#eaf3ff;--bg:#f4f6f9;--card:#fff;
+  --text:#172033;--muted:#7a8799;--line:#e7edf4;--green:#138a57;--greenbg:#e8f7ef;
+  --amber:#ae6908;--amberbg:#fff4dc;--red:#ca3b46;--redbg:#ffecef;--shadow:0 3px 14px rgba(26,48,80,.06)
+}
+*{box-sizing:border-box}html{background:#e9eef5}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px}
+button,input{font:inherit}button{cursor:pointer}.app{max-width:430px;min-height:100dvh;margin:0 auto;background:var(--bg);position:relative;overflow-x:hidden}
+.header{position:sticky;top:0;z-index:900;background:var(--navy);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 15px 12px;box-shadow:0 2px 10px rgba(15,42,74,.16)}
+.header-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}.logo{font-size:19px;font-weight:900;letter-spacing:.8px}.head-title{justify-self:center;background:#183b64;border:1px solid rgba(255,255,255,.08);border-radius:99px;padding:6px 12px;font-size:11px;font-weight:700;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head-actions{display:flex;align-items:center;gap:9px}.icon-btn,.avatar{border:0;color:#fff;background:transparent;position:relative}.icon-btn{width:28px;height:28px;font-size:18px}.icon-btn .pulse{position:absolute;right:3px;top:1px;width:7px;height:7px;border-radius:50%;background:#ff4d5a;border:1px solid #fff}.avatar{width:32px;height:32px;border-radius:50%;background:#1870db;font-weight:800}
+.page{display:none;padding:14px 13px calc(88px + env(safe-area-inset-bottom))}.page.active{display:block}.page.flush{padding:0 0 calc(72px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid #edf1f5;border-radius:18px;box-shadow:var(--shadow)}.p16{padding:16px}.greet h1{font-size:18px;margin:0 0 2px}.greet p{margin:0;color:var(--muted);font-size:11px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mt12{margin-top:12px}.mt14{margin-top:14px}.metric{padding:12px;border-radius:14px;border:1px solid var(--line);min-height:104px}.metric.blue{background:#f2f7ff;border-color:#dcecff}.metric.green{background:#f1fbf6;border-color:#d9f0e4}.metric.amber{background:#fff9ee;border-color:#f8e7c3}.metric.red{background:#fff5f6;border-color:#f6dce0}
+.metric-top{display:flex;align-items:center;gap:8px}.metric-icon{width:33px;height:33px;border-radius:10px;display:grid;place-items:center;color:white;font-size:16px;font-weight:900}.metric.blue .metric-icon{background:#1769d4}.metric.green .metric-icon{background:#1a9d67}.metric.amber .metric-icon{background:#d38b1f}.metric.red .metric-icon{background:#dc4e59}.metric-label{font-size:10px;color:#6f7e92;font-weight:650}.metric-value{font-size:18px;font-weight:850;margin-top:1px}.metric-foot{font-size:10px;margin-top:9px;font-weight:750}.metric.blue .metric-foot{color:#1769d4}.metric.green .metric-foot{color:#198a5b}.metric.red .metric-value{color:#c93d49}
+.section-title{font-size:13px;font-weight:850;margin:0}.control-list{display:grid;gap:9px;margin-top:12px}.control-item{width:100%;border:0;background:#f7f9fb;border-radius:13px;padding:11px;display:flex;align-items:center;text-align:left;gap:10px;color:inherit}.control-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px}.control-icon.red{background:var(--redbg);color:var(--red)}.control-icon.amber{background:var(--amberbg);color:var(--amber)}.control-copy{min-width:0;flex:1}.control-copy b{display:block;font-size:11px}.control-copy span{display:block;font-size:10px;color:var(--muted);margin-top:2px}.chev{color:#a5afbd;font-size:18px}
+.filters{display:flex;gap:7px;overflow-x:auto;padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);scrollbar-width:none}.filters::-webkit-scrollbar{display:none}.chip{border:1px solid #e1e8f0;background:#fff;color:#64748a;border-radius:99px;padding:7px 10px;white-space:nowrap;font-size:10px;font-weight:800}.chip.active{background:var(--navy);border-color:var(--navy);color:#fff}.chip.green{background:#effaf5;color:#16794f;border-color:#d8efe3}.chip.amber{background:#fff7e9;color:#9c620e;border-color:#f2dfba}
+.map-wrap{position:relative;background:#dfe8ef;min-height:calc(100dvh - 146px)}#map{height:calc(100dvh - 146px);min-height:460px;width:100%;background:linear-gradient(135deg,#e5ebef,#d8e3e8)}.map-loading{position:absolute;inset:0;display:grid;place-items:center;color:#64748a;font-size:12px;background:#edf2f5;z-index:5}.agent-float{position:absolute;left:13px;right:13px;bottom:14px;z-index:500;background:#fff;border-radius:18px;padding:13px;border:1px solid #e7edf3;box-shadow:0 12px 30px rgba(15,42,74,.18)}.agent-row{display:flex;align-items:center;gap:10px}.agent-avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#dbeafe;border:2px solid #31a36c;color:#0d539d;font-weight:900}.agent-main{min-width:0;flex:1}.agent-top{display:flex;align-items:center;gap:6px}.agent-top b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tag{font-size:9px;font-weight:800;padding:3px 7px;border-radius:99px}.tag.green{background:var(--greenbg);color:var(--green)}.tag.amber{background:var(--amberbg);color:var(--amber)}.agent-sub{font-size:10px;color:var(--muted);margin-top:3px}.agent-plan{font-size:10px;color:#1668cf;font-weight:800}.agent-stats{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:9px;margin-top:10px;font-size:10px}.agent-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.btn{border:0;border-radius:11px;padding:10px 12px;font-size:11px;font-weight:800}.btn.primary{background:var(--blue);color:#fff}.btn.soft{background:#f0f3f6;color:#344256}.search{position:relative}.search input{width:100%;border:1px solid #dde5ee;background:#fff;border-radius:13px;padding:12px 39px 12px 13px;outline:none;font-size:12px}.search input:focus{border-color:#80aee5;box-shadow:0 0 0 3px #ddebfb}.search .search-ico{position:absolute;right:14px;top:11px;color:#8a98aa}.list-filters{display:flex;gap:6px;overflow:auto;padding:10px 0 1px;scrollbar-width:none}.customer-list{display:grid;gap:9px;margin-top:11px}.customer-card{width:100%;border:1px solid #ebf0f5;background:#fff;border-radius:15px;padding:11px;display:flex;align-items:center;gap:10px;text-align:left;box-shadow:var(--shadow)}.shop-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#edf5ff;color:#145fae;font-size:19px}.customer-copy{min-width:0;flex:1}.customer-copy b{display:block;font-size:11px}.customer-copy span{display:block;font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.age{font-size:9px;font-weight:850;border-radius:9px;padding:5px 7px}.age.green{background:var(--greenbg);color:var(--green)}.age.amber{background:var(--amberbg);color:var(--amber)}.age.red{background:var(--redbg);color:var(--red)}.age.blue{background:#eaf3ff;color:#1767c8}.empty{text-align:center;color:#8b98a8;padding:30px 12px;font-size:11px}
+.cash-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cash-kpi{padding:14px}.cash-kpi span{font-size:10px;color:var(--muted)}.cash-kpi b{display:block;font-size:15px;margin-top:4px}.cash-kpi b.green{color:var(--green)}.cash-kpi b.amber{color:var(--amber)}.cash-kpi small{font-size:9px;color:#9aa6b4}.seg{display:grid;grid-template-columns:repeat(3,1fr);background:#e9eef4;border-radius:12px;padding:3px;margin-bottom:11px}.seg button{border:0;background:transparent;border-radius:9px;padding:8px 4px;color:#718096;font-size:10px;font-weight:800}.seg button.active{background:#fff;color:#145ea8;box-shadow:0 1px 4px rgba(30,55,90,.08)}.txn-list{display:grid;gap:0}.txn{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #eef2f5}.txn:last-child{border-bottom:0}.txn-icon{width:36px;height:36px;border-radius:11px;background:#edf7f2;color:#168454;display:grid;place-items:center}.txn-main{min-width:0;flex:1}.txn-main b{font-size:11px}.txn-main span{display:block;font-size:9px;color:var(--muted);margin-top:2px}.txn-right{text-align:right}.txn-right b{font-size:11px;color:#158050}.txn-right .status{font-size:8px;padding:3px 6px;border-radius:7px;display:inline-block;margin-top:2px}.status.ok{background:var(--greenbg);color:var(--green)}.status.wait{background:var(--amberbg);color:var(--amber)}.approve{border:0;background:#0b67d8;color:#fff;border-radius:8px;padding:5px 7px;font-size:8px;font-weight:800;margin-top:4px}
+.report-card{padding:15px}.report-title{font-size:12px;font-weight:850;margin:0 0 11px}.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.report-box{background:#f7f9fb;border-radius:12px;padding:12px;text-align:center}.report-box span{font-size:9px;color:var(--muted)}.report-box b{display:block;font-size:16px;margin-top:4px}.up{font-size:9px;color:#17955e;font-weight:800}.bars{height:145px;display:flex;align-items:flex-end;gap:9px;padding:15px 4px 22px;border-bottom:1px solid var(--line)}.bar-col{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px;height:100%;position:relative}.bar-col i{display:block;width:9px;border-radius:4px 4px 0 0;background:#b9d7f7}.bar-col i.done{background:#297fe0}.bar-col span{position:absolute;bottom:-18px;font-size:8px;color:#8995a6}.donut-row{display:grid;grid-template-columns:115px 1fr;gap:12px;align-items:center}.donut{width:105px;height:105px;border-radius:50%;background:conic-gradient(#1b9d65 0 58%,#d69b2b 58% 76%,#d9505a 76% 90%,#3388db 90% 100%);position:relative;display:grid;place-items:center}.donut:after{content:"";position:absolute;inset:16px;border-radius:50%;background:#fff}.donut strong,.donut small{position:relative;z-index:1}.donut-center{position:absolute;z-index:2;text-align:center}.donut-center strong{display:block;font-size:20px}.donut-center small{font-size:8px;color:var(--muted)}.legend{display:grid;gap:7px}.legend div{display:flex;justify-content:space-between;gap:8px;font-size:9px}.legend span:first-child{color:#627186}.legend i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
+.bottom{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(430px,100%);z-index:950;background:#fff;border-top:1px solid #e4eaf1;display:grid;grid-template-columns:repeat(5,1fr);padding:7px 6px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -3px 16px rgba(24,47,77,.07)}.bottom button{border:0;background:transparent;color:#8b98a9;display:grid;justify-items:center;gap:2px;padding:3px 0;font-size:9px}.bottom .nav-ico{font-size:17px;height:22px}.bottom button.active{color:#0d67d5;font-weight:800}
+.sheet-bg{position:fixed;inset:0;background:rgba(15,42,74,.4);z-index:1200;display:none;align-items:flex-end;justify-content:center}.sheet-bg.open{display:flex}.sheet{width:min(430px,100%);max-height:77dvh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:16px 15px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(15,42,74,.22)}.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.sheet-head b{font-size:15px}.close{width:31px;height:31px;border:0;border-radius:50%;background:#eef2f6;color:#5d6c7f;font-size:18px}.notice-list{display:grid;gap:8px}.notice-item{padding:11px;border:1px solid #e9eef4;border-radius:13px}.notice-item b{display:block;font-size:11px}.notice-item span{display:block;color:var(--muted);font-size:9px;margin-top:3px}.detail-grid{display:grid;gap:8px}.detail-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:9px 0;font-size:10px}.detail-row span{color:var(--muted)}.detail-row b{text-align:right}.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#173b64;color:#fff;border-radius:12px;padding:10px 13px;font-size:10px;z-index:1600;display:none;max-width:calc(100% - 28px);text-align:center}
+.demo-note{font-size:9px;color:#6b7b90;background:#edf5ff;border:1px solid #d9e9fb;border-radius:11px;padding:9px 10px;margin-top:10px}
+@media(min-width:700px){.app{margin:18px auto;min-height:calc(100dvh - 36px);border-radius:18px;overflow:hidden}.bottom{bottom:18px}.header{border-radius:18px 18px 0 0}}
+</style>
 </head>
-<body class="bg-gray-100 text-gray-800 pb-24">
-
-    <!-- Header (Sarlavha) -->
-    <header class="bg-[#0f2a4a] text-white px-4 py-3 sticky top-0 z-50 shadow-md">
-        <div class="flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <span class="text-xl font-black tracking-wider">ASMAN</span>
-            </div>
-            <div class="flex items-center space-x-3">
-                <span id="header-title" class="text-xs font-medium bg-blue-900/60 px-3 py-1 rounded-full">Rahbar paneli</span>
-                <div class="relative">
-                    <i class="fa-regular fa-bell text-lg"></i>
-                    <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-                </div>
-                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-bold text-sm">
-                    R
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- 1. BOSH SAHIFA -->
-    <div id="page-home" class="page-content active max-w-md mx-auto p-4 space-y-4">
-        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <h1 class="text-lg font-bold text-gray-900">Assalomu alaykum, Rahbar!</h1>
-            <p class="text-xs text-gray-500 mt-0.5">Bugun, 24 sentabr 2026</p>
-
-            <div class="grid grid-cols-2 gap-3 mt-4">
-                <div class="bg-blue-50/60 p-3 rounded-xl border border-blue-100">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fa-solid fa-users text-sm"></i>
-                        </div>
-                        <div>
-                            <p class="text-[11px] text-gray-500 font-medium">Agentlar</p>
-                            <h3 class="text-lg font-bold text-gray-900">28</h3>
-                        </div>
-                    </div>
-                    <p class="text-[11px] text-blue-600 font-semibold mt-2">faol 22</p>
-                </div>
-
-                <div class="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-emerald-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fa-solid fa-map-location-dot text-sm"></i>
-                        </div>
-                        <div>
-                            <p class="text-[11px] text-gray-500 font-medium">Bugungi tashriflar</p>
-                            <h3 class="text-lg font-bold text-gray-900">156</h3>
-                        </div>
-                    </div>
-                    <p class="text-[11px] text-emerald-600 font-semibold mt-2">reja 180</p>
-                </div>
-
-                <div class="bg-amber-50/60 p-3 rounded-xl border border-amber-100">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-amber-500 text-white rounded-lg flex items-center justify-center">
-                            <i class="fa-solid fa-wallet text-sm"></i>
-                        </div>
-                        <div>
-                            <p class="text-[11px] text-gray-500 font-medium">Qabul qilingan to'lovlar</p>
-                            <h3 class="text-sm font-bold text-gray-900">12,450 USD</h3>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-rose-50/60 p-3 rounded-xl border border-rose-100">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-rose-500 text-white rounded-lg flex items-center justify-center">
-                            <i class="fa-solid fa-clock-rotate-left text-sm"></i>
-                        </div>
-                        <div>
-                            <p class="text-[11px] text-gray-500 font-medium">Tashrif kechikkan</p>
-                            <h3 class="text-lg font-bold text-rose-600">24 <span class="text-xs font-normal text-gray-500">mijoz</span></h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <h2 class="text-sm font-bold text-gray-900 mb-3">Bugungi nazorat</h2>
-            <div class="space-y-2.5">
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xs">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-bold text-gray-900">8+ kun tashrifsiz mijozlar</h4>
-                            <p class="text-[11px] text-gray-500">12 ta mijoz</p>
-                        </div>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
-                </div>
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xs">
-                            <i class="fa-solid fa-file-invoice-dollar"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-bold text-gray-900">Kassa tasdig'ini kutayotgan</h4>
-                            <p class="text-[11px] text-gray-500">5 ta to'lov (1,250 USD)</p>
-                        </div>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
-                </div>
-            </div>
-        </div>
+<body>
+<div class="app">
+<header class="header">
+  <div class="header-row">
+    <div class="logo">ASMAN</div>
+    <div class="head-title" id="headerTitle">Rahbar paneli</div>
+    <div class="head-actions">
+      <button class="icon-btn" id="notifyBtn" aria-label="Xabarnomalar">🔔<span class="pulse"></span></button>
+      <button class="avatar" id="profileBtn" aria-label="Profil">R</button>
     </div>
+  </div>
+</header>
 
-    <!-- 2. AGENTLAR (Xarita) -->
-    <div id="page-map" class="page-content max-w-md mx-auto">
-        <div class="bg-white px-4 py-2.5 shadow-sm border-b border-gray-200 flex items-center space-x-2 overflow-x-auto whitespace-nowrap">
-            <button class="bg-[#0f2a4a] text-white text-xs px-3 py-1.5 rounded-full font-medium">Barcha agentlar (28)</button>
-            <button class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-3 py-1.5 rounded-full font-medium">🟢 Faol 22</button>
-            <button class="bg-amber-50 text-amber-700 border border-amber-200 text-xs px-3 py-1.5 rounded-full font-medium">🟠 Tashrif kechikkan 3</button>
-        </div>
-        <div class="relative w-full">
-            <div id="map"></div>
-            <div class="absolute bottom-4 left-4 right-4 z-30 bg-white rounded-2xl p-3.5 shadow-xl border border-gray-100">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-3">
-                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces" alt="Agent" class="w-11 h-11 rounded-full object-cover border-2 border-emerald-500">
-                        <div>
-                            <div class="flex items-center space-x-1.5">
-                                <h3 class="text-sm font-bold text-gray-900">Alibek Karimov</h3>
-                                <span class="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">Marshrutda</span>
-                            </div>
-                            <p class="text-[11px] text-gray-500 mt-0.5">📍 Chilonzor tumani</p>
-                        </div>
-                    </div>
-                    <span class="text-xs font-bold text-blue-600">12 ta reja</span>
-                </div>
-            </div>
-        </div>
+<main>
+<section class="page active" id="page-home">
+  <div class="card p16 greet">
+    <h1>Assalomu alaykum, Rahbar!</h1>
+    <p>Bugun, 24 sentabr 2026</p>
+    <div class="grid2 mt14">
+      <button class="metric blue" data-go="map" data-map-filter="all">
+        <div class="metric-top"><span class="metric-icon">👥</span><div><div class="metric-label">Agentlar</div><div class="metric-value" id="kpiAgents">28</div></div></div>
+        <div class="metric-foot" id="kpiActive">faol 22</div>
+      </button>
+      <button class="metric green" data-go="map" data-map-filter="active">
+        <div class="metric-top"><span class="metric-icon">📍</span><div><div class="metric-label">Bugungi tashriflar</div><div class="metric-value">156</div></div></div>
+        <div class="metric-foot">reja 180</div>
+      </button>
+      <button class="metric amber" data-go="cash">
+        <div class="metric-top"><span class="metric-icon">💳</span><div><div class="metric-label">Qabul qilingan to'lovlar</div><div class="metric-value">12,450 USD</div></div></div>
+      </button>
+      <button class="metric red" data-go="customers" data-customer-filter="red">
+        <div class="metric-top"><span class="metric-icon">⏱</span><div><div class="metric-label">Tashrif kechikkan</div><div class="metric-value">24 <span style="font-size:9px;color:#7a8799;font-weight:500">mijoz</span></div></div></div>
+      </button>
     </div>
-
-    <!-- 3. MIJOZLAR (Ro'yxat) -->
-    <div id="page-customers" class="page-content max-w-md mx-auto p-4 space-y-3">
-        <div class="relative">
-            <input type="text" placeholder="Mijoz nomi yoki manzil..." class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-600 shadow-sm">
-            <i class="fa-solid fa-search absolute right-4 top-3 text-gray-400 text-xs"></i>
-        </div>
-        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold">🏪</div>
-                <div>
-                    <h4 class="text-xs font-bold text-gray-900">Baraka do'koni</h4>
-                    <p class="text-[10px] text-gray-500">Buroq ko'chasi, Qo'qon</p>
-                </div>
-            </div>
-            <span class="bg-amber-50 text-amber-700 text-[10px] px-2 py-1 rounded-lg font-semibold">3 kun</span>
-        </div>
-        <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 font-bold">🏢</div>
-                <div>
-                    <h4 class="text-xs font-bold text-gray-900">Ideal qurilish</h4>
-                    <p class="text-[10px] text-gray-500">Navbahor ko'chasi</p>
-                </div>
-            </div>
-            <span class="bg-emerald-50 text-emerald-700 text-[10px] px-2 py-1 rounded-lg font-semibold">Yangi</span>
-        </div>
+  </div>
+  <div class="card p16 mt12">
+    <h2 class="section-title">Bugungi nazorat</h2>
+    <div class="control-list">
+      <button class="control-item" data-go="customers" data-customer-filter="red"><span class="control-icon red">⚠</span><span class="control-copy"><b>8+ kun tashrifsiz mijozlar</b><span>12 ta mijoz</span></span><span class="chev">›</span></button>
+      <button class="control-item" data-go="cash" data-cash-tab="pending"><span class="control-icon amber">▣</span><span class="control-copy"><b>Kassa tasdig'ini kutayotgan</b><span>5 ta to'lov (1,250 USD)</span></span><span class="chev">›</span></button>
     </div>
+  </div>
+  <div class="demo-note">TEST: hozir Mini App tez ishlaydigan demo ma'lumotlar bilan ishlaydi. Bot bazasiga hech narsa yozmaydi.</div>
+</section>
 
-    <!-- 4. KASSA -->
-    <div id="page-cash" class="page-content max-w-md mx-auto p-4 space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-[11px] text-gray-500 font-medium">Qabul qilingan</p>
-                <h3 class="text-sm font-bold text-emerald-600 mt-1">12,450 USD</h3>
-                <span class="text-[10px] text-gray-400">28 ta to'lov</span>
-            </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-[11px] text-gray-500 font-medium">Tasdiq kutyotgan</p>
-                <h3 class="text-sm font-bold text-amber-600 mt-1">1,250 USD</h3>
-                <span class="text-[10px] text-gray-400">5 ta topshirish</span>
-            </div>
-        </div>
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-            <h3 class="text-xs font-bold text-gray-900">So'nggi topshirishlar</h3>
-            <div class="flex justify-between items-center text-xs pb-2 border-b border-gray-100">
-                <div>
-                    <p class="font-bold text-gray-900">Alibek Karimov</p>
-                    <span class="text-[10px] text-gray-500">14:20</span>
-                </div>
-                <div class="text-right">
-                    <p class="font-bold text-emerald-600">450.00 USD</p>
-                    <span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Qabul qilindi</span>
-                </div>
-            </div>
-        </div>
-    </div>
+<section class="page flush" id="page-map">
+  <div class="filters" id="agentFilters">
+    <button class="chip active" data-agent-filter="all">Barcha agentlar</button>
+    <button class="chip green" data-agent-filter="active">🟢 Faol</button>
+    <button class="chip amber" data-agent-filter="late">🟠 Kechikkan</button>
+  </div>
+  <div class="map-wrap">
+    <div id="map"></div><div class="map-loading" id="mapLoading">Xarita yuklanmoqda...</div>
+    <div class="agent-float" id="agentFloat"></div>
+  </div>
+</section>
 
-    <!-- 5. HISOBOT -->
-    <div id="page-report" class="page-content max-w-md mx-auto p-4 space-y-4">
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-            <h3 class="text-xs font-bold text-gray-900">Umumiy ko'rsatkichlar</h3>
-            <div class="grid grid-cols-2 gap-3 text-center">
-                <div class="bg-gray-50 p-3 rounded-xl">
-                    <p class="text-[10px] text-gray-500">Jami tashriflar</p>
-                    <p class="text-base font-bold text-gray-900 mt-1">892 <span class="text-xs text-emerald-600">+12%</span></p>
-                </div>
-                <div class="bg-gray-50 p-3 rounded-xl">
-                    <p class="text-[10px] text-gray-500">Yangi mijozlar</p>
-                    <p class="text-base font-bold text-gray-900 mt-1">48 <span class="text-xs text-emerald-600">+28%</span></p>
-                </div>
-            </div>
-        </div>
-    </div>
+<section class="page" id="page-customers">
+  <div class="search"><input id="customerSearch" placeholder="Mijoz nomi yoki manzil..."><span class="search-ico">⌕</span></div>
+  <div class="list-filters" id="customerFilters">
+    <button class="chip active" data-customer-filter="all">Barchasi</button>
+    <button class="chip green" data-customer-filter="fresh">🟢 0–2 kun</button>
+    <button class="chip amber" data-customer-filter="yellow">🟠 3–7 kun</button>
+    <button class="chip" data-customer-filter="red" style="color:#c23a45">🔴 8+ kun</button>
+    <button class="chip" data-customer-filter="scheduled">🔵 Rejada</button>
+  </div>
+  <div class="customer-list" id="customerList"></div>
+</section>
 
-    <!-- Bottom Navigation Bar (Pastki menyu) -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 z-50 max-w-md mx-auto shadow-lg">
-        <div class="flex justify-between items-center text-center">
-            <button onclick="switchPage('home', 'Rahbar paneli')" id="nav-home" class="flex flex-col items-center text-blue-600 focus:outline-none">
-                <i class="fa-solid fa-house text-lg"></i>
-                <span class="text-[10px] mt-1 font-semibold">Bosh sahifa</span>
-            </button>
-            <button onclick="switchPage('map', 'Agentlar xaritasi')" id="nav-map" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
-                <i class="fa-solid fa-user-shield text-lg"></i>
-                <span class="text-[10px] mt-1">Agentlar</span>
-            </button>
-            <button onclick="switchPage('customers', 'Mijozlar ro\'yxati')" id="nav-customers" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
-                <i class="fa-solid fa-users text-lg"></i>
-                <span class="text-[10px] mt-1">Mijozlar</span>
-            </button>
-            <button onclick="switchPage('cash', 'Kassa nazorati')" id="nav-cash" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
-                <i class="fa-solid fa-wallet text-lg"></i>
-                <span class="text-[10px] mt-1">Kassa</span>
-            </button>
-            <button onclick="switchPage('report', 'Hisobotlar')" id="nav-report" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
-                <i class="fa-solid fa-chart-pie text-lg"></i>
-                <span class="text-[10px] mt-1">Hisobot</span>
-            </button>
-        </div>
-    </nav>
+<section class="page" id="page-cash">
+  <div class="seg" id="cashTabs"><button class="active" data-cash-tab="today">Bugun</button><button data-cash-tab="week">Hafta</button><button data-cash-tab="pending">Kutilmoqda</button></div>
+  <div class="cash-kpis">
+    <div class="card cash-kpi"><span>Qabul qilingan</span><b class="green" id="cashAccepted">12,450 USD</b><small id="cashAcceptedCount">28 ta to'lov</small></div>
+    <div class="card cash-kpi"><span>Tasdiq kutayotgan</span><b class="amber" id="cashPending">1,250 USD</b><small id="cashPendingCount">5 ta topshirish</small></div>
+  </div>
+  <div class="card p16 mt12"><h3 class="section-title">So'nggi topshirishlar</h3><div class="txn-list" id="txnList"></div></div>
+</section>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        let map = null;
+<section class="page" id="page-report">
+  <div class="seg" id="reportTabs"><button class="active" data-report-tab="week">Hafta</button><button data-report-tab="month">Oy</button><button data-report-tab="agents">Agentlar</button></div>
+  <div class="card report-card">
+    <h3 class="report-title">Umumiy ko'rsatkichlar</h3>
+    <div class="report-grid"><div class="report-box"><span>Jami tashriflar</span><b id="reportVisits">892</b><em class="up">+12%</em></div><div class="report-box"><span>Yangi mijozlar</span><b id="reportNew">48</b><em class="up">+28%</em></div></div>
+    <div class="bars" id="barChart"></div>
+  </div>
+  <div class="card report-card mt12"><h3 class="report-title">Mijozlar holati</h3><div class="donut-row"><div class="donut"><div class="donut-center"><strong id="donutTotal">0</strong><small>mijoz</small></div></div><div class="legend" id="reportLegend"></div></div></div>
+</section>
+</main>
 
-        function switchPage(pageId, titleText) {
-            document.querySelectorAll('.page-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('nav button').forEach(el => {
-                el.classList.remove('text-blue-600');
-                el.classList.add('text-gray-400');
-                let span = el.querySelector('span');
-                if(span) span.classList.remove('font-semibold');
-            });
+<nav class="bottom">
+  <button class="active" id="nav-home" data-page="home"><span class="nav-ico">⌂</span><span>Bosh sahifa</span></button>
+  <button id="nav-map" data-page="map"><span class="nav-ico">🗺</span><span>Agentlar</span></button>
+  <button id="nav-customers" data-page="customers"><span class="nav-ico">👥</span><span>Mijozlar</span></button>
+  <button id="nav-cash" data-page="cash"><span class="nav-ico">▣</span><span>Kassa</span></button>
+  <button id="nav-report" data-page="report"><span class="nav-ico">◔</span><span>Hisobot</span></button>
+</nav>
+</div>
 
-            document.getElementById('page-' + pageId).classList.add('active');
-            document.getElementById('header-title').innerText = titleText;
-            
-            let activeBtn = document.getElementById('nav-' + pageId);
-            activeBtn.classList.add('text-blue-600');
-            activeBtn.classList.remove('text-gray-400');
-            activeBtn.querySelector('span').classList.add('font-semibold');
+<div class="sheet-bg" id="sheetBg"><div class="sheet"><div class="sheet-head"><b id="sheetTitle">Ma'lumot</b><button class="close" id="sheetClose">×</button></div><div id="sheetBody"></div></div></div>
+<div class="toast" id="toast"></div>
 
-            if (pageId === 'map') {
-                setTimeout(() => {
-                    if (!map) {
-                        map = L.map('map', {zoomControl: false}).setView([41.2995, 69.2401], 13);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-                        L.marker([41.2995, 69.2401]).addTo(map);
-                    } else {
-                        map.invalidateSize();
-                    }
-                }, 100);
-            }
-        }
+<script>
+(function(){
+"use strict";
+var state={page:"home",agentFilter:"all",selectedAgent:1,customerFilter:"all",cashTab:"today",reportTab:"week"};
+var agents=[
+{id:1,name:"Alibek Karimov",area:"Chilonzor tumani",status:"active",plan:14,done:12,late:3,lat:41.2995,lon:69.2401},
+{id:2,name:"Botir Rasulov",area:"Yakkasaroy tumani",status:"active",plan:12,done:9,late:1,lat:41.2848,lon:69.2531},
+{id:3,name:"Sardor Aliyev",area:"Olmazor tumani",status:"late",plan:13,done:6,late:5,lat:41.3382,lon:69.2245},
+{id:4,name:"Jasur Komilov",area:"Mirobod tumani",status:"active",plan:10,done:8,late:2,lat:41.2919,lon:69.2864},
+{id:5,name:"Temur Xolmatov",area:"Shayxontohur tumani",status:"late",plan:11,done:5,late:4,lat:41.3212,lon:69.2318}
+];
+var customers=[
+{id:1,name:"Baraka do'koni",address:"Buroq ko'chasi, Qo'qon",age:"yellow",days:3,status:"Taklif berilgan",agent:"Alibek Karimov",phone:"+998 90 111 22 33"},
+{id:2,name:"Ideal qurilish",address:"Navbahor ko'chasi",age:"fresh",days:1,status:"Tovar olgan",agent:"Botir Rasulov",phone:"+998 91 222 44 55"},
+{id:3,name:"Saxovat Market",address:"Yangi hayot MFY",age:"red",days:10,status:"Qayta tashrif kerak",agent:"Sardor Aliyev",phone:"+998 93 333 55 66"},
+{id:4,name:"Nur Savdo",address:"Istiqlol ko'chasi",age:"scheduled",days:0,status:"26 sentabrga reja",agent:"Jasur Komilov",phone:"+998 94 444 66 77"},
+{id:5,name:"Oqtepa Qurilish",address:"Farg'ona yo'li",age:"yellow",days:6,status:"Kutmoqda",agent:"Alibek Karimov",phone:"+998 95 555 77 88"},
+{id:6,name:"Marvarid Market",address:"Mustaqillik ko'chasi",age:"red",days:13,status:"Aloqa kerak",agent:"Temur Xolmatov",phone:"+998 97 666 88 99"},
+{id:7,name:"Bunyodkor",address:"Bunyodkor ko'chasi",age:"fresh",days:2,status:"Yangi",agent:"Botir Rasulov",phone:"+998 99 777 11 22"}
+];
+var txns=[
+{id:1,agent:"Alibek Karimov",time:"14:20",amount:450,state:"accepted",period:"today"},
+{id:2,agent:"Botir Rasulov",time:"13:05",amount:300,state:"pending",period:"today"},
+{id:3,agent:"Sardor Aliyev",time:"11:40",amount:520,state:"accepted",period:"today"},
+{id:4,agent:"Jasur Komilov",time:"Kecha",amount:700,state:"accepted",period:"week"},
+{id:5,agent:"Temur Xolmatov",time:"Kecha",amount:400,state:"pending",period:"week"}
+];
+var pageTitles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar ro'yxati",cash:"Kassa nazorati",report:"Hisobotlar"};
+var leaflet=null,map=null,markers=null;
 
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-    </script>
+function $(id){return document.getElementById(id)}
+function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(function(){el.style.display="none"},1800)}
+function openSheet(title,html){$("sheetTitle").textContent=title;$("sheetBody").innerHTML=html;$("sheetBg").classList.add("open")}
+function closeSheet(){$("sheetBg").classList.remove("open")}
+function switchPage(id){
+  state.page=id;document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("active",p.id==="page-"+id)});
+  document.querySelectorAll(".bottom button").forEach(function(b){b.classList.toggle("active",b.dataset.page===id)});
+  $("headerTitle").textContent=pageTitles[id]||"ASMAN";window.scrollTo(0,0);
+  if(id==="map")initMap();if(id==="customers")renderCustomers();if(id==="cash")renderCash();if(id==="report")renderReport();
+}
+function initials(name){return name.split(" ").map(function(x){return x[0]}).slice(0,2).join("").toUpperCase()}
+function agentCard(a){
+  var label=a.status==="active"?"Marshrutda":"Kechikkan",cls=a.status==="active"?"green":"amber";
+  return '<div class="agent-row"><div class="agent-avatar">'+initials(a.name)+'</div><div class="agent-main"><div class="agent-top"><b>'+a.name+'</b><span class="tag '+cls+'">'+label+'</span></div><div class="agent-sub">📍 '+a.area+'</div></div><div class="agent-plan">'+a.plan+' ta reja</div></div>'+
+  '<div class="agent-stats"><span>🔄 Bugun: <b>'+a.done+' / '+a.plan+'</b></span><span style="color:#bd3d48">⚠ Kechikkan: <b>'+a.late+' ta</b></span></div>'+
+  '<div class="agent-actions"><button class="btn soft" data-agent-profile="'+a.id+'">👤 Profil</button><button class="btn primary" data-agent-route="'+a.id+'">➤ Marshrut</button></div>';
+}
+function renderAgentFloat(){var a=agents.find(function(x){return x.id===state.selectedAgent})||agents[0];$("agentFloat").innerHTML=agentCard(a)}
+function loadLeaflet(){
+  if(window.L)return Promise.resolve(window.L);if(leaflet)return leaflet;
+  leaflet=new Promise(function(resolve,reject){
+    var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
+    var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.onload=function(){resolve(window.L)};js.onerror=reject;document.body.appendChild(js);
+  });return leaflet;
+}
+function filteredAgents(){return agents.filter(function(a){return state.agentFilter==="all"||a.status===state.agentFilter})}
+function initMap(){
+  renderAgentFloat();$("mapLoading").style.display="grid";
+  loadLeaflet().then(function(L){
+    if(!map){map=L.map("map",{zoomControl:false,attributionControl:false}).setView([41.307,69.24],12);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(map);markers=L.layerGroup().addTo(map)}
+    else map.invalidateSize();
+    markers.clearLayers();var list=filteredAgents();
+    list.forEach(function(a){
+      var icon=L.divIcon({className:"",html:'<div style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:'+(a.status==="active"?"#dff5e9":"#fff0d8")+';border:3px solid white;box-shadow:0 2px 9px #0003;font-weight:900;color:#173b64;font-size:10px">'+initials(a.name)+'</div>',iconSize:[34,34],iconAnchor:[17,17]});
+      L.marker([a.lat,a.lon],{icon:icon}).addTo(markers).on("click",function(){state.selectedAgent=a.id;renderAgentFloat()});
+    });
+    if(list.length){var g=L.featureGroup(markers.getLayers());map.fitBounds(g.getBounds().pad(.35),{maxZoom:13})}
+    $("mapLoading").style.display="none";
+  }).catch(function(){$("mapLoading").textContent="Xarita yuklanmadi. Internetni tekshiring."});
+}
+function ageLabel(c){if(c.age==="fresh")return "0–2 kun";if(c.age==="yellow")return c.days+" kun";if(c.age==="red")return c.days+" kun";return "Rejada"}
+function renderCustomers(){
+  var q=$("customerSearch").value.trim().toLowerCase();
+  var list=customers.filter(function(c){var ok=state.customerFilter==="all"||c.age===state.customerFilter;return ok&&(!q||(c.name+" "+c.address).toLowerCase().includes(q))});
+  $("customerList").innerHTML=list.map(function(c){return '<button class="customer-card" data-customer="'+c.id+'"><span class="shop-icon">🏪</span><span class="customer-copy"><b>'+c.name+'</b><span>'+c.address+'</span></span><span class="age '+(c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue")+'">'+ageLabel(c)+'</span></button>'}).join("")||'<div class="empty">Mijoz topilmadi</div>';
+}
+function customerDetail(id){var c=customers.find(function(x){return x.id===id});if(!c)return;openSheet(c.name,'<div class="detail-grid"><div class="detail-row"><span>Manzil</span><b>'+c.address+'</b></div><div class="detail-row"><span>Telefon</span><b>'+c.phone+'</b></div><div class="detail-row"><span>Agent</span><b>'+c.agent+'</b></div><div class="detail-row"><span>Holat</span><b>'+c.status+'</b></div><div class="detail-row"><span>Oxirgi tashrif</span><b>'+ageLabel(c)+'</b></div></div><button class="btn primary" style="width:100%;margin-top:12px" data-demo-nav="1">➤ Navigatsiya</button>')}
+function renderCash(){
+  var list=txns.filter(function(t){if(state.cashTab==="pending")return t.state==="pending";if(state.cashTab==="today")return t.period==="today";return true});
+  var accepted=txns.filter(function(t){return t.state==="accepted"}),pending=txns.filter(function(t){return t.state==="pending"});
+  $("cashAccepted").textContent=accepted.reduce(function(a,t){return a+t.amount},0).toLocaleString("en-US")+" USD";$("cashAcceptedCount").textContent=accepted.length+" ta to'lov";
+  $("cashPending").textContent=pending.reduce(function(a,t){return a+t.amount},0).toLocaleString("en-US")+" USD";$("cashPendingCount").textContent=pending.length+" ta topshirish";
+  $("txnList").innerHTML=list.map(function(t){return '<div class="txn"><div class="txn-icon">💵</div><div class="txn-main"><b>'+t.agent+'</b><span>'+t.time+'</span></div><div class="txn-right"><b>'+t.amount.toLocaleString("en-US")+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span>'+(t.state==="pending"?'<br><button class="approve" data-approve="'+t.id+'">Tasdiqlash</button>':'')+'</div></div>'}).join("")||'<div class="empty">Operatsiya yo'q</div>';
+}
+function renderReport(){
+  var plans=state.reportTab==="month"?[42,48,51,55,58,62,60]:state.reportTab==="agents"?[18,22,15,25,20,17,23]:[8,12,10,14,13,15,11];
+  var done=plans.map(function(x,i){return Math.max(3,x-[2,1,3,2,1,1,2][i])});var max=Math.max.apply(null,plans);
+  $("barChart").innerHTML=["Du","Se","Ch","Pa","Ju","Sh","Ya"].map(function(d,i){return '<div class="bar-col"><i style="height:'+Math.round(plans[i]/max*100)+'%"></i><i class="done" style="height:'+Math.round(done[i]/max*100)+'%"></i><span>'+d+'</span></div>'}).join("");
+  $("reportVisits").textContent=state.reportTab==="month"?"3,482":state.reportTab==="agents"?"156":"892";$("reportNew").textContent=state.reportTab==="month"?"182":state.reportTab==="agents"?"28":"48";
+  var counts={fresh:0,yellow:0,red:0,scheduled:0};customers.forEach(function(c){counts[c.age]++});$("donutTotal").textContent=customers.length;
+  $("reportLegend").innerHTML='<div><span><i style="background:#1b9d65"></i>0–2 kun</span><b>'+counts.fresh+'</b></div><div><span><i style="background:#d69b2b"></i>3–7 kun</span><b>'+counts.yellow+'</b></div><div><span><i style="background:#d9505a"></i>8+ kun</span><b>'+counts.red+'</b></div><div><span><i style="background:#3388db"></i>Rejada</span><b>'+counts.scheduled+'</b></div>';
+}
+function agentProfile(id){var a=agents.find(function(x){return x.id===id});if(!a)return;openSheet("Agent profili",'<div class="detail-grid"><div class="detail-row"><span>Agent</span><b>'+a.name+'</b></div><div class="detail-row"><span>Hudud</span><b>'+a.area+'</b></div><div class="detail-row"><span>Bugun</span><b>'+a.done+' / '+a.plan+' tashrif</b></div><div class="detail-row"><span>Kechikkan</span><b>'+a.late+' mijoz</b></div></div>')}
+document.addEventListener("click",function(e){
+  var b=e.target.closest("button");if(!b)return;
+  if(b.dataset.page){switchPage(b.dataset.page);return}
+  if(b.dataset.go){if(b.dataset.mapFilter){state.agentFilter=b.dataset.mapFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.agentFilter===state.agentFilter)})}if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter===state.customerFilter)})}if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x.dataset.cashTab===state.cashTab)})}switchPage(b.dataset.go);return}
+  if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
+  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
+  if(b.dataset.customer){customerDetail(Number(b.dataset.customer));return}
+  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("#cashTabs [data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
+  if(b.dataset.approve){var t=txns.find(function(x){return x.id===Number(b.dataset.approve)});if(t){t.state="accepted";renderCash();toast("Demo: topshirish tasdiqlandi")};return}
+  if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+  if(b.dataset.agentProfile){agentProfile(Number(b.dataset.agentProfile));return}
+  if(b.dataset.agentRoute){toast("Demo marshrut xaritada ko'rsatildi");closeSheet();return}
+  if(b.dataset.demoNav){toast("Demo: navigatsiya haqiqiy manzilga ochilmaydi");return}
+});
+$("customerSearch").addEventListener("input",renderCustomers);$("sheetClose").onclick=closeSheet;$("sheetBg").addEventListener("click",function(e){if(e.target===$("sheetBg"))closeSheet()});
+$("notifyBtn").onclick=function(){openSheet("Xabarnomalar",'<div class="notice-list"><div class="notice-item"><b>⚠ 8+ kun tashrifsiz mijozlar</b><span>12 ta mijozga qayta tashrif kerak.</span></div><div class="notice-item"><b>💵 Kassa tasdig'i</b><span>5 ta topshirish tasdiq kutmoqda.</span></div><div class="notice-item"><b>📍 Agent holati</b><span>3 ta agentda tashrif kechikishi bor.</span></div></div>')};
+$("profileBtn").onclick=function(){openSheet("Rahbar profili",'<div class="detail-grid"><div class="detail-row"><span>Rol</span><b>Administrator</b></div><div class="detail-row"><span>Ilova</span><b>ASMAN Manager Mini App</b></div><div class="detail-row"><span>Rejim</span><b>TEST / DEMO</b></div></div>')};
+var tg=window.Telegram&&window.Telegram.WebApp;if(tg){try{tg.ready();tg.expand();tg.setHeaderColor("#0f2a4a");tg.setBackgroundColor("#f4f6f9")}catch(e){}}
+renderCustomers();renderCash();renderReport();
+})();
+</script>
 </body>
 </html>
