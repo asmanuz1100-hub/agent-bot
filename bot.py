@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from core import *
 import reports
+import customer_status as cs
 STOP=False
 def stop_signal(*_):
     global STOP
@@ -40,7 +41,7 @@ FLOW={
  'sold':[('client','Мижозни танланг:'),('pack','Қайси товар сотилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?')],
  'return':[('client','Мижозни танланг:'),('pack','Қайси товар қайтарилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта қайтарилди?')],
  'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган тўлов (USD):')],
- 'visit':[('client','Мижозни танланг:'),('note','Суҳбат натижаси, мижоз таклифи ёки бозор маълумоти:')],
+ 'visit':[('client','Мижозни танланг:'),('status','Ташриф натижасини танланг:'),('note','Мижоз билан нима гаплашдингиз? Изоҳ ёзинг:'),('followup','Қайта ташриф санасини YYYY-MM-DD кўринишида киритинг:')],
  'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
  'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
@@ -356,6 +357,7 @@ def prompt(db,u,s):
         keys=[['Дона','Блок']]
         msg+=f'\n1 блок = {units_per_block(s["values"]["pack"])} дона ({product_name(s["values"]["pack"])}).'
     if key=='role':keys=[['agent','cashier']]
+    if key=='status':keys=[[label] for label in cs.LABELS.values()]
     if key=='name' and s['action']=='admin_add':
         existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
         if existing:msg+=f'\nℹ️ Бу ID базада {existing[0]} роли билан сақланган. Тасдиқлаганда ўша аккаунт админга ўтказилади; очиқ смена ёки товар-пул қолдиғи бор бўлса, амал тўхтатилади.'
@@ -368,7 +370,7 @@ def prompt(db,u,s):
         if key=='client':
             all_clients=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
             own_only=role(db,u)=='agent' and not all_clients
-            regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
+            regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS
             predicates=(['agent=?'] if own_only else [])+(['map_only=0'] if regular_only else [])
             where=' WHERE '+' AND '.join(predicates) if predicates else ''
             base_params=(u,) if own_only else ()
@@ -376,13 +378,13 @@ def prompt(db,u,s):
             page=max(0,int(s.get('page',0)))
             last_page=max(0,(total-1)//CLIENT_PAGE_SIZE)
             page=min(page,last_page);s['page']=page
-            rows=db.execute('SELECT id,name,shop_name FROM clients'+where+
+            rows=db.execute('SELECT id,name,shop_name,map_only FROM clients'+where+
                             ' ORDER BY id DESC LIMIT ? OFFSET ?',base_params+(CLIENT_PAGE_SIZE,page*CLIENT_PAGE_SIZE)).fetchall()
             search_button='🔎 Мижоз қидириш'
         else:
             rows=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name LIMIT 20").fetchall()
             search_button='🔎 Агент қидириш'
-        keys=[[f"{r[0]} · {(r[1] or 'Номсиз')[:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"] for r in rows]
+        keys=[[f"{r[0]} · {(r[1] or 'Номсиз')[:22]}{(' — '+r[2][:18]) if len(r)>2 and r[2] else ''}"+((' · '+cs.summary(db,r[0],r[3])['icon']) if key=='client' and s['action']=='client_view' else '')] for r in rows]
         if key=='client' and total>CLIENT_PAGE_SIZE:
             nav=[]
             if page>0:nav.append('⬅️ Олдинги 20')
@@ -458,7 +460,7 @@ def show_client_card(db,u,cid):
 
 def report_clients(db,u):
     if not allowed(db,u,'client_view'):raise ValueError('Мижозлар рўйхатига рухсат йўқ.')
-    if not db.execute('SELECT 1 FROM clients WHERE map_only=0 LIMIT 1').fetchone():
+    if not db.execute('SELECT 1 FROM clients LIMIT 1').fetchone():
         send(u,'Мижозлар ҳали қўшилмаган.',menu(db,u));return
     prompt(db,u,{'action':'client_view','step':0,'values':{}})
 
@@ -994,7 +996,7 @@ def handle(db,update):
             pat='%'+term+'%'
             if key=='client':
                 own_only=r=='agent' and s['action']!='client_view' and s['action'] not in RECONCILE_CLIENT_ACTIONS
-                regular_only=s['action']=='client_view' or s['action'] in RECONCILE_CLIENT_ACTIONS
+                regular_only=s['action'] in RECONCILE_CLIENT_ACTIONS
                 # SQLite LOWER() does not case-fold Cyrillic. Search labels with
                 # Python Unicode casefold consistently on SQLite and PostgreSQL.
                 candidates=db.execute("""SELECT id,name,shop_name,phone,address FROM clients"""+
