@@ -638,7 +638,7 @@ def finish(db,u,s,source):
             try:existing=set(parse_phones(row[0]))
             except ValueError:continue
             if entered & existing:raise ValueError('Телефон рақамларидан бири аввал бошқа мижозга киритилган.')
-        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time())))
+        cur=db.execute('INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,comment,payment_due,created_ts,map_only) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id',(u,v['name'],v['phone'],v['address'],v['lat'],v['lon'],v['photo'],v['shop_name'],v['comment'],v['payment_due'],int(time.time()),int(bool(s.get('map_only')))))
         cid=cur.fetchone()[0]
         for index,item in enumerate(products,1):
             record(db,u,u,cid,'delivery',item['pack'],item['units'],0,f"Янги мижоз: {v['shop_name']} | {v['comment']} | Тўлов: {v['payment_due']}",-(int(source)*100+index),currency='USD')
@@ -674,6 +674,9 @@ def finish(db,u,s,source):
         q=v.get('qty',0)*(units_per_block(v['pack']) if v.get('unit')=='Блок' else 1)
         record(db,u,v.get('agent',u),v.get('client'),a,v.get('pack',0),q,money(v['amount']) if 'amount' in v else 0,v.get('note',''),source,currency='USD')
     db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+    if a=='client' and s.get('map_only'):
+        send(u,f'✅ Потенциал мижоз #{cid} товарсиз сақланди. Қарз йўқ. Мижоз харитасидан топасиз.',menu(db,u))
+        return
     if a in ('client','delivery'):
         selected=cid if a=='client' else v['client']
         count_products=len(v.get('products') or [])
