@@ -70,7 +70,7 @@ button,input{font:inherit}button{cursor:pointer}.app{max-width:430px;min-height:
     <h2 class="section-title">Bugungi nazorat</h2>
     <div class="control-list">
       <button class="control-item" data-go="customers" data-customer-filter="red"><span class="control-icon red">⚠</span><span class="control-copy"><b>8+ kun tashrifsiz mijozlar</b><span>12 ta mijoz</span></span><span class="chev">›</span></button>
-      <button class="control-item" data-go="cash" data-cash-tab="pending"><span class="control-icon amber">▣</span><span class="control-copy"><b>Kassa tasdig'ini kutayotgan</b><span>5 ta to'lov (1,250 USD)</span></span><span class="chev">›</span></button>
+      <button class="control-item" data-go="cash" data-cash-tab="pending"><span class="control-icon amber">▣</span><span class="control-copy"><b>Kassa tasdig‘ini kutayotgan</b><span>5 ta to'lov (1,250 USD)</span></span><span class="chev">›</span></button>
     </div>
   </div>
   <div class="demo-note">TEST: hozir Mini App tez ishlaydigan demo ma'lumotlar bilan ishlaydi. Bot bazasiga hech narsa yozmaydi.</div>
@@ -214,7 +214,7 @@ function renderCash(){
   var accepted=txns.filter(function(t){return t.state==="accepted"}),pending=txns.filter(function(t){return t.state==="pending"});
   $("cashAccepted").textContent=accepted.reduce(function(a,t){return a+t.amount},0).toLocaleString("en-US")+" USD";$("cashAcceptedCount").textContent=accepted.length+" ta to'lov";
   $("cashPending").textContent=pending.reduce(function(a,t){return a+t.amount},0).toLocaleString("en-US")+" USD";$("cashPendingCount").textContent=pending.length+" ta topshirish";
-  $("txnList").innerHTML=list.map(function(t){return '<div class="txn"><div class="txn-icon">💵</div><div class="txn-main"><b>'+t.agent+'</b><span>'+t.time+'</span></div><div class="txn-right"><b>'+t.amount.toLocaleString("en-US")+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span>'+(t.state==="pending"?'<br><button class="approve" data-approve="'+t.id+'">Tasdiqlash</button>':'')+'</div></div>'}).join("")||'<div class="empty">Operatsiya yo'q</div>';
+  $("txnList").innerHTML=list.map(function(t){return '<div class="txn"><div class="txn-icon">💵</div><div class="txn-main"><b>'+t.agent+'</b><span>'+t.time+'</span></div><div class="txn-right"><b>'+t.amount.toLocaleString("en-US")+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span>'+(t.state==="pending"?'<br><button class="approve" data-approve="'+t.id+'">Tasdiqlash</button>':'')+'</div></div>'}).join("")||'<div class="empty">Operatsiya yo‘q</div>';
 }
 function renderReport(){
   var plans=state.reportTab==="month"?[42,48,51,55,58,62,60]:state.reportTab==="agents"?[18,22,15,25,20,17,23]:[8,12,10,14,13,15,11];
@@ -240,7 +240,7 @@ document.addEventListener("click",function(e){
   if(b.dataset.demoNav){toast("Demo: navigatsiya haqiqiy manzilga ochilmaydi");return}
 });
 $("customerSearch").addEventListener("input",renderCustomers);$("sheetClose").onclick=closeSheet;$("sheetBg").addEventListener("click",function(e){if(e.target===$("sheetBg"))closeSheet()});
-$("notifyBtn").onclick=function(){openSheet("Xabarnomalar",'<div class="notice-list"><div class="notice-item"><b>⚠ 8+ kun tashrifsiz mijozlar</b><span>12 ta mijozga qayta tashrif kerak.</span></div><div class="notice-item"><b>💵 Kassa tasdig'i</b><span>5 ta topshirish tasdiq kutmoqda.</span></div><div class="notice-item"><b>📍 Agent holati</b><span>3 ta agentda tashrif kechikishi bor.</span></div></div>')};
+$("notifyBtn").onclick=function(){openSheet("Xabarnomalar",'<div class="notice-list"><div class="notice-item"><b>⚠ 8+ kun tashrifsiz mijozlar</b><span>12 ta mijozga qayta tashrif kerak.</span></div><div class="notice-item"><b>💵 Kassa tasdig‘i</b><span>5 ta topshirish tasdiq kutmoqda.</span></div><div class="notice-item"><b>📍 Agent holati</b><span>3 ta agentda tashrif kechikishi bor.</span></div></div>')};
 $("profileBtn").onclick=function(){openSheet("Rahbar profili",'<div class="detail-grid"><div class="detail-row"><span>Rol</span><b>Administrator</b></div><div class="detail-row"><span>Ilova</span><b>ASMAN Manager Mini App</b></div><div class="detail-row"><span>Rejim</span><b>TEST / DEMO</b></div></div>')};
 var tg=window.Telegram&&window.Telegram.WebApp;if(tg){try{tg.ready();tg.expand();tg.setHeaderColor("#0f2a4a");tg.setBackgroundColor("#f4f6f9")}catch(e){}}
 renderCustomers();renderCash();renderReport();
