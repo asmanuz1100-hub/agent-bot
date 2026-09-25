@@ -5,6 +5,7 @@ from html import escape
 import io,csv,json,time
 from core import route_stats,product_name,distance
 import customer_status as cs
+import client_ledger as ledger
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
@@ -143,12 +144,13 @@ D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if
     L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
   const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
   const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
-  const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  const history=s.history?'<details style="margin-top:8px"><summary>📝 Суҳбат ва ташриф қайдлари</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  const finance=s.finance?'<details style="margin-top:8px"><summary>📒 Товар ва пул тарихи</summary><div style="white-space:pre-line;max-height:260px;overflow:auto">'+esc(s.finance)+'</div></details>':'';
   const visitPlan=s.visit_label?'<br><b>'+esc(s.visit_label)+'</b>':'';
-  const lastVisit=s.last_visit?'<br>🕐 Охирги ташриф: '+esc(s.last_visit):'';
+  const lastVisit=s.last_visit?'<br>🕐 Охирги қайд: '+esc(s.last_visit):'';
   marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Қўшган агент: '+esc(s.owner):'')+
     '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
-    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+visitPlan+lastVisit+last+when+history+
+    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'') +visitPlan+lastVisit+last+when+history+finance+
     (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
     '<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+
     (D.agent_clients && s.visit_url?'<br><a href="'+esc(s.visit_url)+'">📝 Янги ташриф / изоҳ</a>':'')+
@@ -196,7 +198,7 @@ def agent_clients_map_html(db,agent,action_url=None):
               'prospect':bool(row['map_only']),
                'status':status['label'],'icon':status['icon'],
                'last_note':status['note'] or '', 'followup':status['followup'],
-               'history':history,'visit_level':attention['level'],
+               'history':history,'finance':ledger.summary(db,cid)+'\n\n'+ledger.recent_text(db,cid,5),'visit_level':attention['level'],
                'visit_label':attention['label'],'visit_color':attention['color'],
                'visit_background':attention['background'],
                'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
@@ -258,7 +260,7 @@ def admin_clients_map_html(db,actor,card_url=None):
               'prospect':bool(row['map_only']),
               'status':status['label'],'icon':status['icon'],
               'last_note':status['note'] or '', 'followup':status['followup'],
-              'history':history,'visit_level':attention['level'],
+              'history':history,'finance':ledger.summary(db,cid)+'\n\n'+ledger.recent_text(db,cid,5),'visit_level':attention['level'],
               'visit_label':attention['label'],'visit_color':attention['color'],
               'visit_background':attention['background'],
               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
@@ -303,6 +305,8 @@ def client_card_html(db,actor,client_id,photo_url=None):
     status_text=e(status_info['label'])
     followup_text=e(status_info['followup'] or 'Белгиланмаган')
     visits=e(cs.timeline_text(db,client_id,5))
+    finance_summary=e(ledger.summary(db,client_id))
+    finance_history=e(ledger.recent_text(db,client_id,100))
     due=e(customer['payment_due'] or 'Аниқ эмас')
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
                      str(int(client_stock_total(db,client_id,pack)))+
@@ -334,9 +338,13 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}}td{{border-bottom:1px 
 <div class="field">🏠 Манзил: {address}</div>
 <div class="field">{status_text} · 📅 Қайта ташриф: {followup_text}</div>
 <div class="field">📝 Дастлабки изоҳ: {comment}</div>
-<h2>📜 Ташрифлар тарихи</h2><div class="field" style="white-space:pre-line">{visits}</div>
+<h2>📝 Суҳбат ва ташриф қайдлари</h2><div class="field" style="white-space:pre-line">{visits}</div>
 <div class="field">📅 Тўлов санаси: {due}</div>
-<h2>📦 Мижоздаги товар</h2><table>{products}</table>
+<h2>📦 Мижоздаги товар қолдиғи</h2><table>{products}</table>
+<h2>📒 Товар бериш ва олинган пуллар</h2>
+<div class="field" style="white-space:pre-line">{finance_summary}</div>
+<h3>🕒 Операциялар тарихи (сўнгги 100 тагача)</h3>
+<div class="field" style="white-space:pre-line;max-height:440px;overflow:auto;border:1px solid #e4eaf3;border-radius:12px;padding:12px">{finance_history}</div>
 <div class="field">💵 Мижоз қарзи: <strong>{debt/100:,.2f} USD</strong></div>
 {legacy}{loc}<p class="subtle">Карточка фақат кўриш учун. Маълумотни ўзгартириш — ботнинг «👥 Мижозлар» бўлимида.</p>
 </article></main></body></html>"""
