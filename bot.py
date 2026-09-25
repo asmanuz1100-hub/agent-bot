@@ -397,9 +397,9 @@ def _staff_name(db,uid):
     row=db.execute('SELECT name FROM users WHERE id=?',(uid,)).fetchone()
     return (row[0] if row and row[0] else str(uid))
 
-def _safe_send_many(user_ids,text):
+def _safe_send_many(user_ids,text,keys=None):
     for target in set(int(x) for x in user_ids if x is not None):
-        try:send(target,text)
+        try:send(target,text,keys)
         except Exception:logging.exception('Notification failed user=%s',target)
 
 def cashier_ids(db):
@@ -428,8 +428,9 @@ def notify_cashiers_handover(db,agent,hid,amount_usd):
           f"💵 Сумма: {fmt(amount_usd)} USD\n"
           f"🧾 Топшириш: #{hid}\n"
           f"⏳ Тасдиқ кутилмоқда.\n"
-          f"🔎 Кўриб чиқиш: /review {hid}")
-    _safe_send_many(cashier_ids(db),text)
+          f"Пулни санаб текшириш учун қуйидаги тугмани босинг.")
+    _safe_send_many(cashier_ids(db),text,
+                    [[f'🔎 Кўриб чиқиш #{hid}'],['⏳ Тасдиқланмаган пуллар']])
 
 def notify_shift_end(db,agent,shift_id):
     try:
@@ -455,6 +456,17 @@ def cashier_expenses_report(db,u):
                       +(f" · Изоҳ: {row['note']}" if row['note'] else ''))
     if not rows:result.append('Ҳали харажат киритилмаган.')
     send(u,'\n'.join(result),menu(db,u))
+
+
+def cashier_pending_keyboard(db,u,limit=10):
+    """Cashier-only quick review buttons for currently pending handovers."""
+    if role(db,u)!='cashier':
+        return menu(db,u)
+    rows=db.execute("""SELECT id FROM handovers WHERE status='pending'
+        ORDER BY ts DESC,id DESC LIMIT ?""",(max(1,min(int(limit),20)),)).fetchall()
+    keys=[[f"🔎 Кўриб чиқиш #{int(row['id'])}"] for row in rows]
+    keys.append(['💰 Кассир бўлими'])
+    return keys
 
 
 def review_handover(db,u,hid):
@@ -1191,7 +1203,7 @@ def handle(db,update):
             send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
         if action=='cashbox':cashbox_report(db,u);return
         if action=='cashier_pending':
-            send(u,cashier_pending.report(db),menu(db,u));return
+            send(u,cashier_pending.report(db),cashier_pending_keyboard(db,u));return
         if action=='cashier_expenses':cashier_expenses_report(db,u);return
         if action=='cashier_daily':
             send(u,cashier_daily.report(db),menu(db,u));return
