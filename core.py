@@ -284,6 +284,40 @@ def _delivery_return_allocations(db,client,pack,qty):
         raise ValueError('Қайтарилган товар учун USD партия қолдиғи етарли эмас. Админ ҳисобни текширсин.')
     return result
 
+
+def add_agent(db,actor,uid,name):
+    """Create a new active agent without reusing any existing staff identity."""
+    administrator=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not administrator or administrator[0]!='admin':raise ValueError('Фақат админ агент қўшиши мумкин.')
+    if not isinstance(uid,int) or uid<=0:raise ValueError('Telegram ID нотўғри.')
+    if not isinstance(name,str) or not name.strip() or len(name.strip())>120:
+        raise ValueError('Агент исмини киритинг.')
+    if db.execute('SELECT 1 FROM users WHERE id=?',(uid,)).fetchone():
+        raise ValueError('Бу Telegram ID аввал рўйхатдан ўтган. Бошқа ID киритинг.')
+    db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(uid,'agent',name.strip()))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,None,uid,'agent_created',int(time.time())))
+    return uid
+
+
+def rename_agent(db,actor,agent_id,name):
+    """Rename one active agent and record the administrative action."""
+    administrator=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not administrator or administrator[0]!='admin':raise ValueError('Фақат админ.')
+    if not isinstance(name,str) or not name.strip() or len(name.strip())>120:
+        raise ValueError('Агентнинг янги исмини киритинг.')
+    row=db.execute("SELECT name,role FROM users WHERE id=?",(agent_id,)).fetchone()
+    if not row or row['role']!='agent':raise ValueError('Фаол агент топилмади.')
+    new_name=name.strip()
+    if row['name']==new_name:raise ValueError('Агент исми ўзгармаган.')
+    if isinstance(db,PostgresDB):
+        row=db.execute('SELECT name,role FROM users WHERE id=? FOR UPDATE',(agent_id,)).fetchone()
+    db.execute('UPDATE users SET name=? WHERE id=?',(new_name,agent_id))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,agent_id,agent_id,'agent_renamed',int(time.time())))
+    return new_name
+
+
 def transfer_agent_account(db,actor,old_id,new_id):
     """Replace an agent's Telegram login, preserving client, stock and ledger history.
 
