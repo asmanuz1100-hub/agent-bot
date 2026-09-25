@@ -36,6 +36,11 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
+    def test_admin_read_only_agent_selector(self):
+        for term in ('id="adminPicker"','id="adminAgent"','adminAgentId',
+                     'data.adminMode','data.readOnly','admin-readonly'):
+            self.assertIn(term,self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
