@@ -123,6 +123,17 @@ def customer_photo_bytes(file_id):
         raise ValueError('Фото формати нотўғри.')
     return content
 
+def attach_client_photo_urls(data):
+    """Attach short-lived signed photo URLs only to authenticated API responses."""
+    if not isinstance(data,dict):return data
+    def attach(c):
+        if isinstance(c,dict) and c.get('hasPhoto') and c.get('id'):
+            c['photoUrl']=map_link(f"client-photo/{int(c['id'])}",ttl=3600)
+        return c
+    for c in data.get('clients') or []:attach(c)
+    if isinstance(data.get('client'),dict):attach(data['client'])
+    return data
+
 def agent_action_payload(verb,agent,client,ttl=8*3600):
     if verb not in ('p','r','d','v'):raise ValueError('Хизмат тури нотўғри.')
     expires=int(time.time())+int(ttl)
@@ -1577,6 +1588,7 @@ def serve_webhook(db,base_url):
                     if admin_mode:
                         data['adminMode']=True;data['readOnly']=True
                         data['agents']=admin_agents;data['selectedAgentId']=subject
+                    attach_client_photo_urls(data)
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
@@ -1618,6 +1630,7 @@ def serve_webhook(db,base_url):
                     else:
                         answer(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
+                    attach_client_photo_urls(data)
                     answer(200,data)
                 except ValueError as e:
                     answer(400,{'error':str(e)})
