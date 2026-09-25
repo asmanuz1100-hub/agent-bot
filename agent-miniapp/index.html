@@ -404,7 +404,7 @@ var SHIFT_START_DATA="asman.shift.start.v1",SHIFT_END_DATA="asman.shift.end.v1";
 function submitShift(action){
  var status=$("shiftFeedback"),end=action==="end";
  if(end&&!window.confirm("Ишни тугатасизми? Бот GPS қабул қилишни тўхтатади. Telegram'да жонли локация улашишни ҳам ўзингиз тўхтатинг."))return;
- if(!tg||!tg.initData||typeof tg.sendData!=="function"){
+ if(!tg||typeof tg.sendData!=="function"||tg.platform==="unknown"){
   status.textContent="Бу амал фақат бот ичидаги «📱 Agent Mini App» тугмасидан ишлайди. Telegram чатга қайтинг ва «"+(end?"⏹ Ишни тугатиш":"▶️ Ишни бошлаш")+"» тугмасини босинг.";
   status.classList.add("error");return;
  }
