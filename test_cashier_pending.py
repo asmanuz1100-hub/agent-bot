@@ -61,7 +61,10 @@ class CashierUnconfirmedTests(unittest.TestCase):
                 'message_id':4000,'date':self.base+4000,'from':{'id':3},
                 'chat':{'id':3,'type':'private'},'text':'⏳ Тасдиқланмаган пуллар'}})
         report=send.call_args.args[1]
+        keys=send.call_args.args[2]
         self.assertIn('169.40 USD',report)
+        self.assertIn('🔎 Кўриб чиқиш #1',str(keys))
+        self.assertIn('💰 Кассир бўлими',str(keys))
         self.assertIn('112.80 USD',report)
         self.assertIn('62.40 USD',report)
         self.assertIn('175.20 USD',report)
@@ -74,6 +77,21 @@ class CashierUnconfirmedTests(unittest.TestCase):
         self.assertIn('/review 1',report)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM handovers').fetchone()[0],before)
         self.assertEqual(core.cashier_balance_usd(self.db),0)
+
+    def test_review_button_opens_confirmation_and_accepts(self):
+        with patch.object(bot,'send') as send:
+            bot.handle(self.db,{'update_id':4100,'message':{
+                'message_id':4100,'date':self.base+4100,'from':{'id':3},
+                'chat':{'id':3,'type':'private'},'text':'🔎 Кўриб чиқиш #1'}})
+        self.assertIn('✅ Қабул қилиш #1',str(send.call_args.args[2]))
+        self.assertIn('❌ Рад этиш #1',str(send.call_args.args[2]))
+        with patch.object(bot,'send'):
+            bot.handle(self.db,{'update_id':4101,'message':{
+                'message_id':4101,'date':self.base+4101,'from':{'id':3},
+                'chat':{'id':3,'type':'private'},'text':'✅ Қабул қилиш #1'}})
+        row=self.db.execute("SELECT status,cashier FROM handovers WHERE id=1").fetchone()
+        self.assertEqual(row['status'],'accepted')
+        self.assertEqual(row['cashier'],3)
 
     def test_after_accepting_money_report_removes_pending_without_creating_another_payment(self):
         core.accept(self.db,3,1,True)

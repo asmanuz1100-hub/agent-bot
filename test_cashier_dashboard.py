@@ -56,9 +56,14 @@ class CashierDashboardTests(unittest.TestCase):
         state={'action':'handover','values':{'amount':'15.00'}}
         with patch.object(bot,'send') as send:
             bot.finish(self.db,2,state,72002)
-        calls=[(c.args[0],c.args[1]) for c in send.call_args_list]
+        calls=[(call.args[0],call.args[1]) for call in send.call_args_list]
         self.assertTrue(any(uid==3 and 'КАССАГА ПУЛ ТОПШИРИШ' in text and '15.00 USD' in text for uid,text in calls))
         self.assertTrue(any(uid==4 and 'КАССАГА ПУЛ ТОПШИРИШ' in text for uid,text in calls))
+        cashier_calls=[call for call in send.call_args_list if call.args[0] in (3,4)
+                       and 'КАССАГА ПУЛ ТОПШИРИШ' in call.args[1]]
+        self.assertTrue(cashier_calls)
+        self.assertTrue(all(any('🔎 Кўриб чиқиш #' in button for row in call.args[2] for button in row)
+                            for call in cashier_calls))
         hid=self.db.execute("SELECT id FROM handovers WHERE status='pending'").fetchone()[0]
         with patch.object(bot,'send') as send,patch.object(bot,'ADMINS',{1}):
             bot.handle(self.db,self.message(3,f'/review {hid}',72003))

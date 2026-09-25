@@ -36,8 +36,9 @@ class CashierExpenseTests(unittest.TestCase):
         self.assertEqual(core.cashier_balance_usd(self.db),0)
         with patch.object(bot,'send') as send:
             bot.notify_cashiers_handover(self.db,2,hid,core.money('60'))
-        self.assertTrue(any(c.args[0]==3 and '/review' in c.args[1]
-                            for c in send.call_args_list))
+        self.assertTrue(any(call.args[0]==3 and 'КАССАГА ПУЛ ТОПШИРИШ' in call.args[1]
+                            and '🔎 Кўриб чиқиш #' in str(call.args[2])
+                            for call in send.call_args_list))
         with patch.object(bot,'send'):
             bot.handle(self.db,self.message(3,f'🔎 Кўриб чиқиш #{hid}',3001))
             bot.handle(self.db,self.message(3,f'✅ Қабул қилиш #{hid}',3002))
