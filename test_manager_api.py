@@ -302,6 +302,15 @@ class ManagerApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'ro‘yxatdan'):
             manager_api.agent_transfer_preview(self.db,2,3)
 
+    def test_agent_management_lists_active_and_disabled_accounts(self):
+        self.db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?)",(77,'disabled','Old Agent'))
+        rows=manager_api.agent_management(self.db)['agents']
+        active=next(x for x in rows if x['id']==2)
+        disabled=next(x for x in rows if x['id']==77)
+        self.assertTrue(active['active'])
+        self.assertFalse(disabled['active'])
+        self.assertEqual(disabled['role'],'disabled')
+
     def test_unknown_agent_route_is_rejected(self):
         with self.assertRaises(ValueError):
             manager_api.route(self.db,999,self.now)
