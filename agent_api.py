@@ -395,7 +395,8 @@ def mutate(db,agent,action,payload,request_id,now=None):
         shift=db.execute("SELECT id FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1",(agent,)).fetchone()
         if not shift:return {"ok":True,"message":"Ochiq smena yo‘q."}
         db.execute("UPDATE shifts SET end=? WHERE id=?",(now,shift['id']))
-        return {"ok":True,"message":"Ish tugadi. Telegramdagi jonli lokatsiyani ham to‘xtating."}
+        return {"ok":True,"message":"Ish tugadi. Telegramdagi jonli lokatsiyani ham to‘xtating.",
+                "_notify":{"kind":"shift_end","shiftId":int(shift['id'])}}
     if action in ("client","add_client"):
         shop=str(payload.get("shopName") or payload.get("shop") or "").strip()
         name=str(payload.get("name") or payload.get("person") or "").strip() or shop

@@ -133,6 +133,7 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(route['points'][0]['lat'],40.5)
         end=agent_api.mutate(self.db,2,'shift_end',{},'shift_end_123',self.now+100)
         self.assertIn('Ish tugadi',end['message'])
+        self.assertEqual(end['_notify'],{'kind':'shift_end','shiftId':shift[0]})
         self.db.execute("INSERT INTO agent_features(agent,feature,enabled) VALUES(2,'payment',0)")
         with self.assertRaisesRegex(ValueError,'o‘chirilgan'):
             agent_api.mutate(self.db,2,'payment',{'clientId':999,'amount':'1'},'disabled_pay1',self.now)
