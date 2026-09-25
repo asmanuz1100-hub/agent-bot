@@ -43,6 +43,16 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 #cash-total{font-variant-numeric:tabular-nums}.status.cancel{background:#fff1f2;color:#be123c}
 @media(max-width:350px){#agent-list{padding:10px}.auth-card{padding:20px}}
 
+/* Premium redesign — adapted from the approved ASMAN Figma language. */
+:root{--navy:#101e39;--primary:#2367f5;--canvas:#f4f7fd;--ink:#101e39;--muted:#8190a7;--stroke:#e5ecf5;--success:#0daf79;--warning:#e89d2c;--danger:#e55265}
+html,body{background:var(--canvas);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding-bottom:92px}
+header{position:sticky!important;background:var(--navy)!important;border:0!important;color:#fff;padding:17px 18px 14px!important;box-shadow:none!important}header .max-w-md{max-width:390px}.brand-word{font-size:20px;font-weight:850;letter-spacing:-.45px}.brand-sub{display:block;font-size:8px;letter-spacing:1.35px;color:#91a3c0;margin-top:1px;font-weight:700}#header-title{background:transparent;color:#a9b6ca;padding:0;font-size:9px;letter-spacing:.7px;text-transform:uppercase}.refresh{background:#ffffff12;color:#fff;border:1px solid #ffffff17;width:31px;height:31px;border-radius:50%}.manager-avatar{width:31px;height:31px;border-radius:50%;background:#213451;color:#fff;border:1px solid #ffffff15}
+.page-content{max-width:390px!important}.premium-hero{background:var(--navy);color:#fff;margin:-1px -16px 0;padding:8px 18px 26px}.premium-hero h1{font-size:19px;line-height:1.25;margin:0;font-weight:800;letter-spacing:-.25px}.premium-hero p{margin:5px 0 0;color:#91a3c0!important;font-size:10px}.hero-meta{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}.live-pill{display:inline-flex;align-items:center;gap:5px;background:#ffffff0e;border:1px solid #ffffff14;color:#cbd5e4;border-radius:999px;padding:6px 9px;font-size:9px;font-weight:650}.live-dot{width:6px;height:6px;background:#2fd299;border-radius:50%;box-shadow:0 0 0 3px #2fd2991e}
+#page-home{padding-top:0!important}.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:-16px;position:relative;z-index:2}.overview-card{background:#fff;border:1px solid var(--stroke);border-radius:15px;padding:13px;min-height:95px;box-shadow:0 4px 14px #10203b0a}.overview-top{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:9px}.metric-icon{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;font-size:13px;font-weight:800}.metric-icon.blue{background:#eaf1ff;color:var(--primary)}.metric-icon.green{background:#e5f8f0;color:var(--success)}.metric-icon.orange{background:#fff2de;color:var(--warning)}.metric-icon.red{background:#ffe9ed;color:var(--danger)}.overview-card strong{display:block;margin-top:9px;font-size:20px;line-height:1;color:var(--ink);letter-spacing:-.35px}.overview-card small{display:block;margin-top:6px;color:#9aa7ba;font-size:8px}.section-row{display:flex;align-items:center;justify-content:space-between;margin:21px 3px 10px}.section-row h3{font-size:13px;margin:0}.section-row span{font-size:9px;color:var(--primary);background:#eaf1ff;padding:5px 8px;border-radius:999px;font-weight:700}.alert-card{background:#fff;border:1px solid var(--stroke);border-radius:15px;padding:12px;display:flex;align-items:center;gap:10px}.alert-copy{flex:1}.alert-copy b{font-size:11px;display:block}.alert-copy small{font-size:9px;color:var(--muted);display:block;margin-top:3px}.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.quick-card{border:1px solid var(--stroke);background:#fff;border-radius:13px;padding:11px 8px;color:var(--ink);text-align:center;font-size:9px;font-weight:700}.quick-card i{display:grid;place-items:center;width:29px;height:29px;border-radius:9px;background:#edf3ff;color:var(--primary);font-style:normal;margin:0 auto 7px;font-size:14px}
+.filters{padding:11px 16px 10px;margin:0 -16px;background:#fff;border-bottom:1px solid var(--stroke)}.chip{border:0;background:#f0f3f8;color:#73839a;padding:7px 11px;font-weight:700}.chip.active{background:var(--primary);color:#fff}.customer-card,#agent-list .agent-card,.txn,.report-kpi{border-color:var(--stroke);border-radius:15px;box-shadow:none}.customer-card{padding:11px}.shop-ico{background:#e7efff;color:var(--primary);font-size:17px}.age{font-size:8px;padding:5px 7px}.agent-card .agent-avatar{border-radius:50%;background:#e7efff}.agent-status{font-size:8px}.map-shell{margin:0;background:#eaf0ee}.map-card{border:0;border-radius:18px;padding:14px;box-shadow:0 12px 34px #10203b24}.map-actions{margin-top:11px}.mini-btn{border:0;background:#eef3ff;color:var(--primary);padding:10px;border-radius:10px}.mini-btn.primary{background:var(--primary)}
+#page-cash,#page-report,#page-customers{padding-top:12px!important}.cash-hero{background:var(--navy);color:#fff;border-radius:18px;padding:19px;box-shadow:0 8px 26px #10203b16;position:relative;overflow:hidden}.cash-hero:after{content:"";position:absolute;width:125px;height:125px;border-radius:50%;background:#2367f534;right:-30px;top:-50px}.cash-hero p,.cash-hero h2{position:relative;z-index:1}.report-kpi{padding:15px}.report-kpi b{font-size:21px;color:var(--ink)}.bars{height:145px}.bar i.done{background:var(--primary)}
+nav{max-width:390px!important;border-color:var(--stroke)!important;box-shadow:0 -7px 24px #10203b0d!important;padding:8px 14px!important;background:#fffffff5!important}nav button{font-size:17px}nav button span{font-size:8px!important;margin-top:3px!important}nav button.active{background:#eaf1ff;border-radius:10px;padding:6px 7px;color:var(--primary)}.sheet{max-width:390px;border-radius:22px 22px 0 0}.sheet:before{content:"";display:block;width:36px;height:4px;background:#dce3ed;border-radius:4px;margin:-7px auto 13px}.auth-card{border:1px solid var(--stroke);box-shadow:0 18px 50px #10203b17}.auth-mark{color:var(--navy);letter-spacing:-.6px}.auth-card button{background:var(--primary)}
+@media(prefers-color-scheme:dark){html,body{background:var(--canvas);color:var(--ink)}.customer-card,.txn,.report-kpi,.sheet,#agent-list .agent-card{background:#fff;border-color:var(--stroke)}.dark\:bg-gray-800,.dark\:bg-gray-900{background:#fff}.dark\:text-gray-200,.dark\:text-gray-300{color:var(--ink)}}
 </style>
 </head>
 <body class="pb-24">
@@ -52,12 +62,12 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
     <header class="px-4 py-3 sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
         <div class="flex justify-between items-center max-w-md mx-auto">
             <div class="flex items-center space-x-2">
-                <span class="text-lg font-bold tracking-tight text-blue-600">ASMAN</span>
+                <span class="brand-word">ASMAN<span class="brand-sub">BUSINESS CONTROL</span></span>
             </div>
             <div class="flex items-center space-x-2">
                 <button id="refresh-data" type="button" class="refresh" aria-label="Ma’lumotlarni yangilash" title="Yangilash">↻</button>
                 <span id="header-title" class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full">Rahbar paneli</span>
-                <div class="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                <div class="manager-avatar flex items-center justify-center font-bold text-xs">
                     R
                 </div>
             </div>
@@ -65,41 +75,24 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
     </header>
 
     <!-- 1. BOSH SAHIFA -->
-    <main id="page-home" class="page-content active max-w-md mx-auto p-4 space-y-3">
-        <!-- Salomlashuv -->
-        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-            <h1 class="text-base font-bold">Xayrli kun, Rahbar!</h1>
-            <p class="text-xs text-gray-400 mt-0.5">Bugungi ko'rsatkichlar nazorati</p>
-
-            <div class="grid grid-cols-2 gap-2.5 mt-3">
-                <div class="bg-blue-50/50 dark:bg-gray-700/50 p-3 rounded-xl">
-                    <p class="text-[11px] text-gray-500 dark:text-gray-300">Agentlar</p>
-                    <h3 class="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5"><span id="home-agent-count">—</span> <span id="home-active-agents" class="text-[10px] font-normal text-gray-400"></span></h3>
-                </div>
-                <div class="bg-emerald-50/50 dark:bg-gray-700/50 p-3 rounded-xl">
-                    <p class="text-[11px] text-gray-500 dark:text-gray-300">Tashriflar</p>
-                    <h3 class="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5"><span id="home-visit-count">—</span> <span class="text-[10px] font-normal text-gray-400">bugun</span></h3>
-                </div>
-            </div>
-        </div>
-
-        <!-- Nazorat kartasi -->
-        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-2.5">
-            <h3 class="text-xs font-bold text-gray-700 dark:text-gray-200">Tezkor ogohlantirishlar</h3>
-            
-            <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-700/40 rounded-xl">
-                <div class="flex items-center space-x-2.5">
-                    <div class="w-7 h-7 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center text-xs">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                    </div>
-                    <div>
-                        <h4 class="text-xs font-bold">5+ kun tashrif qilinmagan</h4>
-                        <p class="text-[10px] text-gray-400"><span id="home-overdue-count">—</span> ta mijoz</p>
-                    </div>
-                </div>
-                <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
-            </div>
-        </div>
+    <main id="page-home" class="page-content active max-w-md mx-auto p-4">
+        <section class="premium-hero">
+            <div class="hero-meta"><div><h1>Xayrli kun, Rahbar!</h1><p class="text-xs text-gray-400 mt-0.5">Bugungi ko'rsatkichlar nazorati</p></div><span class="live-pill"><i class="live-dot"></i> Real vaqt</span></div>
+        </section>
+        <section class="overview-grid">
+            <div class="overview-card"><div class="overview-top"><i class="metric-icon blue">A</i> Agentlar</div><strong id="home-agent-count">—</strong><small id="home-active-agents">Smenadagi agentlar</small></div>
+            <div class="overview-card"><div class="overview-top"><i class="metric-icon green">✓</i> Tashriflar</div><strong id="home-visit-count">—</strong><small>Bugun bajarildi</small></div>
+            <div class="overview-card"><div class="overview-top"><i class="metric-icon orange">$</i> Kassa</div><strong id="home-cash-total">—</strong><small>Bugun qabul qilindi</small></div>
+            <div class="overview-card"><div class="overview-top"><i class="metric-icon red">!</i> Nazorat</div><strong id="home-overdue-count">—</strong><small>5+ kun tashrif yo‘q</small></div>
+        </section>
+        <div class="section-row"><h3>Tezkor boshqaruv</h3><span>Bugun</span></div>
+        <section class="quick-grid">
+            <button class="quick-card" data-page="map"><i>⌖</i>Agentlar</button>
+            <button class="quick-card" data-page="customers"><i>▦</i>Mijozlar</button>
+            <button class="quick-card" data-page="cash"><i>$</i>Kassa</button>
+        </section>
+        <div class="section-row"><h3>Tezkor ogohlantirishlar</h3><span>Jonli</span></div>
+        <div class="alert-card"><i class="metric-icon red">!</i><div class="alert-copy"><b>5+ kun tashrif qilinmagan</b><small><span id="home-overdue-inline">—</span> ta mijoz e’tibor talab qiladi</small></div><i class="fa-solid fa-chevron-right"></i></div>
     </main>
 
     <!-- 2. AGENTLAR (Xarita) -->
@@ -135,7 +128,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 
 <!-- 4. KASSA -->
     <div id="page-cash" class="page-content max-w-md mx-auto p-4 space-y-3">
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-md">
+        <div class="cash-hero">
   <p class="text-[11px] opacity-80 font-medium">Qabul qilingan tushum</p>
   <h2 id="cash-total" class="text-2xl font-black mt-1">$0.00</h2>
   <p id="cash-summary" class="text-[10px] mt-2 opacity-90">Bugungi kassa holati</p>
@@ -239,6 +232,8 @@ async function loadDashboard(){
   $("home-active-agents").textContent="smenada "+(summary.workingAgents||0);
   $("home-visit-count").textContent=summary.visitsToday||0;
   $("home-overdue-count").textContent=summary.overdueClients||0;
+  $("home-overdue-inline").textContent=summary.overdueClients||0;
+  $("home-cash-total").textContent=money(summary.acceptedTodayUsd||0)+" $";
   var p=document.querySelector("#page-home p.text-xs.text-gray-400.mt-0\\.5");
   if(p)p.textContent="Real ma’lumotlar · yangilangan "+when(generatedTs);
   if(data.clientsTruncated)toast("Mijozlar ko‘p: ro‘yxatda dastlabki 5000 ta ko‘rsatilgan.");
