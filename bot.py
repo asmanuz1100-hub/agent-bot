@@ -822,6 +822,16 @@ def handle(db,update):
             ok=point(db,u,m,True)
             if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
+    # A reply-keyboard Telegram WebApp can send a short data message.
+    # Treat this exactly like the agent's existing shift buttons, retaining
+    # role checks, unique open shift constraint, GPS instructions and reports.
+    if 'web_app_data' in m:
+        if r!='agent':raise ValueError('Фақат агент Mini App орқали сменани бошқариши мумкин.')
+        payload=m['web_app_data'].get('data') if isinstance(m['web_app_data'],dict) else None
+        actions={'asman.shift.start.v1':'▶️ Ишни бошлаш',
+                 'asman.shift.end.v1':'⏹ Ишни тугатиш'}
+        if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
+        text=actions[payload]
     if text.startswith('/start '):
         open_agent_client_action(db,u,text[7:].strip());return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
