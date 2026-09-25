@@ -1844,9 +1844,61 @@ def serve_webhook(db,base_url):
                         data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
+                    elif action=='agent_detail':
+                        data=manager_api.agent_detail(local,payload.get('agentId'))
+                    elif action=='agent_add_preview':
+                        data=manager_api.agent_add_preview(local,payload.get('id'),payload.get('name'))
+                    elif action=='agent_add_commit':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Agent qo‘shishni tasdiqlang.')
+                        preview=manager_api.agent_add_preview(local,payload.get('id'),payload.get('name'))
+                        add_agent(local,actor,preview['id'],preview['name'])
+                        data={'ok':True,'agent':manager_api.agent_detail(local,preview['id'])}
+                    elif action=='agent_rename_preview':
+                        data=manager_api.agent_rename_preview(local,payload.get('agentId'),payload.get('name'))
+                    elif action=='agent_rename_commit':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Agent nomini o‘zgartirishni tasdiqlang.')
+                        preview=manager_api.agent_rename_preview(local,payload.get('agentId'),payload.get('name'))
+                        rename_agent(local,actor,preview['agentId'],preview['newName'])
+                        data={'ok':True,'agent':manager_api.agent_detail(local,preview['agentId'])}
+                    elif action=='agent_feature_set':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Huquq o‘zgarishini tasdiqlang.')
+                        enabled=payload.get('enabled')
+                        if not isinstance(enabled,bool):
+                            raise ValueError('Huquq holati noto‘g‘ri.')
+                        set_agent_feature(local,actor,int(payload.get('agentId')),str(payload.get('feature') or ''),enabled)
+                        data={'ok':True,'agent':manager_api.agent_detail(local,payload.get('agentId'))}
+                    elif action=='agent_transfer_preview':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Akkaunt almashtirish faqat asosiy rahbarga ruxsat.'});return
+                        data=manager_api.agent_transfer_preview(local,payload.get('agentId'),payload.get('newId'))
+                    elif action=='agent_transfer_commit':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Akkaunt almashtirish faqat asosiy rahbarga ruxsat.'});return
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Akkaunt almashtirishni tasdiqlang.')
+                        preview=manager_api.agent_transfer_preview(local,payload.get('agentId'),payload.get('newId'))
+                        transfer_agent_account(local,actor,preview['agentId'],preview['newId'])
+                        data={'ok':True,'agent':manager_api.agent_detail(local,preview['newId'])}
+                    elif action=='agent_deactivate_preview':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Agentni bloklash faqat asosiy rahbarga ruxsat.'});return
+                        data=manager_api.agent_deactivate_preview(local,payload.get('agentId'))
+                    elif action=='agent_deactivate_commit':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Agentni bloklash faqat asosiy rahbarga ruxsat.'});return
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Agentni bloklashni tasdiqlang.')
+                        preview=manager_api.agent_deactivate_preview(local,payload.get('agentId'))
+                        deactivate_agent(local,actor,preview['agentId'])
+                        data={'ok':True,'agent':manager_api.agent_detail(local,preview['agentId'])}
                     else:
                         answer(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
+                    if isinstance(data,dict):
+                        data.setdefault('primaryAdmin',actor in ADMINS)
                     attach_client_photo_urls(data)
                     answer(200,data)
                 except ValueError as e:
