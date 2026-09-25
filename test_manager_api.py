@@ -372,6 +372,23 @@ class ManagerApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'topilmadi'):
             manager_api.agent_period_detail(self.db,999,'today',self.now)
 
+    def test_agent_period_sampling_sql_has_no_unescaped_psycopg_percent(self):
+        class Recorder:
+            def __init__(self,db):
+                self.db=db
+                self.gps_sql=None
+            def execute(self,sql,params=()):
+                if "WITH numbered AS" in sql:
+                    self.gps_sql=sql
+                return self.db.execute(sql,params)
+        recorder=Recorder(self.db)
+        detail=manager_api.agent_period_detail(recorder,2,'today',self.now)
+        self.assertEqual(detail['route']['gpsTotal'],0)
+        self.assertIsNotNone(recorder.gps_sql)
+        postgres_sql=core._pg_sql(recorder.gps_sql)
+        self.assertNotIn('%',postgres_sql.replace('%s',''))
+        self.assertIn('((rn-1) / ((total+999)/1000))',postgres_sql)
+
     def test_unknown_agent_route_is_rejected(self):
         with self.assertRaises(ValueError):
             manager_api.route(self.db,999,self.now)
