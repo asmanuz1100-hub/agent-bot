@@ -900,6 +900,21 @@ def finish(db,u,s,source):
         if u not in ADMINS:raise ValueError('Админ қўшиш ҳуқуқи фақат асосий админда.')
         if v['id'] in ADMINS:raise ValueError('Бу Telegram ID аллақачон асосий админ.')
         admin_result=add_or_promote_admin(db,u,v['id'],v['name'])
+    elif a=='cashier_rate':
+        rate=set_cashier_rate(db,u,int(v['rate']),source)
+        _safe_send_many([admin for admin in admin_ids(db) if admin!=u],
+                        f'💱 КАССА КУРСИ ЯНГИЛАНДИ\nКассир: {_staff_name(db,u)}\n1 USD = {rate:,} сўм\n{datetime.now(TZ).strftime("%d.%m.%Y %H:%M")}')
+    elif a=='cashier_expense_uzs':
+        amount_uzs=parse_whole_som(v['amount'])
+        expense_id,expense_value,expense_rate=add_cashier_expense_uzs(
+            db,u,amount_uzs,v['category'],v['recipient'],v['note'],source,
+            expected_rate=v.get('rate_at_entry'))
+        expense_text=(f'🧾 КАССА ХАРАЖАТИ #{expense_id}\nКассир: {_staff_name(db,u)}\n'
+                      f'Тури: {v["category"]}\nСумма: {amount_uzs:,} сўм\n'
+                      f'Курс: 1 USD = {expense_rate:,} сўм\nUSD эквиваленти: {fmt(expense_value)} USD\n'
+                      f'Кимга/нимага: {v["recipient"]}\nИзоҳ: {v["note"]}\n'
+                      f'Ҳисобий қолдиқ: {fmt(cashier_balance_usd(db))} USD')
+        _safe_send_many([admin for admin in admin_ids(db) if admin!=u],expense_text)
     elif a=='cashier_expense':
         expense_value=money(v['amount'])
         expense_id=add_cashier_expense(db,u,expense_value,v['category'],v['recipient'],v['note'],source)
@@ -939,6 +954,12 @@ def finish(db,u,s,source):
         send(u,f"✅ {operation}: {v['name']} (ID: {v['id']}). У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
+    elif a=='cashier_expense_uzs':
+        send(u,f'✅ Харажат #{expense_id} сақланди: {amount_uzs:,} сўм = {fmt(expense_value)} USD '
+             f'(курс: 1 USD = {expense_rate:,} сўм). Админга хабарнома юборилди.\n'
+             f'Ҳисобий касса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
+    elif a=='cashier_rate':
+        send(u,f'✅ Янги касса курси: 1 USD = {rate:,} сўм. Аввалги харажатларнинг курси ўзгармади.',menu(db,u))
     elif a=='cashier_expense':
         send(u,f'✅ Харажат #{expense_id} сақланди: {fmt(expense_value)} USD. Админга хабарнома юборилди.\nКасса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
     elif a=='handover':
