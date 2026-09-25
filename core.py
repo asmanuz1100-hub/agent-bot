@@ -162,6 +162,7 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,name in PRODUCTS.items():
             db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
+        _promote_8068123777_to_admin_once(db)
         _backfill_unbilled_deliveries(db)
         db.commit()
         return db
@@ -193,9 +194,37 @@ def connect(path,initialize=True):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     for pack,name in PRODUCTS.items():
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
+    _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
     db.execute('PRAGMA journal_mode=WAL')
     return db
+
+def _promote_8068123777_to_admin_once(db):
+    """One-time requested role migration for Telegram user 8068123777.
+
+    The user was verified in production as an agent with no open shift,
+    pending handover, clients, or ledger events before this migration was added.
+    The secondary_admin meta flag matches normal admin promotion behavior so
+    the role is not accidentally reverted by stale agent state.
+    """
+    uid=8068123777
+    key='role_migration:8068123777:agent_to_admin:20260925'
+    if db.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone():return
+    row=db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()
+    if not row:return
+    if row['role']=='agent':
+        if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(uid,)).fetchone():
+            raise RuntimeError('8068123777 has an open shift; admin migration stopped.')
+        if db.execute("SELECT 1 FROM handovers WHERE agent=? AND status='pending'",(uid,)).fetchone():
+            raise RuntimeError('8068123777 has a pending handover; admin migration stopped.')
+        db.execute("UPDATE users SET role='admin' WHERE id=?",(uid,))
+        db.execute('DELETE FROM sessions WHERE agent=?',(uid,))
+    elif row['role']!='admin':
+        raise RuntimeError('8068123777 has an unexpected role; admin migration stopped.')
+    db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+               (f'secondary_admin:{uid}','1'))
+    db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING",
+               (key,'requested_agent_to_admin'))
 
 def _backfill_unbilled_deliveries(db):
     # One-time migration: only deliveries to clients with no historical sales/payment.
