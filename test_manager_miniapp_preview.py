@@ -123,6 +123,19 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_general_analysis_has_ratios_status_map_and_previous_period_deltas(self):
+        for term in (
+            'Umumiy tahlil','id="report-payment-ratio"',
+            'id="report-receivable-change"','id="report-delivered-delta"',
+            'id="report-payments-delta"',
+            'id="analysis-fresh-count"','id="analysis-red-count"',
+            'class="analysis-status-bar"','id="analysis-map"','function renderAnalysisMap(',
+            'function analysisDelta(','previous.deliveredUsd',
+            'paymentToDeliveryPct','netReceivableChangeUsd',
+            'visibleAgents=state.reportTab==="agents"?periodAgents:periodAgents.slice(0,3)'
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")

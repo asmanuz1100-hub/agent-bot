@@ -115,6 +115,13 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 .agent-period-card{position:relative;cursor:pointer;color:var(--asman-text);text-align:left;border:1px solid #e7edf5;width:100%;padding-right:24px!important}.agent-period-card:active{background:#eaf1ff}.agent-period-chevron{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:19px;font-style:normal;color:#718cba}
 .agent-period-detail{margin:-12px}.period-detail-hero{background:linear-gradient(145deg,#0b1830,#183b68);color:#fff;padding:16px}.period-detail-hero>small{font-size:9px;color:#a9bfdc}.period-detail-hero h3{font-size:17px;margin:5px 0 12px}.period-detail-kpis{display:flex;flex-wrap:wrap;gap:6px}.period-detail-kpis span{font-size:9px;font-weight:700;border:1px solid #ffffff1e;border-radius:8px;background:#ffffff10;padding:6px 7px}#period-detail-map{height:300px;width:100%;background:#eff3fa;position:relative;z-index:0}.period-map-status{padding:9px 12px;color:#74849a;font-size:9px}.period-map-legend{display:flex;gap:8px;flex-wrap:wrap;padding:5px 12px 10px;font-size:8px;color:#64748b}.period-gps-dot{width:10px;height:10px;border-radius:50%;background:#246bfd;border:2px solid #fff;box-shadow:0 2px 5px #0003}.period-client-icon{background:transparent!important;border:0!important}.period-client-pin{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:var(--period-pin);border:3px solid #fff;box-shadow:0 2px 9px #0004;font-size:13px;font-weight:900;color:#fff}.period-popup-button{background:#246bfd;border:0;border-radius:8px;color:#fff;font-size:10px;font-weight:800;padding:8px;margin-top:7px}.period-info-note{padding:8px 12px;margin:0;color:#8392a7;font-size:9px;line-height:1.45}.period-client-section{border-top:7px solid #f3f6fa;padding:13px 12px}.period-client-section h4{margin:0 0 10px;font-size:12px}.period-client-row{display:flex;align-items:center;gap:9px;text-align:left;width:100%;padding:10px 0;border:0;border-bottom:1px solid #edf1f6;background:#fff;color:#16263f}.period-client-symbol{width:29px;height:29px;border-radius:10px;display:grid;place-items:center;flex:0 0 29px;font-size:14px;font-weight:900}.period-client-symbol.new{background:#e7f8f0;color:#07825d}.period-client-symbol.visit{background:#fff3e1;color:#b57518}.period-client-row>span:nth-child(2){flex:1;min-width:0}.period-client-row b{display:block;font-size:11px}.period-client-row small{display:block;font-size:9px;line-height:1.4;color:#8796a9;margin-top:3px}.period-client-row>i{font-style:normal;font-size:19px;color:#9daabd}
 
+
+/* Umumiy tahlil executive layer */
+.analysis-insights{display:grid;grid-template-columns:1fr 1fr;gap:8px}.analysis-insight{background:#fff;border:1px solid var(--asman-line);border-radius:14px;padding:11px;min-height:88px}.analysis-insight>span{display:block;font-size:7.5px;color:var(--asman-muted)}.analysis-insight>b{display:block;margin:5px 0 4px;font-size:16px;letter-spacing:-.2px}.analysis-insight>small{display:block;font-size:6.8px;color:#96a3b4;line-height:1.35}.analysis-insight b.up,.analysis-insight b.debt-up{color:#d34a5d}.analysis-insight b.down,.analysis-insight b.debt-down{color:#078660}.analysis-insight b.new{color:#246bfd}.analysis-insight b.flat{color:#64748b}
+.analysis-status-card,.analysis-map-card{background:#fff;border:1px solid var(--asman-line);border-radius:18px;padding:14px}.analysis-status-bar{height:9px;background:#edf1f6;border-radius:999px;overflow:hidden;display:flex}.analysis-status-bar i{display:block;height:100%}.analysis-status-bar .fresh,.analysis-status-legend i.fresh{background:#0ca678}.analysis-status-bar .yellow,.analysis-status-legend i.yellow{background:#e49a2b}.analysis-status-bar .red,.analysis-status-legend i.red{background:#e05263}.analysis-status-bar .scheduled,.analysis-status-legend i.scheduled{background:#246bfd}.analysis-status-legend{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.analysis-status-legend span{font-size:7.5px;color:#728198;display:flex;align-items:center;gap:5px}.analysis-status-legend span>i{width:7px;height:7px;border-radius:50%;flex:none}.analysis-status-legend b{margin-left:auto;color:#22344f;font-size:8px}
+#analysis-map{height:245px;border-radius:13px;background:#eef2f7;overflow:hidden}.analysis-map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.analysis-map-legend span{font-size:7px;color:#74849a;display:flex;gap:4px;align-items:center}.analysis-map-legend i{width:7px;height:7px;border-radius:50%}.analysis-map-legend i.fresh{background:#0ca678}.analysis-map-legend i.red{background:#e05263}.analysis-map-legend i.agent{background:#0b1830}.analysis-map-card>p{font-size:7px;color:#8b99ab;line-height:1.4;margin:8px 0 0}.analysis-client-icon,.analysis-agent-icon{background:transparent!important;border:0!important}.analysis-client-pin{width:14px;height:14px;border-radius:50%;background:var(--analysis-pin);border:2px solid #fff;box-shadow:0 2px 7px #0b183035}.analysis-agent-pin{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--analysis-agent);border:3px solid #fff;color:#fff;font-size:8px;font-weight:900;box-shadow:0 3px 9px #0b183040}
+@media(max-width:350px){.analysis-insights{grid-template-columns:1fr}.analysis-status-legend{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body class="pb-24">
@@ -278,8 +285,8 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
         <section class="report-head report-head-v2">
             <div>
                 <span>ASMAN · RAHBAR TAHLILI</span>
-                <h2>Hisobot markazi</h2>
-                <p>Sotuv, tushum, agent faolligi va marshrut natijalari</p>
+                <h2>Umumiy tahlil</h2>
+                <p>Realizatsiya, tushum, qarz, mijozlar va agentlar holati</p>
             </div>
             <span class="report-live-mark">● JONLI</span>
         </section>
@@ -295,6 +302,62 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
             <div><span>Faol agent</span><b id="report-active-agents">0</b></div>
             <div><span>Nazoratda</span><b id="report-overdue">0</b></div>
             <div><span>Joriy qarz</span><b id="report-current-debt">0.00 $</b></div>
+        </section>
+
+        <section class="analysis-insights">
+          <div class="analysis-insight">
+            <span>Tushum / realizatsiya</span>
+            <b id="report-payment-ratio">—</b>
+            <small>Eski qarz tushumi sabab 100% dan yuqori bo‘lishi mumkin</small>
+          </div>
+          <div class="analysis-insight">
+            <span>Davr qarz o‘zgarishi</span>
+            <b id="report-receivable-change">0.00 $</b>
+            <small id="report-receivable-note">Berilgan − to‘lov − qaytarish</small>
+          </div>
+          <div class="analysis-insight">
+            <span>Realizatsiya dinamikasi</span>
+            <b id="report-delivered-delta">—</b>
+            <small>Oldingi mos davrga nisbatan</small>
+          </div>
+          <div class="analysis-insight">
+            <span>Tushum dinamikasi</span>
+            <b id="report-payments-delta">—</b>
+            <small>Oldingi mos davrga nisbatan</small>
+          </div>
+        </section>
+
+        <section class="analysis-status-card">
+          <div class="exec-section-title compact">
+            <div><small>MIJOZLAR HOLATI</small><h3>Qayta tashrif nazorati</h3></div>
+            <span id="analysis-client-total">0 mijoz</span>
+          </div>
+          <div class="analysis-status-bar" aria-label="Mijozlar holati taqsimoti">
+            <i id="analysis-fresh-bar" class="fresh"></i>
+            <i id="analysis-yellow-bar" class="yellow"></i>
+            <i id="analysis-red-bar" class="red"></i>
+            <i id="analysis-scheduled-bar" class="scheduled"></i>
+          </div>
+          <div class="analysis-status-legend">
+            <span><i class="fresh"></i>0–2 kun <b id="analysis-fresh-count">0</b></span>
+            <span><i class="yellow"></i>3–4 kun <b id="analysis-yellow-count">0</b></span>
+            <span><i class="red"></i>5+ kun <b id="analysis-red-count">0</b></span>
+            <span><i class="scheduled"></i>Rejada <b id="analysis-scheduled-count">0</b></span>
+          </div>
+        </section>
+
+        <section class="analysis-map-card">
+          <div class="exec-section-title compact">
+            <div><small>HUDUDIY TAHLIL</small><h3>Mijozlar va agentlar xaritasi</h3></div>
+            <span id="analysis-map-count">—</span>
+          </div>
+          <div id="analysis-map"></div>
+          <div class="analysis-map-legend">
+            <span><i class="fresh"></i>Mijoz</span>
+            <span><i class="red"></i>Nazorat</span>
+            <span><i class="agent"></i>Agent</span>
+          </div>
+          <p id="analysis-map-note">Joriy saqlangan mijoz nuqtalari va agentlarning so‘nggi GPS joylashuvi.</p>
         </section>
 
         <div class="report-grid report-business-grid">
@@ -378,10 +441,10 @@ var API="https://asman-agent-test.onrender.com/api/manager";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",selectedAgent:null,ready:false};
 var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0,dashboardToday=0;
-var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
+var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_manager_prefs_v1";
 var prefs=loadPrefs();
-var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Hisobot"};
+var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Umumiy tahlil"};
 function $(id){return document.getElementById(id)}
 function escapeHtml(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function money(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -688,6 +751,71 @@ function renderCash(){
  escapeHtml(when(t.ts))+' · #'+t.id+'</small></div><div style="text-align:right"><b style="font-size:11px">'+escapeHtml(value)+'</b><br><span class="status '+klass+'">'+label+'</span></div></div>';
  }).join("")||'<div class="empty">Tanlangan davrda operatsiya yo‘q</div>';
 }
+
+function analysisDelta(current,previous){
+ current=Number(current||0);previous=Number(previous||0);
+ if(!previous)return {text:current?"Yangi":"0.0%",klass:current?"new":"flat"};
+ var pct=(current-previous)/Math.abs(previous)*100;
+ return {text:(pct>0?"+":"")+pct.toLocaleString("uz-UZ",{maximumFractionDigits:1})+"%",
+         klass:pct>0?"up":pct<0?"down":"flat"};
+}
+function setAnalysisDelta(id,current,previous){
+ var d=analysisDelta(current,previous),el=$(id);el.textContent=d.text;el.className=d.klass;
+}
+function setAnalysisStatus(){
+ var fresh=Number(summary&&summary.freshClients||0),yellow=Number(summary&&summary.yellowClients||0),
+     red=Number(summary&&summary.overdueClients||0),scheduled=Number(summary&&summary.scheduledClients||0),
+     unknown=Number(summary&&summary.unknownClients||0),total=fresh+yellow+red+scheduled+unknown;
+ $("analysis-client-total").textContent=total+" mijoz";
+ $("analysis-fresh-count").textContent=fresh;$("analysis-yellow-count").textContent=yellow;
+ $("analysis-red-count").textContent=red;$("analysis-scheduled-count").textContent=scheduled;
+ var divisor=Math.max(1,total);
+ $("analysis-fresh-bar").style.width=(fresh/divisor*100)+"%";
+ $("analysis-yellow-bar").style.width=(yellow/divisor*100)+"%";
+ $("analysis-red-bar").style.width=(red/divisor*100)+"%";
+ $("analysis-scheduled-bar").style.width=(scheduled/divisor*100)+"%";
+}
+function renderAnalysisMap(){
+ if(state.page!=="report"||!$("analysis-map"))return;
+ loadLeaflet().then(function(L){
+   if(state.page!=="report"||!$("analysis-map"))return;
+   if(!analysisMap){
+     analysisMap=L.map("analysis-map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);
+     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(analysisMap);
+   }
+   if(analysisLayer)analysisLayer.clearLayers();else analysisLayer=L.layerGroup().addTo(analysisMap);
+   var bounds=[],clientPins=0,agentPins=0;
+   if(prefs.showMapClients){
+     customers.forEach(function(c){
+       if(!Number.isFinite(c.lat)||!Number.isFinite(c.lon))return;
+       var color=c.age==="red"?"#e05263":c.age==="yellow"?"#e49a2b":c.age==="scheduled"?"#246bfd":"#0ca678";
+       var icon=L.divIcon({className:"analysis-client-icon",html:'<div class="analysis-client-pin" style="--analysis-pin:'+color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+       L.marker([c.lat,c.lon],{icon:icon,title:c.name||"Mijoz"}).addTo(analysisLayer).bindPopup(
+         '<b>'+escapeHtml(c.name)+'</b><br><span>'+escapeHtml(c.address||"")+'</span><br>'+
+         '<span>Qarz: <b>'+money(c.debtUsd)+' USD</b></span><br>'+
+         '<button type="button" class="period-popup-button" data-customer="'+c.id+'">Kartochka</button>');
+       bounds.push([c.lat,c.lon]);clientPins++;
+     });
+   }
+   agents.forEach(function(a){
+     if(!Number.isFinite(a.lat)||!Number.isFinite(a.lon)||!a.lastGpsTs)return;
+     var live=a.shiftOpen&&a.locationSource==="live",color=live?"#0b1830":"#7f8fa6";
+     var icon=L.divIcon({className:"analysis-agent-icon",html:'<div class="analysis-agent-pin" style="--analysis-agent:'+color+'">'+escapeHtml(initials(a.name))+'</div>',iconSize:[30,30],iconAnchor:[15,15]});
+     L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:800,title:a.name}).addTo(analysisLayer).bindPopup(
+       '<b>'+escapeHtml(a.name)+'</b><br><span>'+escapeHtml(agentStatus(a))+'</span><br>'+
+       '<button type="button" class="period-popup-button" data-agent-profile="'+a.id+'">Agent profili</button>');
+     bounds.push([a.lat,a.lon]);agentPins++;
+   });
+   $("analysis-map-count").textContent=clientPins+" mijoz · "+agentPins+" agent";
+   $("analysis-map-note").textContent=prefs.showMapClients?
+     "Joriy mijoz nuqtalari va agentlarning so‘nggi GPS joylashuvi.":
+     "Mijoz nuqtalari Rahbar sozlamalarida yashirilgan. Agent GPS nuqtalari ko‘rsatilmoqda.";
+   if(bounds.length)analysisMap.fitBounds(L.latLngBounds(bounds).pad(.12),{maxZoom:12,animate:false});
+   analysisMap.invalidateSize(false);
+ }).catch(function(){
+   $("analysis-map-note").textContent="Xaritani yuklab bo‘lmadi. Internetni tekshirib qayta urinib ko‘ring.";
+ });
+}
 function renderReport(){
  var key=reportKey(),data=reportData[key]||{};
  $("report-visits").textContent=data.visits||0;
@@ -704,6 +832,15 @@ function renderReport(){
  $("report-current-debt").textContent=money(summary&&summary.debtUsd||0)+" $";
  $("report-period-label").textContent=reportLabel();
  $("report-agent-period").textContent=reportLabel();
+ var previous=data.previous||{};
+ $("report-payment-ratio").textContent=data.paymentToDeliveryPct==null?"—":Number(data.paymentToDeliveryPct).toLocaleString("uz-UZ",{maximumFractionDigits:1})+"%";
+ var change=Number(data.netReceivableChangeUsd||0),changeEl=$("report-receivable-change");
+ changeEl.textContent=(change>0?"+":"")+money(change)+" $";
+ changeEl.className=change>0?"debt-up":change<0?"debt-down":"flat";
+ $("report-receivable-note").textContent=change>0?"Davr ichida hisobiy qarz oshgan":change<0?"Davr ichida hisobiy qarz kamaygan":"Davr qarzi o‘zgarmagan";
+ setAnalysisDelta("report-delivered-delta",data.deliveredUsd,previous.deliveredUsd);
+ setAnalysisDelta("report-payments-delta",data.paymentsUsd,previous.paymentsUsd);
+ setAnalysisStatus();
 
  var products=Array.isArray(data.products)?data.products:[];
  $("report-top-product").textContent=data.topProduct?("TOP · "+data.topProduct):"Harakat yo‘q";
@@ -729,10 +866,10 @@ function renderReport(){
  }).join("")||'<div class="empty">Davr bo‘yicha ma’lumot yo‘q</div>';
 
  var periodAgents=Array.isArray(data.agents)?data.agents:[];
- var showAgents=state.reportTab==="agents";
+ var showAgents=periodAgents.length>0,visibleAgents=state.reportTab==="agents"?periodAgents:periodAgents.slice(0,3);
  $("report-agent-section").classList.toggle("open",showAgents);
  if(showAgents){
-   $("report-agents").innerHTML=periodAgents.map(function(a){
+   $("report-agents").innerHTML=visibleAgents.map(function(a){
      return '<button type="button" class="report-agent-card" data-report-agent="'+a.agentId+'">'+
        '<span class="agent-avatar">'+escapeHtml(initials(a.agent))+'</span>'+
        '<span class="report-agent-main"><b>'+escapeHtml(a.agent)+'</b>'+
@@ -741,6 +878,7 @@ function renderReport(){
        '<span class="exec-chevron">›</span></button>';
    }).join("")||'<div class="empty">Agentlar bo‘yicha ma’lumot yo‘q</div>';
  }else $("report-agents").innerHTML="";
+ if(state.page==="report")setTimeout(renderAnalysisMap,0);
 }
 function showReportProduct(pack){
  var data=reportData[reportKey()]||{},list=Array.isArray(data.products)?data.products:[],p=list.find(function(x){return Number(x.pack)===Number(pack)});
@@ -979,7 +1117,7 @@ document.addEventListener("click",function(e){
  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
  if(b.id==="customer-filter-reset"){state.customerFilter="all";state.customerAgent="all";state.customerDebt="all";state.customerStatus="all";state.customerSort="newest";$("customer-agent-filter").value="all";$("customer-debt-filter").value="all";$("customer-status-filter").value="all";$("customer-sort").value="newest";document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter==="all")});renderCustomers();return}
  if(b.id==="manager-settings"){showManagerSettings();return}
- if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();toast("Rahbar sozlamalari saqlandi");return}
+ if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();if(state.page==="report")renderAnalysisMap();toast("Rahbar sozlamalari saqlandi");return}
  if(b.dataset.clientEdit){openCustomerEdit(Number(b.dataset.clientEdit));return}
  if(b.dataset.clientEditPreview){previewCustomerEdit(Number(b.dataset.clientEditPreview));return}
  if(b.id==="client-edit-confirm"){commitCustomerEdit();return}
