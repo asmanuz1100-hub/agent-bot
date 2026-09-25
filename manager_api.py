@@ -685,7 +685,7 @@ def agent_period_detail(db, agent_id, period, now=None):
        WHERE sh.agent=? AND p.ts>=? AND p.ts<?
     )
     SELECT shift,ts,lat,lon,total FROM numbered
-    WHERE (rn-1) % ((total+999)/1000)=0 OR rn=total
+    WHERE (rn-1) = ((rn-1) / ((total+999)/1000)) * ((total+999)/1000) OR rn=total
     ORDER BY ts,id LIMIT 1100""",(agent_id,start,end)).fetchall()
     segments=[];segment=[];previous=None
     gps_total=int(gps[0]["total"]) if gps else 0
