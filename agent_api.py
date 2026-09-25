@@ -186,7 +186,7 @@ def mutate(db,uid,action,data):
         sh=db.execute('SELECT id FROM shifts WHERE agent=? AND "end" IS NULL ORDER BY id DESC LIMIT 1',(uid,)).fetchone()
         if not sh:raise ValueError("Ochiq ish kuni yo‘q.")
         db.execute('UPDATE shifts SET "end"=? WHERE id=?',(now,sh["id"]))
-        return {"message":"Ish kuni tugadi. Telegram ichida jonli lokatsiya ulashishni ham to‘xtating."}
+        return {"shiftId":int(sh["id"]),"message":"Ish kuni tugadi. Telegram ichida jonli lokatsiya ulashishni ham to‘xtating."}
     if action=="client":
         shop=_text(data.get("shop"),"Do‘kon nomi",90)
         person=_text(data.get("person"),"Mijoz ismi",90)
@@ -218,6 +218,10 @@ def mutate(db,uid,action,data):
         cs.add_visit(db,uid,cid,status,note,data.get("followup") or None)
         return {"message":"Tashrif saqlandi."}
     if action in ("delivery","return"):
+        if action=="return":
+            from bot import live_ready
+            ok,reason=live_ready(db,uid)
+            if not ok:raise ValueError(reason)
         items=data.get("items")
         if not isinstance(items,list) or not 1<=len(items)<=10:raise ValueError("1–10 ta mahsulot kiriting.")
         parsed=[]
@@ -237,14 +241,19 @@ def mutate(db,uid,action,data):
             ", ".join(str(pack)+" kg × "+str(qty) for pack,qty in parsed))
         return {"message":"Tovar operatsiyasi saqlandi."}
     if action=="payment":
+        from bot import live_ready
+        ok,reason=live_ready(db,uid)
+        if not ok:raise ValueError(reason)
         cents=core.money(data.get("amount"))
         if cents>core.client_debt_usd(db,cid):
             raise ValueError("To‘lov USD qarzdan ko‘p. Kassani tekshiring.")
         core.record(db,uid,uid,cid,"payment",value=cents,currency="USD")
-        return {"message":"To‘lov saqlandi."}
+        return {"clientId":cid,"amountCents":cents,"message":"To‘lov saqlandi."}
     if action=="handover":
-        core.handover(db,uid,core.money(data.get("amount")),source=None,currency="USD")
-        return {"message":"Pul kassir tasdig‘ini kutmoqda."}
+        cents=core.money(data.get("amount"))
+        core.handover(db,uid,cents,source=None,currency="USD")
+        row=db.execute("SELECT id FROM handovers WHERE agent=? ORDER BY id DESC LIMIT 1",(uid,)).fetchone()
+        return {"handoverId":int(row["id"]),"amountCents":cents,"message":"Pul kassir tasdig‘ini kutmoqda."}
     raise ValueError("Amal mavjud emas.")
 
 
