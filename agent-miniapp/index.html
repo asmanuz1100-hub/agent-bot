@@ -218,6 +218,13 @@ html,body{background:#edf2fb!important;color:var(--ink)}.app{width:100%;max-widt
 @media(max-width:360px){.header .brand{font-size:19px!important}.header .page-caption{max-width:120px}.surface{padding-left:11px!important;padding-right:11px!important}#page-home .metric{padding:9px!important}#page-home .metric strong{font-size:18px!important}#page-home .metric .mname{font-size:9px}}
 @media(min-width:760px){.app{border-radius:19px;overflow:hidden;margin:18px auto}.header{border-radius:19px 19px 0 0!important}.bottom{bottom:18px;border-radius:0 0 19px 19px}}
 
+
+/* Live shift controls use bot WebApp keyboard data, unlike demo sales forms. */
+#page-home .shift-panel{background:#fff;border:1px solid var(--line);border-radius:20px;padding:16px;margin:0 0 15px;box-shadow:0 6px 23px #101e390b}
+.shift-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.shift-eyebrow{font-size:10px;letter-spacing:1px;color:var(--blue);font-weight:850}.shift-panel-head h2{font-size:17px;letter-spacing:-.3px;margin:4px 0 0;color:var(--navy)}.shift-chip{background:#e9f0ff;color:var(--blue);padding:7px 11px;border-radius:12px;font-size:10px;font-weight:850}
+.shift-intro{font-size:11px;color:var(--muted);margin:10px 0 13px;line-height:1.5}.shift-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.shift-button{min-height:54px;border:0;border-radius:13px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:800;touch-action:manipulation}.shift-button.shift-start{background:#e6f8f0;color:#087b51}.shift-button.shift-end{background:#fff0f1;color:#c8334d}.shift-symbol{font-size:13px}.shift-button:disabled{opacity:.5}.shift-feedback{margin:11px 0 0;color:#526481;font-size:10px;line-height:1.5}.shift-feedback.error{color:#ad2e45}.shift-location-note{font-size:10px;margin:10px 0 0;padding:10px 11px;background:#f4f7fd;border-radius:11px;color:#53657f;line-height:1.5}
+@media(max-width:350px){.shift-controls{gap:7px}.shift-button{font-size:11px}.shift-panel-head h2{font-size:16px}}
+
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head>
@@ -233,6 +240,16 @@ html,body{background:#edf2fb!important;color:var(--ink)}.app{width:100%;max-widt
 </header>
 <main class="surface">
 <section class="page active" id="page-home">
+ <div class="shift-panel" id="shiftPanel">
+  <div class="shift-panel-head"><div><span class="shift-eyebrow">ИШ КУНИ · АГЕНТ</span><h2>Ишни бошқариш</h2></div><span class="shift-chip">BOT</span></div>
+  <p class="shift-intro">Ишни бошлаш ва тугатиш ботнинг ҳақиқий смена ҳисобига юборилади. Натижани Telegram чатда текширинг.</p>
+  <div class="shift-controls">
+   <button class="shift-button shift-start" id="shiftStart" type="button"><span class="shift-symbol">▶</span><span>Ишни бошлаш</span></button>
+   <button class="shift-button shift-end" id="shiftEnd" type="button"><span class="shift-symbol">■</span><span>Ишни тугатиш</span></button>
+  </div>
+  <p class="shift-feedback" id="shiftFeedback" role="status" aria-live="polite">Иш куни ҳолати ботда сақланади; бу экранда автомат янгиланмайди.</p>
+  <p class="shift-location-note">📍 Иш бошланганда админ GPS маршрутини кўриши мумкин. Жонли локацияни Telegram чатидан ўзингиз уланг; иш тугаганда Telegram’да улашишни ҳам ўзингиз тўхтатинг.</p>
+ </div>
  <div class="home-greeting"><strong>Бугунги кўрсаткичлар</strong><span id="todayLabel">ДЕМО · ТЕСТ</span></div>
  <div class="metrics">
   <div class="metric blue"><div class="mname"><span class="iconbox">↗</span> Ташрифлар</div><strong id="kpiVisits">5 / 8</strong><span class="muted">Бугунги режа</span></div>
@@ -245,7 +262,7 @@ html,body{background:#edf2fb!important;color:var(--ink)}.app{width:100%;max-widt
   <div class="panel" id="planList"></div><div class="plan-summary" id="planSummary" aria-live="polite"></div>
  <button class="primary full" type="button" data-open="customer">＋ Янги мижоз қўшиш</button>
  <div class="quick"><button type="button" data-nav="map">📍 Харита</button><button type="button" data-nav="clients">👥 Мижозлар</button><button type="button" data-open="product">➕ Янги товар қўшиш</button><button type="button" data-open="visit">📅 Ташриф қўшиш</button></div>
- <div class="notice">● ТЕСТ: бу дизайн намунавий маълумотлар билан ишлайди. Ҳақиқий бот, омбор ва кассага ёзмайди.</div>
+ <div class="notice">● ТЕСТ: сменани бошлаш/тугатиш ботга юборилади. Мижоз, омбор ва касса маълумотлари ҳали намунавий — реал базага ёзмайди.</div>
 </section>
 <section class="page" id="page-map">
  <div class="sectionline" style="margin-top:0"><h2>Мижозлар харитаси</h2><span class="badge" id="mapCount">7 дўкон</span></div>
@@ -383,6 +400,25 @@ if(b.dataset.showplan){mapFilter="planned";document.querySelectorAll("#mapFilter
 if(b.dataset.nav){navigate(b.dataset.nav);return;}if(b.dataset.customer){showCustomer(b.dataset.customer);return;}if(b.dataset.open){openModal(b.dataset.open);return;}if(b.dataset.detailtab){detailTab=b.dataset.detailtab;renderDetail();return;}if(b.dataset.mapfilter){mapFilter=b.dataset.mapfilter;document.querySelectorAll("#mapFilters button").forEach(function(x){x.classList.toggle("active",x===b);});if(current==="map")renderMap();return;}if(b.dataset.listfilter){listFilter=b.dataset.listfilter;document.querySelectorAll("#clientFilters button").forEach(function(x){x.classList.toggle("active",x===b);});renderCustomers();return;}if(b.dataset.cashtab){cashTab=b.dataset.cashtab;document.querySelectorAll("#cashSegment button").forEach(function(x){x.classList.toggle("active",x===b);});renderCash();return;}if(b.dataset.reporttab){reportTab=b.dataset.reporttab;document.querySelectorAll("#reportSegment button").forEach(function(x){x.classList.toggle("active",x===b);});renderReports();return;}if(b.dataset.accept){var x=operations[Number(b.dataset.accept)];if(x){x.state="Қабул қилинди";renderCash();toast("Демо тасдиқланди · реал касса ўзгармади");}return;}});
 document.addEventListener("change",function(e){var t=e.target;if(t.id==="newCustomerStatus"){var due=$("newCustomerFollowBox"),input=$("newCustomerFollow");if(due&&input){var waiting=t.value==="Кутишда";due.style.display=waiting?"block":"none";input.required=waiting;if(!waiting)input.value="";}return;}if(!t.matches("input[type=file][name=photo]"))return;var preview=$("photoPreview");if(preview){var file=t.files&&t.files[0];preview.textContent=file?"📷 "+file.name+" · демо кўриш":"Расм танланмаган";}});$("clientSearch").oninput=renderCustomers;$("modalClose").onclick=closeModal;$("modal").addEventListener("click",function(e){if(e.target===$("modal"))closeModal();});$("mapReset").onclick=function(){mapFilter="all";document.querySelectorAll("#mapFilters button").forEach(function(b){b.classList.toggle("active",b.dataset.mapfilter==="all");});renderMap();if(leaflet)leaflet.setView([40.539,70.95],13);};$("detailCall").onclick=function(){toast("Намунавий рақам: реал қўнғироқ амалга оширилмайди");};$("detailDirections").onclick=function(){toast("Бу тест дўкони: навигация ҳақиқий манзилга йўналтирилмайди");};$("detailPlan").onclick=function(){if(dailyPlan.has(activeCustomer))dailyPlan.delete(activeCustomer);else dailyPlan.add(activeCustomer);renderDetail();renderHome();toast("Бугунги режа фақат демода ўзгарди");};
 $("giveProduct").onclick=function(){openModal("delivery");};$("notifyBtn").onclick=function(){toast("3 та демо хабарнома: 1 кечиккан ташриф, 2 тўлов ҳолати");};$("profileBtn").onclick=function(){toast("Агент · тест версияси · реал аккаунт киритилмаган");};
+var SHIFT_START_DATA="asman.shift.start.v1",SHIFT_END_DATA="asman.shift.end.v1";
+function submitShift(action){
+ var status=$("shiftFeedback"),end=action==="end";
+ if(end&&!window.confirm("Ишни тугатасизми? Бот GPS қабул қилишни тўхтатади. Telegram'да жонли локация улашишни ҳам ўзингиз тўхтатинг."))return;
+ if(!tg||!tg.initData||typeof tg.sendData!=="function"){
+  status.textContent="Бу амал фақат бот ичидаги «📱 Agent Mini App» тугмасидан ишлайди. Telegram чатга қайтинг ва «"+(end?"⏹ Ишни тугатиш":"▶️ Ишни бошлаш")+"» тугмасини босинг.";
+  status.classList.add("error");return;
+ }
+ try{
+  status.classList.remove("error");
+  status.textContent="Ботга юборилмоқда… Натижани Telegram чатда кўрасиз.";
+  tg.sendData(end?SHIFT_END_DATA:SHIFT_START_DATA);
+ }catch(e){
+  status.textContent="Сўров юборилмади. Telegram чатда «"+(end?"⏹ Ишни тугатиш":"▶️ Ишни бошлаш")+"» тугмасини босинг.";
+  status.classList.add("error");
+ }
+}
+$("shiftStart").addEventListener("click",function(){submitShift("start");});
+$("shiftEnd").addEventListener("click",function(){submitShift("end");});
 renderHome();renderCustomers();renderCash();renderReports();
 })();
 </script>
