@@ -258,9 +258,10 @@ def _period_business_snapshot(db,start,end):
     }
 
 
-def _enrich_period_analysis(db,report):
-    start=int(report["start"]);end=int(report["end"]);duration=max(1,end-start)
-    previous=_period_business_snapshot(db,start-duration,start)
+def _enrich_period_analysis(db,report,offset_seconds):
+    start=int(report["start"]);end=int(report["end"])
+    offset_seconds=max(1,int(offset_seconds))
+    previous=_period_business_snapshot(db,start-offset_seconds,end-offset_seconds)
     delivered=float(report.get("deliveredUsd") or 0)
     payments=float(report.get("paymentsUsd") or 0)
     returns=float(report.get("returnsUsd") or 0)
@@ -400,9 +401,9 @@ def dashboard(db, now=None):
         WHERE status='pending'""").fetchone()[0]
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
-    report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now))
-    report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now))
-    report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now))
+    report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
+    report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now),7*86400)
+    report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now),30*86400)
     series=[]
     for k in range(6,-1,-1):
         day=today-k*86400
