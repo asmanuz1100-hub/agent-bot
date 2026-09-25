@@ -154,7 +154,11 @@ def customer_photo_bytes(file_id):
         if int(info.get('file_size') or 0)>18_000_000:
             raise ValueError('telegram_file_over_18mb')
         if not re.fullmatch(r'(?:photos|documents)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)',path) or '..' in path:
-            raise ValueError('telegram_file_name_not_expected')
+            reason=('missing_path' if not isinstance(path,str) or not path else
+                    'directory' if not path.startswith(('photos/','documents/')) else
+                    'extension' if not path.lower().endswith(('.jpg','.jpeg','.png','.webp')) else
+                    'characters_or_segments')
+            raise ValueError('telegram_file_name_not_expected_'+reason)
         url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
         with urllib.request.urlopen(url,timeout=12) as res:
             content=res.read(18_000_001)
