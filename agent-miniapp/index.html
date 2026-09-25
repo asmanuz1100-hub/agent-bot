@@ -65,7 +65,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,filter="all",mapFilter="all",period="day",formAction="",backPage="home",busy=false,nonce=null,reviewing=false,map=null,mapPins=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
+var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",formAction="",backPage="home",busy=false,nonce=null,reviewing=false,map=null,mapPins=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -116,7 +116,7 @@ function go(page){
  current=page;document.querySelectorAll("section.view").forEach(function(el){el.classList.toggle("active",el.id==="page-"+page)});
  document.querySelectorAll("nav button").forEach(function(b){b.classList.toggle("active",b.dataset.page===page)});
  window.scrollTo(0,0);
- if(page==="map")renderMap();if(page==="reports")renderReports();
+ if(page==="map")renderMap();if(page==="reports")renderReports();if(page==="detail")renderDetail();
 }
 function status(c){return c.age==="fresh"?"green":c.age==="yellow"?"yellow":c.age==="red"?"red":c.age==="scheduled"?"":"unknown"}
 function statusText(c){return c.age==="scheduled"?"Rejada: "+c.followup:c.age==="unknown"?"Sana yo‘q":c.days+" kun"}
@@ -141,8 +141,18 @@ function renderDetail(){
  $("detailName").textContent=c.name;
  var body='<div class="card">'+detailLine("Mijoz",c.person)+detailLine("Manzil",c.address)+detailLine("Telefonlar",c.phone)+detailLine("Mas’ul agent",c.agent)+detailLine("Holat",c.status)+detailLine("Oxirgi tashrif",date(c.lastTs))+detailLine("Keyingi tashrif",c.followup||"Belgilanmagan")+detailLine("Izoh",c.note||c.comment)+detailLine("USD qarz",fmt(c.debtUsd)+" USD")+'</div>';
  body+='<div class="card"><b>Do‘kondagi mahsulot qoldig‘i</b>'+[1,3,5].map(function(p){return detailLine(p+" kg gruntovka",(c.stock[String(p)]||0)+" dona")}).join("")+'</div>';
+ if(detailData){
+  var visits=detailData.visits||[],events=detailData.events||[];
+  body+='<div class="title">Tashriflar tarixi</div><div class="card">'+(visits.length?visits.slice(0,10).map(function(v){return detailLine(date(v.ts)+" · "+(v.actor||"Agent"),(v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
+  body+='<div class="title">So‘nggi operatsiyalar</div><div class="card">'+(events.length?events.slice(0,12).map(function(ev){var names={delivery:"Tovar berildi",payment:"To‘lov olindi",return:"Tovar qaytdi",sold:"Sotildi",order:"Buyurtma",visit:"Tashrif"};var value=ev.amountUsd?fmt(ev.amountUsd)+" USD":ev.qty?ev.pack+" kg · "+ev.qty+" dona":"";return detailLine(date(ev.ts)+" · "+(ev.actor||"Agent"),(names[ev.kind]||ev.kind)+(value?" · "+value:""))}).join(""):'<p class="muted">Operatsiyalar hali yo‘q.</p>')+'</div>';
+ }
  if(Number.isFinite(c.lat)&&Number.isFinite(c.lon))body+='<button class="secondary" type="button" id="navigateClient" style="width:100%;margin-bottom:14px">➤ Navigator</button>';
  $("detailBody").innerHTML=body;
+}
+async function loadClientDetail(id){
+ detailData=null;renderDetail();
+ try{var result=await request("client_detail",{clientId:id});if(selected!==id)return;detailData=result;renderDetail()}
+ catch(e){notify(e.message||"Mijoz kartasi yuklanmadi.")}
 }
 function renderCash(){
  if(!data)return;
@@ -244,7 +254,7 @@ async function shift(kind){
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){go(b.dataset.page);return}
- if(b.dataset.client){selected=Number(b.dataset.client);go("detail");return}
+ if(b.dataset.client){selected=Number(b.dataset.client);go("detail");loadClientDetail(selected);return}
  if(b.dataset.action){openForm(b.dataset.action);return}
  if(b.dataset.filter){if(b.dataset.target==="mapFilters"){mapFilter=b.dataset.filter;renderMap()}else{filter=b.dataset.filter;renderClients()}return}
  if(b.dataset.period){period=b.dataset.period;renderReports();return}
