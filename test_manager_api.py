@@ -236,6 +236,81 @@ class ManagerApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             manager_api.client_edit_preview(self.db,402,{'name':'Old'})
 
+    def test_agent_detail_combines_gps_stock_cash_permissions_and_periods(self):
+        self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
+                         VALUES(501,2,'Agent buyer','+998905010000',?,0)""",(self.today+100,))
+        self.db.execute("""INSERT INTO shifts(id,agent,start,live_id) VALUES(51,2,?,555)""",
+                        (self.today+1000,))
+        self.db.execute("INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(51,?,40.51,70.91,7)",
+                        (self.today+1100,))
+        self.db.execute("INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(51,?,40.512,70.912,7)",
+                        (self.today+1300,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts)
+                         VALUES(1,2,0,'load',1,20,0,?)""",(self.today+100,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts)
+                         VALUES(2,2,501,'delivery',1,5,1000,?)""",(self.today+1400,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,501,'payment',600,?)""",(self.today+1500,))
+        self.db.execute("""INSERT INTO handovers(agent,amount_usd,status,ts)
+                         VALUES(2,400,'pending',?)""",(self.today+1600,))
+        self.db.execute("""INSERT INTO client_visits(client,actor,status,note,ts)
+                         VALUES(501,2,'active','ok',?)""",(self.today+1700,))
+        core.set_agent_feature(self.db,1,2,'payment',False)
+        detail=manager_api.agent_detail(self.db,2,self.now)
+        self.assertTrue(detail['active'])
+        self.assertTrue(detail['shiftOpen'])
+        self.assertEqual(detail['clients'],1)
+        self.assertEqual(detail['lastGpsTs'],self.today+1300)
+        self.assertEqual(detail['stocks'][0]['qty'],15)
+        self.assertEqual(detail['cashUsd'],6)
+        self.assertEqual(detail['pendingHandoverUsd'],4)
+        payment=next(f for f in detail['features'] if f['key']=='payment')
+        self.assertFalse(payment['enabled'])
+        self.assertEqual(detail['periods']['today']['deliveredUsd'],10)
+        self.assertEqual(detail['periods']['today']['paymentsUsd'],6)
+        self.assertEqual(detail['periods']['today']['visits'],1)
+        self.assertEqual(detail['periods']['today']['newClients'],1)
+        self.assertGreater(detail['periods']['today']['distanceKm'],0)
+
+    def test_agent_management_helpers_are_audited_and_previews_do_not_mutate(self):
+        preview=manager_api.agent_add_preview(self.db,900001,' New Agent ')
+        self.assertEqual(preview,{'id':900001,'name':'New Agent'})
+        self.assertIsNone(self.db.execute("SELECT 1 FROM users WHERE id=900001").fetchone())
+        core.add_agent(self.db,1,preview['id'],preview['name'])
+        self.assertEqual(self.db.execute("SELECT role FROM users WHERE id=900001").fetchone()[0],'agent')
+        self.assertEqual(self.db.execute("""SELECT action FROM role_audit
+            WHERE new_id=900001 ORDER BY id DESC LIMIT 1""").fetchone()[0],'agent_created')
+        rename=manager_api.agent_rename_preview(self.db,900001,'Agent Yangilandi')
+        self.assertEqual(rename['oldName'],'New Agent')
+        core.rename_agent(self.db,1,900001,rename['newName'])
+        self.assertEqual(self.db.execute("SELECT name FROM users WHERE id=900001").fetchone()[0],
+                         'Agent Yangilandi')
+        self.assertEqual(self.db.execute("""SELECT action FROM role_audit
+            WHERE new_id=900001 ORDER BY id DESC LIMIT 1""").fetchone()[0],'agent_renamed')
+        transfer=manager_api.agent_transfer_preview(self.db,900001,900002)
+        self.assertEqual(transfer['newId'],900002)
+        self.assertIsNone(self.db.execute("SELECT 1 FROM users WHERE id=900002").fetchone())
+        deactivate=manager_api.agent_deactivate_preview(self.db,900001)
+        self.assertIn('o‘chirilmaydi',deactivate['warning'])
+        self.assertEqual(self.db.execute("SELECT role FROM users WHERE id=900001").fetchone()[0],'agent')
+
+    def test_agent_transfer_preview_rejects_open_shift_and_existing_identity(self):
+        self.db.execute("""INSERT INTO shifts(id,agent,start,live_id) VALUES(92,2,?,1)""",(self.today,))
+        with self.assertRaisesRegex(ValueError,'smenasini'):
+            manager_api.agent_transfer_preview(self.db,2,999)
+        self.db.execute('UPDATE shifts SET "end"=? WHERE id=92',(self.today+100,))
+        with self.assertRaisesRegex(ValueError,'ro‘yxatdan'):
+            manager_api.agent_transfer_preview(self.db,2,3)
+
+    def test_agent_management_lists_active_and_disabled_accounts(self):
+        self.db.execute("INSERT INTO users(id,role,name) VALUES(?,?,?)",(77,'disabled','Old Agent'))
+        rows=manager_api.agent_management(self.db)['agents']
+        active=next(x for x in rows if x['id']==2)
+        disabled=next(x for x in rows if x['id']==77)
+        self.assertTrue(active['active'])
+        self.assertFalse(disabled['active'])
+        self.assertEqual(disabled['role'],'disabled')
+
     def test_unknown_agent_route_is_rejected(self):
         with self.assertRaises(ValueError):
             manager_api.route(self.db,999,self.now)

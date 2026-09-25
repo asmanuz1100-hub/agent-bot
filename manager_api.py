@@ -9,6 +9,7 @@ import json
 import re
 import time
 import math
+import core
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
 from zoneinfo import ZoneInfo
@@ -497,6 +498,156 @@ def client_edit_preview(db, client_id, values):
     return {"clientId":client_id,
             "changes":[{"field":k,"old":str(current[k] or ""),"new":v} for k,v in clean.items()],
             "values":clean}
+
+
+
+AGENT_FEATURE_LABELS={
+    'client':'Mijoz qo‘shish','clients':'Mijozlar','delivery':'Tovar berish',
+    'order':'Buyurtma','sold':'Sotilgan tovar','payment':'Pul olish',
+    'return':'Tovar qaytarish','visit':'Tashrif / taklif',
+    'handover':'Kassaga topshirish','balance':'Hisobim',
+}
+
+
+def _agent_period_stats(db,agent_id,start,end,now):
+    start,end=int(start),int(end)
+    row=db.execute("""SELECT
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivered,
+      COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0) AS payments,
+      COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS returns,
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0) AS delivered_qty,
+      COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0) AS sold_qty
+      FROM events WHERE agent=? AND ts>=? AND ts<?""",(agent_id,start,end)).fetchone()
+    visits=int(db.execute("""SELECT COUNT(*) FROM client_visits
+        WHERE actor=? AND ts>=? AND ts<?""",(agent_id,start,end)).fetchone()[0] or 0)
+    new_clients=int(db.execute("""SELECT COUNT(*) FROM clients
+        WHERE agent=? AND created_ts>=? AND created_ts<?""",(agent_id,start,end)).fetchone()[0] or 0)
+    shifts=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts
+        WHERE agent=? AND start<? AND COALESCE("end",?)>? ORDER BY start,id""",
+        (agent_id,end,now,start)).fetchall()
+    work_seconds=0;shift_ids=[]
+    for sh in shifts:
+        left=max(start,int(sh["start"] or start));right=min(end,int(sh["end_ts"] or now),now)
+        work_seconds+=max(0,right-left);shift_ids.append(int(sh["id"]))
+    distance=0.0
+    for sid in shift_ids:
+        pts=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=? AND ts>=? AND ts<?
+            ORDER BY ts,id""",(sid,start,end)).fetchall()
+        previous=None
+        for p in pts:
+            if previous is not None:
+                km=_route_km(previous,p)
+                if 0<=km<=25:distance+=km
+            previous=p
+    return {
+        "deliveredUsd":_usd(row["delivered"]),"paymentsUsd":_usd(row["payments"]),
+        "returnsUsd":_usd(row["returns"]),"deliveredQty":int(row["delivered_qty"] or 0),
+        "soldQty":int(row["sold_qty"] or 0),"visits":visits,"newClients":new_clients,
+        "workSeconds":work_seconds,"distanceKm":round(distance,2),
+    }
+
+
+
+def agent_management(db):
+    """Compact management list including disabled historical agent accounts."""
+    rows=db.execute("""SELECT u.id,u.name,u.role,
+        (SELECT COUNT(*) FROM clients c WHERE c.agent=u.id) AS clients,
+        EXISTS(SELECT 1 FROM shifts s WHERE s.agent=u.id AND s."end" IS NULL) AS shift_open
+        FROM users u WHERE u.role IN ('agent','disabled')
+        ORDER BY CASE WHEN u.role='agent' THEN 0 ELSE 1 END,u.name,u.id""").fetchall()
+    return {"agents":[{"id":int(r["id"]),"name":r["name"] or str(r["id"]),
+                        "role":r["role"],"active":r["role"]=="agent",
+                        "clients":int(r["clients"] or 0),"shiftOpen":bool(r["shift_open"])}
+                       for r in rows]}
+
+
+def agent_detail(db,agent_id,now=None):
+    """Operational + administrative profile for one active or disabled agent."""
+    try:agent_id=int(agent_id)
+    except (TypeError,ValueError):raise ValueError("Agent ID noto‘g‘ri.")
+    now=int(time.time() if now is None else now)
+    row=db.execute("SELECT id,name,role FROM users WHERE id=? AND role IN ('agent','disabled')",
+                   (agent_id,)).fetchone()
+    if not row:raise ValueError("Agent topilmadi.")
+    open_shift=db.execute("""SELECT id,start,live_id FROM shifts WHERE agent=? AND "end" IS NULL
+        ORDER BY id DESC LIMIT 1""",(agent_id,)).fetchone()
+    last_gps=db.execute("""SELECT p.lat,p.lon,p.ts,p.accuracy FROM points p
+        JOIN shifts s ON s.id=p.shift WHERE s.agent=?
+        ORDER BY p.ts DESC,p.id DESC LIMIT 1""",(agent_id,)).fetchone()
+    lat,lon=_float_coord(last_gps["lat"],last_gps["lon"]) if last_gps else (None,None)
+    products=db.execute("SELECT pack,name FROM products ORDER BY pack").fetchall()
+    stocks=[{"pack":int(p["pack"]),"name":p["name"],
+             "qty":int(core.agent_stock(db,agent_id,int(p["pack"])))} for p in products]
+    clients=int(db.execute("SELECT COUNT(*) FROM clients WHERE agent=?",(agent_id,)).fetchone()[0] or 0)
+    pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE agent=? AND status='pending'""",(agent_id,)).fetchone()[0] or 0)
+    features=[{"key":f,"label":AGENT_FEATURE_LABELS.get(f,f),
+               "enabled":bool(core.feature_enabled(db,agent_id,f))}
+              for f in core.AGENT_FEATURES]
+    audits=db.execute("""SELECT ra.id,ra.actor,ra.old_id,ra.new_id,ra.action,ra.ts,
+               COALESCE(u.name,CAST(ra.actor AS TEXT)) AS actor_name
+        FROM role_audit ra LEFT JOIN users u ON u.id=ra.actor
+        WHERE ra.old_id=? OR ra.new_id=? ORDER BY ra.ts DESC,ra.id DESC LIMIT 30""",
+        (agent_id,agent_id)).fetchall()
+    audit=[{"id":int(a["id"]),"action":a["action"],"ts":int(a["ts"] or 0),
+            "actor":a["actor_name"] or "—","oldId":a["old_id"],"newId":a["new_id"]} for a in audits]
+    today=_midnight(now);week=today-6*86400;month=today-29*86400
+    return {
+        "id":agent_id,"name":row["name"],"role":row["role"],"active":row["role"]=="agent",
+        "shiftOpen":bool(open_shift),"shiftStart":int(open_shift["start"]) if open_shift else None,
+        "liveId":int(open_shift["live_id"]) if open_shift and open_shift["live_id"] is not None else None,
+        "lastGpsTs":int(last_gps["ts"]) if last_gps else None,
+        "lat":lat,"lon":lon,"accuracy":float(last_gps["accuracy"]) if last_gps and last_gps["accuracy"] is not None else None,
+        "clients":clients,"cashUsd":_usd(core.cash_usd(db,agent_id)),
+        "legacyCashUzs":int(core.cash(db,agent_id) or 0),
+        "pendingHandoverUsd":_usd(pending),"stocks":stocks,"features":features,"audit":audit,
+        "periods":{"today":_agent_period_stats(db,agent_id,today,now+1,now),
+                   "week":_agent_period_stats(db,agent_id,week,now+1,now),
+                   "month":_agent_period_stats(db,agent_id,month,now+1,now)}
+    }
+
+
+def agent_add_preview(db,uid,name):
+    try:uid=int(uid)
+    except (TypeError,ValueError):raise ValueError("Telegram ID noto‘g‘ri.")
+    if uid<=0:raise ValueError("Telegram ID noto‘g‘ri.")
+    if not isinstance(name,str) or not name.strip() or len(name.strip())>120:
+        raise ValueError("Agent ismini kiriting.")
+    if db.execute("SELECT 1 FROM users WHERE id=?",(uid,)).fetchone():
+        raise ValueError("Bu Telegram ID avval ro‘yxatdan o‘tgan.")
+    return {"id":uid,"name":name.strip()}
+
+
+def agent_rename_preview(db,agent_id,name):
+    detail=agent_detail(db,agent_id)
+    if not detail["active"]:raise ValueError("Faqat faol agent nomini o‘zgartirish mumkin.")
+    if not isinstance(name,str) or not name.strip() or len(name.strip())>120:
+        raise ValueError("Agentning yangi ismini kiriting.")
+    if detail["name"]==name.strip():raise ValueError("Agent ismi o‘zgarmagan.")
+    return {"agentId":detail["id"],"oldName":detail["name"],"newName":name.strip()}
+
+
+def agent_transfer_preview(db,agent_id,new_id):
+    detail=agent_detail(db,agent_id)
+    if not detail["active"]:raise ValueError("Faqat faol agent akkauntini almashtirish mumkin.")
+    try:new_id=int(new_id)
+    except (TypeError,ValueError):raise ValueError("Yangi Telegram ID noto‘g‘ri.")
+    if new_id<=0 or new_id==detail["id"]:raise ValueError("Yangi Telegram ID noto‘g‘ri.")
+    if detail["shiftOpen"]:raise ValueError("Avval agent smenasini yoping.")
+    if db.execute("SELECT 1 FROM users WHERE id=?",(new_id,)).fetchone():
+        raise ValueError("Yangi Telegram ID avval ro‘yxatdan o‘tgan.")
+    return {"agentId":detail["id"],"agent":detail["name"],"newId":new_id,
+            "clients":detail["clients"],"cashUsd":detail["cashUsd"],"stocks":detail["stocks"]}
+
+
+def agent_deactivate_preview(db,agent_id):
+    detail=agent_detail(db,agent_id)
+    if not detail["active"]:raise ValueError("Agent allaqachon faol emas.")
+    if detail["shiftOpen"]:raise ValueError("Avval agent smenasini yoping.")
+    return {"agentId":detail["id"],"agent":detail["name"],"clients":detail["clients"],
+            "cashUsd":detail["cashUsd"],"pendingHandoverUsd":detail["pendingHandoverUsd"],
+            "stocks":detail["stocks"],
+            "warning":"Kirish bloklanadi, lekin mijozlar, tovar, pul va GPS tarixi o‘chirilmaydi."}
 
 
 def route(db, agent_id, now=None):
