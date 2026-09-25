@@ -289,9 +289,9 @@ html,body{background:#edf2fb!important;color:var(--ink)}.app{width:100%;max-widt
 (function(){
 "use strict";
 var tg=window.Telegram&&window.Telegram.WebApp;
-try{$("todayLabel").textContent=new Intl.DateTimeFormat("uz-UZ",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Tashkent"}).format(new Date())+" · ДЕМО";}catch(e){}
 if(tg){try{tg.ready();tg.expand();}catch(e){}}
 var $=function(id){return document.getElementById(id);};
+try{$("todayLabel").textContent=new Intl.DateTimeFormat("uz-UZ",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Tashkent"}).format(new Date())+" · ДЕМО";}catch(e){}
 var DAY=86400000,now=Date.now(),idSequence=15;
 function old(n){return now-n*DAY;}
 function iso(n){var d=new Date(n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
