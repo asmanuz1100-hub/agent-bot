@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import core
 import bot
 
@@ -11,22 +12,27 @@ class AgentMiniAppButtonTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
-    @staticmethod
-    def web_buttons(rows):
-        return [b for row in rows for b in row if isinstance(b,dict) and b.get('web_app')]
-
-    def test_agent_and_manager_buttons_are_role_specific(self):
-        admin=self.web_buttons(bot.menu(self.db,1))
-        agent=self.web_buttons(bot.menu(self.db,2))
-        cashier=self.web_buttons(bot.menu(self.db,3))
-
-        self.assertEqual(admin,[])
+    def test_agent_button_requests_signed_inline_webapp_for_agent_only(self):
+        agent_rows=bot.menu(self.db,2)
+        self.assertIn('📱 Agent Mini App',[b for row in agent_rows for b in row])
+        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in agent_rows for b in row))
         self.assertIn('📱 Раҳбар Mini App',[b for row in bot.menu(self.db,1) for b in row])
-        self.assertEqual([(b['text'],b['web_app']['url']) for b in agent],
-                         [('📱 Agent Mini App',bot.AGENT_MINIAPP_URL)])
-        self.assertEqual(cashier,[])
+        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in bot.menu(self.db,3) for b in row))
         self.assertTrue(bot.AGENT_MINIAPP_URL.startswith('https://'))
         self.assertIn('asman-agent-miniapp-v2-test.onrender.com',bot.AGENT_MINIAPP_URL)
+        with patch.object(bot,'api') as api:
+            message={'from':{'id':2},'chat':{'id':2,'type':'private'},
+                     'text':'📱 Agent Mini App','date':1234}
+            bot.handle(self.db,{'message':message})
+            button=api.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]
+            self.assertEqual(button['web_app']['url'],bot.AGENT_MINIAPP_URL)
+            self.assertNotIn('url',button)
+        with patch.object(bot,'api') as api:
+            message={'from':{'id':1},'chat':{'id':1,'type':'private'},
+                     'text':'📱 Agent Mini App','date':1234}
+            with self.assertRaises(ValueError):
+                bot.handle(self.db,{'message':message})
+            api.assert_not_called()
 
 if __name__=='__main__':
     unittest.main()
