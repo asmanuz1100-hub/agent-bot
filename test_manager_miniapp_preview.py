@@ -65,6 +65,16 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_map_keeps_clients_and_last_known_agent_locations_visible(self):
+        for term in (
+            'class="map-legend"','var pinClients=customers.filter',
+            'L.circleMarker([c.lat,c.lon]','data-customer="',
+            'Kartochkani ochish','oxirgi GPS saqlangan',
+            'a.locationSource==="last"||!a.shiftOpen',
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn('GPS koordinatasi kelgan agent yo‘q. Quyidagi ro‘yxatni tekshiring.',self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
