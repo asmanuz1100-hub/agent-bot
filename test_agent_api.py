@@ -53,6 +53,8 @@ class AgentApiTests(unittest.TestCase):
         self.db.execute("INSERT INTO clients(agent,name,phone,address,created_ts,map_only) VALUES(4,'X','+998909999999','X',?,1)",(self.now,))
         other=self.db.execute("SELECT id FROM clients WHERE agent=4").fetchone()[0]
         core.record(self.db,4,4,other,'payment',0,0,9900,'',8003,currency='USD')
+        # Freeze event timestamps for the explicitly frozen 2026-09-25 test day.
+        self.db.execute('UPDATE events SET ts=? WHERE source IN (8001,8002,8003)',(self.now,))
         snap=agent_api.dashboard(self.db,2,self.now)
         self.assertEqual(snap['profile']['name'],'Ali')
         self.assertEqual(snap['summary']['clientCount'],2)  # shared client directory

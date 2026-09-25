@@ -37,7 +37,7 @@ class CashierDashboardTests(unittest.TestCase):
             self.assertNotIn('/accept 1',text)
         with patch.object(bot,'send') as send:
             bot.cashbox_report(self.db,3)
-            self.assertIn('/accept 1',send.call_args.args[1])
+            self.assertIn('/review 1',send.call_args.args[1])
 
     def test_payment_finish_notifies_every_cashier_with_agent_and_customer(self):
         state={'action':'payment','values':{'client':1,'amount':'5.00'}}
@@ -61,7 +61,8 @@ class CashierDashboardTests(unittest.TestCase):
         self.assertTrue(any(uid==4 and 'КАССАГА ПУЛ ТОПШИРИШ' in text for uid,text in calls))
         hid=self.db.execute("SELECT id FROM handovers WHERE status='pending'").fetchone()[0]
         with patch.object(bot,'send') as send,patch.object(bot,'ADMINS',{1}):
-            bot.handle(self.db,self.message(3,f'/accept {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/review {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/accept {hid}',72004))
         row=self.db.execute('SELECT status,cashier,accepted_ts FROM handovers WHERE id=?',(hid,)).fetchone()
         self.assertEqual(row['status'],'accepted')
         self.assertEqual(row['cashier'],3)

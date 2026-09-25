@@ -27,6 +27,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, shift INTEGER, ts INTEGER, lat REAL, lon REAL, accuracy REAL, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, actor INTEGER, agent INTEGER, client INTEGER, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount INTEGER DEFAULT 0, amount_usd INTEGER DEFAULT 0, note TEXT DEFAULT '', ts INTEGER, source INTEGER UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amount INTEGER, amount_usd INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', cashier INTEGER, source INTEGER UNIQUE, ts INTEGER);
+CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT NULL, old_id INTEGER, new_id INTEGER, action TEXT NOT NULL, ts INTEGER NOT NULL);
@@ -56,6 +58,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIGINT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, accuracy DOUBLE PRECISION, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent BIGINT, client BIGINT, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount BIGINT DEFAULT 0, amount_usd BIGINT DEFAULT 0, note TEXT DEFAULT '', ts BIGINT, source BIGINT UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, amount_usd BIGINT DEFAULT 0, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
+CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT NULL, old_id BIGINT, new_id BIGINT, action TEXT NOT NULL, ts BIGINT NOT NULL);
@@ -585,6 +589,48 @@ def accept(db,actor,hid,accepted=True):
     if not row:raise ValueError('Бу топшириқ аввал ҳал қилинган.')
     if accepted and (cash_usd(db,row['agent'])<row['amount_usd'] or cash(db,row['agent'])<row['amount']): raise ValueError('Агент пули етарли эмас.')
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
+
+def cashier_balance_usd(db):
+    """Accepted agent handovers less recorded cashier expenses, in USD cents.
+
+    Pending/rejected handovers and customer payments are not cashier income.
+    The historical physical opening cash balance is not included.
+    """
+    accepted=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'").fetchone()[0]
+    spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
+    return int(accepted or 0)-int(spent or 0)
+
+
+CASHIER_EXPENSE_CATEGORIES=(
+    '🚚 Йўл харажати', '⛽ Ёқилғи', '👷 Иш ҳақи',
+    '🏢 Офис ва хўжалик', '📦 Бошқа харажат',
+)
+
+
+def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0]!='cashier':
+        raise ValueError('Харажатни фақат кассир киритиши мумкин.')
+    if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
+        raise ValueError('Харажат суммаси нотўғри.')
+    if category not in CASHIER_EXPENSE_CATEGORIES:
+        raise ValueError('Харажат турини рўйхатдан танланг.')
+    if not isinstance(recipient,str) or not recipient.strip() or len(recipient)>200:
+        raise ValueError('Кимга ёки нима учун берилганини киритинг (1–200 белги).')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:
+        raise ValueError('Операция ID нотўғри.')
+    # Lock the common cashbox when two PostgreSQL cashiers attempt to spend
+    # simultaneously; the surrounding transaction owns this advisory lock.
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(7806292501)').fetchone()
+    if db.execute('SELECT 1 FROM cashier_expenses WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу харажат аллақачон сақланган.')
+    if amount_usd>cashier_balance_usd(db):
+        raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
+    return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts) VALUES(?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()))).fetchone()[0])
+
 
 def point(db,agent,message,edited=False):
     s=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL',(agent,)).fetchone()
