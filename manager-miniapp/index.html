@@ -408,6 +408,13 @@ document.addEventListener("click",function(e){
 /* A missing Telegram photo must never stretch or break the customer list. */
 document.addEventListener("error",function(e){
  var img=e.target;if(!(img instanceof HTMLImageElement))return;
+ if(!img.closest(".customer-card>.shop-ico.photo")&&!img.classList.contains("customer-photo"))return;
+ if(!img.dataset.photoRetried){
+  img.dataset.photoRetried="1";
+  var original=img.currentSrc||img.src;
+  setTimeout(function(){if(img.isConnected)img.src=original+(original.includes("?")?"&":"?")+"photo_retry=1";},1100);
+  return;
+ }
  if(img.closest(".customer-card>.shop-ico.photo")){
   var holder=img.parentElement;if(holder){holder.classList.remove("photo");holder.textContent="▦";holder.setAttribute("aria-label","Rasm mavjud emas");}
  }else if(img.classList.contains("customer-photo")){
