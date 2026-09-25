@@ -41,6 +41,12 @@ class LiveAgentMiniAppTests(unittest.TestCase):
                      'data.adminMode','data.readOnly','admin-readonly'):
             self.assertIn(term,self.html)
 
+    def test_customer_row_opens_and_loads_real_detail_card(self):
+        for term in ('if(page==="detail")renderDetail()','function loadClientDetail(',
+                     'request("client_detail"','Tashriflar tarixi',
+                     'So‘nggi operatsiyalar','loadClientDetail(selected)'):
+            self.assertIn(term,self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
