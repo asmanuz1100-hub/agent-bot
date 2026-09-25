@@ -87,6 +87,17 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_customer_control_module_has_detail_edit_history_and_exports(self):
+        for term in (
+            'request("client_detail"','data-client-edit=','data-client-export=',
+            'Akt PDF','Akt Excel','Tovar va to‘lovlar tarixi',
+            'Tashriflar tarixi','O‘zgartirishlar auditi',
+            'request("client_edit_preview"','request("client_edit_commit"',
+            'request("client_export"','function exportClient(',
+            'function commitCustomerEdit(',
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
