@@ -37,8 +37,8 @@ class MiniAppPreviewTests(unittest.TestCase):
             'id="giveProduct"', "ДЕМО · ТЕСТ"
         ):
             self.assertIn(term, self.html)
-        self.assertNotIn('src="https://unpkg.com/leaflet', self.html)
-        self.assertNotIn('href="https://unpkg.com/leaflet', self.html)
+        self.assertNotRegex(self.html, r'<script\\s+src="https://unpkg\\.com/leaflet')
+        self.assertNotRegex(self.html, r'<link\\s+[^>]*href="https://unpkg\\.com/leaflet')
         self.assertIn('js.src="https://unpkg.com/leaflet', self.html)
         self.assertNotIn("cdn.tailwindcss.com", self.html)
         self.assertNotIn("api/mcp/asset", self.html)
