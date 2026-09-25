@@ -311,6 +311,67 @@ class ManagerApiTests(unittest.TestCase):
         self.assertFalse(disabled['active'])
         self.assertEqual(disabled['role'],'disabled')
 
+    def test_agent_period_route_and_customer_visits_only_from_selected_day(self):
+        yesterday=self.today-86400
+        self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,address,phone,lat,lon,created_ts,map_only)
+             VALUES(601,2,'Contact','New shop','Qo‘qon','+998906010000',40.5,71.0,?,0)""",
+             (self.today+300,))
+        self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,address,phone,lat,lon,created_ts,map_only)
+             VALUES(602,2,'Older','Older shop','Qo‘qon','+998906020000',40.6,71.1,?,0)""",
+             (yesterday+200,))
+        self.db.execute("""INSERT INTO shifts(id,agent,start,"end") VALUES(65,2,?,?)""",
+             (yesterday+200,yesterday+1800))
+        self.db.execute("""INSERT INTO shifts(id,agent,start,"end") VALUES(66,2,?,?)""",
+             (self.today+100,self.today+6000))
+        self.db.executemany("""INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)""",[
+            (65,yesterday+300,40.1,70.1,5),
+            (65,yesterday+400,40.2,70.2,5),
+            (66,self.today+200,40.5,70.9,5),
+            (66,self.today+280,40.501,70.901,5),
+            (66,self.today+3500,40.502,70.902,5),
+        ])
+        self.db.executemany("""INSERT INTO client_visits(client,actor,status,note,ts)
+             VALUES(?,?,?,?,?)""",[
+            (602,2,'active','Kecha',yesterday+700),
+            (601,2,'active','Bugun',self.today+600),
+            (602,2,'waiting','Qayta tashrif',self.today+700),
+        ])
+        day=manager_api.agent_period_detail(self.db,2,'today',self.now)
+        self.assertEqual(day['newClientsTotal'],1)
+        self.assertEqual(day['visitsTotal'],2)
+        self.assertEqual(day['newClients'][0]['id'],601)
+        self.assertEqual({v['clientId'] for v in day['visits']},{601,602})
+        self.assertEqual(day['route']['gpsTotal'],3)
+        self.assertEqual(day['route']['segments'][0][0]['ts'],self.today+200)
+        self.assertTrue(all(p['ts']>=self.today for seg in day['route']['segments'] for p in seg))
+        self.assertEqual(len(day['route']['segments']),2)  # GPS gap: no invented line.
+        self.assertEqual(day['visits'][0]['note'],'Qayta tashrif')
+        week=manager_api.agent_period_detail(self.db,2,'week',self.now)
+        self.assertEqual(week['newClientsTotal'],2)
+        self.assertEqual(week['visitsTotal'],3)
+        self.assertEqual(week['route']['gpsTotal'],5)
+        self.assertTrue(len(week['route']['segments'])>=3)  # shifts stay separate
+        self.assertEqual(week['newClients'][0]['name'],'New shop')
+        self.assertIsNone(self.db.execute("SELECT 1 FROM events WHERE client=601").fetchone())
+
+    def test_agent_period_route_samples_entire_range_and_validates_period(self):
+        base=self.today+100
+        self.db.execute("""INSERT INTO shifts(id,agent,start,"end") VALUES(77,2,?,?)""",
+             (base,base+2000))
+        rows=[(77,base+i,40.51,70.91,5) for i in range(1800)]
+        self.db.executemany("""INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)""",rows)
+        day=manager_api.agent_period_detail(self.db,2,'today',self.today+2500)
+        self.assertEqual(day['route']['gpsTotal'],1800)
+        self.assertLessEqual(day['route']['gpsShown'],1001)
+        self.assertTrue(day['route']['sampled'])
+        stamps=[p['ts'] for seg in day['route']['segments'] for p in seg]
+        self.assertEqual(stamps[0],base)
+        self.assertEqual(stamps[-1],base+1799)
+        with self.assertRaisesRegex(ValueError,'Davr'):
+            manager_api.agent_period_detail(self.db,2,'invalid',self.now)
+        with self.assertRaisesRegex(ValueError,'topilmadi'):
+            manager_api.agent_period_detail(self.db,999,'today',self.now)
+
     def test_unknown_agent_route_is_rejected(self):
         with self.assertRaises(ValueError):
             manager_api.route(self.db,999,self.now)
