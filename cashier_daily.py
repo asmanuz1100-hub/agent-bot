@@ -35,8 +35,6 @@ def report(db,now=None):
           WHERE kind='payment' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
     opening_income=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
           FROM handovers WHERE status='accepted' AND COALESCE(accepted_ts,ts)<?""",(start,)).fetchone()[0] or 0)
-    opening_income+=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes WHERE ts<?",(start,)).fetchone()[0] or 0)
-    manual_income=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes WHERE ts>=? AND ts<?",(start,end)).fetchone()[0] or 0)
     opening_expense=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
           FROM cashier_expenses WHERE ts<?""",(start,)).fetchone()[0] or 0)
     expense=db.execute("""SELECT
@@ -48,7 +46,7 @@ def report(db,now=None):
           FROM handovers WHERE status='pending'""").fetchone()[0] or 0)
     rate=core.cashier_rate(db)
     opening=opening_income-opening_expense
-    closing=opening+cash_accepted+manual_income-int(expense['usd_equivalent'] or 0)
+    closing=opening+cash_accepted-int(expense['usd_equivalent'] or 0)
     rows=db.execute("""SELECT e.ts,e.currency,e.amount_uzs,e.amount_usd,e.rate_uzs_per_usd,
           e.category,e.recipient,u.name AS cashier_name FROM cashier_expenses e
           LEFT JOIN users u ON u.id=e.cashier
@@ -61,7 +59,6 @@ def report(db,now=None):
        f"📊 КУНЛИК КАССА · {day.strftime('%d.%m.%Y')}",
        f"💵 Кун бошидаги ҳисобий қолдиқ: {usd(opening)} USD",
        f"✅ Бугун агентдан қабул қилинган: {usd(cash_accepted)} USD",
-       f"➕ Бугун қўлда кирим: {usd(manual_income)} USD",
        f"🧾 Бугун сўмдаги харажат: {som(expense['original_uzs'])} сўм",
        f"🧾 Бугун USD харажати: {usd(expense['original_usd'])} USD",
        f"💱 Харажатларнинг жами USD эквиваленти: {usd(expense['usd_equivalent'])} USD",
