@@ -76,6 +76,17 @@ class ManagerMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertNotIn('GPS koordinatasi kelgan agent yo‘q. Quyidagi ro‘yxatni tekshiring.',self.html)
 
+    def test_customer_advanced_filters_and_manager_settings_exist(self):
+        for term in (
+            'id="customer-agent-filter"','id="customer-debt-filter"',
+            'id="customer-status-filter"','id="customer-sort"',
+            'id="customer-filter-reset"','id="customer-result-count"',
+            'id="manager-settings"','function showManagerSettings(',
+            'PREF_KEY="asman_manager_prefs_v1"','showMapClients',
+            'refreshSeconds','startPage','function scheduleRefresh(',
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
