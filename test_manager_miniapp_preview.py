@@ -112,6 +112,17 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_agent_period_cards_open_route_new_clients_and_visits(self):
+        for term in (
+            'data-agent-period=','data-agent-id=',
+            'request("agent_period_detail"','function showAgentPeriod(',
+            'function renderPeriodMap(','id="period-detail-map"',
+            'route.segments','data-customer=','Yangi mijozlar',
+            'Tashriflar','Mijoz belgisi do‘konning saqlangan manzili',
+            'function clearPeriodMap('
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
