@@ -1814,14 +1814,46 @@ def serve_webhook(db,base_url):
                         data=manager_api.dashboard(local)
                     elif action=='route':
                         data=manager_api.route(local,payload.get('agentId'))
+                    elif action=='client_detail':
+                        data=manager_api.client_detail(local,payload.get('clientId'))
+                    elif action=='client_edit_preview':
+                        data=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
+                    elif action=='client_edit_commit':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Tahrirni tasdiqlang.')
+                        preview=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
+                        edit_client(local,actor,preview['clientId'],preview['values'])
+                        data={'ok':True,'client':manager_api.client_detail(local,preview['clientId'])}
+                    elif action=='client_export':
+                        client_id=payload.get('clientId')
+                        fmt=str(payload.get('format') or '').lower()
+                        if fmt not in ('pdf','xlsx'):
+                            raise ValueError('Eksport formati noto‘g‘ri.')
+                        report=reports.reconciliation(local,actor,int(client_id))
+                        raw=(reports.reconciliation_pdf(report) if fmt=='pdf'
+                             else reports.reconciliation_xlsx(report))
+                        data={'filename':f'ASMAN-mijoz-{int(client_id)}-akt-sverka.{fmt}',
+                              'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                              'base64':base64.b64encode(raw).decode('ascii')}
+                    elif action=='all_clients_export':
+                        fmt=str(payload.get('format') or '').lower()
+                        if fmt not in ('pdf','xlsx'):
+                            raise ValueError('Eksport formati noto‘g‘ri.')
+                        raw=(reports.all_clients_pdf(local,actor) if fmt=='pdf'
+                             else reports.all_clients_xlsx(local,actor))
+                        data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
+                              'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                              'base64':base64.b64encode(raw).decode('ascii')}
                     else:
                         answer(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
                     attach_client_photo_urls(data)
                     answer(200,data)
                 except ValueError as e:
+                    if local is not None:local.rollback()
                     answer(400,{'error':str(e)})
                 except Exception:
+                    if local is not None:local.rollback()
                     logging.exception('Authenticated manager API request failed')
                     answer(500,{'error':'Ma’lumotlarni yuklab bo‘lmadi. Qayta urinib ko‘ring.'})
                 finally:

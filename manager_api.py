@@ -383,6 +383,122 @@ def dashboard(db, now=None):
     }
 
 
+
+def client_detail(db, client_id, limit=120):
+    """Full manager view of one customer without changing business ledgers."""
+    try:
+        client_id=int(client_id)
+    except (TypeError,ValueError):
+        raise ValueError("Mijoz ID noto‘g‘ri.")
+    if client_id<=0:
+        raise ValueError("Mijoz ID noto‘g‘ri.")
+    c=db.execute("""SELECT c.*,u.name AS agent_name
+        FROM clients c LEFT JOIN users u ON u.id=c.agent WHERE c.id=?""",(client_id,)).fetchone()
+    if not c:
+        raise ValueError("Mijoz topilmadi.")
+    debt=int(db.execute("""SELECT COALESCE(SUM(CASE
+        WHEN kind='delivery' THEN amount_usd
+        WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0)
+        FROM events WHERE client=?""",(client_id,)).fetchone()[0] or 0)
+    stock_rows=db.execute("""SELECT e.pack,
+        COALESCE(SUM(CASE WHEN e.kind='delivery' THEN e.qty
+                          WHEN e.kind IN ('sold','return') THEN -e.qty ELSE 0 END),0) AS qty,
+        COALESCE(p.name,CAST(e.pack AS TEXT)) AS product_name
+        FROM events e LEFT JOIN products p ON p.pack=e.pack
+        WHERE e.client=? AND e.pack>0 AND e.kind IN ('delivery','sold','return')
+        GROUP BY e.pack,p.name ORDER BY e.pack""",(client_id,)).fetchall()
+    stocks=[{"pack":int(r["pack"]),"name":r["product_name"] or str(r["pack"]),
+             "qty":int(r["qty"] or 0)} for r in stock_rows]
+    rows=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.note,e.ts,
+             COALESCE(u.name,CAST(e.actor AS TEXT),CAST(e.agent AS TEXT)) AS actor_name,
+             COALESCE(p.name,CAST(e.pack AS TEXT)) AS product_name
+        FROM events e
+        LEFT JOIN users u ON u.id=e.actor
+        LEFT JOIN products p ON p.pack=e.pack
+        WHERE e.client=? AND e.kind IN ('delivery','payment','sold','return','order','visit')
+        ORDER BY e.ts DESC,e.id DESC LIMIT ?""",(client_id,max(1,min(int(limit),500)))).fetchall()
+    events=[{
+        "id":int(r["id"]),"kind":r["kind"],"pack":int(r["pack"] or 0),
+        "product":r["product_name"] if r["pack"] else "",
+        "qty":int(r["qty"] or 0),"amountUzs":int(r["amount"] or 0),
+        "amountUsd":_usd(r["amount_usd"]),"note":r["note"] or "",
+        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—"
+    } for r in rows]
+    visits=db.execute("""SELECT v.id,v.actor,v.status,v.note,v.followup,v.ts,
+               COALESCE(u.name,CAST(v.actor AS TEXT)) AS actor_name
+        FROM client_visits v LEFT JOIN users u ON u.id=v.actor
+        WHERE v.client=? ORDER BY v.ts DESC,v.id DESC LIMIT 80""",(client_id,)).fetchall()
+    visit_rows=[{
+        "id":int(r["id"]),"status":r["status"] or "","note":r["note"] or "",
+        "followup":r["followup"] or "","ts":int(r["ts"] or 0),
+        "actor":r["actor_name"] or "—"
+    } for r in visits]
+    edits=db.execute("""SELECT ce.id,ce.field,ce.old_value,ce.new_value,ce.ts,
+               COALESCE(u.name,CAST(ce.actor AS TEXT)) AS actor_name
+        FROM client_edits ce LEFT JOIN users u ON u.id=ce.actor
+        WHERE ce.client=? ORDER BY ce.ts DESC,ce.id DESC LIMIT 50""",(client_id,)).fetchall()
+    edit_rows=[{
+        "id":int(r["id"]),"field":r["field"],"old":r["old_value"],"new":r["new_value"],
+        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—"
+    } for r in edits]
+    totals=db.execute("""SELECT
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0)
+        FROM events WHERE client=?""",(client_id,)).fetchone()
+    lat,lon=_float_coord(c["lat"],c["lon"])
+    return {
+        "id":client_id,"name":c["shop_name"] or c["name"] or "Mijoz",
+        "person":c["name"] or "","shopName":c["shop_name"] or "",
+        "phone":c["phone"] or "","address":c["address"] or "",
+        "comment":c["comment"] or "","paymentDue":c["payment_due"] or "",
+        "agentId":int(c["agent"]),"agent":c["agent_name"] or str(c["agent"]),
+        "createdTs":int(c["created_ts"] or 0),"mapOnly":bool(c["map_only"]),
+        "lat":lat,"lon":lon,"photo":c["photo"] or "",
+        "debtUsd":_usd(debt),"stocks":stocks,"events":events,"visits":visit_rows,"edits":edit_rows,
+        "totals":{"deliveredUsd":_usd(totals[0]),"paidUsd":_usd(totals[1]),
+                  "returnedUsd":_usd(totals[2]),"deliveredQty":int(totals[3] or 0),
+                  "soldQty":int(totals[4] or 0)}
+    }
+
+
+def client_edit_preview(db, client_id, values):
+    """Validate manager-editable profile fields and return old/new values for confirmation."""
+    try:
+        client_id=int(client_id)
+    except (TypeError,ValueError):
+        raise ValueError("Mijoz ID noto‘g‘ri.")
+    if not isinstance(values,dict) or not values:
+        raise ValueError("O‘zgartirishlar kiritilmagan.")
+    allowed={"name","shop_name","phone","address","comment","payment_due"}
+    if any(k not in allowed for k in values):
+        raise ValueError("Bu maydon Rahbar App orqali o‘zgartirilmaydi.")
+    current=db.execute("SELECT * FROM clients WHERE id=?",(client_id,)).fetchone()
+    if not current:
+        raise ValueError("Mijoz topilmadi.")
+    clean={}
+    for key,value in values.items():
+        if value is None:
+            value=""
+        if not isinstance(value,str):
+            raise ValueError("Matn maydoni noto‘g‘ri.")
+        value=value.strip()
+        if key=="phone":
+            if len(value)>40:
+                raise ValueError("Telefon juda uzun.")
+        elif len(value)>500:
+            raise ValueError("Matn juda uzun.")
+        if str(current[key] or "")!=value:
+            clean[key]=value
+    if not clean:
+        raise ValueError("Ma’lumot o‘zgarmagan.")
+    return {"clientId":client_id,
+            "changes":[{"field":k,"old":str(current[k] or ""),"new":v} for k,v in clean.items()],
+            "values":clean}
+
+
 def route(db, agent_id, now=None):
     """One agent's most recent shift trajectory, never a guessed position."""
     try:
