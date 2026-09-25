@@ -151,9 +151,10 @@ def customer_photo_bytes(file_id):
                 return cached[1]
         info=api('getFile',file_id=file_id)
         path=info.get('file_path','')
-        if (not re.fullmatch(r'(?:photos|documents)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)',path) or
-                '..' in path or int(info.get('file_size') or 0)>18_000_000):
-            raise ValueError('unsupported_file_path_or_size')
+        if int(info.get('file_size') or 0)>18_000_000:
+            raise ValueError('telegram_file_over_18mb')
+        if not re.fullmatch(r'(?:photos|documents)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)',path) or '..' in path:
+            raise ValueError('telegram_file_name_not_expected')
         url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
         with urllib.request.urlopen(url,timeout=12) as res:
             content=res.read(18_000_001)
