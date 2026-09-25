@@ -10,6 +10,13 @@ class Tests(unittest.TestCase):
  def tearDown(self):self.db.close()
  def rec(self,k,q=0,value=0,actor=2,source=None):
   core.record(self.db,actor,2,None if k=='load' else 1,k,1,q,value,source=source)
+ def test_customer_photo_content_types(self):
+  self.assertEqual(bot.photo_content_type(b'\xff\xd8\xff\x00'),'image/jpeg')
+  self.assertEqual(bot.photo_content_type(b'\x89PNG\r\n\x1a\n\x00'),'image/png')
+  self.assertEqual(bot.photo_content_type(b'RIFF\x08\x00\x00\x00WEBP'),'image/webp')
+  with self.assertRaises(ValueError):
+   bot.photo_content_type(b'not_an_image')
+
  def test_consignment_not_debt(self):
   self.rec('load',12,actor=1);self.rec('delivery',4)
   self.assertEqual(core.agent_stock(self.db,2,1),8)
