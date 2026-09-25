@@ -342,6 +342,17 @@ def notify_cashiers_handover(db,agent,hid,amount_usd):
           f"Қабул: /accept {hid}\nРад: /reject {hid}")
     _safe_send_many(cashier_ids(db),text)
 
+def notify_shift_end(db,agent,shift_id):
+    try:
+        report=reports.shift_summary(db,agent,shift_id)
+        send(agent,'Ish tugadi ✅\nBot koordinatalarni qabul qilishni to‘xtatdi. Telegramdagi jonli lokatsiyani ham to‘xtating.\n\n'+report['text'],menu(db,agent))
+        for admin in admin_ids(db):
+            if admin!=agent:send(admin,'📣 Agent ishni tugatdi\n\n'+report['text'])
+    except Exception:
+        logging.exception('End-of-shift summary failed agent=%s shift=%s',agent,shift_id)
+        try:send(agent,'Ish tugadi ✅ Bot koordinatalarni qabul qilishni to‘xtatdi. Kunlik hisobotni tayyorlashda xato bo‘ldi.',menu(db,agent))
+        except Exception:logging.exception('End-of-shift fallback failed agent=%s',agent)
+
 def cashbox_report(db,u):
     if role(db,u) not in ('admin','cashier'):raise ValueError('Касса бўлимига рухсат йўқ.')
     today=int(datetime.now(TZ).replace(hour=0,minute=0,second=0,microsecond=0).timestamp())
@@ -1542,6 +1553,8 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_payment(local,actor,notify['client'],notify['amount'])
                             elif notify.get('kind')=='handover':
                                 notify_cashiers_handover(local,actor,notify['handoverId'],notify['amount'])
+                            elif notify.get('kind')=='shift_end':
+                                notify_shift_end(local,actor,notify['shiftId'])
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
