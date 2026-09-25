@@ -34,6 +34,8 @@ nav button{border:0;background:transparent;min-height:44px;border-radius:11px;fo
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(min-width:760px){.app{margin:20px auto;border-radius:20px;overflow:hidden;box-shadow:0 15px 50px #101e3915}nav{bottom:20px;border-radius:0 0 20px 20px}}
 .adminbar{display:none;background:#eaf1ff;border-bottom:1px solid #d9e5ff;padding:10px 16px;align-items:center;gap:9px}.adminbar.show{display:flex}.adminbar b{font-size:10px;color:#2367f5;white-space:nowrap}.adminbar select{margin:0;padding:8px 10px;font-size:11px}.admin-readonly [data-action],.admin-readonly #startShift,.admin-readonly #endShift{display:none!important}.admin-readonly #shiftHint:after{content:" · Admin rejimida o‘zgartirish yopiq."}.picker{display:none;margin-top:12px}.picker.show{display:block}.picker select{margin-bottom:9px}
+
+.customer-hero{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(145deg,#10213f,#2367f5);min-height:190px;margin-bottom:12px;box-shadow:0 12px 30px #101e3920}.customer-hero img{display:block;width:100%;height:220px;object-fit:cover}.customer-hero.no-photo{display:grid;place-items:center;color:#fff}.customer-hero .fallback{font-size:58px}.customer-hero-overlay{position:absolute;left:0;right:0;bottom:0;padding:34px 16px 15px;background:linear-gradient(transparent,#08152dcc);color:#fff}.customer-hero-overlay b{display:block;font-size:20px}.customer-hero-overlay small{display:block;margin-top:4px;color:#dce8ff}.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.profile-stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px}.profile-stat small{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}.profile-stat b{font-size:13px}.photo-badge{display:inline-flex;align-items:center;gap:5px;background:#e9f0ff;color:var(--blue);font-size:10px;font-weight:800;padding:6px 9px;border-radius:999px;margin-top:8px}
 </style></head>
 <body>
 <div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ko‘rish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
@@ -138,15 +140,19 @@ function renderClients(){
 function detailLine(name,value){return '<div class="line"><small>'+esc(name)+'</small><b>'+esc(value==null?"—":value)+'</b></div>'}
 function renderDetail(){
  var c=client();if(!c)return;
- $("detailName").textContent=c.name;
- var body='<div class="card">'+detailLine("Mijoz",c.person)+detailLine("Manzil",c.address)+detailLine("Telefonlar",c.phone)+detailLine("Mas’ul agent",c.agent)+detailLine("Holat",c.status)+detailLine("Oxirgi tashrif",date(c.lastTs))+detailLine("Keyingi tashrif",c.followup||"Belgilanmagan")+detailLine("Izoh",c.note||c.comment)+detailLine("USD qarz",fmt(c.debtUsd)+" USD")+'</div>';
- body+='<div class="card"><b>Do‘kondagi mahsulot qoldig‘i</b>'+[1,3,5].map(function(p){return detailLine(p+" kg gruntovka",(c.stock[String(p)]||0)+" dona")}).join("")+'</div>';
+ var d=(detailData&&detailData.client)||c;
+ $("detailName").textContent=d.name||c.name;
+ var photo=d.photoUrl||c.photoUrl||"";
+ var hero=photo?'<div class="customer-hero"><img src="'+esc(photo)+'" alt="'+esc(d.name||c.name)+'" loading="eager"><div class="customer-hero-overlay"><b>'+esc(d.name||c.name)+'</b><small>'+esc(d.person||c.person||"Mijoz")+'</small></div></div>':'<div class="customer-hero no-photo"><div class="fallback">▦</div><div class="customer-hero-overlay"><b>'+esc(d.name||c.name)+'</b><small>Rasm hali biriktirilmagan</small></div></div>';
+ var body=hero+'<div class="profile-grid"><div class="profile-stat"><small>USD qarz</small><b>'+fmt(d.debtUsd)+' USD</b></div><div class="profile-stat"><small>Oxirgi aloqa</small><b>'+esc(date(d.lastTs))+'</b></div></div>';
+ body+='<div class="card" style="margin-top:11px">'+detailLine("Mijoz",d.person)+detailLine("Telefonlar",d.phone)+detailLine("Manzil",d.address)+detailLine("Mas’ul agent",d.agent)+detailLine("Holat",d.status)+detailLine("Qo‘shilgan sana",date(d.createdTs))+detailLine("Keyingi tashrif",d.followup||"Belgilanmagan")+detailLine("Izoh",d.note||d.comment)+'</div>';
+ body+='<div class="card"><b>Do‘kondagi mahsulot qoldig‘i</b>'+[1,3,5].map(function(p){return detailLine(p+" kg gruntovka",((d.stock||{})[String(p)]||0)+" dona")}).join("")+'</div>';
  if(detailData){
   var visits=detailData.visits||[],events=detailData.events||[];
   body+='<div class="title">Tashriflar tarixi</div><div class="card">'+(visits.length?visits.slice(0,10).map(function(v){return detailLine(date(v.ts)+" · "+(v.actor||"Agent"),(v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
   body+='<div class="title">So‘nggi operatsiyalar</div><div class="card">'+(events.length?events.slice(0,12).map(function(ev){var names={delivery:"Tovar berildi",payment:"To‘lov olindi",return:"Tovar qaytdi",sold:"Sotildi",order:"Buyurtma",visit:"Tashrif"};var value=ev.amountUsd?fmt(ev.amountUsd)+" USD":ev.qty?ev.pack+" kg · "+ev.qty+" dona":"";return detailLine(date(ev.ts)+" · "+(ev.actor||"Agent"),(names[ev.kind]||ev.kind)+(value?" · "+value:""))}).join(""):'<p class="muted">Operatsiyalar hali yo‘q.</p>')+'</div>';
  }
- if(Number.isFinite(c.lat)&&Number.isFinite(c.lon))body+='<button class="secondary" type="button" id="navigateClient" style="width:100%;margin-bottom:14px">➤ Navigator</button>';
+ if(Number.isFinite(d.lat)&&Number.isFinite(d.lon))body+='<button class="secondary" type="button" id="navigateClient" style="width:100%;margin-bottom:14px">➤ Navigator</button>';
  $("detailBody").innerHTML=body;
 }
 async function loadClientDetail(id){
