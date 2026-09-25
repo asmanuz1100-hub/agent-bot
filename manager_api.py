@@ -235,7 +235,7 @@ def route(db, agent_id, now=None):
                      (agent_id,)).fetchone()
     if not agent:
         raise ValueError("Agent topilmadi.")
-    shift=db.execute("""SELECT id,start,end FROM shifts WHERE agent=?
+    shift=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts WHERE agent=?
         ORDER BY id DESC LIMIT 1""",(agent_id,)).fetchone()
     if not shift:
         return {"agentId":agent_id,"agent":agent["name"],"points":[],
@@ -248,5 +248,5 @@ def route(db, agent_id, now=None):
         if lat is not None:
             coords.append({"lat":lat,"lon":lon,"ts":int(p["ts"])})
     return {"agentId":agent_id,"agent":agent["name"],
-            "start":int(shift["start"]),"end":int(shift["end"]) if shift["end"] else None,
+            "start":int(shift["start"]),"end":int(shift["end_ts"]) if shift["end_ts"] else None,
             "points":coords}
