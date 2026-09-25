@@ -303,7 +303,7 @@ function renderCustomers(){
  (!q||(c.name+" "+c.person+" "+c.address+" "+c.agent).toLocaleLowerCase().includes(q))});
  $("customer-list").innerHTML=list.map(function(c){
  var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";
- return '<button type="button" class="customer-card" data-customer="'+c.id+'"><span class="shop-ico">▦</span><span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></button>'
+ var media=c.photoUrl?'<span class="shop-ico photo"><img src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></button>'
  }).join("")||'<div class="empty">Mijoz topilmadi</div>';
 }
 function showCustomer(id){
