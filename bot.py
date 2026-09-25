@@ -1008,6 +1008,9 @@ def handle(db,update):
         msg+='\n'.join(f"#{x['update_id']} · ID {x['actor']} · {x['failure_type']} · {x['attempts']} уриниш · {x['status']} · {stamp(x['created_ts'])}" for x in rows) if rows else 'Ҳозирча хато update йўқ.'
         send(u,msg+'\n\nБу ёзувлар автомат қайта ўтказилмайди. Товар ва пул ҳолатини текшириб, зарур бўлса тузатиш киритинг.')
         return
+    preview_button=re.fullmatch(r'🔎 Кўриб чиқиш #([1-9][0-9]*)',text)
+    if preview_button:
+        review_handover(db,u,int(preview_button.group(1)));return
     if text.startswith('/review '):
         if not re.fullmatch(r'/review [1-9][0-9]*',text):raise ValueError('Топшириқ рақами нотўғри.')
         review_handover(db,u,int(text.split()[1]));return
