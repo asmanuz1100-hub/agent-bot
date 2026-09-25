@@ -37,7 +37,7 @@ class CashierDashboardTests(unittest.TestCase):
             self.assertNotIn('/accept 1',text)
         with patch.object(bot,'send') as send:
             bot.cashbox_report(self.db,3)
-            self.assertIn('/accept 1',send.call_args.args[1])
+            self.assertIn('/review 1',send.call_args.args[1])
 
     def test_payment_finish_notifies_every_cashier_with_agent_and_customer(self):
         state={'action':'payment','values':{'client':1,'amount':'5.00'}}
