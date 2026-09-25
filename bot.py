@@ -1850,6 +1850,8 @@ def serve_webhook(db,base_url):
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':
                         data=manager_api.agent_detail(local,payload.get('agentId'))
+                    elif action=='agent_period_detail':
+                        data=manager_api.agent_period_detail(local,payload.get('agentId'),payload.get('period'))
                     elif action=='agent_add_preview':
                         data=manager_api.agent_add_preview(local,payload.get('id'),payload.get('name'))
                     elif action=='agent_add_commit':

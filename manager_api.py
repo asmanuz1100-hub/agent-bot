@@ -650,6 +650,101 @@ def agent_deactivate_preview(db,agent_id):
             "warning":"Kirish bloklanadi, lekin mijozlar, tovar, pul va GPS tarixi o‘chirilmaydi."}
 
 
+PERIOD_LABELS={"today":"Bugun","week":"7 kun","month":"30 kun"}
+
+
+def agent_period_detail(db, agent_id, period, now=None):
+    """Historical agent route and explicit client/visit activity for one selected period.
+
+    Route positions are recorded GPS; client markers use their saved shop
+    coordinates (they are NOT proof of an agent being physically at the shop).
+    No customer, money or GPS rows are created by this read-only API.
+    """
+    try:
+        agent_id=int(agent_id)
+    except (TypeError,ValueError):
+        raise ValueError("Agent ID noto‘g‘ri.")
+    if period not in PERIOD_LABELS:
+        raise ValueError("Davr noto‘g‘ri.")
+    row=db.execute("SELECT id,name,role FROM users WHERE id=? AND role IN ('agent','disabled')",
+                   (agent_id,)).fetchone()
+    if not row:
+        raise ValueError("Agent topilmadi.")
+    now=int(time.time() if now is None else now)
+    today=_midnight(now)
+    start=today-({"today":0,"week":6,"month":29}[period])*86400
+    end=now+1
+    # Sample the entire selected period on the DB side: older days do not
+    # disappear merely because the agent sent many GPS points this week.
+    # A one-hour report does not accidentally include last shift's trajectory.
+    gps=db.execute("""WITH numbered AS (
+       SELECT p.shift,p.ts,p.lat,p.lon,p.id,
+              ROW_NUMBER() OVER (ORDER BY p.ts,p.id) AS rn,
+              COUNT(*) OVER () AS total
+       FROM points p JOIN shifts sh ON sh.id=p.shift
+       WHERE sh.agent=? AND p.ts>=? AND p.ts<?
+    )
+    SELECT shift,ts,lat,lon,total FROM numbered
+    WHERE (rn-1) % ((total+999)/1000)=0 OR rn=total
+    ORDER BY ts,id LIMIT 1100""",(agent_id,start,end)).fetchall()
+    segments=[];segment=[];previous=None
+    gps_total=int(gps[0]["total"]) if gps else 0
+    for p in gps:
+        lat,lon=_float_coord(p["lat"],p["lon"])
+        if lat is None:
+            if segment:segments.append(segment)
+            segment=[];previous=None
+            continue
+        current={"lat":lat,"lon":lon,"ts":int(p["ts"]),"shift":int(p["shift"])}
+        split=(previous is not None and
+               (previous["shift"]!=current["shift"] or
+                current["ts"]-previous["ts"]>1800 or
+                _route_km(previous,current)>25))
+        if split:
+            if segment:segments.append(segment)
+            segment=[]
+        segment.append({"lat":lat,"lon":lon,"ts":current["ts"]})
+        previous=current
+    if segment:segments.append(segment)
+
+    new_rows=db.execute("""SELECT id,COALESCE(NULLIF(shop_name,''),name) AS title,
+           name,address,lat,lon,created_ts
+        FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?
+        ORDER BY created_ts DESC,id DESC LIMIT 500""",(agent_id,start,end)).fetchall()
+    new_clients=[]
+    for c in new_rows:
+        lat,lon=_float_coord(c["lat"],c["lon"])
+        new_clients.append({"id":int(c["id"]),"name":c["title"] or c["name"] or "Mijoz",
+                            "address":c["address"] or "","ts":int(c["created_ts"]),
+                            "lat":lat,"lon":lon})
+    visit_rows=db.execute("""SELECT v.id,v.client,v.ts,v.status,v.note,v.followup,
+           COALESCE(NULLIF(c.shop_name,''),c.name) AS title,
+           c.address,c.lat,c.lon
+        FROM client_visits v LEFT JOIN clients c ON c.id=v.client
+        WHERE v.actor=? AND v.ts>=? AND v.ts<?
+        ORDER BY v.ts DESC,v.id DESC LIMIT 500""",(agent_id,start,end)).fetchall()
+    visits=[]
+    for v in visit_rows:
+        lat,lon=_float_coord(v["lat"],v["lon"])
+        visits.append({"id":int(v["id"]),"clientId":int(v["client"]),
+                       "name":v["title"] or f"Mijoz #{v['client']}",
+                       "address":v["address"] or "","status":v["status"] or "",
+                       "note":v["note"] or "","followup":v["followup"] or "",
+                       "ts":int(v["ts"]),"lat":lat,"lon":lon})
+    counts=db.execute("""SELECT
+         (SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?),
+         (SELECT COUNT(*) FROM client_visits WHERE actor=? AND ts>=? AND ts<?)""",
+         (agent_id,start,end,agent_id,start,end)).fetchone()
+    return {"agentId":agent_id,"agent":row["name"] or str(agent_id),
+            "period":period,"label":PERIOD_LABELS[period],"start":start,"end":end,
+            "route":{"segments":segments,"gpsTotal":gps_total,"gpsShown":len(gps),
+                     "sampled":gps_total>len(gps)},
+            "newClients":new_clients,"visits":visits,
+            "newClientsTotal":int(counts[0] or 0),"visitsTotal":int(counts[1] or 0),
+            "newClientsTruncated":int(counts[0] or 0)>len(new_clients),
+            "visitsTruncated":int(counts[1] or 0)>len(visits)}
+
+
 def route(db, agent_id, now=None):
     """One agent's most recent shift trajectory, never a guessed position."""
     try:
