@@ -946,7 +946,7 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([ [{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}] ] if AGENT_MINIAPP_URL else [])+
+            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([['📱 Agent Mini App']] if AGENT_MINIAPP_URL else [])+
                  [['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
