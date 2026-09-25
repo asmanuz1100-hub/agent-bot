@@ -80,11 +80,29 @@ def _float_coord(lat, lon):
 
 def _cash_transactions(db, since):
     return db.execute("""SELECT h.id,h.agent,h.amount_usd,h.amount,h.status,
-               h.ts,h.accepted_ts,u.name AS agent_name
-        FROM handovers h LEFT JOIN users u ON u.id=h.agent
+               h.ts,h.accepted_ts,h.cashier,u.name AS agent_name,
+               cu.name AS cashier_name
+        FROM handovers h
+        LEFT JOIN users u ON u.id=h.agent
+        LEFT JOIN users cu ON cu.id=h.cashier
         WHERE (h.ts>=? OR h.status='pending') ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
         (since,)).fetchall()
 
+
+def _cash_expenses(db, since):
+    return db.execute("""SELECT e.id,e.cashier,e.amount_usd,e.category,e.recipient,e.note,
+               e.ts,e.currency,e.amount_uzs,e.rate_uzs_per_usd,u.name AS cashier_name
+        FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
+        WHERE e.ts>=? ORDER BY e.ts DESC,e.id DESC LIMIT 800""",(since,)).fetchall()
+
+
+def _cash_period_totals(db,start,end):
+    accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
+          AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
+    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+        WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    return accepted,expenses
 
 
 def _route_km(a, b):
@@ -388,17 +406,32 @@ def dashboard(db, now=None):
     transactions = []
     for h in _cash_transactions(db,since):
         transactions.append({
-            "id":int(h["id"]),"agent":h["agent_name"] or str(h["agent"]),
-            "agentId":int(h["agent"]),"amountUsd":_usd(h["amount_usd"]),
-            "amountUzs":_usd(h["amount"]),"state":h["status"],
-            "ts":int(h["ts"] or 0),"acceptedTs":int(h["accepted_ts"] or 0) or None
+            "id":int(h["id"]),"type":"handover",
+            "agent":h["agent_name"] or str(h["agent"]),"agentId":int(h["agent"]),
+            "cashier":h["cashier_name"] or (str(h["cashier"]) if h["cashier"] is not None else None),
+            "amountUsd":_usd(h["amount_usd"]),"amountUzs":_usd(h["amount"]),
+            "state":h["status"],"ts":int(h["ts"] or 0),
+            "acceptedTs":int(h["accepted_ts"] or 0) or None
         })
-    # Totals must cover the whole day, independent of the limited activity list.
-    cash_total = db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
-        WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
-        AND COALESCE(accepted_ts,ts)<=?""",(today,now)).fetchone()[0]
+    for e in _cash_expenses(db,since):
+        transactions.append({
+            "id":int(e["id"]),"type":"expense","state":"expense",
+            "cashier":e["cashier_name"] or str(e["cashier"]),
+            "amountUsd":_usd(e["amount_usd"]),
+            "amountUzs":int(e["amount_uzs"] or 0) if e["currency"]=="UZS" else 0,
+            "currency":e["currency"] or "USD","rateUzsPerUsd":int(e["rate_uzs_per_usd"] or 0),
+            "category":e["category"] or "Xarajat","recipient":e["recipient"] or "",
+            "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None
+        })
+    transactions.sort(key=lambda t:(int(t["acceptedTs"] or t["ts"] or 0),int(t["id"])),reverse=True)
+    transactions=transactions[:1200]
+    # Totals cover the full ledger, independent of the limited transaction list.
+    cash_total,cash_expense_today=_cash_period_totals(db,today,now+1)
+    cash_week,cash_expense_week=_cash_period_totals(db,week,now+1)
     pending_total = db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='pending'""").fetchone()[0]
+    pending_count = db.execute("SELECT COUNT(*) FROM handovers WHERE status='pending'").fetchone()[0]
+    cash_balance=core.cashier_balance_usd(db)
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
@@ -417,6 +450,12 @@ def dashboard(db, now=None):
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
         "clientCount":int(all_clients),"clientsTruncated":int(all_clients)>MAX_CLIENTS,
         "agents":agents,"clients":clients,"transactions":transactions,
+        "cash":{"balanceUsd":_usd(cash_balance),
+                "acceptedTodayUsd":_usd(cash_total),"expensesTodayUsd":_usd(cash_expense_today),
+                "netTodayUsd":_usd(int(cash_total or 0)-int(cash_expense_today or 0)),
+                "acceptedWeekUsd":_usd(cash_week),"expensesWeekUsd":_usd(cash_expense_week),
+                "netWeekUsd":_usd(int(cash_week or 0)-int(cash_expense_week or 0)),
+                "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0)},
         "summary":{"agentCount":len(agents),"workingAgents":sum(a["shiftOpen"] for a in agents),
                    "visitsToday":sum(visits_today.values()),"newClientsToday":int(new_today),
                    "overdueClients":red_count,
@@ -425,7 +464,10 @@ def dashboard(db, now=None):
                    "scheduledClients":sum(1 for c in clients if c["age"]=="scheduled"),
                    "unknownClients":sum(1 for c in clients if c["age"]=="unknown"),
                    "acceptedTodayUsd":_usd(cash_total),
-                   "pendingUsd":_usd(pending_total),"debtUsd":_usd(total_debt)},
+                   "cashierExpensesTodayUsd":_usd(cash_expense_today),
+                   "cashBalanceUsd":_usd(cash_balance),
+                   "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0),
+                   "debtUsd":_usd(total_debt)},
         "reports":{"today":report_today,"week":report_week,"month":report_month,
                    "series":series}
     }
