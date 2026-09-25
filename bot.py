@@ -189,7 +189,9 @@ def attach_client_photo_urls(data):
         if isinstance(c,dict) and c.get('hasPhoto') and c.get('id'):
             c['photoUrl']=map_link(f"client-photo/{int(c['id'])}",ttl=3600)
         return c
-    for c in data.get('clients') or []:attach(c)
+    clients=data.get('clients')
+    if isinstance(clients,list):
+        for c in clients:attach(c)
     if isinstance(data.get('client'),dict):attach(data['client'])
     return data
 
