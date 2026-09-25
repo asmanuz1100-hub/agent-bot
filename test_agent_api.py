@@ -65,6 +65,11 @@ class AgentLiveApiTests(unittest.TestCase):
         self.assertTrue(self.write('delivery','delivernonce01',clientId=5,items=[{'pack':1,'qty':'4'}])['duplicate'])
         with self.assertRaises(ValueError):
             self.write('payment','paymentbad01',clientId=5,amount='11')
+        with self.assertRaisesRegex(ValueError,'Ишни бошлаш'):
+            self.write('payment','paymentnoloc1',clientId=5,amount='5.00')
+        now=int(time.time())
+        self.db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(15,2,?,777)',(now-30,))
+        self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(15,?,?,?,8)',(now,40.54,70.94))
         self.write('payment','paymentnonce01',clientId=5,amount='5.00')
         self.assertEqual(core.client_debt_usd(self.db,5),500)
         self.assertEqual(core.cash_usd(self.db,2),500)
