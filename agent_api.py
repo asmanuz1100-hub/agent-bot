@@ -361,6 +361,13 @@ def mutate(db,agent,action,payload,request_id,now=None):
         cid=int(cur.fetchone()[0])
         cs.add_visit(db,agent,cid,status,note,followup)
         return {"ok":True,"clientId":cid,"message":"Mijoz real bazaga saqlandi."}
+    if action=="handover":
+        amount=core.money(payload.get("amount"))
+        core.handover(db,agent,amount,source,currency='USD')
+        row=db.execute("SELECT id FROM handovers WHERE agent=? AND source=?",(agent,source)).fetchone()
+        hid=int(row[0]) if row else None
+        return {"ok":True,"handoverId":hid,"message":"Kassaga topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
+                "_notify":{"kind":"handover","handoverId":hid,"amount":amount}}
     cid=int(payload.get("clientId") or 0)
     _client(db,cid)
     if action=="visit":
@@ -405,11 +412,4 @@ def mutate(db,agent,action,payload,request_id,now=None):
         core.record(db,agent,agent,cid,'return',pack,qty,0,'Mini App',source,currency='USD')
         cs.add_visit(db,agent,cid,'active',f"Tovar qaytarildi: {core.product_name(pack)} {qty} dona")
         return {"ok":True,"message":"Tovar qaytarildi va qarz yangilandi."}
-    if action=="handover":
-        amount=core.money(payload.get("amount"))
-        core.handover(db,agent,amount,source,currency='USD')
-        row=db.execute("SELECT id FROM handovers WHERE agent=? AND source=?",(agent,source)).fetchone()
-        hid=int(row[0]) if row else None
-        return {"ok":True,"handoverId":hid,"message":"Kassaga topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
-                "_notify":{"kind":"handover","handoverId":hid,"amount":amount}}
     raise ValueError("Amal noto‘g‘ri.")
