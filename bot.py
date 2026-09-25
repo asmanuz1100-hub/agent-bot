@@ -119,6 +119,16 @@ _PHOTO_CACHE_MAX_BYTES=24_000_000
 _PHOTO_CACHE_TTL=1800
 _PHOTO_CACHE_SIZE=0
 
+def photo_content_type(content):
+    """Return the actual safe image MIME type, not one inferred from a filename."""
+    if content.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if content.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if content.startswith(b'RIFF') and content[8:12] == b'WEBP':
+        return 'image/webp'
+    raise ValueError('unsupported_image_format')
+
 def customer_photo_bytes(file_id):
     """Fetch a signed customer photo server-side, with a small bounded in-memory cache."""
     global _PHOTO_CACHE_SIZE
@@ -141,14 +151,15 @@ def customer_photo_bytes(file_id):
                 return cached[1]
         info=api('getFile',file_id=file_id)
         path=info.get('file_path','')
-        if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\.jpe?g',path) or
-                '..' in path or int(info.get('file_size') or 0)>8_000_000):
-            raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
+        if (not re.fullmatch(r'(?:photos|documents)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)',path) or
+                '..' in path or int(info.get('file_size') or 0)>18_000_000):
+            raise ValueError('unsupported_file_path_or_size')
         url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
         with urllib.request.urlopen(url,timeout=12) as res:
-            content=res.read(8_000_001)
-        if len(content)>8_000_000 or not content.startswith(b'\xff\xd8\xff'):
-            raise ValueError('Фото формати нотўғри.')
+            content=res.read(18_000_001)
+        if len(content)>18_000_000:
+            raise ValueError('image_too_large')
+        photo_content_type(content)
         if len(content)<=_PHOTO_CACHE_MAX_BYTES:
             with _PHOTO_CACHE_LOCK:
                 previous=_PHOTO_CACHE.pop(file_id,None)
@@ -1554,8 +1565,9 @@ def serve_webhook(db,base_url):
                     if not client or not client['photo']:
                         self._reply(404,b'Photo not found');return
                     photo_data=customer_photo_bytes(client['photo'])
-                    self._reply(200,photo_data,'image/jpeg')
-                except ValueError:
+                    self._reply(200,photo_data,photo_content_type(photo_data))
+                except ValueError as exc:
+                    logging.warning('Customer photo unavailable client=%s reason=%s',cid,str(exc))
                     self._reply(404,b'Photo not found')
                 except Exception:
                     logging.exception('Customer photo failed');self._reply(502,b'Photo temporarily unavailable')
