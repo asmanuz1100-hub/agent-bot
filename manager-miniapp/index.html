@@ -402,6 +402,7 @@ $("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",funct
 $("refresh-data").addEventListener("click",loadDashboard);$("auth-retry").addEventListener("click",loadDashboard);
 if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}catch(e){}}
 loadDashboard();
+setInterval(function(){if(state.ready&&document.visibilityState==="visible")loadDashboard()},60000);
 })();
 
 </script>
