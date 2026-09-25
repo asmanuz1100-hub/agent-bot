@@ -20,8 +20,8 @@ class AgentMiniAppButtonTests(unittest.TestCase):
         agent=self.web_buttons(bot.menu(self.db,2))
         cashier=self.web_buttons(bot.menu(self.db,3))
 
-        self.assertEqual([(b['text'],b['web_app']['url']) for b in admin],
-                         [('📱 Раҳбар Mini App',bot.MANAGER_MINIAPP_URL)])
+        self.assertEqual(admin,[])
+        self.assertIn('📱 Раҳбар Mini App',[b for row in bot.menu(self.db,1) for b in row])
         self.assertEqual([(b['text'],b['web_app']['url']) for b in agent],
                          [('📱 Agent Mini App',bot.AGENT_MINIAPP_URL)])
         self.assertEqual(cashier,[])
