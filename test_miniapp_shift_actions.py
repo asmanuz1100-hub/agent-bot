@@ -27,7 +27,7 @@ class AgentMiniAppShiftTests(unittest.TestCase):
 
     def test_start_and_end_from_webapp_use_real_shift_table_and_report(self):
         now=int(time.time())
-        with patch.object(bot,'send') as send, patch.object(bot,'ADMINS',{1}), \\
+        with patch.object(bot,'send') as send, patch.object(bot,'ADMINS',{1}), \
              patch.object(bot.reports,'shift_summary',return_value={'text':'Test report'}):
             bot.handle(self.db,self.webapp_update('asman.shift.start.v1',ts=now))
             shift=self.db.execute('SELECT * FROM shifts WHERE agent=2 AND end IS NULL').fetchone()
