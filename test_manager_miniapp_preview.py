@@ -67,7 +67,7 @@ class ManagerMiniAppTests(unittest.TestCase):
 
     def test_map_keeps_clients_and_last_known_agent_locations_visible(self):
         for term in (
-            'class="map-legend"','var pinClients=customers.filter',
+            'class="map-legend"','prefs.showMapClients?customers.filter',
             'className:"client-map-icon"','class="client-map-pin"',
             'id="map-client-count"','data-customer="',
             'Kartochkani ochish','oxirgi GPS saqlangan',
@@ -75,6 +75,17 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
         self.assertNotIn('GPS koordinatasi kelgan agent yo‘q. Quyidagi ro‘yxatni tekshiring.',self.html)
+
+    def test_customer_advanced_filters_and_manager_settings_exist(self):
+        for term in (
+            'id="customer-agent-filter"','id="customer-debt-filter"',
+            'id="customer-status-filter"','id="customer-sort"',
+            'id="customer-filter-reset"','id="customer-result-count"',
+            'id="manager-settings"','function showManagerSettings(',
+            'PREF_KEY="asman_manager_prefs_v1"','showMapClients',
+            'refreshSeconds','startPage','function scheduleRefresh(',
+        ):
+            self.assertIn(term,self.html)
 
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
