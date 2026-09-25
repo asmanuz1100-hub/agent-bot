@@ -132,6 +132,37 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(snap['reports']['series'][-1]['deliveredUsd'],100)
         self.assertEqual(snap['reports']['series'][-1]['paymentsUsd'],25)
 
+    def test_product_breakdown_uses_delivery_for_revenue_and_sold_only_for_units(self):
+        self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
+                         VALUES(301,2,'P buyer','+998900000301',?,0)""",(self.today,))
+        rows=[
+            (2,2,301,'delivery',1,10,10000,self.today+100),
+            (2,2,301,'sold',1,4,4000,self.today+110),
+            (2,2,301,'return',1,1,1000,self.today+120),
+            (2,2,301,'delivery',3,6,9000,self.today+130),
+            (2,2,301,'sold',3,2,3000,self.today+140),
+            (2,2,301,'delivery',5,2,8000,self.today+150),
+        ]
+        self.db.executemany("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts)
+                             VALUES(?,?,?,?,?,?,?,?)""",rows)
+        snap=manager_api.dashboard(self.db,self.now)
+        day=snap['reports']['today']
+        self.assertEqual(day['deliveredUsd'],270)
+        self.assertEqual(day['soldQty'],6)
+        self.assertEqual(len(day['products']),3)
+        first=day['products'][0]
+        self.assertEqual(first['pack'],1)
+        self.assertEqual(first['name'],'Грунтовка 7/1 — 1 кг')
+        self.assertEqual(first['deliveredQty'],10)
+        self.assertEqual(first['deliveredUsd'],100)
+        self.assertEqual(first['soldQty'],4)
+        self.assertEqual(first['returnedQty'],1)
+        self.assertEqual(first['returnedUsd'],10)
+        self.assertAlmostEqual(first['sharePct'],37.0,places=1)
+        self.assertEqual(day['topProduct'],'Грунтовка 7/1 — 1 кг')
+        # "sold" amount is intentionally not added to financial realization.
+        self.assertEqual(sum(p['deliveredUsd'] for p in day['products']),270)
+
     def test_no_fake_gps_no_usd_uzs_mixing_and_pending_separate(self):
         self.db.execute("""INSERT INTO handovers(agent,amount_usd,amount,status,ts)
                          VALUES(2,1000,0,'pending',?)""",(self.now,))
