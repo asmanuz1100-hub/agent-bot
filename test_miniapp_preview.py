@@ -34,10 +34,8 @@ class MiniAppPreviewTests(unittest.TestCase):
             "page-home", "page-map", "page-clients", "page-detail",
             "page-cash", "page-reports", 'data-open="customer"',
             'data-open="payment"', 'data-open="visit"',
-            'id="giveProduct"', "bot bazasi", "ДЕМО · ТЕСТ"
+            'id="giveProduct"', "ДЕМО · ТЕСТ"
         ):
-            if term == "bot bazasi":
-                continue
             self.assertIn(term, self.html)
         self.assertNotIn('src="https://unpkg.com/leaflet', self.html)
         self.assertNotIn('href="https://unpkg.com/leaflet', self.html)
