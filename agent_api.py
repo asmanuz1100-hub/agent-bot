@@ -363,7 +363,7 @@ def client_detail(db,agent,cid,now=None):
 
 def route(db,agent):
     _require_agent(db,agent)
-    shift=db.execute("""SELECT id,start,end FROM shifts WHERE agent=?
+    shift=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts WHERE agent=?
         ORDER BY id DESC LIMIT 1""",(agent,)).fetchone()
     if not shift:return {"start":None,"end":None,"points":[]}
     rows=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=?
