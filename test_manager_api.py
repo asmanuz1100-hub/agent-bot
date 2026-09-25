@@ -191,6 +191,51 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(snap['transactions'][0]['amountUzs'],5000)
         self.assertEqual(snap['summary']['newClientsToday'],0)
         self.assertEqual(snap['reports']['week']['visits'],0)
+    def test_customer_detail_contains_stock_money_visits_and_edit_audit(self):
+        self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,phone,address,comment,payment_due,lat,lon,created_ts,map_only)
+                         VALUES(401,2,'Person','Shop 401','+998904010000','Qo‘qon','Izoh','Dushanba',40.55,70.95,?,0)""",
+                        (self.today+100,))
+        self.db.executemany("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts,note)
+                             VALUES(2,2,401,?,?,?,?,?,?)""",[
+            ('delivery',1,10,2000,self.today+200,''),
+            ('sold',1,3,600,self.today+300,''),
+            ('payment',0,0,500,self.today+400,'paid'),
+            ('return',1,1,200,self.today+500,'back'),
+        ])
+        self.db.execute("""INSERT INTO client_visits(client,actor,status,note,followup,ts)
+                         VALUES(401,2,'active','Ko‘rildi','Ertaga',?)""",(self.today+600,))
+        core.edit_client(self.db,1,401,{'comment':'Yangi izoh'})
+        detail=manager_api.client_detail(self.db,401)
+        self.assertEqual(detail['name'],'Shop 401')
+        self.assertEqual(detail['person'],'Person')
+        self.assertEqual(detail['debtUsd'],13)
+        self.assertEqual(detail['stocks'][0]['qty'],6)
+        self.assertEqual(detail['totals']['deliveredUsd'],20)
+        self.assertEqual(detail['totals']['paidUsd'],5)
+        self.assertEqual(detail['totals']['returnedUsd'],2)
+        self.assertEqual(detail['events'][0]['kind'],'return')
+        self.assertEqual(detail['events'][1]['kind'],'payment')
+        self.assertEqual(detail['visits'][0]['note'],'Ko‘rildi')
+        self.assertEqual(detail['edits'][0]['field'],'comment')
+        self.assertEqual(detail['edits'][0]['actor'],'Rahbar')
+
+    def test_customer_edit_preview_whitelists_fields_and_normalizes_values(self):
+        self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,phone,address,comment,created_ts,map_only)
+                         VALUES(402,2,'Old','Shop','+99890000402','Old address','old',?,0)""",(self.today,))
+        preview=manager_api.client_edit_preview(self.db,402,{
+            'name':' New person ','shop_name':' New shop ','phone':' +998901112233 ',
+            'address':' New address ','comment':' New note ','payment_due':' Friday '
+        })
+        self.assertEqual(preview['clientId'],402)
+        self.assertEqual(preview['values']['name'],'New person')
+        self.assertEqual(preview['values']['shop_name'],'New shop')
+        self.assertEqual(len(preview['changes']),6)
+        self.assertEqual(self.db.execute("SELECT name FROM clients WHERE id=402").fetchone()[0],'Old')
+        with self.assertRaises(ValueError):
+            manager_api.client_edit_preview(self.db,402,{'agent':'3'})
+        with self.assertRaises(ValueError):
+            manager_api.client_edit_preview(self.db,402,{'name':'Old'})
+
     def test_unknown_agent_route_is_rejected(self):
         with self.assertRaises(ValueError):
             manager_api.route(self.db,999,self.now)
