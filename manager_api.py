@@ -142,6 +142,37 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
             sold_qty+=qty
             if target:target["soldQty"]=qty
 
+    product_names={int(r["pack"]):r["name"] for r in db.execute(
+        "SELECT pack,name FROM products ORDER BY pack").fetchall()}
+    product_rows=db.execute("""SELECT pack,kind,
+        COALESCE(SUM(qty),0) AS qty,
+        COALESCE(SUM(amount_usd),0) AS amount_usd
+        FROM events
+        WHERE ts>=? AND ts<? AND pack>0
+          AND kind IN ('delivery','sold','return')
+        GROUP BY pack,kind ORDER BY pack,kind""",(start,end)).fetchall()
+    products={}
+    for row in product_rows:
+        pack=int(row["pack"]);kind=row["kind"];qty=int(row["qty"] or 0);cents=int(row["amount_usd"] or 0)
+        item=products.setdefault(pack,{
+            "pack":pack,"name":product_names.get(pack) or f"{pack} kg",
+            "deliveredQty":0,"deliveredUsd":0.0,
+            "soldQty":0,"returnedQty":0,"returnedUsd":0.0,
+            "sharePct":0.0,
+        })
+        if kind=="delivery":
+            item["deliveredQty"]=qty;item["deliveredUsd"]=_usd(cents)
+        elif kind=="sold":
+            item["soldQty"]=qty
+        elif kind=="return":
+            item["returnedQty"]=qty;item["returnedUsd"]=_usd(cents)
+    product_list=list(products.values())
+    product_total=sum(float(p["deliveredUsd"] or 0) for p in product_list)
+    for p in product_list:
+        p["sharePct"]=round((float(p["deliveredUsd"] or 0)/product_total*100) if product_total else 0,1)
+    product_list.sort(key=lambda p:(p["deliveredUsd"],p["deliveredQty"],-p["pack"]),reverse=True)
+    top_product=product_list[0]["name"] if product_list and product_list[0]["deliveredUsd"]>0 else None
+
     new_rows=db.execute("""SELECT agent,COUNT(*) AS n FROM clients
         WHERE created_ts>=? AND created_ts<? GROUP BY agent""",(start,end)).fetchall()
     new_clients=0
@@ -193,7 +224,7 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
         "returnsUsd":_usd(returns),"deliveredQty":delivered_qty,"soldQty":sold_qty,
         "acceptedCashUsd":_usd(accepted),"cashierExpensesUsd":_usd(expenses),
         "workSeconds":work_seconds,"distanceKm":round(distance_km,2),
-        "agents":agents,
+        "agents":agents,"products":product_list,"topProduct":top_product,
     }
 
 
