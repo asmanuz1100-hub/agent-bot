@@ -141,13 +141,13 @@ def customer_photo_bytes(file_id):
                 return cached[1]
         info=api('getFile',file_id=file_id)
         path=info.get('file_path','')
-        if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\\.jpe?g',path) or
+        if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\.jpe?g',path) or
                 '..' in path or int(info.get('file_size') or 0)>8_000_000):
             raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
         url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
         with urllib.request.urlopen(url,timeout=12) as res:
             content=res.read(8_000_001)
-        if len(content)>8_000_000 or not content.startswith(b'\\xff\\xd8\\xff'):
+        if len(content)>8_000_000 or not content.startswith(b'\xff\xd8\xff'):
             raise ValueError('Фото формати нотўғри.')
         if len(content)<=_PHOTO_CACHE_MAX_BYTES:
             with _PHOTO_CACHE_LOCK:
