@@ -372,7 +372,7 @@ def route(db,agent):
     for p in reversed(rows):
         lat,lon=_coord(p['lat'],p['lon'])
         if lat is not None:points.append({"lat":lat,"lon":lon,"ts":int(p['ts'])})
-    return {"start":int(shift['start']),"end":int(shift['end']) if shift['end'] else None,
+    return {"start":int(shift['start']),"end":int(shift['end_ts']) if shift['end_ts'] else None,
             "points":points}
 
 
