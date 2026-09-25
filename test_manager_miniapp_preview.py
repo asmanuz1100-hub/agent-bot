@@ -14,7 +14,9 @@ class ManagerMiniAppTests(unittest.TestCase):
             "ASMAN · Rahbar paneli — Real ma’lumotlar",
             "page-home","page-map","page-customers","page-cash","page-report",
             "Rahbar paneli","Agentlar xaritasi","Mijozlar","Kassa","Hisobot",
-            "Tezkor ogohlantirishlar",
+            "Diqqat talab qiladigan holatlar","ASMAN · CONTROL CENTER",
+            "home-pending-cash","home-client-count","home-new-clients",
+            "cash-pending-inline","report-active-agents","report-overdue",
             'data-page="home"','data-page="map"','data-page="customers"',
             'data-page="cash"','data-page="report"',
         ):
