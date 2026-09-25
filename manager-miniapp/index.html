@@ -53,6 +53,8 @@ header{position:sticky!important;background:var(--navy)!important;border:0!impor
 #page-cash,#page-report,#page-customers{padding-top:12px!important}.cash-hero{background:var(--navy);color:#fff;border-radius:18px;padding:19px;box-shadow:0 8px 26px #10203b16;position:relative;overflow:hidden}.cash-hero:after{content:"";position:absolute;width:125px;height:125px;border-radius:50%;background:#2367f534;right:-30px;top:-50px}.cash-hero p,.cash-hero h2{position:relative;z-index:1}.report-kpi{padding:15px}.report-kpi b{font-size:21px;color:var(--ink)}.bars{height:145px}.bar i.done{background:var(--primary)}
 nav{max-width:390px!important;border-color:var(--stroke)!important;box-shadow:0 -7px 24px #10203b0d!important;padding:8px 14px!important;background:#fffffff5!important}nav button{font-size:17px}nav button span{font-size:8px!important;margin-top:3px!important}nav button.active{background:#eaf1ff;border-radius:10px;padding:6px 7px;color:var(--primary)}.sheet{max-width:390px;border-radius:22px 22px 0 0}.sheet:before{content:"";display:block;width:36px;height:4px;background:#dce3ed;border-radius:4px;margin:-7px auto 13px}.auth-card{border:1px solid var(--stroke);box-shadow:0 18px 50px #10203b17}.auth-mark{color:var(--navy);letter-spacing:-.6px}.auth-card button{background:var(--primary)}
 @media(prefers-color-scheme:dark){html,body{background:var(--canvas);color:var(--ink)}.customer-card,.txn,.report-kpi,.sheet,#agent-list .agent-card{background:#fff;border-color:var(--stroke)}.dark\:bg-gray-800,.dark\:bg-gray-900{background:#fff}.dark\:text-gray-200,.dark\:text-gray-300{color:var(--ink)}}
+
+.customer-profile-hero{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(145deg,#10213f,#2367f5);min-height:200px;margin:-2px 0 14px;box-shadow:0 12px 30px #101e3920}.customer-profile-hero img{display:block;width:100%;height:230px;object-fit:cover}.customer-profile-hero.no-photo{display:grid;place-items:center;color:white}.customer-profile-hero .fallback{font-size:58px}.customer-profile-overlay{position:absolute;left:0;right:0;bottom:0;padding:36px 16px 15px;background:linear-gradient(transparent,#08152ddd);color:#fff}.customer-profile-overlay b{display:block;font-size:20px}.customer-profile-overlay small{display:block;color:#dce8ff;margin-top:4px}.customer-profile-kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}.customer-profile-kpi{border:1px solid #e5ecf5;border-radius:15px;padding:12px;background:#f8faff}.customer-profile-kpi span{display:block;color:#8190a7;font-size:10px}.customer-profile-kpi b{display:block;margin-top:4px;font-size:13px}.sheet{max-height:92vh;overflow:auto}
 </style>
 </head>
 <body class="pb-24">
@@ -306,10 +308,11 @@ function renderCustomers(){
 function showCustomer(id){
  var c=customers.find(function(x){return x.id===id});if(!c)return;
  var status={active:"Tovar olgan",interested:"Taklif berilgan",waiting:"Kutilmoqda",declined:"Hozircha olmaydi"}[c.status]||c.status;
- var rows=[["Manzil",c.address],["Mijoz",c.person],["Telefon",c.phone],["Agent",c.agent],
-           ["Holat",status],["Oxirgi aloqa",when(c.lastTs)],["Keyingi tashrif",c.followup||"Belgilanmagan"],
-           ["USD qarz",money(c.debtUsd)+" USD"],["Izoh",c.note]];
- var body=rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1])+'</b></div>'}).join("");
+ var hero=c.photoUrl?'<div class="customer-profile-hero"><img src="'+escapeHtml(c.photoUrl)+'" alt="'+escapeHtml(c.name)+'" loading="eager"><div class="customer-profile-overlay"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.person||"Mijoz")+'</small></div></div>':'<div class="customer-profile-hero no-photo"><div class="fallback">▦</div><div class="customer-profile-overlay"><b>'+escapeHtml(c.name)+'</b><small>Rasm hali biriktirilmagan</small></div></div>';
+ var body=hero+'<div class="customer-profile-kpis"><div class="customer-profile-kpi"><span>USD qarz</span><b>'+money(c.debtUsd)+' USD</b></div><div class="customer-profile-kpi"><span>Oxirgi aloqa</span><b>'+escapeHtml(when(c.lastTs))+'</b></div></div>';
+ var rows=[["Mijoz",c.person],["Telefon",c.phone],["Manzil",c.address],["Mas’ul agent",c.agent],
+           ["Holat",status],["Qo‘shilgan sana",when(c.createdTs)],["Keyingi tashrif",c.followup||"Belgilanmagan"],["Izoh",c.note||"—"]];
+ body+=rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1]||"—")+'</b></div>'}).join("");
  if(Number.isFinite(c.lat)&&Number.isFinite(c.lon)){
   body+='<button type="button" class="mini-btn primary" style="width:100%;margin-top:12px" data-navigate="'+c.id+'">Navigator</button>';
  }
