@@ -229,6 +229,47 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     }
 
 
+
+def _period_business_snapshot(db,start,end):
+    """Lightweight prior-period comparison without scanning GPS points."""
+    start,end=int(start),int(end)
+    row=db.execute("""SELECT
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivered,
+      COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0) AS payments,
+      COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS returns
+      FROM events WHERE ts>=? AND ts<?""",(start,end)).fetchone()
+    visits=int(db.execute("""SELECT
+       (SELECT COUNT(*) FROM client_visits WHERE ts>=? AND ts<?) +
+       (SELECT COUNT(*) FROM events WHERE kind='visit' AND ts>=? AND ts<?)""",
+       (start,end,start,end)).fetchone()[0] or 0)
+    new_clients=int(db.execute("SELECT COUNT(*) FROM clients WHERE created_ts>=? AND created_ts<?",
+                               (start,end)).fetchone()[0] or 0)
+    accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+       WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
+         AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
+    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+       WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    delivered=int(row["delivered"] or 0);payments=int(row["payments"] or 0);returns=int(row["returns"] or 0)
+    return {
+      "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments),"returnsUsd":_usd(returns),
+      "visits":visits,"newClients":new_clients,"acceptedCashUsd":_usd(accepted),
+      "cashierExpensesUsd":_usd(expenses),
+      "netReceivableChangeUsd":_usd(delivered-payments-returns),
+    }
+
+
+def _enrich_period_analysis(db,report):
+    start=int(report["start"]);end=int(report["end"]);duration=max(1,end-start)
+    previous=_period_business_snapshot(db,start-duration,start)
+    delivered=float(report.get("deliveredUsd") or 0)
+    payments=float(report.get("paymentsUsd") or 0)
+    returns=float(report.get("returnsUsd") or 0)
+    report["netReceivableChangeUsd"]=round(delivered-payments-returns,2)
+    report["paymentToDeliveryPct"]=round(payments/delivered*100,1) if delivered else None
+    report["previous"]=previous
+    return report
+
+
 def dashboard(db, now=None):
     """One consistent read snapshot of the real agentbot schema.
 
@@ -359,9 +400,9 @@ def dashboard(db, now=None):
         WHERE status='pending'""").fetchone()[0]
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
-    report_today=_period_report(db,today,now+1,staff,clients,recent_visits,now)
-    report_week=_period_report(db,week,now+1,staff,clients,recent_visits,now)
-    report_month=_period_report(db,since,now+1,staff,clients,recent_visits,now)
+    report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now))
+    report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now))
+    report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now))
     series=[]
     for k in range(6,-1,-1):
         day=today-k*86400
@@ -377,7 +418,12 @@ def dashboard(db, now=None):
         "agents":agents,"clients":clients,"transactions":transactions,
         "summary":{"agentCount":len(agents),"workingAgents":sum(a["shiftOpen"] for a in agents),
                    "visitsToday":sum(visits_today.values()),"newClientsToday":int(new_today),
-                   "overdueClients":red_count,"acceptedTodayUsd":_usd(cash_total),
+                   "overdueClients":red_count,
+                   "freshClients":sum(1 for c in clients if c["age"]=="fresh"),
+                   "yellowClients":sum(1 for c in clients if c["age"]=="yellow"),
+                   "scheduledClients":sum(1 for c in clients if c["age"]=="scheduled"),
+                   "unknownClients":sum(1 for c in clients if c["age"]=="unknown"),
+                   "acceptedTodayUsd":_usd(cash_total),
                    "pendingUsd":_usd(pending_total),"debtUsd":_usd(total_debt)},
         "reports":{"today":report_today,"week":report_week,"month":report_month,
                    "series":series}
