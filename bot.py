@@ -18,7 +18,7 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260924-2').strip()
-AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-figma-premium').strip()
+AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-shift-v1').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -822,6 +822,16 @@ def handle(db,update):
             ok=point(db,u,m,True)
             if ok:logging.info('Live point saved agent=%s message=%s edited=1',u,m.get('message_id'))
         return
+    # A reply-keyboard Telegram WebApp can send a short data message.
+    # Treat this exactly like the agent's existing shift buttons, retaining
+    # role checks, unique open shift constraint, GPS instructions and reports.
+    if 'web_app_data' in m:
+        if r!='agent':raise ValueError('Фақат агент Mini App орқали сменани бошқариши мумкин.')
+        payload=m['web_app_data'].get('data') if isinstance(m['web_app_data'],dict) else None
+        actions={'asman.shift.start.v1':'▶️ Ишни бошлаш',
+                 'asman.shift.end.v1':'⏹ Ишни тугатиш'}
+        if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
+        text=actions[payload]
     if text.startswith('/start '):
         open_agent_client_action(db,u,text[7:].strip());return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
@@ -913,7 +923,8 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',[['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
+            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([ [{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}] ] if AGENT_MINIAPP_URL else [])+
+                 [['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
             if not shift:
