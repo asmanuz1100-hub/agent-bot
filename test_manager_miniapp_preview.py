@@ -70,7 +70,7 @@ class ManagerMiniAppTests(unittest.TestCase):
             'class="map-legend"','var pinClients=customers.filter',
             'L.circleMarker([c.lat,c.lon]','data-customer="',
             'Kartochkani ochish','oxirgi GPS saqlangan',
-            'var color=!a.shiftOpen?"#7f8fa6"',
+            'a.locationSource==="last"||!a.shiftOpen',
         ):
             self.assertIn(term,self.html)
         self.assertNotIn('GPS koordinatasi kelgan agent yo‘q. Quyidagi ro‘yxatni tekshiring.',self.html)
