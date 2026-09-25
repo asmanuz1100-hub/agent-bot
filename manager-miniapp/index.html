@@ -97,6 +97,11 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 /* Product performance cards */
 .report-product-section{background:#fff;border:1px solid var(--asman-line);border-radius:18px;padding:14px}.report-product-section .exec-section-title>span{max-width:48%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-product-card{width:100%;border:0;border-top:1px solid #edf1f6;background:transparent;padding:11px 0;display:flex;align-items:center;gap:10px;text-align:left;color:var(--asman-text)}.report-product-card:first-of-type{border-top:0;padding-top:5px}.report-product-pack{width:38px;height:38px;flex:0 0 38px;border-radius:12px;background:#eef3ff;color:var(--asman-blue);display:flex;align-items:baseline;justify-content:center;gap:1px;font-size:14px;font-weight:900}.report-product-pack i{font-size:7px;font-style:normal;font-weight:800}.report-product-main{flex:1;min-width:0}.report-product-title{display:flex;justify-content:space-between;gap:8px;align-items:center}.report-product-title b{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-product-title em{font-style:normal;font-size:8px;color:var(--asman-blue);font-weight:800}.report-product-bar{display:block;height:5px;background:#eef2f7;border-radius:999px;overflow:hidden;margin:7px 0}.report-product-bar i{display:block;height:100%;background:linear-gradient(90deg,#246bfd,#72a0ff);border-radius:999px}.report-product-main>small{display:flex;gap:4px;flex-wrap:wrap}.report-product-main>small b{font-size:6.8px;font-weight:700;color:#687991;background:#f5f7fa;border-radius:6px;padding:3px 4px}.report-product-empty{padding:16px 4px!important}
 
+
+/* Customer filters + manager settings */
+.manager-avatar{cursor:pointer;padding:0}.customer-advanced-filter{background:#fff;border:1px solid var(--stroke);border-radius:16px;padding:11px;margin-bottom:11px}.customer-filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.customer-filter-head small{display:block;font-size:7px;letter-spacing:1px;color:#9aa7ba;font-weight:800}.customer-filter-head b{display:block;font-size:11px;margin-top:2px}.customer-filter-head button{border:0;background:#eef3ff;color:var(--primary);border-radius:8px;padding:6px 8px;font-size:8px;font-weight:750}.customer-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.customer-filter-grid label{font-size:7.5px;color:#8190a7;font-weight:700}.customer-filter-grid select{display:block;width:100%;margin-top:4px;border:1px solid #e4eaf3;border-radius:9px;background:#f8faff;color:#22334f;padding:8px 7px;font-size:9px;outline:none}.settings-profile{display:flex;align-items:center;gap:11px;padding:9px 0 13px}.settings-avatar{width:46px;height:46px;border-radius:50%;background:#e9f0ff;color:var(--primary);display:grid;place-items:center;font-weight:900;font-size:16px}.settings-profile b{display:block;font-size:13px}.settings-profile small{display:block;color:#8796aa;font-size:9px;margin-top:3px}.settings-note{background:#f5f8fc;border:1px solid #e7edf5;border-radius:11px;padding:9px;font-size:8px;color:#74849a;line-height:1.45;margin-bottom:8px}.settings-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #edf1f6;padding:12px 0}.settings-row span{flex:1}.settings-row b{display:block;font-size:10px}.settings-row small{display:block;font-size:7.5px;color:#8d9caf;margin-top:3px}.settings-row select{max-width:120px;border:1px solid #dde5ef;border-radius:8px;background:#f8faff;padding:7px;font-size:9px}.settings-row input[type=checkbox]{width:19px;height:19px;accent-color:var(--primary)}.settings-save{width:100%;margin-top:14px}.customer-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px}.customer-debt-mini{font-size:9px;font-weight:850;color:var(--asman-text)}
+@media(max-width:350px){.customer-filter-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body class="pb-24">
@@ -111,9 +116,9 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
             <div class="flex items-center space-x-2">
                 <button id="refresh-data" type="button" class="refresh" aria-label="Ma’lumotlarni yangilash" title="Yangilash">↻</button>
                 <span id="header-title" class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full">Rahbar paneli</span>
-                <div class="manager-avatar flex items-center justify-center font-bold text-xs">
-                    R
-                </div>
+                <button id="manager-settings" type="button" class="manager-avatar flex items-center justify-center font-bold text-xs" aria-label="Rahbar sozlamalari" title="Sozlamalar">
+                    <span id="manager-avatar-letter">R</span>
+                </button>
             </div>
         </div>
     </header>
@@ -221,6 +226,18 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
   <button class="chip" data-customer-filter="red">🔴 5+ kun</button>
   <button class="chip" data-customer-filter="scheduled">🔵 Rejada</button>
 </div>
+<section class="customer-advanced-filter">
+  <div class="customer-filter-head">
+    <div><small>QO‘SHIMCHA FILTR</small><b id="customer-result-count">0 mijoz</b></div>
+    <button type="button" id="customer-filter-reset">Tozalash</button>
+  </div>
+  <div class="customer-filter-grid">
+    <label>Agent<select id="customer-agent-filter"><option value="all">Barcha agentlar</option></select></label>
+    <label>Qarz<select id="customer-debt-filter"><option value="all">Hammasi</option><option value="debt">Qarzi bor</option><option value="clear">Qarzi yo‘q</option></select></label>
+    <label>Holat<select id="customer-status-filter"><option value="all">Barcha holatlar</option><option value="active">Tovar olgan</option><option value="interested">Taklif berilgan</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option></select></label>
+    <label>Saralash<select id="customer-sort"><option value="newest">Yangi qo‘shilgan</option><option value="debt">Qarz katta</option><option value="oldest-contact">Eng uzoq tashrif</option><option value="name">Nomi A–Z</option></select></label>
+  </div>
+</section>
 <div id="customer-list"></div>
 </div>
 
@@ -345,9 +362,11 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/manager";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",reportMetric:"visits",selectedAgent:null,ready:false};
+var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",selectedAgent:null,ready:false};
 var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0,dashboardToday=0;
-var leafletPromise=null,map=null,markers=null,routeLayer=null,refreshing=false;
+var leafletPromise=null,map=null,markers=null,routeLayer=null,refreshing=false,refreshTimer=null;
+var PREF_KEY="asman_manager_prefs_v1";
+var prefs=loadPrefs();
 var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Hisobot"};
 function $(id){return document.getElementById(id)}
 function escapeHtml(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
@@ -359,6 +378,25 @@ function initials(v){return String(v||"?").trim().split(/\s+/).map(function(x){r
 function duration(v){v=Math.max(0,Number(v||0));var h=Math.floor(v/3600),m=Math.floor((v%3600)/60);return h+"s "+String(m).padStart(2,"0")+"d"}
 function reportKey(){return state.reportTab==="today"?"today":state.reportTab==="month"?"month":"week"}
 function reportLabel(){return state.reportTab==="today"?"Bugun":state.reportTab==="month"?"30 kun":state.reportTab==="agents"?"7 kun · agentlar":"7 kun"}
+function loadPrefs(){try{return Object.assign({refreshSeconds:60,startPage:"home",showMapClients:true},JSON.parse(localStorage.getItem(PREF_KEY)||"{}"))}catch(e){return {refreshSeconds:60,startPage:"home",showMapClients:true}}}
+function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify(prefs))}catch(e){} scheduleRefresh()}
+function scheduleRefresh(){if(refreshTimer)clearInterval(refreshTimer);var seconds=Number(prefs.refreshSeconds||0);if(seconds>0)refreshTimer=setInterval(function(){if(state.ready&&document.visibilityState==="visible")loadDashboard()},seconds*1000)}
+function telegramUser(){return tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user:null}
+function updateManagerIdentity(){var u=telegramUser(),name=u?([u.first_name,u.last_name].filter(Boolean).join(" ")||u.username||"Rahbar"):"Rahbar";var letter=(name.trim()[0]||"R").toUpperCase();$("manager-avatar-letter").textContent=letter}
+function showManagerSettings(){
+ var u=telegramUser(),name=u?([u.first_name,u.last_name].filter(Boolean).join(" ")||"Rahbar"):"Rahbar";
+ var username=u&&u.username?"@"+u.username:"Ko‘rsatilmagan",uid=u&&u.id?String(u.id):"—";
+ var body='<div class="settings-profile"><span class="settings-avatar">'+escapeHtml((name[0]||"R").toUpperCase())+'</span><div><b>'+escapeHtml(name)+'</b><small>'+escapeHtml(username)+' · ID '+escapeHtml(uid)+'</small></div></div>'+
+ '<div class="settings-note">Kirish huquqi Telegram orqali tekshiriladi. Profil nomi va rasmi Telegram akkauntidan olinadi.</div>'+
+ '<label class="settings-row"><span><b>Avto yangilanish</b><small>Panel ma’lumotlarini qayta yuklash</small></span><select id="settings-refresh"><option value="30">30 soniya</option><option value="60">1 daqiqa</option><option value="120">2 daqiqa</option><option value="0">O‘chiq</option></select></label>'+
+ '<label class="settings-row"><span><b>Boshlang‘ich sahifa</b><small>Mini App ochilganda</small></span><select id="settings-start"><option value="home">Asosiy</option><option value="map">Agentlar</option><option value="customers">Mijozlar</option><option value="cash">Kassa</option><option value="report">Hisobot</option></select></label>'+
+ '<label class="settings-row"><span><b>Xaritada mijozlar</b><small>Mijoz nuqtalarini ko‘rsatish</small></span><input id="settings-map-clients" type="checkbox"></label>'+
+ '<button type="button" class="mini-btn primary settings-save" id="settings-save">Sozlamalarni saqlash</button>';
+ openSheet("Rahbar sozlamalari",body);
+ $("settings-refresh").value=String(prefs.refreshSeconds);
+ $("settings-start").value=prefs.startPage;
+ $("settings-map-clients").checked=!!prefs.showMapClients;
+}
 
 function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(function(){el.style.display="none"},2500)}
 function gate(title,msg){$("auth-title").textContent=title;$("auth-message").textContent=msg;$("auth-gate").classList.remove("hidden");state.ready=false}
@@ -387,6 +425,11 @@ async function loadDashboard(){
   txns=Array.isArray(data.transactions)?data.transactions:[];
   summary=data.summary||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;dashboardToday=data.todayStart||0;
   state.ready=true;$("auth-gate").classList.add("hidden");
+  updateManagerIdentity();
+  var agentSelect=$("customer-agent-filter"),current=state.customerAgent;
+  agentSelect.innerHTML='<option value="all">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'">'+escapeHtml(a.name)+'</option>'}).join("");
+  agentSelect.value=current;
+  if(!state._initialPageApplied){state._initialPageApplied=true;if(prefs.startPage&&prefs.startPage!=="home")setTimeout(function(){switchPage(prefs.startPage)},0)}
   $("home-agent-count").textContent=summary.agentCount||0;
   $("home-active-agents").textContent="Smenada "+(summary.workingAgents||0)+" ta";
   $("home-client-count").textContent=data.clientCount||customers.length||0;
@@ -450,7 +493,7 @@ function initMap(){
    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
   map.invalidateSize(false);markers.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
 
-  var pinClients=customers.filter(function(c){return Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
+  var pinClients=prefs.showMapClients?customers.filter(function(c){return Number.isFinite(c.lat)&&Number.isFinite(c.lon)}):[];
   $("map-client-count").textContent="Mijozlar · "+pinClients.length;
   pinClients.forEach(function(c){
    var color=c.age==="fresh"?"#0ca678":c.age==="yellow"?"#e49a2b":c.age==="red"?"#e05263":c.age==="scheduled"?"#246bfd":"#94a3b8";
@@ -492,12 +535,25 @@ function initMap(){
 function ageLabel(c){return c.age==="fresh"?"0–2 kun":c.age==="scheduled"?"Rejada":c.age==="unknown"?"Noma’lum":String(c.days)+" kun"}
 function renderCustomers(){
  var q=$("customer-search").value.trim().toLocaleLowerCase();
- var list=customers.filter(function(c){return(state.customerFilter==="all"||c.age===state.customerFilter)&&
- (!q||(c.name+" "+c.person+" "+c.address+" "+c.agent).toLocaleLowerCase().includes(q))});
+ var list=customers.filter(function(c){
+   if(state.customerFilter!=="all"&&c.age!==state.customerFilter)return false;
+   if(state.customerAgent!=="all"&&String(c.agentId)!==String(state.customerAgent))return false;
+   if(state.customerDebt==="debt"&&Number(c.debtUsd||0)<=0)return false;
+   if(state.customerDebt==="clear"&&Number(c.debtUsd||0)>0)return false;
+   if(state.customerStatus!=="all"&&c.status!==state.customerStatus)return false;
+   return !q||(c.name+" "+c.person+" "+c.address+" "+c.agent).toLocaleLowerCase().includes(q);
+ });
+ list.sort(function(a,b){
+   if(state.customerSort==="debt")return Number(b.debtUsd||0)-Number(a.debtUsd||0);
+   if(state.customerSort==="oldest-contact")return Number(a.lastTs||0)-Number(b.lastTs||0);
+   if(state.customerSort==="name")return String(a.name||"").localeCompare(String(b.name||""),"uz");
+   return Number(b.createdTs||0)-Number(a.createdTs||0);
+ });
+ $("customer-result-count").textContent=list.length+" mijoz";
  $("customer-list").innerHTML=list.map(function(c){
  var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";
  var media=c.photoUrl?'<span class="shop-ico photo"><img src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy" decoding="async" width="56" height="56"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="customer-side"><b class="customer-debt-mini">'+money(c.debtUsd)+' $</b><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></span></button>'
- }).join("")||'<div class="empty">Mijoz topilmadi</div>';
+ }).join("")||'<div class="empty">Filtr bo‘yicha mijoz topilmadi</div>';
 }
 function showCustomer(id){
  var c=customers.find(function(x){return x.id===id});if(!c)return;
@@ -640,6 +696,9 @@ document.addEventListener("click",function(e){
  if(!state.ready)return;
  if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
+ if(b.id==="customer-filter-reset"){state.customerFilter="all";state.customerAgent="all";state.customerDebt="all";state.customerStatus="all";state.customerSort="newest";$("customer-agent-filter").value="all";$("customer-debt-filter").value="all";$("customer-status-filter").value="all";$("customer-sort").value="newest";document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter==="all")});renderCustomers();return}
+ if(b.id==="manager-settings"){showManagerSettings();return}
+ if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();toast("Rahbar sozlamalari saqlandi");return}
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
  if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
@@ -675,11 +734,14 @@ document.addEventListener("error",function(e){
  }
 },true);
 $("customer-search").addEventListener("input",renderCustomers);
+$("customer-agent-filter").addEventListener("change",function(){state.customerAgent=this.value;renderCustomers()});
+$("customer-debt-filter").addEventListener("change",function(){state.customerDebt=this.value;renderCustomers()});
+$("customer-status-filter").addEventListener("change",function(){state.customerStatus=this.value;renderCustomers()});
+$("customer-sort").addEventListener("change",function(){state.customerSort=this.value;renderCustomers()});
 $("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",function(e){if(e.target===$("sheet-bg"))closeSheet()});
 $("refresh-data").addEventListener("click",loadDashboard);$("auth-retry").addEventListener("click",loadDashboard);
 if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}catch(e){}}
-loadDashboard();
-setInterval(function(){if(state.ready&&document.visibilityState==="visible")loadDashboard()},60000);
+updateManagerIdentity();scheduleRefresh();loadDashboard();
 })();
 
 </script>
