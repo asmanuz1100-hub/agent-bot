@@ -1023,7 +1023,12 @@ def handle(db,update):
             raise ValueError('Аввал /review орқали топшириқни очинг.')
         text=('/accept ' if decision.group(1).startswith('✅') else '/reject ')+str(hid)
     if text.startswith('/accept ') or text.startswith('/reject '):
+        if not re.fullmatch(r'/(?:accept|reject) [1-9][0-9]*',text):
+            raise ValueError('Топшириқ рақами нотўғри.')
         hid=int(text.split()[1]);accepted=text.startswith('/accept ')
+        if (role(db,u)!='cashier' or not reviewed or reviewed.get('action')!='handover_review'
+                or reviewed.get('values',{}).get('handover')!=hid):
+            raise ValueError('Аввал /review орқали топшириқни очинг.')
         row=db.execute("""SELECT h.*,ua.name AS agent_name FROM handovers h
             LEFT JOIN users ua ON ua.id=h.agent WHERE h.id=? AND h.status='pending'""",(hid,)).fetchone()
         if not row:raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
