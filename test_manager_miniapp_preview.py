@@ -67,7 +67,7 @@ class ManagerMiniAppTests(unittest.TestCase):
 
     def test_map_keeps_clients_and_last_known_agent_locations_visible(self):
         for term in (
-            'class="map-legend"','var pinClients=customers.filter',
+            'class="map-legend"','prefs.showMapClients?customers.filter',
             'className:"client-map-icon"','class="client-map-pin"',
             'id="map-client-count"','data-customer="',
             'Kartochkani ochish','oxirgi GPS saqlangan',
