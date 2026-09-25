@@ -61,7 +61,8 @@ class CashierDashboardTests(unittest.TestCase):
         self.assertTrue(any(uid==4 and 'КАССАГА ПУЛ ТОПШИРИШ' in text for uid,text in calls))
         hid=self.db.execute("SELECT id FROM handovers WHERE status='pending'").fetchone()[0]
         with patch.object(bot,'send') as send,patch.object(bot,'ADMINS',{1}):
-            bot.handle(self.db,self.message(3,f'/accept {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/review {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/accept {hid}',72004))
         row=self.db.execute('SELECT status,cashier,accepted_ts FROM handovers WHERE id=?',(hid,)).fetchone()
         self.assertEqual(row['status'],'accepted')
         self.assertEqual(row['cashier'],3)
