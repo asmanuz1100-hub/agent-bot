@@ -57,6 +57,14 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_report_product_breakdown_controls_exist(self):
+        for term in (
+            'id="report-products"','id="report-top-product"',
+            'data-report-product=','function showReportProduct(',
+            'Mahsulot harakati','Sotilgani qayd etilgan',
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
