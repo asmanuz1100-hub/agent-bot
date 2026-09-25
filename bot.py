@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from core import *
 import reports
+import client_ledger as ledger
 import customer_status as cs
 import manager_api
 import agent_api
@@ -661,7 +662,9 @@ def show_client_card(db,u,cid):
          f"\n🗓 Қўшилган сана: {stamp(c['created_ts']) if c['created_ts'] else 'Кўрсатилмаган'}"
          f"\n📦 Мижоздаги товар:\n{stock}\n💵 Мижоз қарзи: {fmt(debt)} USD"
          +(f"\nЭски сўм ҳисоби: {fmt(old_debt)} сўм" if old_debt else '')
-         +f"\n📍 {coords}",
+         +f"\n📍 {coords}\n\n📒 ТОВАР ВА ПУЛ ҲИСОБИ\n{ledger.summary(db,cid)}"
+         +f"\n\n🕒 СЎНГГИ ОПЕРАЦИЯЛАР\n{ledger.recent_text(db,cid,8)}",
+         [['📜 Барча товар ва пул тарихи']]+
          ([['📝 Ташрифни қайд этиш'],['✏️ Мижоз маълумотини ўзгартириш']] if can_edit else [])+
          [['⬅️ Мижозлар','⬅️ Меню']])
     save(db,u,{'action':'client_card','step':0,'values':{'client':cid}})
@@ -1160,6 +1163,9 @@ def handle(db,update):
     if s.get('action')=='client_card':
         cid=s['values']['client']
         client_visible(db,u,cid)
+        if text=='📜 Барча товар ва пул тарихи':
+            send(u,f'📒 МИЖОЗ #{cid} · ТОВАР ВА ПУЛ ТАРИХИ\n{ledger.summary(db,cid)}\n\n'
+                 +ledger.recent_text(db,cid,200),[['⬅️ Мижоз карточкаси'],['⬅️ Меню']]);return
         if text=='✏️ Мижоз маълумотини ўзгартириш':
             show_client_edit_fields(db,u,cid);return
         if text=='📝 Ташрифни қайд этиш':
