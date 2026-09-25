@@ -28,8 +28,10 @@ CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, shift INTEGER, ts INTE
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, actor INTEGER, agent INTEGER, client INTEGER, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount INTEGER DEFAULT 0, amount_usd INTEGER DEFAULT 0, note TEXT DEFAULT '', ts INTEGER, source INTEGER UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amount INTEGER, amount_usd INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', cashier INTEGER, source INTEGER UNIQUE, ts INTEGER);
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
+CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT NULL, old_id INTEGER, new_id INTEGER, action TEXT NOT NULL, ts INTEGER NOT NULL);
@@ -60,8 +62,10 @@ CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIG
 CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent BIGINT, client BIGINT, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount BIGINT DEFAULT 0, amount_usd BIGINT DEFAULT 0, note TEXT DEFAULT '', ts BIGINT, source BIGINT UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, amount_usd BIGINT DEFAULT 0, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
+CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT NULL, old_id BIGINT, new_id BIGINT, action TEXT NOT NULL, ts BIGINT NOT NULL);
@@ -662,20 +666,47 @@ def accept(db,actor,hid,accepted=True):
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
 
 def cashier_balance_usd(db):
-    """Accepted agent handovers less recorded cashier expenses, in USD cents.
+    """Accepted agent handovers + manual cashier income - cashier expenses, in USD cents.
 
     Pending/rejected handovers and customer payments are not cashier income.
-    The historical physical opening cash balance is not included.
+    Manual UZS income/expenses use the bookkeeping rate saved on each record.
     """
     accepted=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'").fetchone()[0]
+    manual_income=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0]
     spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
-    return int(accepted or 0)-int(spent or 0)
+    return int(accepted or 0)+int(manual_income or 0)-int(spent or 0)
 
+
+CASHIER_INCOME_CATEGORIES=(
+    '💵 Савдодан ташқари кирим', '🏦 Банк/кассадан', '👨‍💼 Раҳбардан',
+    '↩️ Қайтган пул', '📦 Бошқа кирим',
+)
 
 CASHIER_EXPENSE_CATEGORIES=(
     '🚚 Йўл харажати', '⛽ Ёқилғи', '🍽 Тушлик', '👷 Иш ҳақи',
     '🏢 Офис ва хўжалик', '📦 Бошқа харажат',
 )
+
+
+def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0]!='cashier':
+        raise ValueError('Киримни фақат кассир киритиши мумкин.')
+    if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
+        raise ValueError('Кирим суммаси нотўғри.')
+    if category not in CASHIER_INCOME_CATEGORIES:
+        raise ValueError('Кирим турини рўйхатдан танланг.')
+    if not isinstance(source_name,str) or not source_name.strip() or len(source_name)>200:
+        raise ValueError('Пул қаердан келганини киритинг (1–200 белги).')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:
+        raise ValueError('Операция ID нотўғри.')
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    if db.execute('SELECT 1 FROM cashier_incomes WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу кирим аллақачон сақланган.')
+    return int(db.execute('INSERT INTO cashier_incomes(cashier,amount_usd,category,source_name,note,source,ts) VALUES(?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,source_name.strip(),note.strip(),source,int(time.time()))).fetchone()[0])
 
 
 def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
@@ -747,6 +778,20 @@ def som_to_usd_cents(som,rate):
     cents=int((Decimal(som)*100/Decimal(rate)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
     if cents<=0:raise ValueError('Харажат 0.01 USD дан кичик. Суммани текширинг.')
     return cents
+
+
+def add_cashier_income_uzs(db,actor,amount_uzs,category,source_name,note,source,expected_rate=None):
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    rate=cashier_rate(db)
+    if rate is None:raise ValueError('Аввал «💱 Касса курси» бўлимида 1 USD курсини белгиланг.')
+    if expected_rate is not None and rate!=expected_rate:
+        raise ValueError('Курс ўзгарган. Янги курсда киримни қайта киритинг.')
+    cents=som_to_usd_cents(amount_uzs,rate)
+    income_id=add_cashier_income(db,actor,cents,category,source_name,note,source)
+    db.execute("""UPDATE cashier_incomes SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
+           WHERE id=?""",(amount_uzs,rate,income_id))
+    return income_id,cents,rate
 
 
 def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,expected_rate=None):
