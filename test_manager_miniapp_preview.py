@@ -45,6 +45,18 @@ class ManagerMiniAppTests(unittest.TestCase):
         self.assertNotIn('data-approve=',self.html)
         self.assertIn('id="auth-gate"',self.html)
 
+    def test_report_center_has_finance_route_and_agent_controls(self):
+        for term in (
+            'data-report-tab="today"','data-report-tab="week"','data-report-tab="month"',
+            'data-report-tab="agents"','id="report-delivered"','id="report-payments"',
+            'id="report-work"','id="report-distance"','id="report-accepted-cash"',
+            'id="report-cash-expense"','id="report-current-debt"',
+            'data-report-metric="visits"','data-report-metric="deliveredUsd"',
+            'data-report-metric="paymentsUsd"','function showReportAgent(',
+            'function reportKey()','function duration(',
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
