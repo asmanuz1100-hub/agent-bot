@@ -1844,6 +1844,8 @@ def serve_webhook(db,base_url):
                         data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
+                    elif action=='agent_management':
+                        data=manager_api.agent_management(local)
                     elif action=='agent_detail':
                         data=manager_api.agent_detail(local,payload.get('agentId'))
                     elif action=='agent_add_preview':
