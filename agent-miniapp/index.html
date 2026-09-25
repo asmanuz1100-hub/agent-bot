@@ -273,6 +273,26 @@ document.addEventListener("click",function(e){
  if(b.id==="navigateClient"){var c=client();if(c&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)){var url="https://www.google.com/maps?q="+encodeURIComponent(c.lat+","+c.lon);if(tg&&tg.openLink)tg.openLink(url);else window.open(url,"_blank","noopener")};return}
  if(b.id==="myRoute"){showMyRoute();return}
 });
+/* Retry a transient photo failure once; an unavailable file gets a bounded placeholder. */
+document.addEventListener("error",function(e){
+ var img=e.target;if(!(img instanceof HTMLImageElement))return;
+ if(!img.closest(".client-thumb")&&!img.classList.contains("client-photo"))return;
+ if(!img.dataset.photoRetried){
+  img.dataset.photoRetried="1";
+  var original=img.currentSrc||img.src;
+  setTimeout(function(){
+   if(img.isConnected)img.src=original+(original.includes("?")?"&":"?")+"photo_retry=1";
+  },1100);
+  return;
+ }
+ if(img.closest(".client-thumb")){
+  var holder=img.parentElement;
+  if(holder){holder.className="icon";holder.removeAttribute("style");holder.setAttribute("aria-label","Rasm ochilmadi");holder.textContent="▦";}
+ }else if(img.classList.contains("client-photo")){
+  var fallback=document.createElement("div");fallback.className="client-photo-fallback";fallback.textContent="▦";
+  img.replaceWith(fallback);
+ }
+},true);
 $("search").addEventListener("input",renderClients);
 $("operationForm").addEventListener("submit",saveForm);
 $("operationForm").addEventListener("input",function(){if(reviewing){reviewing=false;nonce=null;$("review").style.display="none";$("submitForm").textContent="Davom etish · Tekshirish"}});
