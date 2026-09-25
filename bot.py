@@ -1,5 +1,7 @@
 """Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
+import threading
+from collections import OrderedDict
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from urllib.parse import urlparse
@@ -109,19 +111,54 @@ def map_link(scope,ttl=MAP_TTL_SECONDS):
     expires=int(time.time())+max(60,min(int(ttl),3600))
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
 
+# Bound image memory on the free instance, reduce repeated Telegram getFile calls.
+_PHOTO_CACHE=OrderedDict()
+_PHOTO_CACHE_LOCK=threading.Lock()
+_PHOTO_FETCH_SLOTS=threading.BoundedSemaphore(3)
+_PHOTO_CACHE_MAX_BYTES=24_000_000
+_PHOTO_CACHE_TTL=1800
+_PHOTO_CACHE_SIZE=0
+
 def customer_photo_bytes(file_id):
-    """Fetch a customer photo server-side without disclosing BOT_TOKEN to browsers."""
-    info=api('getFile',file_id=file_id)
-    path=info.get('file_path','')
-    if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\.jpe?g',path) or
-            '..' in path or int(info.get('file_size') or 0)>8_000_000):
-        raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
-    url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
-    with urllib.request.urlopen(url,timeout=12) as res:
-        content=res.read(8_000_001)
-    if len(content)>8_000_000 or not content.startswith(b'\xff\xd8\xff'):
-        raise ValueError('Фото формати нотўғри.')
-    return content
+    """Fetch a signed customer photo server-side, with a small bounded in-memory cache."""
+    global _PHOTO_CACHE_SIZE
+    if not isinstance(file_id,str) or not file_id:
+        raise ValueError('Мижоз фотоси мавжуд эмас.')
+    with _PHOTO_CACHE_LOCK:
+        cached=_PHOTO_CACHE.get(file_id)
+        if cached and time.monotonic()-cached[0]<_PHOTO_CACHE_TTL:
+            _PHOTO_CACHE.move_to_end(file_id)
+            return cached[1]
+        if cached:
+            _PHOTO_CACHE_SIZE-=len(cached[1])
+            del _PHOTO_CACHE[file_id]
+    # Bound parallel Telegram getFile/download calls when a screen displays many photos.
+    with _PHOTO_FETCH_SLOTS:
+        with _PHOTO_CACHE_LOCK:
+            cached=_PHOTO_CACHE.get(file_id)
+            if cached and time.monotonic()-cached[0]<_PHOTO_CACHE_TTL:
+                _PHOTO_CACHE.move_to_end(file_id)
+                return cached[1]
+        info=api('getFile',file_id=file_id)
+        path=info.get('file_path','')
+        if (not re.fullmatch(r'photos/[A-Za-z0-9_./-]+\\.jpe?g',path) or
+                '..' in path or int(info.get('file_size') or 0)>8_000_000):
+            raise ValueError('Мижоз фотоси мавжуд эмас ёки катта.')
+        url=f'https://api.telegram.org/file/bot{TOKEN}/'+path
+        with urllib.request.urlopen(url,timeout=12) as res:
+            content=res.read(8_000_001)
+        if len(content)>8_000_000 or not content.startswith(b'\\xff\\xd8\\xff'):
+            raise ValueError('Фото формати нотўғри.')
+        if len(content)<=_PHOTO_CACHE_MAX_BYTES:
+            with _PHOTO_CACHE_LOCK:
+                previous=_PHOTO_CACHE.pop(file_id,None)
+                if previous:_PHOTO_CACHE_SIZE-=len(previous[1])
+                while _PHOTO_CACHE and _PHOTO_CACHE_SIZE+len(content)>_PHOTO_CACHE_MAX_BYTES:
+                    _,evicted=_PHOTO_CACHE.popitem(last=False)
+                    _PHOTO_CACHE_SIZE-=len(evicted[1])
+                _PHOTO_CACHE[file_id]=(time.monotonic(),content)
+                _PHOTO_CACHE_SIZE+=len(content)
+        return content
 
 def attach_client_photo_urls(data):
     """Attach short-lived signed photo URLs only to authenticated API responses."""
