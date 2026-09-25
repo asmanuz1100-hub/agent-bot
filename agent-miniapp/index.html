@@ -161,7 +161,7 @@ async function renderMap(){
  $("mapList").innerHTML=list.slice(0,50).map(shopRow).join("");
  try{
   var L=await loadLeaflet();if(current!=="map")return;
-  if(!map){map=L.map("map",{zoomControl:true}).setView([40.54,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);mapPins=L.layerGroup().addTo(map)}
+  if(!map){map=L.map("map",{zoomControl:true}).setView([40.54,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);mapPins=L.featureGroup().addTo(map)}
   map.invalidateSize();mapPins.clearLayers();
   list.forEach(function(c){var color=c.age==="red"?"#e55265":c.age==="yellow"?"#e89d2c":c.age==="fresh"?"#0daf79":"#2367f5";
    var icon=L.divIcon({className:"",html:'<span style="display:block;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px #0004;background:'+color+'"></span>',iconSize:[20,20],iconAnchor:[10,10]});
