@@ -34,9 +34,17 @@ def verify_init_data(raw, token, now=None):
         if not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
             raise ValueError("Telegram avtorizatsiyasi noto‘g‘ri.")
         key = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
-        check = "\n".join(k + "=" + v for k, v in sorted(data.items()))
-        expected = hmac.new(key, check.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, digest.lower()):
+        # Current Telegram clients may attach an independent Ed25519
+        # 'signature'. Validate the bot HMAC with the signature excluded,
+        # and accept the legacy signed-all-fields variant as well.
+        variants = [data]
+        if "signature" in data:
+            variants.append({k:v for k,v in data.items() if k!="signature"})
+        hashes = []
+        for fields in variants:
+            check = "\n".join(k + "=" + v for k, v in sorted(fields.items()))
+            hashes.append(hmac.new(key, check.encode("utf-8"), hashlib.sha256).hexdigest())
+        if not any(hmac.compare_digest(value,digest.lower()) for value in hashes):
             raise ValueError("Telegram imzosi tasdiqlanmadi.")
         issued = int(data["auth_date"])
         now = int(time.time() if now is None else now)
