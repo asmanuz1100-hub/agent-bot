@@ -199,7 +199,7 @@ def dashboard(db, now=None):
         series.append({"day":datetime.fromtimestamp(day,TZ).strftime("%d.%m"),
                        "visits":sum(1 for _,ts in recent_visits if day<=ts<next_day)})
     return {
-        "generatedTs":now,"timezone":"Asia/Tashkent","readOnly":True,
+        "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
         "clientCount":int(all_clients),"clientsTruncated":int(all_clients)>MAX_CLIENTS,
         "agents":agents,"clients":clients,"transactions":transactions,
         "summary":{"agentCount":len(agents),"workingAgents":sum(a["shiftOpen"] for a in agents),
