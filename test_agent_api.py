@@ -22,6 +22,7 @@ class AgentApiTests(unittest.TestCase):
         core.record(self.db,1,2,None,'load',1,30,source=7001,currency='USD')
         core.record(self.db,1,2,None,'load',3,12,source=7002,currency='USD')
         core.record(self.db,1,2,None,'load',5,8,source=7003,currency='USD')
+        self.db.commit()
 
     def tearDown(self):
         self.db.close()
@@ -66,6 +67,7 @@ class AgentApiTests(unittest.TestCase):
 
     def test_add_client_is_real_gps_required_and_idempotent(self):
         first=self.add_client()
+        self.db.commit()
         self.assertTrue(first['ok'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM clients').fetchone()[0],1)
         duplicate=self.add_client()
@@ -107,6 +109,7 @@ class AgentApiTests(unittest.TestCase):
     def test_payment_and_return_require_recent_live_location(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
         core.record(self.db,2,2,cid,'delivery',1,2,0,'',9001,currency='USD')
+        self.db.commit()
         with self.assertRaisesRegex(ValueError,'Ishni boshlash'):
             agent_api.mutate(self.db,2,'payment',{'clientId':cid,'amount':'1'},'pay_no_shift1',self.now)
         self.db.rollback()
@@ -116,6 +119,7 @@ class AgentApiTests(unittest.TestCase):
 
     def test_shift_start_end_route_and_disabled_feature(self):
         start=agent_api.mutate(self.db,2,'shift_start',{},'shift_start12',self.now)
+        self.db.commit()
         self.assertTrue(start['shiftId'])
         with self.assertRaisesRegex(ValueError,'allaqachon'):
             agent_api.mutate(self.db,2,'shift_start',{},'shift_start13',self.now+1)
