@@ -37,7 +37,7 @@ BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафт�
 ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','agent_add','agent_deactivate','tracking','load','agent_rename','prices','price_set','home',
                    'reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf'}
-CASHIER_SUB_ACTIONS={'cashbox','cashier_pending','cashier_income','cashier_income_uzs','cashier_expense','cashier_expense_uzs','cashier_expenses','cashier_rate','cashier_daily'}
+CASHIER_SUB_ACTIONS={'cashbox','cashier_income','cashier_income_uzs','cashier_expense','cashier_expense_uzs','cashier_expenses','cashier_rate','cashier_daily'}
 RECONCILE_CLIENT_ACTIONS={'reconcile_client_xlsx','reconcile_client_pdf'}
 FLOW={
  'reconcile_client_xlsx':[('client','Excel акт сверка учун мижозни танланг:')],
