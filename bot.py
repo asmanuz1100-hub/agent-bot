@@ -8,6 +8,7 @@ from core import *
 import reports
 import customer_status as cs
 import manager_api
+import agent_api
 STOP=False
 def stop_signal(*_):
     global STOP
@@ -192,7 +193,7 @@ def menu(db,u):
         # inline-keyboard web_app launches may access the real admin dashboard.
         rows.insert(0,['📱 Раҳбар Mini App'])
     elif r=='agent' and AGENT_MINIAPP_URL:
-        rows.insert(0,[{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}])
+        rows.insert(0,['📱 Agent Mini App'])
     return rows
 
 AGENT_WORK_ACTIONS={'client','delivery','sold','order','payment','return','visit','handover'}
@@ -835,6 +836,13 @@ def handle(db,update):
                  'asman.shift.end.v1':'⏹ Ишни тугатиш'}
         if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
         text=actions[payload]
+    if text=='📱 Agent Mini App':
+        if r!='agent' or not AGENT_MINIAPP_URL:raise ValueError('Фақат агент.')
+        api('sendMessage',chat_id=u,
+            text='📱 Agent Mini App · Реал маълумотлар. Қуйидаги хавфсиз тугмадан очинг.',
+            reply_markup={'inline_keyboard':[[{'text':'📱 Agent Mini App очиш',
+               'web_app':{'url':AGENT_MINIAPP_URL}}]]})
+        return
     if text=='📱 Раҳбар Mini App':
         if r!='admin' or not MANAGER_MINIAPP_URL:
             raise ValueError('Фақат админ.')
@@ -934,7 +942,7 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([ [{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}] ] if AGENT_MINIAPP_URL else [])+
+            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([['📱 Agent Mini App']] if AGENT_MINIAPP_URL else [])+
                  [['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
@@ -1344,9 +1352,17 @@ def serve_webhook(db,base_url):
             return {'Access-Control-Allow-Origin':origin,'Vary':'Origin',
                     'Access-Control-Allow-Methods':'POST, OPTIONS',
                     'Access-Control-Allow-Headers':'Content-Type'}
+        def _agent_headers(self):
+            origin=self.headers.get('Origin','')
+            if origin!='https://asman-agent-miniapp-v2-test.onrender.com':return None
+            return {'Access-Control-Allow-Origin':origin,'Vary':'Origin',
+                    'Access-Control-Allow-Methods':'POST, OPTIONS',
+                    'Access-Control-Allow-Headers':'Content-Type'}
         def do_OPTIONS(self):
-            headers=self._manager_headers()
-            if urlparse(self.path).path!='/api/manager' or headers is None:
+            api_path=urlparse(self.path).path
+            headers=(self._manager_headers() if api_path=='/api/manager'
+                     else self._agent_headers() if api_path=='/api/agent' else None)
+            if api_path not in ('/api/manager','/api/agent') or headers is None:
                 self._reply(403,b'Forbidden');return
             self._reply(204,b'',extra_headers=headers)
         def do_HEAD(self):
@@ -1483,6 +1499,42 @@ def serve_webhook(db,base_url):
                 return
             self._reply(404,b'Not found')
         def do_POST(self):
+            if urlparse(self.path).path=='/api/agent':
+                headers=self._agent_headers()
+                if headers is None or self.path!='/api/agent':
+                    self._reply(403,b'Forbidden');return
+                def answer(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                        'application/json; charset=utf-8',headers)
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if length<2 or length>12_000:
+                        answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):
+                        answer(400,{'error':'So‘rov noto‘g‘ri.'});return
+                    actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
+                except (ValueError,TypeError,json.JSONDecodeError):
+                    answer(401,{'error':'Telegram sessiyasi eskirgan. Botdan qayta oching.'});return
+                local=None
+                try:
+                    local=request_db()
+                    agent_api.authorize(local,payload.get('initData'),TOKEN)
+                    action=payload.get('action')
+                    if not isinstance(action,str):raise ValueError('Amal tanlanmagan.')
+                    with local:
+                        data=agent_api.handle(local,actor,action,payload)
+                    answer(200,data)
+                except PermissionError:
+                    answer(403,{'error':'Bu ilova faqat agent uchun.'})
+                except ValueError as e:
+                    answer(400,{'error':str(e)})
+                except Exception:
+                    logging.exception('Agent Mini App API failed')
+                    answer(500,{'error':'Serverda xatolik. Qayta urinib ko‘ring.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
             if urlparse(self.path).path=='/api/manager':
                 headers=self._manager_headers()
                 if headers is None or self.path!='/api/manager':
