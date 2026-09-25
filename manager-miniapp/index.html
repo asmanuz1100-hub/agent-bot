@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASMAN - Telegram Mini App UI Kit</title>
+    <title>ASMAN · Rahbar paneli — Real ma’lumotlar</title>
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -29,9 +29,24 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 .sheet-bg{display:none;position:fixed;inset:0;background:#0f172a66;z-index:1000;align-items:flex-end;justify-content:center}.sheet-bg.open{display:flex}.sheet{width:min(100%,430px);background:#fff;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-height:78dvh;overflow:auto}.sheet-head{display:flex;justify-content:space-between;align-items:center}.sheet-head h3{margin:0;font-size:15px}.close{border:0;background:#f3f4f6;width:30px;height:30px;border-radius:50%}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:11px}.detail-row span{color:#94a3b8}.detail-row b{text-align:right}.toast{display:none;position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:#0f2a4a;color:#fff;border-radius:10px;padding:10px 14px;z-index:1200;font-size:11px;white-space:nowrap}
 .empty{text-align:center;color:#94a3b8;padding:24px 10px;font-size:11px}
 @media(prefers-color-scheme:dark){body{--tg-bg:var(--tg-theme-bg-color,#111827);--tg-text:var(--tg-theme-text-color,#f9fafb)}.dark\:bg-gray-800{background:#1f2937}.dark\:bg-gray-900{background:#111827}.dark\:bg-gray-900\/80{background:#111827e8}.dark\:bg-gray-700\/50,.dark\:bg-gray-700\/40{background:#37415180}.dark\:border-gray-700{border-color:#374151}.dark\:border-gray-800{border-color:#1f2937}.dark\:text-gray-200{color:#e5e7eb}.dark\:text-gray-300{color:#d1d5db}.dark\:text-blue-400{color:#60a5fa}.dark\:text-emerald-400{color:#34d399}.customer-card,.txn,.report-kpi,.sheet{background:#1f2937;border-color:#374151}}
+
+/* Authenticated manager UI: never reveal static sample data before admin verification. */
+.auth-gate{position:fixed;inset:0;z-index:3000;background:#f4f7fd;display:flex;align-items:center;justify-content:center;padding:24px}
+.auth-gate.hidden{display:none}.auth-card{width:min(100%,390px);background:#fff;padding:26px;border-radius:21px;box-shadow:0 16px 45px #10203b15;text-align:center;color:#101e39}
+.auth-mark{font-size:27px;font-weight:900;color:#2367f5;letter-spacing:.6px}.auth-card h2{margin:12px 0 8px;font-size:19px}.auth-card p{color:#67778d;font-size:12px;line-height:1.6;margin:0 0 16px;white-space:pre-line}
+.auth-card button{background:#2367f5;color:#fff;border:0;border-radius:12px;width:100%;padding:12px;font-weight:700}.auth-card small{display:block;color:#8493a7;font-size:10px;line-height:1.5;margin-top:13px}
+.refresh{border:0;background:#e9f0ff;color:#2367f5;border-radius:9px;width:28px;height:28px;font-size:20px;font-weight:700;line-height:20px}
+#agent-list .agent-card{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5ecf5;border-radius:15px;padding:12px;margin-bottom:9px;width:100%;text-align:left}
+.agent-card .agent-avatar{background:#e9f0ff;color:#2367f5;border-radius:11px;width:38px;height:38px;display:grid;place-items:center;font-size:11px;font-weight:800;flex-shrink:0}
+.agent-card .agent-main{flex:1;min-width:0}.agent-card b{display:block;font-size:12px;color:#101e39}.agent-card small{font-size:10px;color:#8190a7;display:block;line-height:1.5}.agent-status{font-size:10px;font-weight:800;border-radius:9px;padding:6px 9px;background:#f4f7fd;color:#71819a}.agent-status.active{background:#e2f8ed;color:#047857}.agent-status.late{background:#fff4e2;color:#9a5f09}
+#map{height:calc(100dvh - 265px);min-height:330px}.map-card{bottom:10px}.map-loading{pointer-events:none}.map-shell{overflow:hidden}
+#cash-total{font-variant-numeric:tabular-nums}.status.cancel{background:#fff1f2;color:#be123c}
+@media(max-width:350px){#agent-list{padding:10px}.auth-card{padding:20px}}
+
 </style>
 </head>
 <body class="pb-24">
+<div id="auth-gate" class="auth-gate"><div class="auth-card"><div class="auth-mark">ASMAN</div><h2 id="auth-title">Rahbar paneli</h2><p id="auth-message">Telegram orqali kirish tekshirilmoqda…</p><button id="auth-retry" type="button">Qayta urinish</button><small>Haqiqiy mijoz va kassa ma’lumotlari faqat tasdiqlangan admin uchun.</small></div></div>
 
     <!-- Header (Telegram UI Kit Style) -->
     <header class="px-4 py-3 sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
@@ -40,6 +55,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
                 <span class="text-lg font-bold tracking-tight text-blue-600">ASMAN</span>
             </div>
             <div class="flex items-center space-x-2">
+                <button id="refresh-data" type="button" class="refresh" aria-label="Ma’lumotlarni yangilash" title="Yangilash">↻</button>
                 <span id="header-title" class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full">Rahbar paneli</span>
                 <div class="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
                     R
@@ -58,11 +74,11 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
             <div class="grid grid-cols-2 gap-2.5 mt-3">
                 <div class="bg-blue-50/50 dark:bg-gray-700/50 p-3 rounded-xl">
                     <p class="text-[11px] text-gray-500 dark:text-gray-300">Agentlar</p>
-                    <h3 class="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5">28 <span class="text-[10px] font-normal text-gray-400">faol 22</span></h3>
+                    <h3 class="text-base font-bold text-blue-600 dark:text-blue-400 mt-0.5"><span id="home-agent-count">—</span> <span id="home-active-agents" class="text-[10px] font-normal text-gray-400"></span></h3>
                 </div>
                 <div class="bg-emerald-50/50 dark:bg-gray-700/50 p-3 rounded-xl">
                     <p class="text-[11px] text-gray-500 dark:text-gray-300">Tashriflar</p>
-                    <h3 class="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">156 <span class="text-[10px] font-normal text-gray-400">reja 180</span></h3>
+                    <h3 class="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5"><span id="home-visit-count">—</span> <span class="text-[10px] font-normal text-gray-400">bugun</span></h3>
                 </div>
             </div>
         </div>
@@ -77,8 +93,8 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
                         <i class="fa-solid fa-triangle-exclamation"></i>
                     </div>
                     <div>
-                        <h4 class="text-xs font-bold">8+ kun tashrif qilinmagan</h4>
-                        <p class="text-[10px] text-gray-400">12 ta mijoz</p>
+                        <h4 class="text-xs font-bold">5+ kun tashrif qilinmagan</h4>
+                        <p class="text-[10px] text-gray-400"><span id="home-overdue-count">—</span> ta mijoz</p>
                     </div>
                 </div>
                 <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
@@ -98,6 +114,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
   <div id="map-loading" class="map-loading">Xarita ochilganda yuklanadi…</div>
   <div id="map-card" class="map-card"></div>
 </div>
+    <div id="agent-list" class="p-4"></div>
     </div>
 
     <!-- 3. MIJOZLAR -->
@@ -109,8 +126,8 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
         <div class="filters" id="customer-filters">
   <button class="chip active" data-customer-filter="all">Barchasi</button>
   <button class="chip" data-customer-filter="fresh">🟢 0–2 kun</button>
-  <button class="chip" data-customer-filter="yellow">🟠 3–7 kun</button>
-  <button class="chip" data-customer-filter="red">🔴 8+ kun</button>
+  <button class="chip" data-customer-filter="yellow">🟠 3–4 kun</button>
+  <button class="chip" data-customer-filter="red">🔴 5+ kun</button>
   <button class="chip" data-customer-filter="scheduled">🔵 Rejada</button>
 </div>
 <div id="customer-list"></div>
@@ -175,98 +192,216 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
     </nav><div class="sheet-bg" id="sheet-bg"><div class="sheet"><div class="sheet-head"><h3 id="sheet-title">Ma'lumot</h3><button class="close" id="sheet-close">×</button></div><div id="sheet-body"></div></div></div>
 <div class="toast" id="toast"></div>
 <script>
+
 (function(){
 "use strict";
-var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",selectedAgent:1};
-var agents=[
-{id:1,name:"Alibek Karimov",area:"Chilonzor tumani",status:"active",plan:14,done:12,late:3,lat:41.2995,lon:69.2401},
-{id:2,name:"Botir Rasulov",area:"Yakkasaroy tumani",status:"active",plan:12,done:9,late:1,lat:41.2848,lon:69.2531},
-{id:3,name:"Sardor Aliyev",area:"Olmazor tumani",status:"late",plan:13,done:6,late:5,lat:41.3382,lon:69.2245},
-{id:4,name:"Jasur Komilov",area:"Mirobod tumani",status:"active",plan:10,done:8,late:2,lat:41.2919,lon:69.2864}
-];
-var customers=[
-{id:1,name:"Baraka do'koni",address:"Qo'qon sh., Buroq ko'chasi",age:"yellow",days:3,agent:"Alibek Karimov",phone:"+998 90 111 22 33",status:"Taklif berilgan"},
-{id:2,name:"Ideal qurilish",address:"Navbahor ko'chasi",age:"fresh",days:1,agent:"Botir Rasulov",phone:"+998 91 222 44 55",status:"Tovar olgan"},
-{id:3,name:"Saxovat Market",address:"Yangi hayot MFY",age:"red",days:10,agent:"Sardor Aliyev",phone:"+998 93 333 55 66",status:"Qayta tashrif kerak"},
-{id:4,name:"Nur Savdo",address:"Istiqlol ko'chasi",age:"scheduled",days:0,agent:"Jasur Komilov",phone:"+998 94 444 66 77",status:"26 sentabrga reja"},
-{id:5,name:"Oqtepa Qurilish",address:"Farg'ona yo'li",age:"yellow",days:6,agent:"Alibek Karimov",phone:"+998 95 555 77 88",status:"Kutmoqda"}
-];
-var txns=[
-{id:1,agent:"Alibek Karimov",time:"14:20",amount:450,state:"accepted",period:"today"},
-{id:2,agent:"Botir Rasulov",time:"13:05",amount:300,state:"pending",period:"today"},
-{id:3,agent:"Sardor Aliyev",time:"11:40",amount:520,state:"accepted",period:"today"},
-{id:4,agent:"Jasur Komilov",time:"Kecha",amount:700,state:"accepted",period:"week"}
-];
+var API="https://asman-agent-test.onrender.com/api/manager";
+var tg=window.Telegram&&window.Telegram.WebApp;
+var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",selectedAgent:null,ready:false};
+var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0;
+var leafletPromise=null,map=null,markers=null,routeLayer=null,refreshing=false;
 var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Hisobot"};
-var leafletPromise=null,map=null,markers=null;
 function $(id){return document.getElementById(id)}
-function toast(msg){var e=$("toast");e.textContent=msg;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(function(){e.style.display="none"},1600)}
+function escapeHtml(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function money(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function when(ts){return ts?new Date(ts*1000).toLocaleString("uz-UZ",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ma’lumot yo‘q"}
+function since(ts){return ts?Math.max(0,Math.floor((Date.now()/1000-ts)/60))+" daqiqa oldin":"GPS kelmagan"}
+function todayStart(){var d=new Date();var parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tashkent",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);return Date.parse(parts+"T00:00:00+05:00")/1000}
+function initials(v){return String(v||"?").trim().split(/\s+/).map(function(x){return x[0]||""}).slice(0,2).join("").toUpperCase()}
+function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(function(){el.style.display="none"},2500)}
+function gate(title,msg){$("auth-title").textContent=title;$("auth-message").textContent=msg;$("auth-gate").classList.remove("hidden");state.ready=false}
 function openSheet(title,body){$("sheet-title").textContent=title;$("sheet-body").innerHTML=body;$("sheet-bg").classList.add("open")}
 function closeSheet(){$("sheet-bg").classList.remove("open")}
+async function request(action,agentId){
+ if(!tg||!tg.initData){throw Error("Haqiqiy ma’lumotlarni ko‘rish uchun Telegram botga /start yuboring, «📱 Rahbar Mini App»ni bosing va chatdagi «Rahbar panelini ochish» tugmasidan kiring. Oddiy brauzer havolasi orqali kirish yopiq.")}
+ var controller=new AbortController();var timeout=setTimeout(function(){controller.abort()},18000);
+ try{
+  var res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,
+   body:JSON.stringify({initData:tg.initData,action:action,agentId:agentId})});
+  var data=await res.json();
+  if(!res.ok)throw Error(data.error||"Ma’lumotlarni yuklashda xatolik ("+res.status+").");
+  return data;
+ }catch(e){if(e.name==="AbortError")throw Error("Server javob bermadi. Internetni tekshirib qayta urinib ko‘ring.");throw e}
+ finally{clearTimeout(timeout)}
+}
+async function loadDashboard(){
+ if(refreshing)return;refreshing=true;$("refresh-data").disabled=true;
+ if(!state.ready)gate("Rahbar paneli","Haqiqiy ma’lumotlar tekshirilmoqda…");
+ try{
+  var data=await request("dashboard");
+  if(!data.readOnly)throw Error("API kutilmagan javob qaytardi.");
+  agents=Array.isArray(data.agents)?data.agents:[];
+  customers=Array.isArray(data.clients)?data.clients:[];
+  txns=Array.isArray(data.transactions)?data.transactions:[];
+  summary=data.summary||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;
+  state.ready=true;$("auth-gate").classList.add("hidden");
+  $("home-agent-count").textContent=summary.agentCount||0;
+  $("home-active-agents").textContent="smenada "+(summary.workingAgents||0);
+  $("home-visit-count").textContent=summary.visitsToday||0;
+  $("home-overdue-count").textContent=summary.overdueClients||0;
+  var p=document.querySelector("#page-home p.text-xs.text-gray-400.mt-0\\.5");
+  if(p)p.textContent="Real ma’lumotlar · yangilangan "+when(generatedTs);
+  if(data.clientsTruncated)toast("Mijozlar ko‘p: ro‘yxatda dastlabki 5000 ta ko‘rsatilgan.");
+  renderCustomers();renderCash();renderReport();renderAgentList();
+  if(state.page==="map")initMap();
+ }catch(e){gate("Kirish yoki ma’lumot xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
+ finally{refreshing=false;$("refresh-data").disabled=false}
+}
 function switchPage(id){
+ if(!state.ready)return;
  state.page=id;document.querySelectorAll(".page-content").forEach(function(p){p.classList.toggle("active",p.id==="page-"+id)});
- document.querySelectorAll("nav button[data-page]").forEach(function(b){b.classList.toggle("active",b.dataset.page===id);b.classList.toggle("text-blue-600",b.dataset.page===id);b.classList.toggle("text-gray-400",b.dataset.page!==id)});
+ document.querySelectorAll("nav button[data-page]").forEach(function(b){var active=b.dataset.page===id;b.classList.toggle("active",active);b.classList.toggle("text-blue-600",active);b.classList.toggle("text-gray-400",!active)});
  $("header-title").textContent=titles[id]||"ASMAN";window.scrollTo(0,0);
  if(id==="map")initMap();if(id==="customers")renderCustomers();if(id==="cash")renderCash();if(id==="report")renderReport();
 }
-window.switchPage=function(id){switchPage(id)};
-function initials(n){return n.split(" ").map(function(x){return x[0]}).slice(0,2).join("").toUpperCase()}
-function filteredAgents(){return agents.filter(function(a){return state.agentFilter==="all"||a.status===state.agentFilter})}
+window.switchPage=switchPage;
+function agentStatus(a){return !a.shiftOpen?"Smena yopiq":a.status==="active"?"Ishda · GPS faol":"Ishda · GPS eskirgan"}
+function filteredAgents(){return agents.filter(function(a){return state.agentFilter==="all"||(state.agentFilter==="active"?a.shiftOpen&&a.status==="active":a.shiftOpen&&a.status==="late")})}
+function renderAgentList(){
+ var list=filteredAgents();
+ $("agent-list").innerHTML='<h3 class="text-sm font-bold" style="margin:0 0 10px">Agentlar · '+list.length+' ta</h3>'+
+ list.map(function(a){return '<button type="button" class="agent-card" data-agent-profile="'+a.id+'"><span class="agent-avatar">'+escapeHtml(initials(a.name))+'</span><span class="agent-main"><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(agentStatus(a))+' · Tashrif: '+a.done+'</small><small>'+escapeHtml(a.lastGpsTs?("GPS: "+when(a.lastGpsTs)):"Koordinata kelmagan")+'</small></span><span class="agent-status '+(a.status==="active"?"active":a.status==="late"?"late":"")+'">'+(a.shiftOpen?"Ishda":"Yopiq")+'</span></button>'}).join("")+
+ (list.length?'':'<div class="empty">Agent topilmadi</div>');
+}
+function renderMapCard(){
+ var a=agents.find(function(x){return x.id===state.selectedAgent});
+ if(!a){$("map-card").style.display="none";return}
+ $("map-card").style.display="block";
+ $("map-card").innerHTML='<b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(agentStatus(a))+' · Tashrif: '+a.done+'</small><small>'+
+ escapeHtml(a.lastGpsTs?"Oxirgi GPS: "+when(a.lastGpsTs):"GPS koordinatasi kelmagan")+'</small>'+
+ '<div class="map-actions"><button class="mini-btn" data-agent-profile="'+a.id+'">Profil</button>'+
+ '<button class="mini-btn primary" data-agent-route="'+a.id+'">Marshrut</button></div>';
+}
 function loadLeaflet(){
  if(window.L)return Promise.resolve(window.L);if(leafletPromise)return leafletPromise;
  leafletPromise=new Promise(function(resolve,reject){
   var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
-  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.async=true;js.onload=function(){resolve(window.L)};js.onerror=reject;document.body.appendChild(js);
- });return leafletPromise;
-}
-function renderMapCard(){
- var a=agents.find(function(x){return x.id===state.selectedAgent})||agents[0];
- $("map-card").innerHTML='<b>'+a.name+'</b><small>📍 '+a.area+' · Bugun '+a.done+'/'+a.plan+' tashrif</small><small>⚠ Kechikkan mijoz: '+a.late+' ta</small><div class="map-actions"><button class="mini-btn" data-agent-profile="'+a.id+'">Profil</button><button class="mini-btn primary" data-agent-route="'+a.id+'">Marshrut</button></div>';
+  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.async=true;js.onload=function(){window.L?resolve(window.L):reject(Error("Map kutubxonasi mavjud emas."))};js.onerror=function(){reject(Error("Map yuklanmadi."))};document.body.appendChild(js)
+ }).catch(function(e){leafletPromise=null;throw e});return leafletPromise;
 }
 function initMap(){
- renderMapCard();var loading=$("map-loading");loading.style.display="grid";loading.textContent="Xarita yuklanmoqda…";
+ if(!state.ready)return;
+ renderAgentList();renderMapCard();
+ var loading=$("map-loading");loading.style.display="grid";loading.textContent="Haqiqiy GPS nuqtalari yuklanmoqda…";
  loadLeaflet().then(function(L){
-  if(!map){map=L.map("map",{zoomControl:false,attributionControl:false,preferCanvas:true}).setView([41.30,69.24],12);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
-  else setTimeout(function(){map.invalidateSize(false)},0);
-  markers.clearLayers();var list=filteredAgents();
-  list.forEach(function(a){var icon=L.divIcon({className:"",html:'<div style="width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:'+(a.status==="active"?"#dcfce7":"#fef3c7")+';border:3px solid #fff;box-shadow:0 2px 7px #0002;font-size:10px;font-weight:800;color:#1e3a5f">'+initials(a.name)+'</div>',iconSize:[32,32],iconAnchor:[16,16]});L.marker([a.lat,a.lon],{icon:icon}).addTo(markers).on("click",function(){state.selectedAgent=a.id;renderMapCard()})});
-  if(list.length){var group=L.featureGroup(markers.getLayers());map.fitBounds(group.getBounds().pad(.25),{maxZoom:13,animate:false})}
-  loading.style.display="none";
- }).catch(function(){loading.textContent="Xarita yuklanmadi. Internetni tekshiring.";});
+  if(state.page!=="map")return;
+  if(!map){map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],7);
+   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
+  map.invalidateSize(false);markers.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
+  var pinAgents=filteredAgents().filter(function(a){return Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&a.lastGpsTs});
+  pinAgents.forEach(function(a){
+   var color=a.status==="active"?"#0daf79":"#e89d2c";
+   var icon=L.divIcon({className:"",html:'<div style="width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:'+color+';border:3px solid #fff;box-shadow:0 2px 7px #0003;font-size:10px;font-weight:800;color:white">'+escapeHtml(initials(a.name))+'</div>',iconSize:[32,32],iconAnchor:[16,16]});
+   L.marker([a.lat,a.lon],{icon:icon}).addTo(markers).on("click",function(){state.selectedAgent=a.id;renderMapCard()});
+  });
+  if(pinAgents.length){var bounds=L.featureGroup(markers.getLayers()).getBounds();map.fitBounds(bounds.pad(.3),{maxZoom:13,animate:false});loading.style.display="none"}
+  else{loading.style.display="grid";loading.textContent="GPS koordinatasi kelgan agent yo‘q. Quyidagi ro‘yxatni tekshiring."}
+ }).catch(function(){loading.style.display="grid";loading.textContent="Xarita ochilmadi. Agentlar ro‘yxati pastda ishlaydi."});
 }
-function ageLabel(c){return c.age==="fresh"?"0–2 kun":c.age==="scheduled"?"Rejada":c.days+" kun"}
+function ageLabel(c){return c.age==="fresh"?"0–2 kun":c.age==="scheduled"?"Rejada":c.age==="unknown"?"Noma’lum":String(c.days)+" kun"}
 function renderCustomers(){
- var q=$("customer-search").value.trim().toLowerCase();var list=customers.filter(function(c){return(state.customerFilter==="all"||c.age===state.customerFilter)&&(!q||(c.name+" "+c.address).toLowerCase().includes(q))});
- $("customer-list").innerHTML=list.map(function(c){var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";return '<button class="customer-card" data-customer="'+c.id+'"><span class="shop-ico">🏪</span><span class="customer-copy"><b>'+c.name+'</b><small>'+c.address+'</small></span><span class="age '+cls+'">'+ageLabel(c)+'</span></button>'}).join("")||'<div class="empty">Mijoz topilmadi</div>';
+ var q=$("customer-search").value.trim().toLocaleLowerCase();
+ var list=customers.filter(function(c){return(state.customerFilter==="all"||c.age===state.customerFilter)&&
+ (!q||(c.name+" "+c.person+" "+c.address+" "+c.agent).toLocaleLowerCase().includes(q))});
+ $("customer-list").innerHTML=list.map(function(c){
+ var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";
+ return '<button type="button" class="customer-card" data-customer="'+c.id+'"><span class="shop-ico">▦</span><span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></button>'
+ }).join("")||'<div class="empty">Mijoz topilmadi</div>';
 }
-function showCustomer(id){var c=customers.find(function(x){return x.id===id});if(!c)return;openSheet(c.name,'<div class="detail-row"><span>Manzil</span><b>'+c.address+'</b></div><div class="detail-row"><span>Telefon</span><b>'+c.phone+'</b></div><div class="detail-row"><span>Agent</span><b>'+c.agent+'</b></div><div class="detail-row"><span>Holat</span><b>'+c.status+'</b></div><button class="mini-btn primary" style="width:100%;margin-top:12px" data-demo-nav="1">Navigatsiya</button>')}
+function showCustomer(id){
+ var c=customers.find(function(x){return x.id===id});if(!c)return;
+ var status={active:"Tovar olgan",interested:"Taklif berilgan",waiting:"Kutilmoqda",declined:"Hozircha olmaydi"}[c.status]||c.status;
+ var rows=[["Manzil",c.address],["Mijoz",c.person],["Telefon",c.phone],["Agent",c.agent],
+           ["Holat",status],["Oxirgi aloqa",when(c.lastTs)],["Keyingi tashrif",c.followup||"Belgilanmagan"],
+           ["USD qarz",money(c.debtUsd)+" USD"],["Izoh",c.note]];
+ var body=rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1])+'</b></div>'}).join("");
+ if(Number.isFinite(c.lat)&&Number.isFinite(c.lon)){
+  body+='<button type="button" class="mini-btn primary" style="width:100%;margin-top:12px" data-navigate="'+c.id+'">Navigator</button>';
+ }
+ openSheet(c.name,body);
+}
 function renderCash(){
- var list=txns.filter(function(t){return state.cashTab==="pending"?t.state==="pending":state.cashTab==="today"?t.period==="today":true});var accepted=txns.filter(function(t){return t.state==="accepted"});var total=accepted.reduce(function(a,t){return a+t.amount},0);
- $("cash-total").textContent="$"+total.toLocaleString("en-US")+".00";$("cash-summary").textContent=accepted.length+" ta tasdiqlangan to'lov";
- $("txn-list").innerHTML=list.map(function(t){return '<div class="txn"><span>💵</span><div class="txn-main"><b>'+t.agent+'</b><small>'+t.time+'</small></div><div style="text-align:right"><b style="font-size:11px">'+t.amount+' USD</b><br><span class="status '+(t.state==="accepted"?"ok":"wait")+'">'+(t.state==="accepted"?"Qabul qilindi":"Kutilmoqda")+'</span>'+(t.state==="pending"?'<br><button class="mini-btn" style="margin-top:5px;padding:5px 7px" data-approve="'+t.id+'">Tasdiqlash</button>':'')+'</div></div>'}).join("")||'<div class="empty">Operatsiya yo‘q</div>';
+ var day=todayStart(),week=day-6*86400;
+ var list=txns.filter(function(t){
+  return state.cashTab==="pending"?t.state==="pending":state.cashTab==="today"?t.ts>=day:t.ts>=week;
+ });
+ var accepted=txns.filter(function(t){return t.state==="accepted"&&
+ (state.cashTab==="today"?(t.acceptedTs||t.ts)>=day:state.cashTab==="week"?(t.acceptedTs||t.ts)>=week:false)});
+ var total=state.cashTab==="today"?summary.acceptedTodayUsd:
+ state.cashTab==="pending"?summary.pendingUsd:accepted.reduce(function(v,t){return v+t.amountUsd},0);
+ $("cash-total").textContent=money(total)+" USD";
+ $("cash-summary").textContent=state.cashTab==="pending"?"Kassir tasdiğini kutayotgan USD topshirishlar":
+ state.cashTab==="week"?"Oxirgi 7 kun qabul qilingan USD":"Bugun kassir qabul qilgan USD";
+ $("txn-list").innerHTML=list.map(function(t){
+ var label=t.state==="accepted"?"Qabul qilindi":t.state==="rejected"?"Rad etildi":"Kutilmoqda";
+ var klass=t.state==="accepted"?"ok":t.state==="rejected"?"cancel":"wait";
+ var value=t.amountUsd?"+"+money(t.amountUsd)+" USD":t.amountUzs?
+ "+"+Number(t.amountUzs).toLocaleString("en-US")+" UZS":"0 USD";
+ return '<div class="txn"><span>▣</span><div class="txn-main"><b>'+escapeHtml(t.agent)+'</b><small>'+
+ escapeHtml(when(t.ts))+' · #'+t.id+'</small></div><div style="text-align:right"><b style="font-size:11px">'+escapeHtml(value)+'</b><br><span class="status '+klass+'">'+label+'</span></div></div>';
+ }).join("")||'<div class="empty">Tanlangan davrda operatsiya yo‘q</div>';
 }
 function renderReport(){
- var plans=state.reportTab==="month"?[42,48,51,55,58,62,60]:state.reportTab==="agents"?[18,22,15,25,20,17,23]:[8,12,10,14,13,15,11],done=plans.map(function(x,i){return Math.max(3,x-[2,1,3,2,1,1,2][i])}),max=Math.max.apply(null,plans);
- $("report-visits").textContent=state.reportTab==="month"?"3,482":state.reportTab==="agents"?"156":"892";$("report-new").textContent=state.reportTab==="month"?"182":state.reportTab==="agents"?"28":"48";
- $("bar-chart").innerHTML=["Du","Se","Ch","Pa","Ju","Sh","Ya"].map(function(d,i){return '<div class="bar"><i style="height:'+Math.round(plans[i]/max*100)+'%"></i><i class="done" style="height:'+Math.round(done[i]/max*100)+'%"></i><span>'+d+'</span></div>'}).join("");
+ var key=state.reportTab==="month"?"month":"week";
+ var data=reportData[key]||{visits:0,newClients:0};
+ $("report-visits").textContent=data.visits||0;$("report-new").textContent=data.newClients||0;
+ var series=reportData.series||[];var max=Math.max(1,...series.map(function(d){return d.visits}));
+ $("bar-chart").innerHTML=series.map(function(d){return '<div class="bar"><i style="height:100%;opacity:.16"></i><i class="done" style="height:'+Math.max(d.visits?3:0,Math.round(d.visits/max*100))+'%"></i><span>'+escapeHtml(d.day)+'</span></div>'}).join("")||'<div class="empty">Tashrif qaydlari yo‘q</div>';
+ if(state.reportTab==="agents"){
+  var breakdown=agents.map(function(a){return a.name+": "+a.done+" tashrif"}).join(" · ");
+  $("report-visits").title=breakdown;
+ } else $("report-visits").title="";
 }
-function showAgent(id){var a=agents.find(function(x){return x.id===id});if(!a)return;openSheet("Agent profili",'<div class="detail-row"><span>Agent</span><b>'+a.name+'</b></div><div class="detail-row"><span>Hudud</span><b>'+a.area+'</b></div><div class="detail-row"><span>Bugun</span><b>'+a.done+'/'+a.plan+' tashrif</b></div><div class="detail-row"><span>Kechikkan</span><b>'+a.late+' mijoz</b></div>')}
-document.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;
+function showAgent(id){
+ var a=agents.find(function(x){return x.id===id});if(!a)return;
+ state.selectedAgent=id;
+ openSheet("Agent profili",[
+ ["Agent",a.name],["Ish holati",agentStatus(a)],["Smena boshlanishi",when(a.shiftStart)],
+ ["Oxirgi GPS",when(a.lastGpsTs)],["Bugungi tashrif",a.done],["Mijozlar",a.clients],
+ ["Qayta tashrif kerak",a.late]
+ ].map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1])+'</b></div>'}).join("")+
+ '<button type="button" class="mini-btn primary" style="width:100%;margin-top:12px" data-agent-route="'+a.id+'">Oxirgi marshrutni ko‘rish</button>');
+}
+async function showRoute(id){
+ var a=agents.find(function(x){return x.id===id});if(!a)return;
+ closeSheet();if(state.page!=="map")switchPage("map");
+ try{
+  var route=await request("route",id);
+  if(!route.points.length){toast("Bu agentning oxirgi smenasida GPS nuqtalari yo‘q.");return}
+  await loadLeaflet();if(!map){initMap();await new Promise(function(resolve){setTimeout(resolve,350)})}
+  if(!map)return;
+  if(routeLayer)map.removeLayer(routeLayer);
+  routeLayer=window.L.polyline(route.points.map(function(p){return [p.lat,p.lon]}),{color:"#2367f5",weight:4}).addTo(map);
+  map.fitBounds(routeLayer.getBounds().pad(.15),{animate:false,maxZoom:15});
+  state.selectedAgent=id;renderMapCard();toast("Oxirgi smena yo‘li · "+route.points.length+" ta GPS nuqta");
+ }catch(e){toast(e.message||"Marshrutni ochib bo‘lmadi.")}
+}
+document.addEventListener("click",function(e){
+ var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){switchPage(b.dataset.page);return}
+ if(!state.ready)return;
  if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
  if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
- if(b.dataset.approve){var t=txns.find(function(x){return x.id===Number(b.dataset.approve)});if(t){t.state="accepted";renderCash();toast("Test: topshirish tasdiqlandi")}return}
  if(b.dataset.agentProfile){showAgent(Number(b.dataset.agentProfile));return}
- if(b.dataset.agentRoute){toast("Marshrut xaritada ko‘rsatildi");return}
- if(b.dataset.demoNav){toast("Test rejimi: navigatsiya hali real manzilga ulanmagan");return}
+ if(b.dataset.agentRoute){showRoute(Number(b.dataset.agentRoute));return}
+ if(b.dataset.navigate){
+  var c=customers.find(function(x){return x.id===Number(b.dataset.navigate)});
+  if(c&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)){
+   var url="https://www.google.com/maps?q="+encodeURIComponent(c.lat+","+c.lon);
+   if(tg&&tg.openLink)tg.openLink(url);else window.open(url,"_blank","noopener");
+  }
+ }
 });
-$("customer-search").addEventListener("input",renderCustomers);$("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",function(e){if(e.target===$("sheet-bg"))closeSheet()});
-var tg=window.Telegram&&window.Telegram.WebApp;if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");if(tg.setBackgroundColor)tg.setBackgroundColor("#f6f8fb")}catch(e){}}
-renderCustomers();renderCash();renderReport();
+$("customer-search").addEventListener("input",renderCustomers);
+$("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",function(e){if(e.target===$("sheet-bg"))closeSheet()});
+$("refresh-data").addEventListener("click",loadDashboard);$("auth-retry").addEventListener("click",loadDashboard);
+if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}catch(e){}}
+loadDashboard();
 })();
+
 </script>
 </body>
 </html>
