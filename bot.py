@@ -153,7 +153,7 @@ def customer_photo_bytes(file_id):
         path=info.get('file_path','')
         if int(info.get('file_size') or 0)>18_000_000:
             raise ValueError('telegram_file_over_18mb')
-        if not re.fullmatch(r'(?:photos|documents)/[A-Za-z0-9_./-]+\.(?:jpe?g|png|webp)',path) or '..' in path:
+        if not re.fullmatch(r'(?:photos|documents)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]{1,16})?',path):
             reason=('missing_path' if not isinstance(path,str) or not path else
                     'directory' if not path.startswith(('photos/','documents/')) else
                     'extension' if not path.lower().endswith(('.jpg','.jpeg','.png','.webp')) else
