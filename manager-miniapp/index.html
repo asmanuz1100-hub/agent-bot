@@ -415,7 +415,7 @@ function switchPage(id){
  if(id==="map")initMap();if(id==="customers")renderCustomers();if(id==="cash")renderCash();if(id==="report")renderReport();
 }
 window.switchPage=switchPage;
-function agentStatus(a){return !a.shiftOpen?(a.lastGpsTs?"Smena yopiq · oxirgi GPS saqlangan":"Smena yopiq · GPS yo‘q"):a.status==="active"?"Ishda · GPS faol":"Ishda · GPS eskirgan"}
+function agentStatus(a){return !a.shiftOpen?(a.lastGpsTs?"Smena yopiq · oxirgi GPS saqlangan":"Smena yopiq · GPS yo‘q"):a.locationSource==="last"?"Ishda · jonli GPS yo‘q, oxirgi joylashuv":a.status==="active"?"Ishda · GPS faol":"Ishda · GPS eskirgan"}
 function filteredAgents(){return agents.filter(function(a){return state.agentFilter==="all"||(state.agentFilter==="active"?a.shiftOpen&&a.status==="active":a.shiftOpen&&a.status==="late")})}
 function renderAgentList(){
  var list=filteredAgents();
@@ -464,7 +464,7 @@ function initMap(){
 
   var pinAgents=filteredAgents().filter(function(a){return Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&a.lastGpsTs});
   pinAgents.forEach(function(a){
-   var color=!a.shiftOpen?"#7f8fa6":a.status==="active"?"#0daf79":"#e89d2c";
+   var color=a.locationSource==="last"||!a.shiftOpen?"#7f8fa6":a.status==="active"?"#0daf79":"#e89d2c";
    var border=a.shiftOpen?"#fff":"#d9e1ec";
    var icon=L.divIcon({className:"",html:'<div style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:'+color+';border:3px solid '+border+';box-shadow:0 3px 10px #0004;font-size:10px;font-weight:850;color:white">'+escapeHtml(initials(a.name))+'</div>',iconSize:[34,34],iconAnchor:[17,17]});
    L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:1000}).addTo(markers).on("click",function(){state.selectedAgent=a.id;renderMapCard()});
