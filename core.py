@@ -666,15 +666,14 @@ def accept(db,actor,hid,accepted=True):
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
 
 def cashier_balance_usd(db):
-    """Accepted agent handovers + manual cashier income - cashier expenses, in USD cents.
+    """Accepted agent handovers less cashier expenses, in USD cents.
 
-    Pending/rejected handovers and customer payments are not cashier income.
-    Manual UZS income/expenses use the bookkeeping rate saved on each record.
+    Only agent handovers accepted by a cashier count as cashier income.
+    Pending/rejected handovers, customer payments, and manual cashier income do not.
     """
     accepted=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'").fetchone()[0]
-    manual_income=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0]
     spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
-    return int(accepted or 0)+int(manual_income or 0)-int(spent or 0)
+    return int(accepted or 0)-int(spent or 0)
 
 
 CASHIER_INCOME_CATEGORIES=(
@@ -689,25 +688,12 @@ CASHIER_EXPENSE_CATEGORIES=(
 
 
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
-    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not identity or identity[0]!='cashier':
-        raise ValueError('Киримни фақат кассир киритиши мумкин.')
-    if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
-        raise ValueError('Кирим суммаси нотўғри.')
-    if category not in CASHIER_INCOME_CATEGORIES:
-        raise ValueError('Кирим турини рўйхатдан танланг.')
-    if not isinstance(source_name,str) or not source_name.strip() or len(source_name)>200:
-        raise ValueError('Пул қаердан келганини киритинг (1–200 белги).')
-    if not isinstance(note,str) or len(note)>1000:
-        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
-    if not isinstance(source,int) or source<=0:
-        raise ValueError('Операция ID нотўғри.')
-    if isinstance(db,PostgresDB):
-        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
-    if db.execute('SELECT 1 FROM cashier_incomes WHERE source=?',(source,)).fetchone():
-        raise ValueError('Бу кирим аллақачон сақланган.')
-    return int(db.execute('INSERT INTO cashier_incomes(cashier,amount_usd,category,source_name,note,source,ts) VALUES(?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,source_name.strip(),note.strip(),source,int(time.time()))).fetchone()[0])
+    """Manual cashier income is intentionally disabled.
 
+    Cash enters the cashier ledger only through an agent handover that the
+    cashier explicitly accepts.
+    """
+    raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
 def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -781,18 +767,7 @@ def som_to_usd_cents(som,rate):
 
 
 def add_cashier_income_uzs(db,actor,amount_uzs,category,source_name,note,source,expected_rate=None):
-    if isinstance(db,PostgresDB):
-        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
-    rate=cashier_rate(db)
-    if rate is None:raise ValueError('Аввал «💱 Касса курси» бўлимида 1 USD курсини белгиланг.')
-    if expected_rate is not None and rate!=expected_rate:
-        raise ValueError('Курс ўзгарган. Янги курсда киримни қайта киритинг.')
-    cents=som_to_usd_cents(amount_uzs,rate)
-    income_id=add_cashier_income(db,actor,cents,category,source_name,note,source)
-    db.execute("""UPDATE cashier_incomes SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
-           WHERE id=?""",(amount_uzs,rate,income_id))
-    return income_id,cents,rate
-
+    raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
 def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,expected_rate=None):
     if isinstance(db,PostgresDB):

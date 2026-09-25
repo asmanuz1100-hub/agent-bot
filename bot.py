@@ -31,13 +31,13 @@ MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
 MAX_UPDATE_RETRIES=3
 CLIENT_PAGE_SIZE=20
-BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','🗺 Мижозлар харитаси':'agent_clients_map','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','💰 Кассир бўлими':'cashier_menu','📥 Касса':'cashbox','⏳ Тасдиқланмаган пуллар':'cashier_pending','➕ Кирим USD':'cashier_income','➕ Кирим UZS':'cashier_income_uzs','➖ Расход USD':'cashier_expense','➖ Расход UZS':'cashier_expense_uzs','🧾 Харажат киритиш':'cashier_expense','📋 Харажатлар тарихи':'cashier_expenses','🧾 Сўмда харажат':'cashier_expense_uzs','💱 Касса курси':'cashier_rate','📊 Кунлик касса':'cashier_daily','🗺 Умумий таҳлил':'analytics'}
+BTN={'▶️ Ишни бошлаш':'shift','⏹ Ишни тугатиш':'end','ℹ️ Локация ёрдами':'location_help','🏪 Мижоз қўшиш':'client','👥 Мижозлар':'clients','🗺 Мижозлар харитаси':'agent_clients_map','📦 Товар бериш':'delivery','🛒 Буюртма':'order','💵 Сотилган товар':'sold','💰 Пул олиш':'payment','↩️ Товар қайтариш':'return','📝 Ташриф / таклиф':'visit','🏦 Кассага топшириш':'handover','📊 Ҳисобим':'balance','👥 Агентлар бошқаруви':'agent_admin','➕ Ходим':'user','➕ Агент қўшиш':'agent_add','🗑 Агент ҳисобини ёпиш':'agent_deactivate','🔐 Админ қўшиш':'admin_add','🔁 Агент аккаунтини алмаштириш':'agent_transfer','💰 Кассир бўлими':'cashier_menu','📥 Касса':'cashbox','⏳ Тасдиқланмаган пуллар':'cashier_pending','➖ Расход USD':'cashier_expense','➖ Расход UZS':'cashier_expense_uzs','🧾 Харажат киритиш':'cashier_expense','📋 Харажатлар тарихи':'cashier_expenses','🧾 Сўмда харажат':'cashier_expense_uzs','💱 Касса курси':'cashier_rate','📊 Кунлик касса':'cashier_daily','🗺 Умумий таҳлил':'analytics'}
 BTN.update({'📄 Акт сверка':'reconcile','👤 Битта мижоз — Excel':'reconcile_client_xlsx','👤 Битта мижоз — PDF':'reconcile_client_pdf','📊 Барча мижозлар — Excel':'reconcile_all_xlsx','📄 Барча мижозлар — PDF':'reconcile_all_pdf','📋 Агентлар рўйхати':'agent_list','👤 Агент профили':'agent_profile','📍 Агент маршрути':'tracking','🚚 Агентга товар':'load','✏️ Агент номини ўзгартириш':'agent_rename','💲 Товар ва нархлар':'prices','✏️ Нарх киритиш':'price_set','⬅️ Админ меню':'home'})
 BTN.update({'📅 1 кунлик таҳлил':'analytics_day','📅 1 ҳафталик таҳлил':'analytics_week','📅 1 ойлик таҳлил':'analytics_month'})
 ANALYTICS_PERIODS={'analytics_day':'day','analytics_week':'week','analytics_month':'month'}
 ADMIN_SUB_ACTIONS={'agent_list','agent_profile','agent_add','agent_deactivate','tracking','load','agent_rename','prices','price_set','home',
                    'reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf'}
-CASHIER_SUB_ACTIONS={'cashbox','cashier_income','cashier_income_uzs','cashier_expense','cashier_expense_uzs','cashier_expenses','cashier_rate','cashier_daily'}
+CASHIER_SUB_ACTIONS={'cashbox','cashier_expense','cashier_expense_uzs','cashier_expenses','cashier_rate','cashier_daily'}
 RECONCILE_CLIENT_ACTIONS={'reconcile_client_xlsx','reconcile_client_pdf'}
 FLOW={
  'reconcile_client_xlsx':[('client','Excel акт сверка учун мижозни танланг:')],
@@ -53,8 +53,6 @@ FLOW={
  'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган тўлов (USD):')],
  'visit':[('client','Мижозни танланг:'),('status','Ташриф натижасини танланг:'),('note','Мижоз билан нима гаплашдингиз? Изоҳ ёзинг:'),('followup','Қайта ташриф санасини YYYY-MM-DD кўринишида киритинг:')],
  'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
- 'cashier_income':[('category','Кирим турини танланг:'),('amount','Кирим суммаси (USD):'),('source_name','Пул қаердан келди?'),('note','Изоҳ киритинг (ёки —):')],
- 'cashier_income_uzs':[('category','Сўмдаги кирим турини танланг:'),('amount','Кирим суммасини бутун сўмда киритинг (масалан: 100000):'),('source_name','Пул қаердан келди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (USD):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_expense_uzs':[('category','Сўмдаги харажат турини танланг:'),('amount','Харажат суммасини бутун сўмда киритинг (масалан: 100000):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_rate':[('rate','Касса учун 1 USD неча сўм? Фақат бутун сон киритинг (масалан: 12500):')],
@@ -257,7 +255,7 @@ def allowed(db,u,action):
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_expenses')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_income','cashier_income_uzs','cashier_expense','cashier_expense_uzs','cashier_expenses')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_expenses')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -279,10 +277,10 @@ def menu(db,u):
 def show_cashier_menu(db,u):
     r=role(db,u)
     if r=='cashier':
-        rows=[['➕ Кирим USD','➕ Кирим UZS'],['➖ Расход USD','➖ Расход UZS'],
+        rows=[['➖ Расход USD','➖ Расход UZS'],
               ['📥 Касса','⏳ Тасдиқланмаган пуллар'],['💱 Касса курси','📊 Кунлик касса'],
               ['📋 Харажатлар тарихи'],['⬅️ Меню']]
-        send(u,'💰 КАССИР БЎЛИМИ\nКирим ва расходни киритинг. Агент топширган пулни «Кирим»га қайта ёзманг — у кассир тасдиқлаганда автомат кирим бўлади.',rows)
+        send(u,'💰 КАССИР БЎЛИМИ\nКиримни кассир қўлда киритмайди. Пул фақат агент топширганда ва кассир тасдиқлаганда кассага кирим бўлади.',rows)
         return
     if r=='admin':
         send(u,'💰 КАССИР БЎЛИМИ · назорат режими',
@@ -485,7 +483,6 @@ def cashbox_report(db,u):
         WHERE e.kind='payment' ORDER BY e.id DESC LIMIT 12""").fetchall()
     pending_total=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='pending'").fetchone()[0] or 0)
     accepted_today=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted' AND accepted_ts>=?",(today,)).fetchone()[0] or 0)
-    manual_income_today=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes WHERE ts>=?",(today,)).fetchone()[0] or 0)
     payments_today=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM events WHERE kind='payment' AND ts>=?",(today,)).fetchone()[0] or 0)
     expenses_today=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE ts>=?',(today,)).fetchone()[0] or 0)
     out=['📥 КАССА НАЗОРАТИ','⏳ Тасдиқланмаган пуллар: менюдан шу бўлимни очинг.',
@@ -493,7 +490,6 @@ def cashbox_report(db,u):
          f'Бугунги харажатлар: {fmt(expenses_today)} USD',
          f"Бугун мижозлардан олинган: {fmt(payments_today)} USD",
          f"Бугун агентдан қабул қилинган: {fmt(accepted_today)} USD",
-         f"Бугун қўлда кирим: {fmt(manual_income_today)} USD",
          f"Тасдиқ кутаётган: {fmt(pending_total)} USD",
          '',
          '⏳ КУТИЛАЁТГАН ТОПШИРИШЛАР']
@@ -569,12 +565,11 @@ def prompt(db,u,s):
             shown=product_name(v) if k=='pack' else v
             lines.append(f'{names.get(k,k).rstrip(":")} {shown}')
         if s['action']=='client' and s['values'].get('photo'):lines.append('📷 Фото: бириктирилди')
-        if s['action'] in ('cashier_expense_uzs','cashier_income_uzs'):
+        if s['action']=='cashier_expense_uzs':
             rate=s['values'].get('rate_at_entry')
             if not rate:raise ValueError('Курс киритилмаган.')
             cents=som_to_usd_cents(parse_whole_som(s['values']['amount']),rate)
-            label='Харажат' if s['action']=='cashier_expense_uzs' else 'Кирим'
-            lines.append(f"💱 Курс: 1 USD = {rate:,} сўм · {label} USD эквиваленти: {fmt(cents)} USD")
+            lines.append(f"💱 Курс: 1 USD = {rate:,} сўм · Харажат USD эквиваленти: {fmt(cents)} USD")
         if s['action']=='cashier_rate':lines.append('Курс ўзгарса ҳам аввалги харажатлар ўз вақтидаги курс билан сақланади.')
         if s['action']=='admin_add':
             existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
@@ -589,10 +584,9 @@ def prompt(db,u,s):
     key,msg=fields[i]; keys=[]
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if s['action']=='cashier_rate':msg+=f"\nЖорий курс: {cashier_rate(db):,} сўм / USD" if cashier_rate(db) else '\nҲали курс белгиланмаган.'
-    if s['action'] in ('cashier_expense_uzs','cashier_income_uzs') and key=='amount':msg+=f"\n💱 1 USD = {cashier_rate(db):,} сўм. Сўмдаги сумма USDга автомат ҳисобланади."
+    if s['action']=='cashier_expense_uzs' and key=='amount':msg+=f"\n💱 1 USD = {cashier_rate(db):,} сўм. Сўмдаги сумма USDга автомат ҳисобланади."
     if key=='pack':keys=[[product_name(p)] for p in (1,3,5)]
     if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs'):keys=[[c] for c in CASHIER_EXPENSE_CATEGORIES]
-    if key=='category' and s['action'] in ('cashier_income','cashier_income_uzs'):keys=[[c] for c in CASHIER_INCOME_CATEGORIES]
     if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
         keys=[['Дона','Блок']]
@@ -927,25 +921,6 @@ def finish(db,u,s,source):
         rate=set_cashier_rate(db,u,int(v['rate']),source)
         _safe_send_many([admin for admin in admin_ids(db) if admin!=u],
                         f'💱 КАССА КУРСИ ЯНГИЛАНДИ\nКассир: {_staff_name(db,u)}\n1 USD = {rate:,} сўм\n{datetime.now(TZ).strftime("%d.%m.%Y %H:%M")}')
-    elif a=='cashier_income_uzs':
-        amount_uzs=parse_whole_som(v['amount'])
-        income_id,income_value,income_rate=add_cashier_income_uzs(
-            db,u,amount_uzs,v['category'],v['source_name'],v['note'],source,
-            expected_rate=v.get('rate_at_entry'))
-        income_text=(f'➕ КАССА КИРИМИ #{income_id}\nКассир: {_staff_name(db,u)}\n'
-                     f'Тури: {v["category"]}\nСумма: {amount_uzs:,} сўм\n'
-                     f'Курс: 1 USD = {income_rate:,} сўм\nUSD эквиваленти: {fmt(income_value)} USD\n'
-                     f'Қаердан: {v["source_name"]}\nИзоҳ: {v["note"]}\n'
-                     f'Ҳисобий қолдиқ: {fmt(cashier_balance_usd(db))} USD')
-        _safe_send_many([admin for admin in admin_ids(db) if admin!=u],income_text)
-    elif a=='cashier_income':
-        income_value=money(v['amount'])
-        income_id=add_cashier_income(db,u,income_value,v['category'],v['source_name'],v['note'],source)
-        income_text=(f'➕ КАССА КИРИМИ #{income_id}\nКассир: {_staff_name(db,u)}\n'
-                     f'Тури: {v["category"]}\nСумма: {fmt(income_value)} USD\n'
-                     f'Қаердан: {v["source_name"]}\nИзоҳ: {v["note"]}\n'
-                     f'Қолдиқ: {fmt(cashier_balance_usd(db))} USD')
-        _safe_send_many([admin for admin in admin_ids(db) if admin!=u],income_text)
     elif a=='cashier_expense_uzs':
         amount_uzs=parse_whole_som(v['amount'])
         expense_id,expense_value,expense_rate=add_cashier_expense_uzs(
@@ -996,12 +971,6 @@ def finish(db,u,s,source):
         send(u,f"✅ {operation}: {v['name']} (ID: {v['id']}). У ботга /start юборсин. Бошқа админ қўшиш ҳуқуқи унга берилмаган.",menu(db,u))
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
-    elif a=='cashier_income_uzs':
-        send(u,f'✅ Кирим #{income_id} сақланди: {amount_uzs:,} сўм = {fmt(income_value)} USD '
-             f'(курс: 1 USD = {income_rate:,} сўм). Админга хабарнома юборилди.\n'
-             f'Ҳисобий касса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
-    elif a=='cashier_income':
-        send(u,f'✅ Кирим #{income_id} сақланди: {fmt(income_value)} USD. Админга хабарнома юборилди.\nКасса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
     elif a=='cashier_expense_uzs':
         send(u,f'✅ Харажат #{expense_id} сақланди: {amount_uzs:,} сўм = {fmt(expense_value)} USD '
              f'(курс: 1 USD = {expense_rate:,} сўм). Админга хабарнома юборилди.\n'
@@ -1170,7 +1139,7 @@ def handle(db,update):
             document(u,f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.pdf',reports.all_clients_pdf(db,u))
             send(u,'✅ Барча мижозлар PDF жадвали тайёр.',menu(db,u));return
         if action in FLOW:
-            if action in ('cashier_expense_uzs','cashier_income_uzs') and cashier_rate(db) is None:
+            if action=='cashier_expense_uzs' and cashier_rate(db) is None:
                 raise ValueError('Аввал «💱 Касса курси» бўлимида 1 USD курсини белгиланг.')
             s={'action':action,'step':0,'values':{}}
             prompt(db,u,s);return
@@ -1454,27 +1423,24 @@ def handle(db,update):
     elif key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs'):
         if text not in CASHIER_EXPENSE_CATEGORIES:raise ValueError('Харажат турини тугмадан танланг.')
         v=text
-    elif key=='category' and s['action'] in ('cashier_income','cashier_income_uzs'):
-        if text not in CASHIER_INCOME_CATEGORIES:raise ValueError('Кирим турини тугмадан танланг.')
-        v=text
     elif key=='rate' and s['action']=='cashier_rate':
         v=parse_whole_som(text,'1 USD курси')
         if v<100 or v>10**7:raise ValueError('Курс: 100–10 000 000 сўм киритинг.')
     elif key=='qty':v=count(text)
     elif key=='amount':
-        if s['action'] in ('cashier_expense_uzs','cashier_income_uzs'):
+        if s['action']=='cashier_expense_uzs':
             rate=cashier_rate(db)
             if rate is None:raise ValueError('Аввал касса курсини белгиланг.')
             amount_uzs=parse_whole_som(text)
             parsed_amount=som_to_usd_cents(amount_uzs,rate)
             s['values']['rate_at_entry']=rate
-            if s['action']=='cashier_expense_uzs' and parsed_amount>cashier_balance_usd(db):
-                raise ValueError('Кассада етарли қабул қилинган пул йўқ. Аввал кирим ёки агент топшириғини киритинг.')
+            if parsed_amount>cashier_balance_usd(db):
+                raise ValueError('Кассада етарли қабул қилинган пул йўқ. Аввал агент топшириғини кассир тасдиқласин.')
             v=str(amount_uzs)
         else:
             parsed_amount=money(text)
         if s['action']=='cashier_expense' and parsed_amount>cashier_balance_usd(db):
-            raise ValueError('Кассада бунча пул йўқ. Аввал кирим ёки агент топшириғини киритинг.')
+            raise ValueError('Кассада бунча пул йўқ. Аввал агент топшириғини кассир тасдиқласин.')
         v=text
     elif key=='unit':
         if text not in ('Дона','Блок'):raise ValueError('Дона ёки Блокни танланг.')
@@ -1486,8 +1452,6 @@ def handle(db,update):
         if not text or len(text)>1000:raise ValueError('1–1000 белгидан иборат матн киритинг.')
         if s['action'] in ('cashier_expense','cashier_expense_uzs') and key=='recipient' and len(text)>200:
             raise ValueError('Кимга ёки нима учун берилгани 200 белгидан ошмасин.')
-        if s['action'] in ('cashier_income','cashier_income_uzs') and key=='source_name' and len(text)>200:
-            raise ValueError('Пул қаердан келгани 200 белгидан ошмасин.')
         v=text
     s['values'][key]=v;s['step']+=1
     if s['action']=='visit' and key=='note' and s['values']['status']!='waiting':
