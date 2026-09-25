@@ -129,7 +129,7 @@ class ManagerMiniAppTests(unittest.TestCase):
             'id="report-receivable-change"','id="report-delivered-delta"',
             'id="report-payments-delta"','id="analysis-status-bar"',
             'id="analysis-fresh-count"','id="analysis-red-count"',
-            'id="analysis-map"','function renderAnalysisMap(',
+            'class="analysis-status-bar"','id="analysis-map"','function renderAnalysisMap(',
             'function analysisDelta(','previous.deliveredUsd',
             'paymentToDeliveryPct','netReceivableChangeUsd',
             'visibleAgents=state.reportTab==="agents"?periodAgents:periodAgents.slice(0,3)'
