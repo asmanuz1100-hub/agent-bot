@@ -1524,6 +1524,23 @@ def serve_webhook(db,base_url):
                     if not isinstance(action,str):raise ValueError('Amal tanlanmagan.')
                     with local:
                         data=agent_api.handle(local,actor,action,payload)
+                    # Telegram notifications are sent only after a committed,
+                    # non-duplicate write, never during a database transaction.
+                    if not data.get('duplicate'):
+                        try:
+                            if action=='shift_start':
+                                send(actor,'Иш бошланди ✅\\n📍 Telegram чатда 📎 → Локация → Жонли локацияни улашишни ўзингиз ёқинг. Админ иш вақтида GPS ва маршрутингизни кўриши мумкин.',menu(local,actor))
+                            elif action=='shift_end':
+                                report=reports.shift_summary(local,actor,data['shiftId'])['text']
+                                send(actor,'Иш тугади ✅\\nБот GPS қабул қилишни тўхтатди. Telegramда жонли локацияни ҳам ўзингиз тўхтатинг.\\n\\n'+report,menu(local,actor))
+                                for administrator in ADMINS:
+                                    if administrator!=actor:send(administrator,'📣 Агент ишни тугатди\\n\\n'+report)
+                            elif action=='payment':
+                                notify_cashiers_payment(local,actor,data['clientId'],data['amountCents'])
+                            elif action=='handover':
+                                notify_cashiers_handover(local,actor,data['handoverId'],data['amountCents'])
+                        except Exception:
+                            logging.exception('Agent API post-commit notification failed action=%s actor=%s',action,actor)
                     answer(200,data)
                 except PermissionError:
                     answer(403,{'error':'Bu ilova faqat agent uchun.'})
