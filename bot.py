@@ -1523,8 +1523,8 @@ def serve_webhook(db,base_url):
                     if role(local,actor)!='agent':
                         answer_agent(403,{'error':'Bu panelga faqat faol agent kira oladi.'});return
                     action=payload.get('action','dashboard')
-                    if action=='dashboard':
-                        data=agent_api.dashboard(local,actor)
+                    if action in ('dashboard','snapshot'):
+                        data=agent_api.snapshot(local,actor) if action=='snapshot' else agent_api.dashboard(local,actor)
                         local.commit()
                     elif action=='client_detail':
                         data=agent_api.client_detail(local,actor,payload.get('clientId'))
@@ -1534,7 +1534,7 @@ def serve_webhook(db,base_url):
                         local.commit()
                     else:
                         data=agent_api.mutate(local,actor,action,payload,
-                                              payload.get('requestId'))
+                                              payload.get('requestId') or payload.get('nonce'))
                         notify=data.pop('_notify',None)
                         local.commit()
                         if notify and not data.get('duplicate'):
