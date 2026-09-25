@@ -425,11 +425,11 @@ def cashier_expenses_report(db,u):
         raise ValueError('Касса бўлимига рухсат йўқ.')
     rows=db.execute('SELECT e.*,u.name AS cashier_name FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier ORDER BY e.ts DESC,e.id DESC LIMIT 25').fetchall()
     result=['📋 КАССА ХАРАЖАТЛАРИ',f'Ҳозирги касса қолдиғи: {fmt(cashier_balance_usd(db))} USD','']
-    result.extend(f"#{row['id']} · {stamp(row['ts'])} · {fmt(row['amount_usd'])} USD\\n"
-                  f"{row['category']} · {row['recipient']}\\nКассир: {row['cashier_name'] or row['cashier']}"
+    result.extend(f"#{row['id']} · {stamp(row['ts'])} · {fmt(row['amount_usd'])} USD\n"
+                  f"{row['category']} · {row['recipient']}\nКассир: {row['cashier_name'] or row['cashier']}"
                   +(f" · Изоҳ: {row['note']}" if row['note'] else '') for row in rows)
     if not rows:result.append('Ҳали харажат киритилмаган.')
-    send(u,'\\n'.join(result),menu(db,u))
+    send(u,'\n'.join(result),menu(db,u))
 
 
 def review_handover(db,u,hid):
@@ -438,8 +438,8 @@ def review_handover(db,u,hid):
     if not row:raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
     save(db,u,{'action':'handover_review','step':0,'values':{'handover':hid}})
     value=(f"{fmt(row['amount_usd'])} USD" if row['amount_usd'] else f"{fmt(row['amount'])} сўм")
-    send(u,f"🔎 ПУЛНИ ТЕКШИРИШ\\nТопшириқ #{hid}\\nАгент: {row['agent_name'] or row['agent']}\\n"
-         f"Топширилган: {value}\\nВақти: {stamp(row['ts'])}\\n\\nПулни санаб олгандан кейин қарорни танланг. "
+    send(u,f"🔎 ПУЛНИ ТЕКШИРИШ\nТопшириқ #{hid}\nАгент: {row['agent_name'] or row['agent']}\n"
+         f"Топширилган: {value}\nВақти: {stamp(row['ts'])}\n\nПулни санаб олгандан кейин қарорни танланг. "
          'Сумма мос келмаса рад этинг ва агентдан қайта юборишни сўранг.',
          [[f'✅ Қабул қилиш #{hid}',f'❌ Рад этиш #{hid}'],['❌ Бекор қилиш']])
 
@@ -885,9 +885,9 @@ def finish(db,u,s,source):
     elif a=='cashier_expense':
         expense_value=money(v['amount'])
         expense_id=add_cashier_expense(db,u,expense_value,v['category'],v['recipient'],v['note'],source)
-        expense_text=(f"🧾 КАССА ХАРАЖАТИ #{expense_id}\\nКассир: {_staff_name(db,u)}\\n"
-                      f"Тури: {v['category']}\\nСумма: {fmt(expense_value)} USD\\n"
-                      f"Кимга/нимага: {v['recipient']}\\nИзоҳ: {v['note']}\\n"
+        expense_text=(f"🧾 КАССА ХАРАЖАТИ #{expense_id}\nКассир: {_staff_name(db,u)}\n"
+                      f"Тури: {v['category']}\nСумма: {fmt(expense_value)} USD\n"
+                      f"Кимга/нимага: {v['recipient']}\nИзоҳ: {v['note']}\n"
                       f"Қолдиқ: {fmt(cashier_balance_usd(db))} USD")
         _safe_send_many([admin for admin in admin_ids(db) if admin!=u],expense_text)
     elif a=='handover':
@@ -922,7 +922,7 @@ def finish(db,u,s,source):
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
     elif a=='cashier_expense':
-        send(u,f'✅ Харажат #{expense_id} сақланди: {fmt(expense_value)} USD. Админга хабарнома юборилди.\\nКасса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
+        send(u,f'✅ Харажат #{expense_id} сақланди: {fmt(expense_value)} USD. Админга хабарнома юборилди.\nКасса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
     elif a=='handover':
         send(u,'✅ Кассага пул топшириш юборилди. Кассир тасдиғи кутилмоқда.',menu(db,u))
     elif a=='payment':
