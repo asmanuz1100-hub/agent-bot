@@ -163,6 +163,21 @@ class ManagerApiTests(unittest.TestCase):
         # "sold" amount is intentionally not added to financial realization.
         self.assertEqual(sum(p['deliveredUsd'] for p in day['products']),270)
 
+    def test_closed_shift_keeps_last_known_gps_but_never_marks_it_live(self):
+        self.db.execute("""INSERT INTO shifts(id,agent,start,"end",live_id)
+                         VALUES(88,2,?,?,123)""",(self.today+1000,self.today+4000))
+        self.db.execute("""INSERT INTO points(shift,ts,lat,lon,accuracy)
+                         VALUES(88,?,40.444,71.222,6)""",(self.today+3900,))
+        snap=manager_api.dashboard(self.db,self.now)
+        agent=snap['agents'][0]
+        self.assertFalse(agent['shiftOpen'])
+        self.assertEqual(agent['status'],'offline')
+        self.assertEqual(agent['locationSource'],'last')
+        self.assertEqual(agent['lat'],40.444)
+        self.assertEqual(agent['lon'],71.222)
+        self.assertEqual(agent['lastGpsTs'],self.today+3900)
+        self.assertEqual(snap['summary']['workingAgents'],0)
+
     def test_no_fake_gps_no_usd_uzs_mixing_and_pending_separate(self):
         self.db.execute("""INSERT INTO handovers(agent,amount_usd,amount,status,ts)
                          VALUES(2,1000,0,'pending',?)""",(self.now,))
