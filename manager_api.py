@@ -547,6 +547,20 @@ def _agent_period_stats(db,agent_id,start,end,now):
     }
 
 
+
+def agent_management(db):
+    """Compact management list including disabled historical agent accounts."""
+    rows=db.execute("""SELECT u.id,u.name,u.role,
+        (SELECT COUNT(*) FROM clients c WHERE c.agent=u.id) AS clients,
+        EXISTS(SELECT 1 FROM shifts s WHERE s.agent=u.id AND s."end" IS NULL) AS shift_open
+        FROM users u WHERE u.role IN ('agent','disabled')
+        ORDER BY CASE WHEN u.role='agent' THEN 0 ELSE 1 END,u.name,u.id""").fetchall()
+    return {"agents":[{"id":int(r["id"]),"name":r["name"] or str(r["id"]),
+                        "role":r["role"],"active":r["role"]=="agent",
+                        "clients":int(r["clients"] or 0),"shiftOpen":bool(r["shift_open"])}
+                       for r in rows]}
+
+
 def agent_detail(db,agent_id,now=None):
     """Operational + administrative profile for one active or disabled agent."""
     try:agent_id=int(agent_id)
