@@ -42,6 +42,15 @@ class ManagerApiTests(unittest.TestCase):
             manager_api.verify_init_data(raw,'other-token',self.now)
         with self.assertRaisesRegex(ValueError,'muddati'):
             manager_api.verify_init_data(raw,'secret',self.now+3601)
+    def test_telegram_signature_field_keeps_hmac_authentication(self):
+        from urllib.parse import parse_qsl
+        data=dict(parse_qsl(signed_data('secret',1,self.now)))
+        data['signature']='ed25519_example'
+        self.assertEqual(manager_api.verify_init_data(urlencode(data),'secret',self.now),1)
+        data['user']=json.dumps({'id':2})
+        with self.assertRaises(ValueError):
+            manager_api.verify_init_data(urlencode(data),'secret',self.now)
+
     def test_dashboard_reads_real_clients_shifts_gps_and_does_not_mutate(self):
         self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,phone,address,lat,lon,created_ts,map_only)
                          VALUES(101,2,'Buyer','Real shop','+998900000001','Qo‘qon',40.54,70.94,?,1)""",
