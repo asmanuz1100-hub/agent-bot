@@ -30,6 +30,7 @@ class CashierUzsDailyTests(unittest.TestCase):
     def test_pending_handover_stays_pending_and_expense_blocked_until_cashier_accepts(self):
         self.assertEqual(core.cashier_balance_usd(self.db),0)
         self.assertEqual(self.db.execute('SELECT status FROM handovers').fetchone()[0],'pending')
+        core.set_cashier_rate(self.db,3,12500,3000)
         with self.assertRaisesRegex(ValueError,'Кассада'):
             core.add_cashier_expense_uzs(self.db,3,62500,core.CASHIER_EXPENSE_CATEGORIES[1],
                                          'Fuel','',3001)
