@@ -363,7 +363,7 @@ def client_detail(db,agent,cid,now=None):
 
 def route(db,agent):
     _require_agent(db,agent)
-    shift=db.execute("""SELECT id,start,end FROM shifts WHERE agent=?
+    shift=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts WHERE agent=?
         ORDER BY id DESC LIMIT 1""",(agent,)).fetchone()
     if not shift:return {"start":None,"end":None,"points":[]}
     rows=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=?
@@ -372,7 +372,7 @@ def route(db,agent):
     for p in reversed(rows):
         lat,lon=_coord(p['lat'],p['lon'])
         if lat is not None:points.append({"lat":lat,"lon":lon,"ts":int(p['ts'])})
-    return {"start":int(shift['start']),"end":int(shift['end']) if shift['end'] else None,
+    return {"start":int(shift['start']),"end":int(shift['end_ts']) if shift['end_ts'] else None,
             "points":points}
 
 
