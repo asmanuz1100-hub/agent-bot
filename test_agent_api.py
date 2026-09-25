@@ -33,6 +33,10 @@ class AgentLiveApiTests(unittest.TestCase):
                 agent_api.authorize(self.db,signed(uid),TOKEN)
         with self.assertRaises(ValueError):
             agent_api.authorize(self.db,signed(2).replace('id%22%3A+2','id%22%3A+3'),TOKEN)
+        self.db.execute("INSERT INTO meta(key,value) VALUES(?,?)",('secondary_admin:2','1'))
+        with self.assertRaises(PermissionError):
+            agent_api.authorize(self.db,signed(2),TOKEN)
+        self.db.execute("DELETE FROM meta WHERE key=?",('secondary_admin:2',))
 
     def test_snapshot_real_shared_clients_but_only_own_cash_and_shift(self):
         self.db.execute("INSERT INTO shifts(agent,start) VALUES(3,?)",(int(time.time())-100,))
