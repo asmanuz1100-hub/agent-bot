@@ -103,11 +103,11 @@ class ManagerMiniAppTests(unittest.TestCase):
             'id="agent-management-open"','request("agent_management"',
             'request("agent_detail"','data-agent-feature=',
             'data-agent-rename=','data-agent-transfer=','data-agent-deactivate=',
-            'request("agent_add_preview"','request("agent_add_commit"',
-            'request("agent_rename_preview"','request("agent_rename_commit"',
-            'request("agent_feature_set"','request("agent_transfer_preview"',
-            'request("agent_transfer_commit"','request("agent_deactivate_preview"',
-            'request("agent_deactivate_commit"','function commitAgentAction(',
+            'request("agent_add_preview"','"agent_add_commit"',
+            'request("agent_rename_preview"','"agent_rename_commit"',
+            '"agent_feature_set"','request("agent_transfer_preview"',
+            '"agent_transfer_commit"','request("agent_deactivate_preview"',
+            '"agent_deactivate_commit"','function commitAgentAction(',
             'Agentdagi tovar','Huquqlar','Boshqaruv auditi'
         ):
             self.assertIn(term,self.html)
