@@ -29,6 +29,8 @@ class CashierUnconfirmedTests(unittest.TestCase):
         self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
                       VALUES(2,2,6,'payment',4640,?,2001)""",(base+2000,))
         self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
+                      VALUES(2,2,6,'payment',6640,?,2002)""",(base+2100,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
                       VALUES(4,4,7,'payment',6240,?,3000)""",(base+3000,))
 
     def tearDown(self):
@@ -78,10 +80,10 @@ class CashierUnconfirmedTests(unittest.TestCase):
         report=cashier_pending.report(self.db)
         self.assertIn('Кассир тасдиғини кутаётган топшириқлар: 0.00 USD',report)
         self.assertIn('Касса қабул қилган 169.40 USD',report)
-        self.assertIn('Топшириш сўровисиз қолган ҳисобий сумма: 46.40 USD',report)
+        self.assertIn('Топшириш сўровисиз қолган ҳисобий сумма: 112.80 USD',report)
         self.assertNotIn('🔎 Кўриб чиқиш: /review 1',report)
         self.assertEqual(core.cashier_balance_usd(self.db),16940)
-        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0],7)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0],8)
 
     def test_cashier_menu_contains_pending_button(self):
         self.assertIn('⏳ Тасдиқланмаган пуллар',str(bot.menu(self.db,3)))
