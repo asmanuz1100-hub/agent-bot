@@ -56,6 +56,15 @@ nav{max-width:390px!important;border-color:var(--stroke)!important;box-shadow:0 
 
 .customer-profile-hero{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(145deg,#10213f,#2367f5);min-height:200px;margin:-2px 0 14px;box-shadow:0 12px 30px #101e3920}.customer-profile-hero img{display:block;width:100%;height:230px;object-fit:cover}.customer-profile-hero.no-photo{display:grid;place-items:center;color:white}.customer-profile-hero .fallback{font-size:58px}.customer-profile-overlay{position:absolute;left:0;right:0;bottom:0;padding:36px 16px 15px;background:linear-gradient(transparent,#08152ddd);color:#fff}.customer-profile-overlay b{display:block;font-size:20px}.customer-profile-overlay small{display:block;color:#dce8ff;margin-top:4px}.customer-profile-kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}.customer-profile-kpi{border:1px solid #e5ecf5;border-radius:15px;padding:12px;background:#f8faff}.customer-profile-kpi span{display:block;color:#8190a7;font-size:10px}.customer-profile-kpi b{display:block;margin-top:4px;font-size:13px}.sheet{max-height:92vh;overflow:auto}
 .customer-profile{overflow:hidden;margin:-12px -12px 0}.customer-photo{width:100%;height:230px;object-fit:cover;display:block;background:linear-gradient(135deg,#e7eef9,#dce6f5)}.customer-photo-fallback{height:190px;display:grid;place-items:center;background:linear-gradient(135deg,#e7eef9,#dce6f5);color:var(--primary);font-size:56px;font-weight:900}.customer-profile-info{padding:16px 12px 4px}.customer-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}.customer-title-row h3{font-size:18px;margin:0;color:var(--ink)}.customer-title-row p{margin:4px 0 0;color:var(--muted);font-size:10px}.customer-badge{font-size:9px;font-weight:800;border-radius:999px;padding:6px 8px;background:#eaf1ff;color:var(--primary)}.customer-debt{background:var(--navy);color:#fff;border-radius:14px;padding:14px;margin:10px 0}.customer-debt small{display:block;color:#a9b7ce;font-size:9px}.customer-debt b{display:block;font-size:22px;margin-top:4px}.detail-row{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--stroke)}.detail-row:last-child{border-bottom:0}.detail-row span{font-size:10px;color:var(--muted)}.detail-row b{font-size:11px;color:var(--ink);text-align:right;max-width:62%;word-break:break-word}
+
+/* Mobile client photos: image bounds apply to the LIST only. The full photo belongs in the detail sheet. */
+.customer-card{position:relative;overflow:hidden;isolation:isolate;min-width:0}
+.customer-card>.shop-ico.photo{position:relative!important;display:block!important;flex:0 0 56px!important;width:56px!important;min-width:56px!important;max-width:56px!important;height:56px!important;min-height:56px!important;max-height:56px!important;border-radius:13px!important;overflow:hidden!important;background:#e7efff}
+.customer-card>.shop-ico.photo>img{position:absolute!important;inset:0!important;display:block!important;width:56px!important;min-width:56px!important;max-width:56px!important;height:56px!important;min-height:56px!important;max-height:56px!important;object-fit:cover!important;object-position:center!important;margin:0!important;padding:0!important}
+.customer-card>.customer-copy{min-width:0;overflow:hidden}
+.customer-card>.age{flex:none}
+.customer-profile>.customer-photo{display:block;width:100%;height:230px;object-fit:cover}
+@media(max-width:480px){.customer-card{max-width:100%;min-height:76px;max-height:92px;padding:10px;gap:10px}.customer-card>.customer-copy b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.customer-card>.customer-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sheet-bg .sheet{max-width:100vw;max-height:88dvh;overflow-y:auto}}
 </style>
 </head>
 <body class="pb-24">
@@ -303,7 +312,7 @@ function renderCustomers(){
  (!q||(c.name+" "+c.person+" "+c.address+" "+c.agent).toLocaleLowerCase().includes(q))});
  $("customer-list").innerHTML=list.map(function(c){
  var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";
- var media=c.photoUrl?'<span class="shop-ico photo"><img src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></button>'
+ var media=c.photoUrl?'<span class="shop-ico photo"><img src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy" decoding="async" width="56" height="56"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></button>'
  }).join("")||'<div class="empty">Mijoz topilmadi</div>';
 }
 function showCustomer(id){
@@ -395,6 +404,17 @@ document.addEventListener("click",function(e){
   }
  }
 });
+
+/* A missing Telegram photo must never stretch or break the customer list. */
+document.addEventListener("error",function(e){
+ var img=e.target;if(!(img instanceof HTMLImageElement))return;
+ if(img.closest(".customer-card>.shop-ico.photo")){
+  var holder=img.parentElement;if(holder){holder.classList.remove("photo");holder.textContent="▦";holder.setAttribute("aria-label","Rasm mavjud emas");}
+ }else if(img.classList.contains("customer-photo")){
+  var fallback=document.createElement("div");fallback.className="customer-photo-fallback";fallback.textContent="▦";
+  img.replaceWith(fallback);
+ }
+},true);
 $("customer-search").addEventListener("input",renderCustomers);
 $("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",function(e){if(e.target===$("sheet-bg"))closeSheet()});
 $("refresh-data").addEventListener("click",loadDashboard);$("auth-retry").addEventListener("click",loadDashboard);
