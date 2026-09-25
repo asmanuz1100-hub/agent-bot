@@ -22,9 +22,9 @@ services:
       - key: DB_SCHEMA
         value: agentbot
       - key: MANAGER_MINIAPP_URL
-        value: https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1
+        value: https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-photo-mobile-v3
       - key: AGENT_MINIAPP_URL
-        value: https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-agent-mobile-thumb-v2
+        value: https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-agent-photo-retry-v3
       - key: DATABASE_URL
         fromDatabase:
           name: asman-accounting-db-v2
