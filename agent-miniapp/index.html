@@ -173,6 +173,16 @@ html,body{background:#eef5ff}.app{max-width:430px;background:#fff;box-shadow:non
 @media(min-width:760px){.app{margin:18px auto;border-radius:18px;overflow:hidden;box-shadow:0 16px 50px #13386824}.header{border-radius:18px 18px 0 0}.bottom{bottom:18px;border-radius:0 0 18px 18px}.sheet{max-height:88vh}}
 
 
+/* Figma mobile layout: floating KPI sheet and visible interactive CTA */
+.header.is-home{min-height:154px!important;padding-bottom:25px!important}
+.surface{position:relative;z-index:3}
+#page-home .home-greeting{display:none!important}
+#page-home .metrics{margin-top:-26px!important}
+#page-home .metrics .metric .mname{line-height:1.2}
+#page-home .metrics .metric{min-width:0}
+#page-home .metrics .metric strong{overflow:hidden;text-overflow:ellipsis}
+#page-map .chip,#page-clients .chip{min-height:32px}
+#page-detail .split button,#page-home>.primary,#page-cash>.primary{touch-action:manipulation}
 /* ASMAN Figma Premium — mobile layout; existing demo operations preserved */
 :root{--blue:#2367f5;--navy:#101e39;--ink:#101e39;--muted:#8190a7;--line:#e5ecf5;--bg:#f4f7fd;--green:#0daf79;--orange:#e89d2c;--red:#e55265;--shade:0 8px 22px #101e3909}
 html,body{background:#edf2fb!important;color:var(--ink)}.app{width:100%;max-width:430px;background:var(--bg)!important;box-shadow:0 12px 42px #101e3910}
