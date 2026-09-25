@@ -804,6 +804,21 @@ class Tests(unittest.TestCase):
   with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':18_000_001}):
    with self.assertRaises(ValueError):bot.customer_photo_bytes('large-file')
 
+ def test_telegram_photo_without_standard_extension(self):
+  import io
+  jpg=bytes([255,216,255])+b'camera-photo'
+  for index,filename in enumerate(('photos/file_53','photos/file_54.bin','documents/customer_55.heic')):
+   with self.subTest(filename=filename):
+    with patch.object(bot,'TOKEN','local-test-token'),patch.object(bot,'api',return_value={'file_path':filename,'file_size':len(jpg)}),patch.object(bot.urllib.request,'urlopen',return_value=io.BytesIO(jpg)) as opening:
+     self.assertEqual(bot.customer_photo_bytes('unusual-name-'+str(index)),jpg)
+     self.assertIn('/'+filename,opening.call_args.args[0])
+  for index,filename in enumerate(('photos/../bad.jpg','documents/a//b.png','https://example.com/other','photos/img.jpg?hack=1')):
+   with self.subTest(rejected=filename):
+    with patch.object(bot,'api',return_value={'file_path':filename,'file_size':len(jpg)}),patch.object(bot.urllib.request,'urlopen') as opening:
+     with self.assertRaises(ValueError):
+      bot.customer_photo_bytes('invalid-path-'+str(index))
+     opening.assert_not_called()
+
  def test_map_links_expire(self):
   with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'},clear=False),patch.object(bot.time,'time',return_value=2_000_000_000):
    link=bot.map_link('overall')
