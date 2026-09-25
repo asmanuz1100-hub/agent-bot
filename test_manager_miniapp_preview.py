@@ -11,7 +11,7 @@ class ManagerMiniAppTests(unittest.TestCase):
 
     def test_complete_design_and_navigation(self):
         for term in (
-            "ASMAN - Telegram Mini App UI Kit",
+            "ASMAN · Rahbar paneli — Real ma’lumotlar",
             "page-home","page-map","page-customers","page-cash","page-report",
             "Rahbar paneli","Agentlar xaritasi","Mijozlar","Kassa","Hisobot",
             "Tezkor ogohlantirishlar",
