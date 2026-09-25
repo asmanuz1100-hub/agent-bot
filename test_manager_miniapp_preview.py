@@ -98,6 +98,20 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_agent_operations_and_management_controls_exist(self):
+        for term in (
+            'id="agent-management-open"','request("agent_management"',
+            'request("agent_detail"','data-agent-feature=',
+            'data-agent-rename=','data-agent-transfer=','data-agent-deactivate=',
+            'request("agent_add_preview"','"agent_add_commit"',
+            'request("agent_rename_preview"','"agent_rename_commit"',
+            '"agent_feature_set"','request("agent_transfer_preview"',
+            '"agent_transfer_commit"','request("agent_deactivate_preview"',
+            '"agent_deactivate_commit"','function commitAgentAction(',
+            'Agentdagi tovar','Huquqlar','Boshqaruv auditi'
+        ):
+            self.assertIn(term,self.html)
+
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
