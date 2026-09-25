@@ -249,6 +249,15 @@ def dashboard(db, now=None):
        WHERE s.end IS NULL
          AND p.id=(SELECT MAX(p2.id) FROM points p2 WHERE p2.shift=p.shift)""").fetchall()
     points = {int(p["shift"]): p for p in last_points}
+    # Last known GPS is also useful after a shift closes, but it must never be
+    # presented as live. Keep it separately and mark the location source.
+    historical_points = db.execute("""SELECT s.agent,p.lat,p.lon,p.ts,p.accuracy,p.id
+       FROM points p JOIN shifts s ON s.id=p.shift
+       WHERE p.id=(SELECT p2.id FROM points p2
+          JOIN shifts s2 ON s2.id=p2.shift
+          WHERE s2.agent=s.agent ORDER BY p2.ts DESC,p2.id DESC LIMIT 1)
+       ORDER BY s.agent""").fetchall()
+    last_by_agent = {int(p["agent"]): p for p in historical_points}
     visit_rows = db.execute("""SELECT v.actor,v.ts FROM client_visits v
        WHERE v.ts>=? AND v.ts<=?""", (since, now)).fetchall()
     legacy_visits = db.execute("""SELECT agent,ts FROM events
@@ -315,16 +324,20 @@ def dashboard(db, now=None):
     agents = []
     for u in staff:
         uid=int(u["id"]);shift=shifts.get(uid)
-        p=points.get(int(shift["id"])) if shift else None
+        live_point=points.get(int(shift["id"])) if shift else None
+        p=live_point or last_by_agent.get(uid)
         lat,lon=_float_coord(p["lat"],p["lon"]) if p else (None,None)
         ts=int(p["ts"]) if p else None
         status = ("offline" if not shift else
-                  "active" if ts is not None and now-ts<=300 else "late")
+                  "active" if live_point is not None and ts is not None and now-ts<=300 else "late")
+        location_source=("live" if shift and live_point is not None else
+                         "last" if p is not None else "none")
         agents.append({
             "id":uid,"name":u["name"] or str(uid),
             "status":status,"shiftOpen":bool(shift),
             "shiftStart":int(shift["start"]) if shift else None,
             "lastGpsTs":ts,"lat":lat,"lon":lon,
+            "locationSource":location_source,
             "done":visits_today.get(uid,0),
             "late":sum(1 for c in clients if c["agentId"]==uid and c["age"]=="red"),
             "clients":sum(1 for c in clients if c["agentId"]==uid)
