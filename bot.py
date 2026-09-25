@@ -192,6 +192,8 @@ def menu(db,u):
         # Telegram reply-keyboard Web Apps can omit signed initData. Only
         # inline-keyboard web_app launches may access the real admin dashboard.
         rows.insert(0,['📱 Раҳбар Mini App'])
+        if AGENT_MINIAPP_URL:
+            rows.insert(1,['📱 Agent Mini App'])
     elif r=='agent' and AGENT_MINIAPP_URL:
         # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
         # launches can have empty initData, so the button asks the bot to send
@@ -859,10 +861,11 @@ def handle(db,update):
                                                   'web_app':{'url':MANAGER_MINIAPP_URL}}]]})
         return
     if text=='📱 Agent Mini App':
-        if r!='agent' or not AGENT_MINIAPP_URL:
-            raise ValueError('Фақат агент.')
+        if r not in ('agent','admin') or not AGENT_MINIAPP_URL:
+            raise ValueError('Фақат агент ёки админ.')
         api('sendMessage',chat_id=u,
-            text='📱 Agent Mini App · Реал маълумотлар. Қуйидаги тугмадан очинг.',
+            text=('📱 Agent Mini App · Реал маълумотлар. Қуйидаги тугмадан очинг.' if r=='agent'
+                  else '📱 Agent Mini App · Админ назорат режими. Агентни танлаб, маълумотларни кўринг.'),
             reply_markup={'inline_keyboard':[[{'text':'📱 Agent Mini Appни очиш',
                                               'web_app':{'url':AGENT_MINIAPP_URL}}]]})
         return
@@ -1531,17 +1534,33 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor)!='agent':
-                        answer_agent(403,{'error':'Bu panelga faqat faol agent kira oladi.'});return
+                    actor_role=role(local,actor)
+                    if actor_role not in ('agent','admin'):
+                        answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
                     action=payload.get('action','dashboard')
+                    subject=actor
+                    admin_mode=actor_role=='admin'
+                    admin_agents=[]
+                    if admin_mode:
+                        admin_agents=[{'id':int(x['id']),'name':x['name'] or str(x['id'])}
+                                      for x in local.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()]
+                        try:subject=int(payload.get('agentId') or 0)
+                        except (TypeError,ValueError):subject=0
+                        if not any(x['id']==subject for x in admin_agents):
+                            if action in ('dashboard','snapshot'):
+                                answer_agent(200,{'adminMode':True,'readOnly':True,'agents':admin_agents,
+                                    'selectedAgentId':None,'message':'Ko‘rish uchun agentni tanlang.'});return
+                            answer_agent(400,{'error':'Ko‘rish uchun faol agentni tanlang.'});return
+                        if action not in ('dashboard','snapshot','client_detail','route'):
+                            answer_agent(403,{'error':'Admin nazorat rejimi faqat ko‘rish uchun.'});return
                     if action in ('dashboard','snapshot'):
-                        data=agent_api.snapshot(local,actor) if action=='snapshot' else agent_api.dashboard(local,actor)
+                        data=agent_api.snapshot(local,subject) if action=='snapshot' else agent_api.dashboard(local,subject)
                         local.commit()
                     elif action=='client_detail':
-                        data=agent_api.client_detail(local,actor,payload.get('clientId'))
+                        data=agent_api.client_detail(local,subject,payload.get('clientId'))
                         local.commit()
                     elif action=='route':
-                        data=agent_api.route(local,actor)
+                        data=agent_api.route(local,subject)
                         local.commit()
                     else:
                         data=agent_api.mutate(local,actor,action,payload,
@@ -1555,6 +1574,9 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_handover(local,actor,notify['handoverId'],notify['amount'])
                             elif notify.get('kind')=='shift_end':
                                 notify_shift_end(local,actor,notify['shiftId'])
+                    if admin_mode:
+                        data['adminMode']=True;data['readOnly']=True
+                        data['agents']=admin_agents;data['selectedAgentId']=subject
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
