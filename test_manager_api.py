@@ -132,6 +132,36 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(snap['reports']['series'][-1]['deliveredUsd'],100)
         self.assertEqual(snap['reports']['series'][-1]['paymentsUsd'],25)
 
+    def test_general_analysis_has_previous_period_receivable_and_customer_status(self):
+        yesterday=self.today-86400
+        self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
+                         VALUES(250,2,'Fresh','+998900000250',?,0)""",(self.today+100,))
+        self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
+                         VALUES(251,2,'Old','+998900000251',?,0)""",(self.today-7*86400,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,250,'delivery',10000,?)""",(self.today+200,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,250,'payment',4000,?)""",(self.today+300,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,251,'delivery',5000,?)""",(yesterday+200,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,251,'payment',1000,?)""",(yesterday+300,))
+        snap=manager_api.dashboard(self.db,self.now)
+        day=snap['reports']['today']
+        self.assertEqual(day['netReceivableChangeUsd'],60)
+        self.assertEqual(day['paymentToDeliveryPct'],40.0)
+        self.assertEqual(day['previous']['deliveredUsd'],50)
+        self.assertEqual(day['previous']['paymentsUsd'],10)
+        self.assertEqual(day['previous']['netReceivableChangeUsd'],40)
+        self.assertGreaterEqual(snap['summary']['freshClients'],1)
+        self.assertGreaterEqual(snap['summary']['overdueClients'],1)
+        self.assertEqual(
+            snap['summary']['freshClients']+snap['summary']['yellowClients']+
+            snap['summary']['overdueClients']+snap['summary']['scheduledClients']+
+            snap['summary']['unknownClients'],
+            len(snap['clients'])
+        )
+
     def test_product_breakdown_uses_delivery_for_revenue_and_sold_only_for_units(self):
         self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
                          VALUES(301,2,'P buyer','+998900000301',?,0)""",(self.today,))
