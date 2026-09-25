@@ -801,7 +801,7 @@ class Tests(unittest.TestCase):
    self.assertIn('/file/botlocal-test-token/photos/file_12.jpg',urlopen.call_args.args[0])
   with patch.object(bot,'api',return_value={'file_path':'../secret.txt','file_size':3}):
    with self.assertRaises(ValueError):bot.customer_photo_bytes('bad-file')
-  with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':8_000_001}):
+  with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':18_000_001}):
    with self.assertRaises(ValueError):bot.customer_photo_bytes('large-file')
 
  def test_map_links_expire(self):
