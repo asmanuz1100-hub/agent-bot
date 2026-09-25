@@ -24,7 +24,7 @@ services:
       - key: MANAGER_MINIAPP_URL
         value: https://asman-manager-miniapp-test.onrender.com/?v=20260924-2
       - key: AGENT_MINIAPP_URL
-        value: https://asman-agent-miniapp-v2-test.onrender.com/?v=20260924-1
+        value: https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-figma-premium
       - key: DATABASE_URL
         fromDatabase:
           name: asman-accounting-db-v2
