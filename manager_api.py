@@ -47,7 +47,7 @@ def verify_init_data(raw, token, now=None):
         if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
             raise ValueError("Telegram akkaunti aniqlanmadi.")
         return uid
-    except (KeyError, TypeError, OverflowError, json.JSONDecodeError, UnicodeError) as e:
+    except (KeyError, TypeError, AttributeError, OverflowError, json.JSONDecodeError, UnicodeError) as e:
         raise ValueError("Telegram avtorizatsiyasi noto‘g‘ri.") from e
 
 
@@ -72,7 +72,7 @@ def _cash_transactions(db, since):
     return db.execute("""SELECT h.id,h.agent,h.amount_usd,h.amount,h.status,
                h.ts,h.accepted_ts,u.name AS agent_name
         FROM handovers h LEFT JOIN users u ON u.id=h.agent
-        WHERE h.ts>=? ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
+        WHERE (h.ts>=? OR h.status='pending') ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
         (since,)).fetchall()
 
 
@@ -181,7 +181,7 @@ def dashboard(db, now=None):
         transactions.append({
             "id":int(h["id"]),"agent":h["agent_name"] or str(h["agent"]),
             "agentId":int(h["agent"]),"amountUsd":_usd(h["amount_usd"]),
-            "amountUzs":int(h["amount"] or 0),"state":h["status"],
+            "amountUzs":_usd(h["amount"]),"state":h["status"],
             "ts":int(h["ts"] or 0),"acceptedTs":int(h["accepted_ts"] or 0) or None
         })
     # Totals must cover the whole day, independent of the limited activity list.
