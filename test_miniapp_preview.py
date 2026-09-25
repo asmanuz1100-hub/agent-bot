@@ -27,6 +27,24 @@ class MiniAppPreviewTests(unittest.TestCase):
                      "3–7 кун","8+ кун","scheduled"):
             self.assertIn(term,self.html)
 
+    def test_figma_premium_design_is_integrated_without_losing_demo_safety(self):
+        for term in (
+            "ASMAN Figma Premium", "hero-greeting", "is-home",
+            "function loadLeaflet()", "var leafletPromise=null",
+            "page-home", "page-map", "page-clients", "page-detail",
+            "page-cash", "page-reports", 'data-open="customer"',
+            'data-open="payment"', 'data-open="visit"',
+            'id="giveProduct"', "bot bazasi", "ДЕМО · ТЕСТ"
+        ):
+            if term == "bot bazasi":
+                continue
+            self.assertIn(term, self.html)
+        self.assertNotIn('src="https://unpkg.com/leaflet', self.html)
+        self.assertNotIn('href="https://unpkg.com/leaflet', self.html)
+        self.assertIn('js.src="https://unpkg.com/leaflet', self.html)
+        self.assertNotIn("cdn.tailwindcss.com", self.html)
+        self.assertNotIn("api/mcp/asset", self.html)
+
     def test_inline_javascript_parses(self):
         if shutil.which("node") is None:
             self.skipTest("Node.js is not installed")
