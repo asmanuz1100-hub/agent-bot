@@ -161,7 +161,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 </div>
 <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 mt-3">
   <h3 class="text-xs font-bold">Tashriflar dinamikasi</h3>
-  <div class="bars" id="bar-chart"></div>
+  <div class="bars" id="bar-chart"></div><div id="report-agents"></div>
 </div>
 </div>
 
@@ -198,7 +198,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 var API="https://asman-agent-test.onrender.com/api/manager";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",selectedAgent:null,ready:false};
-var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0;
+var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0,dashboardToday=0;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,refreshing=false;
 var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Hisobot"};
 function $(id){return document.getElementById(id)}
@@ -206,7 +206,7 @@ function escapeHtml(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c
 function money(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function when(ts){return ts?new Date(ts*1000).toLocaleString("uz-UZ",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ma’lumot yo‘q"}
 function since(ts){return ts?Math.max(0,Math.floor((Date.now()/1000-ts)/60))+" daqiqa oldin":"GPS kelmagan"}
-function todayStart(){var d=new Date();var parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tashkent",year:"numeric",month:"2-digit",day:"2-digit"}).format(d);return Date.parse(parts+"T00:00:00+05:00")/1000}
+function todayStart(){return dashboardToday||Math.floor(Date.now()/86400000)*86400;}
 function initials(v){return String(v||"?").trim().split(/\s+/).map(function(x){return x[0]||""}).slice(0,2).join("").toUpperCase()}
 function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(function(){el.style.display="none"},2500)}
 function gate(title,msg){$("auth-title").textContent=title;$("auth-message").textContent=msg;$("auth-gate").classList.remove("hidden");state.ready=false}
@@ -214,7 +214,7 @@ function openSheet(title,body){$("sheet-title").textContent=title;$("sheet-body"
 function closeSheet(){$("sheet-bg").classList.remove("open")}
 async function request(action,agentId){
  if(!tg||!tg.initData){throw Error("Haqiqiy ma’lumotlarni ko‘rish uchun Telegram botga /start yuboring, «📱 Rahbar Mini App»ni bosing va chatdagi «Rahbar panelini ochish» tugmasidan kiring. Oddiy brauzer havolasi orqali kirish yopiq.")}
- var controller=new AbortController();var timeout=setTimeout(function(){controller.abort()},18000);
+ var controller=new AbortController();var timeout=setTimeout(function(){controller.abort()},60000);
  try{
   var res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,
    body:JSON.stringify({initData:tg.initData,action:action,agentId:agentId})});
@@ -233,7 +233,7 @@ async function loadDashboard(){
   agents=Array.isArray(data.agents)?data.agents:[];
   customers=Array.isArray(data.clients)?data.clients:[];
   txns=Array.isArray(data.transactions)?data.transactions:[];
-  summary=data.summary||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;
+  summary=data.summary||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;dashboardToday=data.todayStart||0;
   state.ready=true;$("auth-gate").classList.add("hidden");
   $("home-agent-count").textContent=summary.agentCount||0;
   $("home-active-agents").textContent="smenada "+(summary.workingAgents||0);
@@ -336,7 +336,7 @@ function renderCash(){
  var label=t.state==="accepted"?"Qabul qilindi":t.state==="rejected"?"Rad etildi":"Kutilmoqda";
  var klass=t.state==="accepted"?"ok":t.state==="rejected"?"cancel":"wait";
  var value=t.amountUsd?"+"+money(t.amountUsd)+" USD":t.amountUzs?
- "+"+Number(t.amountUzs).toLocaleString("en-US")+" UZS":"0 USD";
+ "+"+money(t.amountUzs)+" UZS":"0 USD";
  return '<div class="txn"><span>▣</span><div class="txn-main"><b>'+escapeHtml(t.agent)+'</b><small>'+
  escapeHtml(when(t.ts))+' · #'+t.id+'</small></div><div style="text-align:right"><b style="font-size:11px">'+escapeHtml(value)+'</b><br><span class="status '+klass+'">'+label+'</span></div></div>';
  }).join("")||'<div class="empty">Tanlangan davrda operatsiya yo‘q</div>';
@@ -348,9 +348,11 @@ function renderReport(){
  var series=reportData.series||[];var max=Math.max(1,...series.map(function(d){return d.visits}));
  $("bar-chart").innerHTML=series.map(function(d){return '<div class="bar"><i style="height:100%;opacity:.16"></i><i class="done" style="height:'+Math.max(d.visits?3:0,Math.round(d.visits/max*100))+'%"></i><span>'+escapeHtml(d.day)+'</span></div>'}).join("")||'<div class="empty">Tashrif qaydlari yo‘q</div>';
  if(state.reportTab==="agents"){
-  var breakdown=agents.map(function(a){return a.name+": "+a.done+" tashrif"}).join(" · ");
-  $("report-visits").title=breakdown;
- } else $("report-visits").title="";
+  $("report-agents").innerHTML=agents.map(function(a){
+   return '<button class="agent-card" type="button" data-agent-profile="'+a.id+'"><span class="agent-avatar">'+escapeHtml(initials(a.name))+'</span><span class="agent-main"><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(agentStatus(a))+'</small></span><span class="agent-status">'+a.done+' tashrif</span></button>';
+  }).join("")||'<div class="empty">Agentlar yo‘q</div>';
+ } else $("report-agents").innerHTML="";
+
 }
 function showAgent(id){
  var a=agents.find(function(x){return x.id===id});if(!a)return;
