@@ -45,6 +45,16 @@ class ManagerMiniAppTests(unittest.TestCase):
         self.assertNotIn('data-approve=',self.html)
         self.assertIn('id="auth-gate"',self.html)
 
+    def test_cash_control_has_balance_expenses_pending_and_period_kpis(self):
+        for term in (
+            'Joriy hisobiy qoldiq','id="cash-kpi-1"','id="cash-kpi-2"','id="cash-kpi-3"',
+            'id="cash-entry-count"','cashData=data.cash||{}',
+            'function cashEventTs(','t.type==="expense"',
+            'cash.expensesTodayUsd','cash.expensesWeekUsd',
+            'cash.pendingCount','Kassa rasxodi'
+        ):
+            self.assertIn(term,self.html)
+
     def test_report_center_has_finance_route_and_agent_controls(self):
         for term in (
             'data-report-tab="today"','data-report-tab="week"','data-report-tab="month"',
