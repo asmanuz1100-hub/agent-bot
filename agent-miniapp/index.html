@@ -33,10 +33,12 @@ nav button{border:0;background:transparent;min-height:44px;border-radius:11px;fo
 .bar{height:10px;border-radius:10px;background:#e9f0ff;overflow:hidden;margin:6px 0 10px}.bar i{display:block;height:100%;background:var(--blue)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(min-width:760px){.app{margin:20px auto;border-radius:20px;overflow:hidden;box-shadow:0 15px 50px #101e3915}nav{bottom:20px;border-radius:0 0 20px 20px}}
+.adminbar{display:none;background:#eaf1ff;border-bottom:1px solid #d9e5ff;padding:10px 16px;align-items:center;gap:9px}.adminbar.show{display:flex}.adminbar b{font-size:10px;color:#2367f5;white-space:nowrap}.adminbar select{margin:0;padding:8px 10px;font-size:11px}.admin-readonly [data-action],.admin-readonly #startShift,.admin-readonly #endShift{display:none!important}.admin-readonly #shiftHint:after{content:" · Admin rejimida o‘zgartirish yopiq."}.picker{display:none;margin-top:12px}.picker.show{display:block}.picker select{margin-bottom:9px}
 </style></head>
 <body>
-<div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat agentning Telegram akkauntidan ochiladi.</p></div></div>
+<div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ko‘rish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
 <div class="app"><header><div class="top"><span class="logo">ASMAN</span><span class="tag">AGENT PANELI · REAL</span></div><div class="greet" id="greet">Assalomu alaykum!</div><div class="sub" id="headerDesc">Bot ma’lumotlari yuklanmoqda…</div></header>
+<div class="adminbar" id="adminBar"><b>ADMIN · KO‘RISH</b><select id="adminAgent"></select></div>
 <main>
 <section class="view active" id="page-home">
  <div class="kpis">
@@ -63,7 +65,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,filter="all",mapFilter="all",period="day",formAction="",backPage="home",busy=false,nonce=null,reviewing=false,map=null,mapPins=null,mapPromise=null,routeLine=null,routeMap=null;
+var data=null,current="home",selected=null,filter="all",mapFilter="all",period="day",formAction="",backPage="home",busy=false,nonce=null,reviewing=false,map=null,mapPins=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -76,14 +78,23 @@ async function request(action,extra){
  if(!tg||!tg.initData)throw Error("Botga /start yuboring → «📱 Agent Mini App» → chatdagi «Agent Mini App ochish» tugmasini bosing. Oddiy brauzer havolasi ishlamaydi.");
  var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},60000);
  try{
-  var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,body:JSON.stringify(Object.assign({initData:tg.initData,action:action},extra||{}))});
+  var base={initData:tg.initData,action:action};if(adminAgentId)base.agentId=adminAgentId;
+  var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,body:JSON.stringify(Object.assign(base,extra||{}))});
   var body=await r.json();if(!r.ok)throw Error(body.error||"Server xatosi ("+r.status+")");return body
  }catch(e){if(e.name==="AbortError")throw Error("Server javob bermadi. Qayta urinib ko‘ring.");throw e}
  finally{clearTimeout(timer)}
 }
 async function refresh(){
  if(busy)return;busy=true;try{
-  data=await request("snapshot");$("gate").classList.add("hidden");
+  data=await request("snapshot");
+  if(data.adminMode&&!data.readOnly)throw Error("Admin nazorat rejimi xavfsiz emas.");
+  if(data.adminMode&&!data.me){
+   var options=(data.agents||[]).map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+'</option>'}).join("");
+   $("gateAgent").innerHTML=options;$("adminPicker").classList.add("show");$("retry").style.display="none";
+   fail(options?"Nazorat rejimi: ko‘rish uchun agentni tanlang.":"Faol agent topilmadi.");return
+  }
+  $("gate").classList.add("hidden");
+  if(data.adminMode){document.body.classList.add("admin-readonly");$("adminBar").classList.add("show");var opts=data.agents.map(function(a){return '<option value="'+a.id+'" '+(a.id===data.selectedAgentId?'selected':'')+'>'+esc(a.name)+'</option>'}).join("");$("adminAgent").innerHTML=opts}
   $("greet").textContent="Assalomu alaykum, "+data.me.name+"!";
   $("headerDesc").textContent="Real ma’lumotlar · yangilandi "+date(data.generatedTs);
   $("kVisits").textContent=data.summary.visitsToday;
@@ -252,6 +263,8 @@ $("search").addEventListener("input",renderClients);
 $("operationForm").addEventListener("submit",saveForm);
 $("operationForm").addEventListener("input",function(){if(reviewing){reviewing=false;nonce=null;$("review").style.display="none";$("submitForm").textContent="Davom etish · Tekshirish"}});
 $("retry").addEventListener("click",refresh);
+$("openAgent").addEventListener("click",function(){adminAgentId=safeId($("gateAgent").value);$("adminPicker").classList.remove("show");refresh()});
+$("adminAgent").addEventListener("change",function(){adminAgentId=safeId(this.value);selected=null;refresh()});
 async function showMyRoute(){
  try{var r=await request("route");$("routeSummary").textContent=r.points.length+" ta GPS nuqtasi. Boshlanishi: "+date(r.start)+"; tugashi: "+date(r.end);if(!r.points.length)return;
  var L=await loadLeaflet();$("routeMap").style.display="block";
