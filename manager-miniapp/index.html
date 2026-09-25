@@ -55,6 +55,7 @@ nav{max-width:390px!important;border-color:var(--stroke)!important;box-shadow:0 
 @media(prefers-color-scheme:dark){html,body{background:var(--canvas);color:var(--ink)}.customer-card,.txn,.report-kpi,.sheet,#agent-list .agent-card{background:#fff;border-color:var(--stroke)}.dark\:bg-gray-800,.dark\:bg-gray-900{background:#fff}.dark\:text-gray-200,.dark\:text-gray-300{color:var(--ink)}}
 
 .customer-profile-hero{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(145deg,#10213f,#2367f5);min-height:200px;margin:-2px 0 14px;box-shadow:0 12px 30px #101e3920}.customer-profile-hero img{display:block;width:100%;height:230px;object-fit:cover}.customer-profile-hero.no-photo{display:grid;place-items:center;color:white}.customer-profile-hero .fallback{font-size:58px}.customer-profile-overlay{position:absolute;left:0;right:0;bottom:0;padding:36px 16px 15px;background:linear-gradient(transparent,#08152ddd);color:#fff}.customer-profile-overlay b{display:block;font-size:20px}.customer-profile-overlay small{display:block;color:#dce8ff;margin-top:4px}.customer-profile-kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}.customer-profile-kpi{border:1px solid #e5ecf5;border-radius:15px;padding:12px;background:#f8faff}.customer-profile-kpi span{display:block;color:#8190a7;font-size:10px}.customer-profile-kpi b{display:block;margin-top:4px;font-size:13px}.sheet{max-height:92vh;overflow:auto}
+.customer-profile{overflow:hidden;margin:-12px -12px 0}.customer-photo{width:100%;height:230px;object-fit:cover;display:block;background:linear-gradient(135deg,#e7eef9,#dce6f5)}.customer-photo-fallback{height:190px;display:grid;place-items:center;background:linear-gradient(135deg,#e7eef9,#dce6f5);color:var(--primary);font-size:56px;font-weight:900}.customer-profile-info{padding:16px 12px 4px}.customer-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}.customer-title-row h3{font-size:18px;margin:0;color:var(--ink)}.customer-title-row p{margin:4px 0 0;color:var(--muted);font-size:10px}.customer-badge{font-size:9px;font-weight:800;border-radius:999px;padding:6px 8px;background:#eaf1ff;color:var(--primary)}.customer-debt{background:var(--navy);color:#fff;border-radius:14px;padding:14px;margin:10px 0}.customer-debt small{display:block;color:#a9b7ce;font-size:9px}.customer-debt b{display:block;font-size:22px;margin-top:4px}.detail-row{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--stroke)}.detail-row:last-child{border-bottom:0}.detail-row span{font-size:10px;color:var(--muted)}.detail-row b{font-size:11px;color:var(--ink);text-align:right;max-width:62%;word-break:break-word}
 </style>
 </head>
 <body class="pb-24">
@@ -308,15 +309,14 @@ function renderCustomers(){
 function showCustomer(id){
  var c=customers.find(function(x){return x.id===id});if(!c)return;
  var status={active:"Tovar olgan",interested:"Taklif berilgan",waiting:"Kutilmoqda",declined:"Hozircha olmaydi"}[c.status]||c.status;
- var hero=c.photoUrl?'<div class="customer-profile-hero"><img src="'+escapeHtml(c.photoUrl)+'" alt="'+escapeHtml(c.name)+'" loading="eager"><div class="customer-profile-overlay"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.person||"Mijoz")+'</small></div></div>':'<div class="customer-profile-hero no-photo"><div class="fallback">▦</div><div class="customer-profile-overlay"><b>'+escapeHtml(c.name)+'</b><small>Rasm hali biriktirilmagan</small></div></div>';
- var body=hero+'<div class="customer-profile-kpis"><div class="customer-profile-kpi"><span>USD qarz</span><b>'+money(c.debtUsd)+' USD</b></div><div class="customer-profile-kpi"><span>Oxirgi aloqa</span><b>'+escapeHtml(when(c.lastTs))+'</b></div></div>';
- var rows=[["Mijoz",c.person],["Telefon",c.phone],["Manzil",c.address],["Mas’ul agent",c.agent],
-           ["Holat",status],["Qo‘shilgan sana",when(c.createdTs)],["Keyingi tashrif",c.followup||"Belgilanmagan"],["Izoh",c.note||"—"]];
- body+=rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1]||"—")+'</b></div>'}).join("");
+ var photo=c.photoUrl?'<img class="customer-photo" src="'+escapeHtml(c.photoUrl)+'" alt="'+escapeHtml(c.name)+' rasmi" loading="eager">':'<div class="customer-photo-fallback">▦</div>';
+ var body='<div class="customer-profile">'+photo+'<div class="customer-profile-info"><div class="customer-title-row"><div><h3>'+escapeHtml(c.name)+'</h3><p>'+escapeHtml(c.person||"Mijoz")+'</p></div><span class="customer-badge">'+escapeHtml(status||"Holat")+'</span></div><div class="customer-debt"><small>Joriy qarz</small><b>'+money(c.debtUsd)+' USD</b></div>';
+ var rows=[["Telefon",c.phone],["Manzil",c.address],["Mas’ul agent",c.agent],["Qo‘shilgan sana",when(c.createdTs)],["Oxirgi aloqa",when(c.lastTs)],["Keyingi tashrif",c.followup||"Belgilanmagan"],["Izoh",c.note||"—"]];
+ body+=rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1])+'</b></div>'}).join("")+'</div></div>';
  if(Number.isFinite(c.lat)&&Number.isFinite(c.lon)){
   body+='<button type="button" class="mini-btn primary" style="width:100%;margin-top:12px" data-navigate="'+c.id+'">Navigator</button>';
  }
- openSheet(c.name,body);
+ openSheet("Mijoz kartochkasi",body);
 }
 function renderCash(){
  var day=todayStart(),week=day-6*86400;
