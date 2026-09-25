@@ -117,7 +117,7 @@ def dashboard(db, now=None):
             visits_today[actor] = visits_today.get(actor, 0) + 1
     all_clients = db.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
     rows = db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.phone,c.address,
-         c.lat,c.lon,c.comment,c.payment_due,c.created_ts,c.map_only,
+         c.lat,c.lon,c.photo,c.comment,c.payment_due,c.created_ts,c.map_only,
          u.name AS agent_name
          FROM clients c LEFT JOIN users u ON u.id=c.agent
          ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
@@ -165,6 +165,7 @@ def dashboard(db, now=None):
             "agentId":int(c["agent"]),"lat":lat,"lon":lon,
             "status":status,"age":age,"days":days,"lastTs":last or None,
             "followup":followup or None,"note":(v["note"] if v else c["comment"]) or "",
+            "createdTs":int(c["created_ts"] or 0) or None,"hasPhoto":bool(c["photo"]),
             "debtUsd":_usd(debt_by_client.get(cid,0))
         })
     agents = []
