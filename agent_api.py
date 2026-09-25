@@ -25,6 +25,7 @@ STATUS_LABELS={
     "declined":"Ҳозирча олмайди",
 }
 FEATURE_ACTION={
+    "client":"client",
     "add_client":"client",
     "client_detail":"clients",
     "visit":"visit",
@@ -275,6 +276,68 @@ def dashboard(db,agent,now=None):
     }
 
 
+def snapshot(db,agent,now=None):
+    """Compatibility shape consumed by the premium Agent Mini App UI."""
+    now=int(time.time() if now is None else now)
+    base=dashboard(db,agent,now)
+    today=base["todayStart"];week=today-6*86400;month=today-29*86400
+    cash_on_hand=int(core.cash_usd(db,agent))
+    pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE agent=? AND status='pending'""",(agent,)).fetchone()[0] or 0)
+    event_rows=db.execute("""SELECT e.id,e.kind,e.client,e.pack,e.qty,e.amount_usd,e.ts,
+        c.shop_name,c.name FROM events e LEFT JOIN clients c ON c.id=e.client
+        WHERE e.agent=? AND e.ts>=? AND e.kind IN ('delivery','sold','return','payment','order','visit')
+        ORDER BY e.ts DESC,e.id DESC LIMIT 500""",(agent,month)).fetchall()
+    events=[{"id":int(e["id"]),"kind":e["kind"],
+             "clientId":int(e["client"]) if e["client"] is not None else None,
+             "shop":e["shop_name"] or e["name"] or (f"Mijoz #{e['client']}" if e["client"] else ""),
+             "pack":int(e["pack"] or 0),"qty":int(e["qty"] or 0),
+             "amountUsd":_usd(e["amount_usd"]),"ts":int(e["ts"])} for e in event_rows]
+    hand_rows=db.execute("""SELECT id,amount_usd,status,ts,accepted_ts FROM handovers
+        WHERE agent=? AND (ts>=? OR status='pending') ORDER BY ts DESC,id DESC LIMIT 300""",
+        (agent,month)).fetchall()
+    handovers=[{"id":int(h["id"]),"amountUsd":_usd(h["amount_usd"]),
+                "status":h["status"],"ts":int(h["ts"]),
+                "acceptedTs":int(h["accepted_ts"] or 0) or None} for h in hand_rows]
+    def p(lo):
+        row=db.execute("""SELECT
+          COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
+          COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0)
+          FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
+        return {"visits":int(db.execute("""SELECT COUNT(*) FROM client_visits
+                    WHERE actor=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
+                "newClients":int(db.execute("""SELECT COUNT(*) FROM clients
+                    WHERE agent=? AND created_ts>=? AND created_ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
+                "paymentsUsd":_usd(row[0]),"goods":int(row[1] or 0)}
+    clients=[]
+    for c in base["clients"]:
+        item=dict(c)
+        item["agent"]=item.pop("owner")
+        item["agentId"]=item.pop("ownerId")
+        item["comment"]=item.get("note","")
+        item["status"]=item.get("statusLabel") or item.get("status")
+        clients.append(item)
+    products=[{"pack":x["pack"],"name":x["name"],"priceUsd":x["priceUsd"],
+               "stock":x["agentStock"],"blockUnits":x["blockUnits"]} for x in base["products"]]
+    shift=base["shift"]
+    return {"generatedTs":base["generatedTs"],"timezone":base["timezone"],
+            "me":{"id":base["profile"]["id"],"name":base["profile"]["name"],
+                  "shiftOpen":shift["open"],"shiftStart":shift["start"],
+                  "liveAttached":shift["liveConnected"],
+                  "gps":{"ts":shift["lastGpsTs"],"lat":shift["lat"],"lon":shift["lon"]}},
+            "features":base["features"],"clients":clients,"products":products,
+            "events":events,"handovers":handovers,
+            "summary":{"visitsToday":base["summary"]["visitsToday"],
+                       "newClientsToday":base["summary"]["newClientsToday"],
+                       "paymentTodayUsd":base["summary"]["paymentsTodayUsd"],
+                       "goodsToday":base["summary"]["deliveryTodayQty"],
+                       "cashOnHandUsd":_usd(cash_on_hand),
+                       "cashAvailableUsd":_usd(max(0,cash_on_hand-pending))},
+            "period":{"day":p(today),"week":p(week),"month":p(month)},
+            "clientCount":len(clients),
+            "truncated":int(db.execute("SELECT COUNT(*) FROM clients").fetchone()[0] or 0)>MAX_CLIENTS}
+
+
 def client_detail(db,agent,cid,now=None):
     _require_agent(db,agent);_feature(db,agent,'clients')
     c=_client(db,cid);now=int(time.time() if now is None else now)
@@ -333,9 +396,9 @@ def mutate(db,agent,action,payload,request_id,now=None):
         if not shift:return {"ok":True,"message":"Ochiq smena yo‘q."}
         db.execute("UPDATE shifts SET end=? WHERE id=?",(now,shift['id']))
         return {"ok":True,"message":"Ish tugadi. Telegramdagi jonli lokatsiyani ham to‘xtating."}
-    if action=="add_client":
-        shop=str(payload.get("shopName") or "").strip()
-        name=str(payload.get("name") or "").strip() or shop
+    if action in ("client","add_client"):
+        shop=str(payload.get("shopName") or payload.get("shop") or "").strip()
+        name=str(payload.get("name") or payload.get("person") or "").strip() or shop
         address=str(payload.get("address") or "").strip()
         note=str(payload.get("note") or "").strip()
         if not shop or len(shop)>120:raise ValueError("Do‘kon nomini kiriting.")
@@ -350,8 +413,8 @@ def mutate(db,agent,action,payload,request_id,now=None):
         lat,lon=_coord(payload.get("lat"),payload.get("lon"))
         if lat is None:raise ValueError("Mijoz joylashuvini GPS orqali belgilang.")
         status=str(payload.get("status") or "interested")
-        if status not in ("interested","waiting","declined"):
-            raise ValueError("Yangi tovarsiz mijoz maqomi noto‘g‘ri.")
+        if status not in cs.LABELS:
+            raise ValueError("Mijoz maqomi noto‘g‘ri.")
         followup=payload.get("followup") or None
         followup=cs.normalize(status,followup)
         cur=db.execute("""INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,
@@ -407,9 +470,24 @@ def mutate(db,agent,action,payload,request_id,now=None):
     if action=="return":
         ok,msg=_live_ready(db,agent,now=now)
         if not ok:raise ValueError(msg)
-        try:pack=int(payload.get("pack"));qty=int(payload.get("qty"))
-        except (TypeError,ValueError):raise ValueError("Qaytarish miqdori noto‘g‘ri.")
-        core.record(db,agent,agent,cid,'return',pack,qty,0,'Mini App',source,currency='USD')
-        cs.add_visit(db,agent,cid,'active',f"Tovar qaytarildi: {core.product_name(pack)} {qty} dona")
+        items=payload.get("items")
+        if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:
+            raise ValueError("Qaytariladigan tovarni kiriting.")
+        clean=[]
+        for item in items:
+            if not isinstance(item,dict):raise ValueError("Qaytarish noto‘g‘ri.")
+            try:pack=int(item.get("pack"));qty=int(item.get("qty"))
+            except (TypeError,ValueError):raise ValueError("Qaytarish miqdori noto‘g‘ri.")
+            if pack not in (1,3,5) or qty<=0 or qty>100000:
+                raise ValueError("Qaytarish miqdori noto‘g‘ri.")
+            clean.append((pack,qty))
+        for pack,qty in clean:
+            if core.client_stock_total(db,cid,pack)<qty:
+                raise ValueError(f"{core.product_name(pack)} mijozda yetarli emas.")
+        for idx,(pack,qty) in enumerate(clean):
+            core.record(db,agent,agent,cid,'return',pack,qty,0,'Mini App',
+                        _source(agent,request_id,idx+1),currency='USD')
+        cs.add_visit(db,agent,cid,'active','Tovar qaytarildi: '+', '.join(
+            f"{core.product_name(pack)} {qty} dona" for pack,qty in clean))
         return {"ok":True,"message":"Tovar qaytarildi va qarz yangilandi."}
     raise ValueError("Amal noto‘g‘ri.")
