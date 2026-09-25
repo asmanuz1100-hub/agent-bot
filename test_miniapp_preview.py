@@ -43,6 +43,17 @@ class MiniAppPreviewTests(unittest.TestCase):
         self.assertNotIn("cdn.tailwindcss.com", self.html)
         self.assertNotIn("api/mcp/asset", self.html)
 
+    def test_shift_buttons_send_only_known_telegram_webapp_actions(self):
+        for term in ('id="shiftStart"', 'id="shiftEnd"',
+                     'var SHIFT_START_DATA="asman.shift.start.v1"',
+                     'SHIFT_END_DATA="asman.shift.end.v1"',
+                     'tg.sendData(end?SHIFT_END_DATA:SHIFT_START_DATA)',
+                     'typeof tg.sendData!=="function"',
+                     'Ишни тугатасизми?',
+                     'Жонли локацияни Telegram чатидан ўзингиз уланг'):
+            self.assertIn(term,self.html)
+        self.assertNotIn('asman.shift.start.v1"+"',self.html)
+
     def test_inline_javascript_parses(self):
         if shutil.which("node") is None:
             self.skipTest("Node.js is not installed")
