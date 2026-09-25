@@ -171,7 +171,7 @@ async function renderMap(){
  }catch(e){$("mapNote").textContent="Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi."}
 }
 function field(name,label,type,placeholder,required){
- return '<label for="'+name+'">'+label+'</label><input id="'+name+'" name="'+name+'" type="'+(type||"text")+'" placeholder="'+esc(placeholder||"")+'" '+(required?"required":"")+' autocomplete="off">';
+ return '<label for="'+name+'">'+label+'</label><input id="'+name+'" name="'+name+'" type="'+(type||"text")+'" '+(type==="number"?'step="any" inputmode="decimal"':"")+' placeholder="'+esc(placeholder||"")+'" '+(required?"required":"")+' autocomplete="off">';
 }
 function clientSelect(){return '<label>Mijoz</label><select name="clientId" required>'+data.clients.map(function(c){return '<option value="'+c.id+'" '+(c.id===selected?"selected":"")+'>'+esc(c.name)+'</option>'}).join("")+'</select>'}
 function packLine(i){return '<div class="grid2"><div><label>Qadoq</label><select name="pack'+i+'">'+data.products.map(function(p){return '<option value="'+p.pack+'">'+p.pack+' kg · '+fmt(p.priceUsd)+' USD</option>'}).join("")+'</select></div><div>'+field("qty"+i,"Dona","number","1",true)+'</div></div>'}
