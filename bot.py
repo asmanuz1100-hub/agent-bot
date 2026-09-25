@@ -8,6 +8,7 @@ from core import *
 import reports
 import customer_status as cs
 import manager_api
+import agent_api
 STOP=False
 def stop_signal(*_):
     global STOP
@@ -19,7 +20,7 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
-AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-shift-v1').strip()
+AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-agent-live-v1').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -192,7 +193,10 @@ def menu(db,u):
         # inline-keyboard web_app launches may access the real admin dashboard.
         rows.insert(0,['📱 Раҳбар Mini App'])
     elif r=='agent' and AGENT_MINIAPP_URL:
-        rows.insert(0,[{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}])
+        # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
+        # launches can have empty initData, so the button asks the bot to send
+        # a private inline WebApp launcher instead.
+        rows.insert(0,['📱 Agent Mini App'])
     return rows
 
 AGENT_WORK_ACTIONS={'client','delivery','sold','order','payment','return','visit','handover'}
@@ -843,6 +847,14 @@ def handle(db,update):
             reply_markup={'inline_keyboard':[[{'text':'📱 Раҳбар панелини очиш',
                                                   'web_app':{'url':MANAGER_MINIAPP_URL}}]]})
         return
+    if text=='📱 Agent Mini App':
+        if r!='agent' or not AGENT_MINIAPP_URL:
+            raise ValueError('Фақат агент.')
+        api('sendMessage',chat_id=u,
+            text='📱 Agent Mini App · Реал маълумотлар. Қуйидаги тугмадан очинг.',
+            reply_markup={'inline_keyboard':[[{'text':'📱 Agent Mini Appни очиш',
+                                              'web_app':{'url':AGENT_MINIAPP_URL}}]]})
+        return
     if text.startswith('/start '):
         open_agent_client_action(db,u,text[7:].strip());return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
@@ -934,7 +946,7 @@ def handle(db,update):
         if action=='shift':
             if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(u,)).fetchone():raise ValueError('Иш аллақачон бошланган.')
             db.execute('INSERT INTO shifts(agent,start) VALUES(?,?)',(u,m['date']))
-            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([ [{'text':'📱 Agent Mini App','web_app':{'url':AGENT_MINIAPP_URL}}] ] if AGENT_MINIAPP_URL else [])+
+            send(u,'Иш бошланди ✅\n\n📍 ДИҚҚАТ: иш сменаси давомида жонли локациянгиз қайд этилади. Админ сизнинг жорий жойлашувингиз ва ҳаракат маршрутиингизни кузатиши мумкин. Локация фақат иш сменаси учун талаб қилинади.\n\nTelegram бот локацияни ўз номингиздан автомат ёқа олмайди. 📎 → «Локация» → «Жонли локацияни улашиш»ни ўзингиз босинг.\n\n«⏹ Ишни тугатиш» босилганда бот GPS қабул қилишни тўхтатади, лекин Telegram ичида улашишни ҳам ўзингиз тўхтатинг.',([['📱 Agent Mini App']] if AGENT_MINIAPP_URL else [])+
                  [['ℹ️ Локация ёрдами'],['⏹ Ишни тугатиш']]);return
         if action=='end':
             shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(u,)).fetchone()
@@ -1337,16 +1349,21 @@ def serve_webhook(db,base_url):
             self.send_header('Content-Length',str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        def _manager_headers(self):
+        def _cors_headers(self,allowed_origin):
             origin=self.headers.get('Origin','')
-            if origin!='https://asman-manager-miniapp-test.onrender.com':
-                return None
+            if origin!=allowed_origin:return None
             return {'Access-Control-Allow-Origin':origin,'Vary':'Origin',
                     'Access-Control-Allow-Methods':'POST, OPTIONS',
                     'Access-Control-Allow-Headers':'Content-Type'}
+        def _manager_headers(self):
+            return self._cors_headers('https://asman-manager-miniapp-test.onrender.com')
+        def _agent_headers(self):
+            return self._cors_headers('https://asman-agent-miniapp-v2-test.onrender.com')
         def do_OPTIONS(self):
-            headers=self._manager_headers()
-            if urlparse(self.path).path!='/api/manager' or headers is None:
+            req_path=urlparse(self.path).path
+            headers=self._manager_headers() if req_path=='/api/manager' else (
+                    self._agent_headers() if req_path=='/api/agent' else None)
+            if headers is None:
                 self._reply(403,b'Forbidden');return
             self._reply(204,b'',extra_headers=headers)
         def do_HEAD(self):
@@ -1483,6 +1500,59 @@ def serve_webhook(db,base_url):
                 return
             self._reply(404,b'Not found')
         def do_POST(self):
+            if urlparse(self.path).path=='/api/agent':
+                headers=self._agent_headers()
+                if headers is None or self.path!='/api/agent':
+                    self._reply(403,b'Forbidden');return
+                def answer_agent(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                                'application/json; charset=utf-8',headers)
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if length<2 or length>100_000:
+                        answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):
+                        answer_agent(400,{'error':'So‘rov noto‘g‘ri.'});return
+                    actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
+                except (ValueError,TypeError,json.JSONDecodeError):
+                    answer_agent(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
+                local=None
+                try:
+                    local=request_db()
+                    if role(local,actor)!='agent':
+                        answer_agent(403,{'error':'Bu panelga faqat faol agent kira oladi.'});return
+                    action=payload.get('action','dashboard')
+                    if action in ('dashboard','snapshot'):
+                        data=agent_api.snapshot(local,actor) if action=='snapshot' else agent_api.dashboard(local,actor)
+                        local.commit()
+                    elif action=='client_detail':
+                        data=agent_api.client_detail(local,actor,payload.get('clientId'))
+                        local.commit()
+                    elif action=='route':
+                        data=agent_api.route(local,actor)
+                        local.commit()
+                    else:
+                        data=agent_api.mutate(local,actor,action,payload,
+                                              payload.get('requestId') or payload.get('nonce'))
+                        notify=data.pop('_notify',None)
+                        local.commit()
+                        if notify and not data.get('duplicate'):
+                            if notify.get('kind')=='payment':
+                                notify_cashiers_payment(local,actor,notify['client'],notify['amount'])
+                            elif notify.get('kind')=='handover':
+                                notify_cashiers_handover(local,actor,notify['handoverId'],notify['amount'])
+                    answer_agent(200,data)
+                except ValueError as e:
+                    if local is not None:local.rollback()
+                    answer_agent(400,{'error':str(e)})
+                except Exception:
+                    if local is not None:local.rollback()
+                    logging.exception('Authenticated agent API request failed')
+                    answer_agent(500,{'error':'Ma’lumotlarni saqlab bo‘lmadi. Qayta urinib ko‘ring.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
             if urlparse(self.path).path=='/api/manager':
                 headers=self._manager_headers()
                 if headers is None or self.path!='/api/manager':

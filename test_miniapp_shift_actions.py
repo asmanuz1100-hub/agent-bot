@@ -35,9 +35,7 @@ class AgentMiniAppShiftTests(unittest.TestCase):
             self.assertEqual(shift['start'],now)
             self.assertIsNone(shift['live_id'])
             self.assertIn('жонли локация',send.call_args.args[1])
-            self.assertTrue(any(isinstance(button,dict) and button.get('web_app')
-                                and button['text']=='📱 Agent Mini App'
-                                for row in send.call_args.args[2] for button in row))
+            self.assertIn('📱 Agent Mini App',[button for row in send.call_args.args[2] for button in row])
             with self.assertRaisesRegex(ValueError,'аллақачон'):
                 bot.handle(self.db,self.webapp_update('asman.shift.start.v1',update_id=2,ts=now+1))
             self.assertEqual(self.db.execute('SELECT COUNT(*) FROM shifts WHERE agent=2').fetchone()[0],1)

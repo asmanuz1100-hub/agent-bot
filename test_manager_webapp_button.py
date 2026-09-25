@@ -16,9 +16,8 @@ class ManagerMiniAppButtonTests(unittest.TestCase):
         admin_rows=bot.menu(self.db,1)
         self.assertIn('📱 Раҳбар Mini App',[b for row in admin_rows for b in row])
         self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in admin_rows for b in row))
-        agent_buttons=[b for row in bot.menu(self.db,2) for b in row if isinstance(b,dict) and b.get('web_app')]
-        self.assertEqual(len(agent_buttons),1)
-        self.assertEqual(agent_buttons[0]['text'],'📱 Agent Mini App')
+        self.assertIn('📱 Agent Mini App',[b for row in bot.menu(self.db,2) for b in row])
+        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in bot.menu(self.db,2) for b in row))
         self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in bot.menu(self.db,3) for b in row))
         with patch.object(bot,'api') as api:
             message={'from':{'id':1},'chat':{'id':1,'type':'private'},'text':'📱 Раҳбар Mini App','date':1234}
