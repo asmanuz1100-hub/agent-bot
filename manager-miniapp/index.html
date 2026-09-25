@@ -89,6 +89,10 @@ header .max-w-md,.page-content,nav{max-width:430px!important}
 nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:19px 19px 0 0!important;box-shadow:0 -8px 30px #0b183012!important;padding:7px 12px calc(7px + env(safe-area-inset-bottom))!important}.fixed.bottom-0{left:50%!important;right:auto!important;transform:translateX(-50%);width:min(100%,430px)}nav button{min-width:55px!important;padding:7px 5px!important;border-radius:11px!important}nav button.active{background:#eaf1ff!important}nav button i{font-size:16px!important}nav button span{font-size:7.5px!important}
 @media(max-width:350px){.exec-kpi-grid,.exec-shortcuts{grid-template-columns:1fr}.exec-cash-grid{grid-template-columns:1fr}.exec-cash-pending{display:flex;justify-content:space-between;align-items:center}.exec-cash-pending strong{margin:0}}
 
+
+/* Report Center v2 */
+.report-head-v2{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:linear-gradient(145deg,#0b1830,#17365f)!important;color:#fff!important;border:0!important;padding:17px!important;box-shadow:0 10px 26px #0b183016}.report-head-v2 h2{color:#fff!important;font-size:20px!important}.report-head-v2 p{color:#9fb1cc!important;line-height:1.4}.report-live-mark{flex:none!important;background:#ffffff0e;border:1px solid #ffffff14;border-radius:999px;padding:6px 8px;color:#b9cae1!important;font-size:7px!important;letter-spacing:.6px!important}.report-period-tabs .chip{min-width:70px}.report-live-strip{display:grid;grid-template-columns:.8fr .8fr 1.4fr;gap:8px}.report-live-strip>div{background:#fff;border:1px solid var(--asman-line);border-radius:13px;padding:10px}.report-live-strip span{display:block;color:var(--asman-muted);font-size:7.5px}.report-live-strip b{display:block;margin-top:4px;font-size:13px}.report-business-grid{grid-template-columns:1fr 1fr!important}.report-business-grid .report-kpi{min-height:88px}.report-business-grid .report-kpi b{font-size:18px!important;line-height:1.15}.report-business-grid .report-kpi.report-money{background:linear-gradient(145deg,#f7faff,#fff)}.report-business-grid .report-kpi.report-money b{color:var(--asman-blue)!important}.report-business-grid .report-kpi.report-money.green b{color:var(--asman-green)!important}.report-finance-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.report-finance-strip>div{background:#fff;border:1px solid var(--asman-line);border-radius:13px;padding:10px;min-width:0}.report-finance-strip span{display:block;font-size:7px;line-height:1.25;color:var(--asman-muted);min-height:18px}.report-finance-strip b{display:block;margin-top:4px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-chart-v2{padding-bottom:24px!important}.report-metric-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:9px 0 4px}.report-metric-tabs button{border:0;background:#eef2f7;color:#74849a;border-radius:9px;padding:7px 5px;font-size:7.5px;font-weight:750}.report-metric-tabs button.active{background:#e8efff;color:var(--asman-blue)}.report-bars{height:165px!important;padding-top:25px!important}.report-bar{position:relative}.report-bar em{position:absolute;top:-18px;font-style:normal;font-size:6.5px;color:#8695aa;white-space:nowrap;left:50%;transform:translateX(-50%)}.report-bar i.done{width:12px!important;border-radius:5px 5px 2px 2px!important;background:linear-gradient(180deg,#4b82ff,#246bfd)!important}.report-agent-section{display:none}.report-agent-section.open{display:block}.report-agent-card{width:100%;border:1px solid var(--asman-line);background:#fff;border-radius:15px;padding:11px;display:flex;align-items:center;gap:10px;text-align:left;margin-bottom:8px;color:var(--asman-text)}.report-agent-card .agent-avatar{flex:0 0 38px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#eaf1ff;color:var(--asman-blue);font-weight:850;font-size:10px}.report-agent-main{flex:1;min-width:0}.report-agent-main>b{display:block;font-size:10.5px}.report-agent-main>small{display:block;margin-top:3px;font-size:7.5px;color:var(--asman-muted)}.report-agent-money{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}.report-agent-money i{font-style:normal;background:#f4f7fb;border-radius:7px;padding:4px 5px;font-size:7px;color:#63748b}.report-footnote{border:1px dashed #dfe7f1;background:#f8fafd;color:#8290a4;border-radius:12px;padding:10px;font-size:7.5px;line-height:1.45}.report-footnote b{color:#586980}@media(max-width:350px){.report-live-strip{grid-template-columns:1fr 1fr}.report-live-strip>div:last-child{grid-column:1/3}.report-finance-strip{grid-template-columns:1fr}.report-finance-strip span{min-height:0}}
+
 </style>
 </head>
 <body class="pb-24">
@@ -230,27 +234,65 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 
 <!-- 5. HISOBOT -->
     <div id="page-report" class="page-content max-w-md mx-auto p-4 space-y-3 executive-page">
-        <section class="report-head">
-            <span>RAHBAR TAHLILI</span>
-            <h2>Natijalar va dinamika</h2>
-            <p>Agent faoliyati va mijozlar oqimini bir joyda kuzating</p>
+        <section class="report-head report-head-v2">
+            <div>
+                <span>ASMAN · RAHBAR TAHLILI</span>
+                <h2>Hisobot markazi</h2>
+                <p>Sotuv, tushum, agent faolligi va marshrut natijalari</p>
+            </div>
+            <span class="report-live-mark">● JONLI</span>
         </section>
-        <div class="filters executive-tabs" id="report-tabs">
-          <button class="chip active" data-report-tab="week">Hafta</button>
-          <button class="chip" data-report-tab="month">Oy</button>
+
+        <div class="filters executive-tabs report-period-tabs" id="report-tabs">
+          <button class="chip" data-report-tab="today">Bugun</button>
+          <button class="chip active" data-report-tab="week">7 kun</button>
+          <button class="chip" data-report-tab="month">30 kun</button>
           <button class="chip" data-report-tab="agents">Agentlar</button>
         </div>
-        <div class="report-grid exec-report-grid">
-          <div class="report-kpi"><span>Jami tashriflar</span><b id="report-visits">0</b><small id="report-period-label">Tanlangan davr</small></div>
-          <div class="report-kpi"><span>Yangi mijozlar</span><b id="report-new">0</b><small>Ro‘yxatga qo‘shilgan</small></div>
-          <div class="report-kpi"><span>Faol agentlar</span><b id="report-active-agents">0</b><small>Hozir smenada</small></div>
-          <div class="report-kpi warn"><span>Nazoratdagi mijozlar</span><b id="report-overdue">0</b><small>5+ kun tashrifsiz</small></div>
+
+        <section class="report-live-strip">
+            <div><span>Faol agent</span><b id="report-active-agents">0</b></div>
+            <div><span>Nazoratda</span><b id="report-overdue">0</b></div>
+            <div><span>Joriy qarz</span><b id="report-current-debt">0.00 $</b></div>
+        </section>
+
+        <div class="report-grid report-business-grid">
+          <div class="report-kpi report-money"><span>📦 Realizatsiya</span><b id="report-delivered">0.00 $</b><small>Berilgan tovar summasi</small></div>
+          <div class="report-kpi report-money green"><span>💰 Mijozdan olindi</span><b id="report-payments">0.00 $</b><small>Agent qayd etgan to‘lov</small></div>
+          <div class="report-kpi"><span>✓ Tashriflar</span><b id="report-visits">0</b><small id="report-period-label">Tanlangan davr</small></div>
+          <div class="report-kpi"><span>＋ Yangi mijozlar</span><b id="report-new">0</b><small>Davr ichida qo‘shilgan</small></div>
+          <div class="report-kpi"><span>◷ Ish vaqti</span><b id="report-work">0s 00d</b><small>Agent smenalari jami</small></div>
+          <div class="report-kpi"><span>⌁ Masofa</span><b id="report-distance">0 km</b><small>GPS bo‘yicha hisoblangan</small></div>
         </div>
-        <section class="exec-chart-card">
-          <div class="exec-section-title compact"><div><small>DINAMIKA</small><h3>Tashriflar · 7 kun</h3></div></div>
-          <div class="bars" id="bar-chart"></div>
+
+        <section class="report-finance-strip">
+            <div><span>Kassir qabul qilgan</span><b id="report-accepted-cash">0.00 USD</b></div>
+            <div><span>Kassa xarajati</span><b id="report-cash-expense">0.00 USD</b></div>
+            <div><span>Qaytarilgan tovar</span><b id="report-returns">0.00 USD</b></div>
+        </section>
+
+        <section class="exec-chart-card report-chart-v2">
+          <div class="exec-section-title compact">
+            <div><small>7 KUNLIK DINAMIKA</small><h3 id="report-chart-title">Tashriflar</h3></div>
+            <span id="report-chart-total">0</span>
+          </div>
+          <div class="report-metric-tabs">
+              <button type="button" class="active" data-report-metric="visits">Tashrif</button>
+              <button type="button" data-report-metric="deliveredUsd">Realizatsiya</button>
+              <button type="button" data-report-metric="paymentsUsd">Tushum</button>
+          </div>
+          <div class="bars report-bars" id="bar-chart"></div>
+        </section>
+
+        <section id="report-agent-section" class="report-agent-section">
+          <div class="exec-section-title compact">
+            <div><small>AGENTLAR KESIMI</small><h3>Agent natijalari</h3></div>
+            <span id="report-agent-period">7 kun</span>
+          </div>
           <div id="report-agents"></div>
         </section>
+
+        <div class="report-footnote">ℹ️ “Realizatsiya” — tizimda mijozga <b>tovar berilgan</b> paytdagi USD summa. “Sotildi” qaydi bu summaga qayta qo‘shilmaydi.</div>
     </div>
 
 <!-- Bottom Navigation Bar (Telegram UI Kit Tabbar standartida) -->
@@ -285,7 +327,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/manager";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",selectedAgent:null,ready:false};
+var state={page:"home",agentFilter:"all",customerFilter:"all",cashTab:"today",reportTab:"week",reportMetric:"visits",selectedAgent:null,ready:false};
 var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0,dashboardToday=0;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,refreshing=false;
 var titles={home:"Rahbar paneli",map:"Agentlar xaritasi",customers:"Mijozlar",cash:"Kassa",report:"Hisobot"};
@@ -296,6 +338,10 @@ function when(ts){return ts?new Date(ts*1000).toLocaleString("uz-UZ",{timeZone:"
 function since(ts){return ts?Math.max(0,Math.floor((Date.now()/1000-ts)/60))+" daqiqa oldin":"GPS kelmagan"}
 function todayStart(){return dashboardToday||Math.floor(Date.now()/86400000)*86400;}
 function initials(v){return String(v||"?").trim().split(/\s+/).map(function(x){return x[0]||""}).slice(0,2).join("").toUpperCase()}
+function duration(v){v=Math.max(0,Number(v||0));var h=Math.floor(v/3600),m=Math.floor((v%3600)/60);return h+"s "+String(m).padStart(2,"0")+"d"}
+function reportKey(){return state.reportTab==="today"?"today":state.reportTab==="month"?"month":"week"}
+function reportLabel(){return state.reportTab==="today"?"Bugun":state.reportTab==="month"?"30 kun":state.reportTab==="agents"?"7 kun · agentlar":"7 kun"}
+
 function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(function(){el.style.display="none"},2500)}
 function gate(title,msg){$("auth-title").textContent=title;$("auth-message").textContent=msg;$("auth-gate").classList.remove("hidden");state.ready=false}
 function openSheet(title,body){$("sheet-title").textContent=title;$("sheet-body").innerHTML=body;$("sheet-bg").classList.add("open")}
@@ -336,6 +382,7 @@ async function loadDashboard(){
   $("cash-pending-inline").textContent=money(summary.pendingUsd||0);
   $("report-active-agents").textContent=summary.workingAgents||0;
   $("report-overdue").textContent=summary.overdueClients||0;
+  $("report-current-debt").textContent=money(summary.debtUsd||0)+" $";
   $("home-updated").textContent="Yangilandi · "+when(generatedTs);
   if(data.clientsTruncated)toast("Mijozlar ko‘p: ro‘yxatda dastlabki 5000 ta ko‘rsatilgan.");
   renderCustomers();renderCash();renderReport();renderAgentList();
@@ -438,19 +485,58 @@ function renderCash(){
  }).join("")||'<div class="empty">Tanlangan davrda operatsiya yo‘q</div>';
 }
 function renderReport(){
- var key=state.reportTab==="month"?"month":"week";
- var data=reportData[key]||{visits:0,newClients:0};
- $("report-visits").textContent=data.visits||0;$("report-new").textContent=data.newClients||0;
- $("report-active-agents").textContent=summary&&summary.workingAgents||0;$("report-overdue").textContent=summary&&summary.overdueClients||0;
- $("report-period-label").textContent=state.reportTab==="month"?"Joriy 30 kun":state.reportTab==="agents"?"Agentlar kesimida":"Oxirgi 7 kun";
- var series=reportData.series||[];var max=Math.max(1,...series.map(function(d){return d.visits}));
- $("bar-chart").innerHTML=series.map(function(d){return '<div class="bar"><i style="height:100%;opacity:.16"></i><i class="done" style="height:'+Math.max(d.visits?3:0,Math.round(d.visits/max*100))+'%"></i><span>'+escapeHtml(d.day)+'</span></div>'}).join("")||'<div class="empty">Tashrif qaydlari yo‘q</div>';
- if(state.reportTab==="agents"){
-  $("report-agents").innerHTML=agents.map(function(a){
-   return '<button class="agent-card" type="button" data-agent-profile="'+a.id+'"><span class="agent-avatar">'+escapeHtml(initials(a.name))+'</span><span class="agent-main"><b>'+escapeHtml(a.name)+'</b><small>'+escapeHtml(agentStatus(a))+'</small></span><span class="agent-status">'+a.done+' tashrif</span></button>';
-  }).join("")||'<div class="empty">Agentlar yo‘q</div>';
- } else $("report-agents").innerHTML="";
+ var key=reportKey(),data=reportData[key]||{};
+ $("report-visits").textContent=data.visits||0;
+ $("report-new").textContent=data.newClients||0;
+ $("report-delivered").textContent=money(data.deliveredUsd||0)+" $";
+ $("report-payments").textContent=money(data.paymentsUsd||0)+" $";
+ $("report-work").textContent=duration(data.workSeconds||0);
+ $("report-distance").textContent=Number(data.distanceKm||0).toLocaleString("uz-UZ",{maximumFractionDigits:1})+" km";
+ $("report-accepted-cash").textContent=money(data.acceptedCashUsd||0)+" USD";
+ $("report-cash-expense").textContent=money(data.cashierExpensesUsd||0)+" USD";
+ $("report-returns").textContent=money(data.returnsUsd||0)+" USD";
+ $("report-active-agents").textContent=summary&&summary.workingAgents||0;
+ $("report-overdue").textContent=summary&&summary.overdueClients||0;
+ $("report-current-debt").textContent=money(summary&&summary.debtUsd||0)+" $";
+ $("report-period-label").textContent=reportLabel();
+ $("report-agent-period").textContent=reportLabel();
 
+ var metric=state.reportMetric||"visits",series=reportData.series||[];
+ var title=metric==="deliveredUsd"?"Realizatsiya · USD":metric==="paymentsUsd"?"Mijozdan olingan · USD":"Tashriflar";
+ $("report-chart-title").textContent=title;
+ var values=series.map(function(d){return Number(d[metric]||0)}),max=Math.max(1,...values),total=values.reduce(function(a,b){return a+b},0);
+ $("report-chart-total").textContent=(metric==="visits"?Math.round(total):money(total)+(metric==="visits"?"":" $"));
+ $("bar-chart").innerHTML=series.map(function(d){
+   var value=Number(d[metric]||0),height=value?Math.max(5,Math.round(value/max*100)):2;
+   var label=metric==="visits"?String(Math.round(value)):money(value);
+   return '<div class="bar report-bar"><em>'+escapeHtml(label)+'</em><i class="done" style="height:'+height+'%"></i><span>'+escapeHtml(d.day)+'</span></div>';
+ }).join("")||'<div class="empty">Davr bo‘yicha ma’lumot yo‘q</div>';
+
+ var periodAgents=Array.isArray(data.agents)?data.agents:[];
+ var showAgents=state.reportTab==="agents";
+ $("report-agent-section").classList.toggle("open",showAgents);
+ if(showAgents){
+   $("report-agents").innerHTML=periodAgents.map(function(a){
+     return '<button type="button" class="report-agent-card" data-report-agent="'+a.agentId+'">'+
+       '<span class="agent-avatar">'+escapeHtml(initials(a.agent))+'</span>'+
+       '<span class="report-agent-main"><b>'+escapeHtml(a.agent)+'</b>'+
+       '<small>'+a.visits+' tashrif · '+a.newClients+' yangi mijoz · '+Number(a.distanceKm||0).toLocaleString("uz-UZ",{maximumFractionDigits:1})+' km</small>'+
+       '<span class="report-agent-money"><i>📦 '+money(a.deliveredUsd)+' $</i><i>💰 '+money(a.paymentsUsd)+' $</i><i>◷ '+duration(a.workSeconds)+'</i></span></span>'+
+       '<span class="exec-chevron">›</span></button>';
+   }).join("")||'<div class="empty">Agentlar bo‘yicha ma’lumot yo‘q</div>';
+ }else $("report-agents").innerHTML="";
+}
+function showReportAgent(id){
+ var data=reportData[reportKey()]||{},list=Array.isArray(data.agents)?data.agents:[],a=list.find(function(x){return Number(x.agentId)===Number(id)});
+ if(!a)return;
+ var rows=[
+   ["Davr",reportLabel()],["Realizatsiya",money(a.deliveredUsd)+" USD"],["Mijozdan olindi",money(a.paymentsUsd)+" USD"],
+   ["Qaytarilgan",money(a.returnsUsd)+" USD"],["Tashriflar",a.visits],["Yangi mijozlar",a.newClients],
+   ["Ish vaqti",duration(a.workSeconds)],["Masofa",Number(a.distanceKm||0).toLocaleString("uz-UZ",{maximumFractionDigits:2})+" km"],
+   ["Mijozlari",a.clients],["5+ kun nazoratda",a.overdueClients]
+ ];
+ openSheet("Agent hisoboti · "+a.agent,rows.map(function(row){return '<div class="detail-row"><span>'+escapeHtml(row[0])+'</span><b>'+escapeHtml(row[1])+'</b></div>'}).join("")+
+   '<button type="button" class="mini-btn primary" style="width:100%;margin-top:12px" data-agent-route="'+a.agentId+'">Oxirgi marshrutni ko‘rish</button>');
 }
 function showAgent(id){
  var a=agents.find(function(x){return x.id===id});if(!a)return;
@@ -485,6 +571,8 @@ document.addEventListener("click",function(e){
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
  if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.reportMetric){state.reportMetric=b.dataset.reportMetric;document.querySelectorAll("[data-report-metric]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.reportAgent){showReportAgent(Number(b.dataset.reportAgent));return}
  if(b.dataset.agentProfile){showAgent(Number(b.dataset.agentProfile));return}
  if(b.dataset.agentRoute){showRoute(Number(b.dataset.agentRoute));return}
  if(b.dataset.navigate){
