@@ -97,7 +97,7 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(pay['_notify']['kind'],'payment')
         self.assertEqual(core.client_debt_usd(self.db,cid),3500)
         ret=agent_api.mutate(self.db,2,'return',
-            {'clientId':cid,'pack':1,'qty':2},'return_1234567',self.now)
+            {'clientId':cid,'items':[{'pack':1,'qty':2}]},'return_1234567',self.now)
         self.assertTrue(ret['ok'])
         self.assertEqual(core.client_stock_total(self.db,cid,1),8)
         self.assertEqual(core.client_debt_usd(self.db,cid),3000)
@@ -115,7 +115,7 @@ class AgentApiTests(unittest.TestCase):
         self.db.rollback()
         self.db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(55,2,?,NULL)',(self.now-100,))
         with self.assertRaisesRegex(ValueError,'jonli lokatsiya'):
-            agent_api.mutate(self.db,2,'return',{'clientId':cid,'pack':1,'qty':1},'ret_no_live12',self.now)
+            agent_api.mutate(self.db,2,'return',{'clientId':cid,'items':[{'pack':1,'qty':1}]},'ret_no_live12',self.now)
 
     def test_shift_start_end_route_and_disabled_feature(self):
         start=agent_api.mutate(self.db,2,'shift_start',{},'shift_start12',self.now)
@@ -136,6 +136,17 @@ class AgentApiTests(unittest.TestCase):
         self.db.execute("INSERT INTO agent_features(agent,feature,enabled) VALUES(2,'payment',0)")
         with self.assertRaisesRegex(ValueError,'o‘chirilgan'):
             agent_api.mutate(self.db,2,'payment',{'clientId':999,'amount':'1'},'disabled_pay1',self.now)
+
+    def test_snapshot_shape_matches_premium_agent_ui(self):
+        self.add_client()
+        snap=agent_api.snapshot(self.db,2,self.now)
+        self.assertEqual(snap['me']['name'],'Ali')
+        self.assertIn('paymentTodayUsd',snap['summary'])
+        self.assertIn('cashAvailableUsd',snap['summary'])
+        self.assertIn('day',snap['period'])
+        self.assertEqual(snap['products'][0]['stock'],30)
+        self.assertEqual(snap['clients'][0]['agent'],'Ali')
+        self.assertIn('gps',snap['me'])
 
     def test_client_detail_returns_real_history_and_events(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
