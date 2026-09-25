@@ -25,7 +25,7 @@ class ManagerMiniAppTests(unittest.TestCase):
             "function switchPage(","function renderCustomers(","function renderCash(",
             "function renderReport(","function initMap(","function showCustomer(",
             "data-agent-filter","data-customer-filter","data-cash-tab",
-            "data-report-tab","data-approve","customer-search",
+            "data-report-tab","customer-search","function showRoute(",
         ):
             self.assertIn(term,self.html)
 
@@ -36,7 +36,12 @@ class ManagerMiniAppTests(unittest.TestCase):
         self.assertIn("function loadLeaflet()",self.html)
         self.assertIn("telegram.org/js/telegram-web-app.js",self.html)
         self.assertNotIn("BOT_TOKEN",self.html)
-        self.assertNotIn("fetch('/api/",self.html)
+        self.assertIn("https://asman-agent-test.onrender.com/api/manager",self.html)
+        self.assertIn("tg.initData",self.html)
+        self.assertIn("data.readOnly",self.html)
+        self.assertNotIn("Alibek Karimov",self.html)
+        self.assertNotIn('data-approve=',self.html)
+        self.assertIn('id="auth-gate"',self.html)
 
     def test_inline_javascript_parses(self):
         if not shutil.which("node"):
