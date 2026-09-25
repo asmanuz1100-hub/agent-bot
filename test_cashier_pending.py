@@ -24,8 +24,8 @@ class CashierUnconfirmedTests(unittest.TestCase):
             self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
                      VALUES(2,2,?,'payment',?,?,?)""",
                      (n,cents,base+n*100,1000+n))
-        self.db.execute("""INSERT INTO handovers(agent,amount_usd,status,ts,source)
-                       VALUES(2,16940,'pending',?,2000)""",(base+1000,))
+        self.db.execute("""INSERT INTO handovers(agent,amount,amount_usd,status,ts,source)
+                       VALUES(2,0,16940,'pending',?,2000)""",(base+1000,))
         self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
                       VALUES(2,2,6,'payment',4640,?,2001)""",(base+2000,))
         self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts,source)
