@@ -41,6 +41,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}nav button{
 .agent-card .agent-main{flex:1;min-width:0}.agent-card b{display:block;font-size:12px;color:#101e39}.agent-card small{font-size:10px;color:#8190a7;display:block;line-height:1.5}.agent-status{font-size:10px;font-weight:800;border-radius:9px;padding:6px 9px;background:#f4f7fd;color:#71819a}.agent-status.active{background:#e2f8ed;color:#047857}.agent-status.late{background:#fff4e2;color:#9a5f09}
 #map{height:calc(100dvh - 265px);min-height:330px}.map-card{bottom:10px}.map-loading{pointer-events:none}.map-shell{overflow:hidden}
 #cash-total{font-variant-numeric:tabular-nums}.status.cancel{background:#fff1f2;color:#be123c}
+.cash-kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.cash-kpi{background:#fff;border:1px solid var(--stroke);border-radius:14px;padding:11px 10px;min-width:0}.cash-kpi small{display:block;color:var(--muted);font-size:9px;line-height:1.3;margin-bottom:5px}.cash-kpi b{display:block;color:var(--ink);font-size:11px;line-height:1.25;overflow-wrap:anywhere}.txn.expense>span{background:#fff1f2;color:#be123c}
 @media(max-width:350px){#agent-list{padding:10px}.auth-card{padding:20px}}
 
 /* Premium redesign — adapted from the approved ASMAN Figma language. */
@@ -267,16 +268,21 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
         <section class="cash-exec-hero">
             <div class="cash-exec-label">KASSA NAZORATI</div>
             <div class="cash-exec-row">
-                <div><span>Tanlangan davr</span><strong id="cash-total">0.00 USD</strong><small id="cash-summary">Bugungi kassa holati</small></div>
+                <div><span>Joriy hisobiy qoldiq</span><strong id="cash-total">0.00 USD</strong><small id="cash-summary">Tasdiqlangan agent pullari − kassa rasxodlari</small></div>
                 <div class="cash-exec-badge"><span>⏳</span><b id="cash-pending-inline">0.00</b><small>USD kutilmoqda</small></div>
             </div>
         </section>
+        <div class="cash-kpi-grid">
+          <div class="cash-kpi"><small id="cash-kpi-1-label">Bugun qabul qilindi</small><b id="cash-kpi-1">0.00 USD</b></div>
+          <div class="cash-kpi"><small id="cash-kpi-2-label">Bugun rasxod</small><b id="cash-kpi-2">0.00 USD</b></div>
+          <div class="cash-kpi"><small id="cash-kpi-3-label">Sof o‘zgarish</small><b id="cash-kpi-3">0.00 USD</b></div>
+        </div>
         <div class="filters executive-tabs" id="cash-tabs">
           <button class="chip active" data-cash-tab="today">Bugun</button>
           <button class="chip" data-cash-tab="week">7 kun</button>
           <button class="chip" data-cash-tab="pending">Tasdiqlanmagan</button>
         </div>
-        <div class="exec-section-title compact"><div><small>OPERATSIYALAR</small><h3>Kassa harakatlari</h3></div></div>
+        <div class="exec-section-title compact"><div><small>OPERATSIYALAR</small><h3>Kassa harakatlari</h3></div><span id="cash-entry-count">0 ta</span></div>
         <div id="txn-list"></div>
     </div>
 
@@ -440,7 +446,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 var API="https://asman-agent-test.onrender.com/api/manager";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",selectedAgent:null,ready:false};
-var agents=[],customers=[],txns=[],summary=null,reportData=null,generatedTs=0,dashboardToday=0;
+var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_manager_prefs_v1";
 var prefs=loadPrefs();
@@ -503,7 +509,7 @@ async function loadDashboard(){
   agents=Array.isArray(data.agents)?data.agents:[];
   customers=Array.isArray(data.clients)?data.clients:[];
   txns=Array.isArray(data.transactions)?data.transactions:[];
-  summary=data.summary||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;dashboardToday=data.todayStart||0;primaryAdmin=!!data.primaryAdmin;
+  summary=data.summary||{};cashData=data.cash||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;dashboardToday=data.todayStart||0;primaryAdmin=!!data.primaryAdmin;
   state.ready=true;$("auth-gate").classList.add("hidden");
   updateManagerIdentity();
   var agentSelect=$("customer-agent-filter"),current=state.customerAgent;
@@ -730,25 +736,47 @@ async function exportClient(id,format){
   setTimeout(function(){URL.revokeObjectURL(url)},60000);toast("Akt sverka tayyor")
  }catch(e){toast(e.message||"Fayl tayyorlanmadi")}
 }
+function cashEventTs(t){return t.type==="handover"&&t.state==="accepted"?(t.acceptedTs||t.ts):t.ts}
 function renderCash(){
- var day=todayStart(),week=day-6*86400;
+ var day=todayStart(),week=day-6*86400,cash=cashData||{};
  var list=txns.filter(function(t){
-  return state.cashTab==="pending"?t.state==="pending":state.cashTab==="today"?t.ts>=day:t.ts>=week;
+  if(state.cashTab==="pending")return t.type==="handover"&&t.state==="pending";
+  var ts=cashEventTs(t);return state.cashTab==="today"?ts>=day:ts>=week;
  });
- var accepted=txns.filter(function(t){return t.state==="accepted"&&
- (state.cashTab==="today"?(t.acceptedTs||t.ts)>=day:state.cashTab==="week"?(t.acceptedTs||t.ts)>=week:false)});
- var total=state.cashTab==="today"?summary.acceptedTodayUsd:
- state.cashTab==="pending"?summary.pendingUsd:accepted.reduce(function(v,t){return v+t.amountUsd},0);
- $("cash-total").textContent=money(total)+" USD";
- $("cash-summary").textContent=state.cashTab==="pending"?"Kassir tasdiğini kutayotgan USD topshirishlar":
- state.cashTab==="week"?"Oxirgi 7 kun qabul qilingan USD":"Bugun kassir qabul qilgan USD";
+ $("cash-total").textContent=money(cash.balanceUsd!=null?cash.balanceUsd:(summary.cashBalanceUsd||0))+" USD";
+ $("cash-pending-inline").textContent=money(cash.pendingUsd!=null?cash.pendingUsd:(summary.pendingUsd||0));
+ $("cash-summary").textContent="Tasdiqlangan agent pullari − kassa rasxodlari";
+ if(state.cashTab==="pending"){
+  $("cash-kpi-1-label").textContent="Kutilayotgan topshiriq";
+  $("cash-kpi-1").textContent=Number(cash.pendingCount||summary.pendingCount||0)+" ta";
+  $("cash-kpi-2-label").textContent="Kutilayotgan summa";
+  $("cash-kpi-2").textContent=money(cash.pendingUsd||summary.pendingUsd||0)+" USD";
+  $("cash-kpi-3-label").textContent="Kassa holati";
+  $("cash-kpi-3").textContent="Hali kirmagan";
+ }else{
+  var weekly=state.cashTab==="week";
+  $("cash-kpi-1-label").textContent=weekly?"7 kunda qabul qilindi":"Bugun qabul qilindi";
+  $("cash-kpi-2-label").textContent=weekly?"7 kunda rasxod":"Bugun rasxod";
+  $("cash-kpi-3-label").textContent="Sof o‘zgarish";
+  $("cash-kpi-1").textContent=money(weekly?cash.acceptedWeekUsd:cash.acceptedTodayUsd)+" USD";
+  $("cash-kpi-2").textContent=money(weekly?cash.expensesWeekUsd:cash.expensesTodayUsd)+" USD";
+  $("cash-kpi-3").textContent=money(weekly?cash.netWeekUsd:cash.netTodayUsd)+" USD";
+ }
+ $("cash-entry-count").textContent=list.length+" ta";
  $("txn-list").innerHTML=list.map(function(t){
- var label=t.state==="accepted"?"Qabul qilindi":t.state==="rejected"?"Rad etildi":"Kutilmoqda";
- var klass=t.state==="accepted"?"ok":t.state==="rejected"?"cancel":"wait";
- var value=t.amountUsd?"+"+money(t.amountUsd)+" USD":t.amountUzs?
- "+"+money(t.amountUzs)+" UZS":"0 USD";
- return '<div class="txn"><span>▣</span><div class="txn-main"><b>'+escapeHtml(t.agent)+'</b><small>'+
- escapeHtml(when(t.ts))+' · #'+t.id+'</small></div><div style="text-align:right"><b style="font-size:11px">'+escapeHtml(value)+'</b><br><span class="status '+klass+'">'+label+'</span></div></div>';
+  if(t.type==="expense"){
+   var original=t.currency==="UZS"&&t.amountUzs?money(t.amountUzs)+" UZS · ":"";
+   var meta=[when(t.ts),t.cashier?("Kassir: "+t.cashier):"",t.recipient?("Kimga: "+t.recipient):""].filter(Boolean).join(" · ");
+   return '<div class="txn expense"><span>−</span><div class="txn-main"><b>'+escapeHtml(t.category||"Kassa rasxodi")+'</b><small>'+
+    escapeHtml(meta)+'</small>'+(t.note?'<small>'+escapeHtml(t.note)+'</small>':'')+
+    '</div><div style="text-align:right"><b style="font-size:11px">−'+escapeHtml(original)+money(t.amountUsd)+' USD</b><br><span class="status cancel">Rasxod</span></div></div>';
+  }
+  var label=t.state==="accepted"?"Qabul qilindi":t.state==="rejected"?"Rad etildi":"Kutilmoqda";
+  var klass=t.state==="accepted"?"ok":t.state==="rejected"?"cancel":"wait";
+  var value=(t.state==="accepted"?"+":"")+money(t.amountUsd||0)+" USD";
+  var info=when(cashEventTs(t))+" · #"+t.id+(t.cashier?(" · Kassir: "+t.cashier):"");
+  return '<div class="txn"><span>▣</span><div class="txn-main"><b>'+escapeHtml(t.agent||"Agent")+'</b><small>'+
+   escapeHtml(info)+'</small></div><div style="text-align:right"><b style="font-size:11px">'+escapeHtml(value)+'</b><br><span class="status '+klass+'">'+label+'</span></div></div>';
  }).join("")||'<div class="empty">Tanlangan davrda operatsiya yo‘q</div>';
 }
 
