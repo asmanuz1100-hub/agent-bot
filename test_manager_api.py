@@ -84,7 +84,7 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(snap['agents'][0]['status'],'offline')
         self.assertEqual(snap['summary']['acceptedTodayUsd'],0)
         self.assertEqual(snap['summary']['pendingUsd'],10)
-        self.assertEqual(snap['transactions'][0]['amountUzs'],500000)
+        self.assertEqual(snap['transactions'][0]['amountUzs'],5000)
         self.assertEqual(snap['summary']['newClientsToday'],0)
         self.assertEqual(snap['reports']['week']['visits'],0)
     def test_unknown_agent_route_is_rejected(self):
