@@ -18,7 +18,11 @@ MAX_CLIENTS=5000
 def authorize(db,raw,token):
     uid=verify_init_data(raw,token)
     row=db.execute("SELECT id,name,role FROM users WHERE id=?",(uid,)).fetchone()
-    if not row or row["role"]!="agent":
+    # Protected secondary admins may be restored from an old agent role on
+    # the next bot interaction. Never grant them agent finance access meanwhile.
+    admin_lock=db.execute("SELECT 1 FROM meta WHERE key=? AND value='1'",
+                          (f"secondary_admin:{uid}",)).fetchone()
+    if not row or row["role"]!="agent" or admin_lock:
         raise PermissionError("Mini App'ga faqat faol agent kirishi mumkin.")
     return uid,row["name"] or str(uid)
 
