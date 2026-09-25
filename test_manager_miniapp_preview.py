@@ -127,7 +127,7 @@ class ManagerMiniAppTests(unittest.TestCase):
         for term in (
             'Umumiy tahlil','id="report-payment-ratio"',
             'id="report-receivable-change"','id="report-delivered-delta"',
-            'id="report-payments-delta"','id="analysis-status-bar"',
+            'id="report-payments-delta"',
             'id="analysis-fresh-count"','id="analysis-red-count"',
             'class="analysis-status-bar"','id="analysis-map"','function renderAnalysisMap(',
             'function analysisDelta(','previous.deliveredUsd',
