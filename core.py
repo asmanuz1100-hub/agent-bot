@@ -1,5 +1,5 @@
 import sqlite3, json, time, math, re, os
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 PRODUCTS={
     1:'Грунтовка 7/1 — 1 кг',
@@ -27,7 +27,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, shift INTEGER, ts INTEGER, lat REAL, lon REAL, accuracy REAL, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, actor INTEGER, agent INTEGER, client INTEGER, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount INTEGER DEFAULT 0, amount_usd INTEGER DEFAULT 0, note TEXT DEFAULT '', ts INTEGER, source INTEGER UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amount INTEGER, amount_usd INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', cashier INTEGER, source INTEGER UNIQUE, ts INTEGER);
-CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id INTEGER PRIMARY KEY, actor INTEGER, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts INTEGER NOT NULL);
@@ -58,7 +59,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIGINT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, accuracy DOUBLE PRECISION, UNIQUE(shift,ts));
 CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, actor BIGINT, agent BIGINT, client BIGINT, kind TEXT, pack INTEGER DEFAULT 0, qty INTEGER DEFAULT 0, amount BIGINT DEFAULT 0, amount_usd BIGINT DEFAULT 0, note TEXT DEFAULT '', ts BIGINT, source BIGINT UNIQUE);
 CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amount BIGINT, amount_usd BIGINT DEFAULT 0, status TEXT DEFAULT 'pending', cashier BIGINT, source BIGINT UNIQUE, ts BIGINT, accepted_ts BIGINT);
-CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
 CREATE TABLE IF NOT EXISTS failed_updates(update_id BIGINT PRIMARY KEY, actor BIGINT, failure_type TEXT, attempts INTEGER DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', last_error TEXT, created_ts BIGINT NOT NULL);
@@ -155,6 +157,9 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_only INTEGER NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
+        db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
+        db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
+        db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,name in PRODUCTS.items():
             db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
         _backfill_unbilled_deliveries(db)
@@ -183,6 +188,9 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE events ADD COLUMN amount_usd INTEGER DEFAULT 0')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN amount_usd INTEGER DEFAULT 0')
+    expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
+    for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
+        if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     for pack,name in PRODUCTS.items():
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
     _backfill_unbilled_deliveries(db)
@@ -602,7 +610,7 @@ def cashier_balance_usd(db):
 
 
 CASHIER_EXPENSE_CATEGORIES=(
-    '🚚 Йўл харажати', '⛽ Ёқилғи', '👷 Иш ҳақи',
+    '🚚 Йўл харажати', '⛽ Ёқилғи', '🍽 Тушлик', '👷 Иш ҳақи',
     '🏢 Офис ва хўжалик', '📦 Бошқа харажат',
 )
 
@@ -630,6 +638,66 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
     if amount_usd>cashier_balance_usd(db):
         raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
     return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts) VALUES(?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()))).fetchone()[0])
+
+
+# Manually maintained internal bookkeeping rate; never implies a live FX quote.
+CASHIER_RATE_KEY='cashier_uzs_per_usd'
+_CASHBOX_LOCK=7806292501
+
+
+def parse_whole_som(raw,label='Сумма'):
+    text=str(raw or '').strip().replace(' ','')
+    if not text.isdecimal() or not 1<=int(text)<=10**12:
+        raise ValueError(f'{label}: 1 дан 1 000 000 000 000 гача бутун сўм киритинг.')
+    return int(text)
+
+
+def cashier_rate(db):
+    row=db.execute('SELECT value FROM meta WHERE key=?',(CASHIER_RATE_KEY,)).fetchone()
+    if not row:return None
+    try:rate=int(row[0])
+    except (TypeError,ValueError):return None
+    return rate if 100<=rate<=10**7 else None
+
+
+def set_cashier_rate(db,actor,rate,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0]!='cashier':
+        raise ValueError('Курсни фақат кассир белгилайди.')
+    if isinstance(rate,bool) or not isinstance(rate,int) or not 100<=rate<=10**7:
+        raise ValueError('1 USD учун бутун сўмда курс киритинг (100–10 000 000).')
+    if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    if db.execute('SELECT 1 FROM cashier_fx_rates WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу курс аллақачон сақланган.')
+    db.execute('INSERT INTO cashier_fx_rates(cashier,rate_uzs_per_usd,source,ts) VALUES(?,?,?,?)',
+               (actor,rate,source,int(time.time())))
+    db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+               (CASHIER_RATE_KEY,str(rate)))
+    return rate
+
+
+def som_to_usd_cents(som,rate):
+    if not isinstance(som,int) or isinstance(som,bool) or som<=0:raise ValueError('Сўм миқдори нотўғри.')
+    if not isinstance(rate,int) or not 100<=rate<=10**7:raise ValueError('Аввал касса курсини белгиланг.')
+    cents=int((Decimal(som)*100/Decimal(rate)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    if cents<=0:raise ValueError('Харажат 0.01 USD дан кичик. Суммани текширинг.')
+    return cents
+
+
+def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,expected_rate=None):
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    rate=cashier_rate(db)
+    if rate is None:raise ValueError('Аввал «💱 Касса курси» бўлимида 1 USD курсини белгиланг.')
+    if expected_rate is not None and rate!=expected_rate:
+        raise ValueError('Курс ўзгарган. Янги курсда харажатни қайта киритинг.')
+    cents=som_to_usd_cents(amount_uzs,rate)
+    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source)
+    db.execute("""UPDATE cashier_expenses SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
+           WHERE id=?""",(amount_uzs,rate,expense_id))
+    return expense_id,cents,rate
 
 
 def point(db,agent,message,edited=False):
