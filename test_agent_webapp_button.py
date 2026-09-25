@@ -1,6 +1,7 @@
 import unittest
 import core
 import bot
+from unittest.mock import patch
 
 class AgentMiniAppButtonTests(unittest.TestCase):
     def setUp(self):
@@ -22,11 +23,17 @@ class AgentMiniAppButtonTests(unittest.TestCase):
 
         self.assertEqual(admin,[])
         self.assertIn('📱 Раҳбар Mini App',[b for row in bot.menu(self.db,1) for b in row])
-        self.assertEqual([(b['text'],b['web_app']['url']) for b in agent],
-                         [('📱 Agent Mini App',bot.AGENT_MINIAPP_URL)])
+        self.assertEqual(agent,[])
+        self.assertIn('📱 Agent Mini App',[b for row in bot.menu(self.db,2) for b in row])
         self.assertEqual(cashier,[])
         self.assertTrue(bot.AGENT_MINIAPP_URL.startswith('https://'))
         self.assertIn('asman-agent-miniapp-v2-test.onrender.com',bot.AGENT_MINIAPP_URL)
+        with patch.object(bot,'api') as api:
+            message={'from':{'id':2},'chat':{'id':2,'type':'private'},
+                     'text':'📱 Agent Mini App','date':1234}
+            bot.handle(self.db,{'message':message})
+            button=api.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]
+            self.assertEqual(button['web_app']['url'],bot.AGENT_MINIAPP_URL)
 
 if __name__=='__main__':
     unittest.main()
