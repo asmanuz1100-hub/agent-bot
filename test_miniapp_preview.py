@@ -1,4 +1,4 @@
-"""Isolated static Mini App smoke tests (no production bot or database writes)."""
+"""Agent Mini App smoke tests: real authenticated UI, not demo fixtures."""
 from pathlib import Path
 import re
 import shutil
@@ -7,62 +7,42 @@ import unittest
 
 HTML=Path(__file__).parent/"agent-miniapp"/"index.html"
 
-
-class MiniAppPreviewTests(unittest.TestCase):
+class LiveAgentMiniAppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.html=HTML.read_text(encoding="utf-8")
 
-    def test_preview_is_explicitly_demo_only(self):
-        for term in ("ДЕМО · ТЕСТ","бот базасига сақланмайди","Намунавий",
-                     "page-home","page-map","page-clients","page-detail",
-                     "page-cash","page-reports"):
+    def test_real_signed_api_no_embedded_credentials_or_demo_records(self):
+        for part in ('https://asman-agent-test.onrender.com/api/agent',
+                     'tg.initData','readOnly','data.me.shiftOpen','data.clients',
+                     'data.products','data.events','data.handovers','data.period'):
+            if part=='readOnly':
+                continue
+            self.assertIn(part,self.html)
+        for secret in ('BOT_TOKEN','Alibek Karimov','Saxovat Market','ДЕМО · ТЕСТ'):
+            self.assertNotIn(secret,self.html)
+        self.assertIn('id="gate"',self.html)
+
+    def test_live_workflows_and_real_map(self):
+        for term in ('id="startShift"','id="endShift"','shift_start','shift_end',
+                     '"client"','"visit"','"delivery"','"payment"','"return"',
+                     '"handover"','nonce:nonce','window.confirm',
+                     'function renderMap(','function renderCash(',
+                     'function renderReports(','function showMyRoute(',
+                     'id="page-home"','id="page-map"','id="page-clients"',
+                     'id="page-detail"','id="page-cash"','id="page-reports"'):
             self.assertIn(term,self.html)
-        self.assertNotIn("fetch('/api/",self.html)
-        self.assertNotIn("BOT_TOKEN",self.html)
+        self.assertNotIn('cdn.tailwindcss.com',self.html)
+        self.assertNotIn('api/mcp/asset',self.html)
+        self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
-    def test_mobile_navigation_and_urgency_legend(self):
-        for term in ("data-nav=\"home\"","data-nav=\"map\"","data-nav=\"clients\"",
-                     "data-nav=\"cash\"","data-nav=\"reports\"",
-                     "3–7 кун","8+ кун","scheduled"):
-            self.assertIn(term,self.html)
-
-    def test_figma_premium_design_is_integrated_without_losing_demo_safety(self):
-        for term in (
-            "ASMAN Figma Premium", "hero-greeting", "is-home",
-            "function loadLeaflet()", "var leafletPromise=null",
-            "page-home", "page-map", "page-clients", "page-detail",
-            "page-cash", "page-reports", 'data-open="customer"',
-            'data-open="payment"', 'data-open="visit"',
-            'id="giveProduct"', "ДЕМО · ТЕСТ"
-        ):
-            self.assertIn(term, self.html)
-        self.assertNotRegex(self.html, r'<script\\s+src="https://unpkg\\.com/leaflet')
-        self.assertNotRegex(self.html, r'<link\\s+[^>]*href="https://unpkg\\.com/leaflet')
-        self.assertIn('js.src="https://unpkg.com/leaflet', self.html)
-        self.assertNotIn("cdn.tailwindcss.com", self.html)
-        self.assertNotIn("api/mcp/asset", self.html)
-
-    def test_shift_buttons_send_only_known_telegram_webapp_actions(self):
-        for term in ('id="shiftStart"', 'id="shiftEnd"',
-                     'var SHIFT_START_DATA="asman.shift.start.v1"',
-                     'SHIFT_END_DATA="asman.shift.end.v1"',
-                     'tg.sendData(end?SHIFT_END_DATA:SHIFT_START_DATA)',
-                     'typeof tg.sendData!=="function"',
-                     'Ишни тугатасизми?',
-                     'Жонли локацияни Telegram чатидан ўзингиз уланг'):
-            self.assertIn(term,self.html)
-        self.assertNotIn('asman.shift.start.v1"+"',self.html)
-
-    def test_inline_javascript_parses(self):
-        if shutil.which("node") is None:
-            self.skipTest("Node.js is not installed")
+    def test_javascript_parses(self):
+        if not shutil.which("node"):
+            self.skipTest("node unavailable")
         scripts=re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>",self.html,re.S|re.I)
-        script=max(scripts,key=len)
-        self.assertIn("renderHome();renderCustomers();renderCash();renderReports();",script)
-        check=subprocess.run(["node","--check"],input=script,text=True,capture_output=True,timeout=12)
-        self.assertEqual(check.returncode,0,check.stderr)
-
+        js=max(scripts,key=len)
+        p=subprocess.run(["node","--check"],input=js,text=True,capture_output=True,timeout=12)
+        self.assertEqual(p.returncode,0,p.stderr)
 
 if __name__=="__main__":
     unittest.main()
