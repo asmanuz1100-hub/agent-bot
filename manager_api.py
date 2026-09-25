@@ -8,6 +8,7 @@ import hmac
 import json
 import re
 import time
+import math
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
 from zoneinfo import ZoneInfo
@@ -82,6 +83,118 @@ def _cash_transactions(db, since):
         FROM handovers h LEFT JOIN users u ON u.id=h.agent
         WHERE (h.ts>=? OR h.status='pending') ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
         (since,)).fetchall()
+
+
+
+def _route_km(a, b):
+    try:
+        lat1,lon1,lat2,lon2=map(float,(a["lat"],a["lon"],b["lat"],b["lon"]))
+    except (TypeError,ValueError,KeyError):
+        return 0.0
+    if not (-90<=lat1<=90 and -90<=lat2<=90 and -180<=lon1<=180 and -180<=lon2<=180):
+        return 0.0
+    p1,p2=math.radians(lat1),math.radians(lat2)
+    dp=math.radians(lat2-lat1);dl=math.radians(lon2-lon1)
+    h=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 6371.0088*2*math.asin(min(1.0,math.sqrt(h)))
+
+
+def _period_report(db, start, end, staff, clients, recent_visits, now):
+    """Read-only KPI snapshot for a half-open [start,end) manager period."""
+    start,end=int(start),int(end)
+    by_agent={int(u["id"]):{
+        "agentId":int(u["id"]),"agent":u["name"] or str(u["id"]),
+        "visits":0,"newClients":0,"deliveredUsd":0.0,"paymentsUsd":0.0,
+        "returnsUsd":0.0,"deliveredQty":0,"soldQty":0,
+        "workSeconds":0,"distanceKm":0.0,
+        "clients":0,"overdueClients":0,
+    } for u in staff}
+    for c in clients:
+        aid=int(c["agentId"])
+        if aid in by_agent:
+            by_agent[aid]["clients"]+=1
+            if c["age"]=="red":by_agent[aid]["overdueClients"]+=1
+    for actor,ts in recent_visits:
+        if start<=ts<end and actor in by_agent:
+            by_agent[actor]["visits"]+=1
+
+    event_rows=db.execute("""SELECT agent,kind,
+        COALESCE(SUM(amount_usd),0) AS amount_usd,
+        COALESCE(SUM(qty),0) AS qty
+        FROM events WHERE ts>=? AND ts<? AND kind IN ('delivery','payment','return','sold')
+        GROUP BY agent,kind""",(start,end)).fetchall()
+    delivered=payments=returns=0
+    delivered_qty=sold_qty=0
+    for row in event_rows:
+        aid=int(row["agent"]);kind=row["kind"]
+        cents=int(row["amount_usd"] or 0);qty=int(row["qty"] or 0)
+        target=by_agent.get(aid)
+        if kind=="delivery":
+            delivered+=cents;delivered_qty+=qty
+            if target:target["deliveredUsd"]=_usd(cents);target["deliveredQty"]=qty
+        elif kind=="payment":
+            payments+=cents
+            if target:target["paymentsUsd"]=_usd(cents)
+        elif kind=="return":
+            returns+=cents
+            if target:target["returnsUsd"]=_usd(cents)
+        elif kind=="sold":
+            sold_qty+=qty
+            if target:target["soldQty"]=qty
+
+    new_rows=db.execute("""SELECT agent,COUNT(*) AS n FROM clients
+        WHERE created_ts>=? AND created_ts<? GROUP BY agent""",(start,end)).fetchall()
+    new_clients=0
+    for row in new_rows:
+        n=int(row["n"] or 0);new_clients+=n
+        if int(row["agent"]) in by_agent:by_agent[int(row["agent"])]["newClients"]=n
+
+    shifts=db.execute("""SELECT id,agent,start,"end" AS end_ts FROM shifts
+        WHERE start<? AND COALESCE("end",?)>? ORDER BY agent,start,id""",
+        (end,now,start)).fetchall()
+    shift_agent={}
+    work_seconds=0
+    for sh in shifts:
+        aid=int(sh["agent"]);sid=int(sh["id"]);shift_agent[sid]=aid
+        left=max(start,int(sh["start"] or start))
+        right=min(end,int(sh["end_ts"] or now),now)
+        seconds=max(0,right-left)
+        work_seconds+=seconds
+        if aid in by_agent:by_agent[aid]["workSeconds"]+=seconds
+
+    point_rows=db.execute("""SELECT p.shift,p.ts,p.lat,p.lon
+        FROM points p JOIN shifts s ON s.id=p.shift
+        WHERE p.ts>=? AND p.ts<? AND s.start<?
+        ORDER BY p.shift,p.ts,p.id""",(start,end,end)).fetchall()
+    prev_by_shift={};distance_km=0.0
+    for p in point_rows:
+        sid=int(p["shift"]);aid=shift_agent.get(sid)
+        previous=prev_by_shift.get(sid)
+        if previous is not None:
+            km=_route_km(previous,p)
+            # Ignore impossible GPS jumps. This is a field-sales route, not air travel.
+            if 0<=km<=25:
+                distance_km+=km
+                if aid in by_agent:by_agent[aid]["distanceKm"]+=km
+        prev_by_shift[sid]=p
+
+    accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
+          AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
+    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+        WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    visits=sum(1 for _,ts in recent_visits if start<=ts<end)
+    agents=list(by_agent.values())
+    for a in agents:a["distanceKm"]=round(a["distanceKm"],2)
+    agents.sort(key=lambda a:(a["deliveredUsd"],a["paymentsUsd"],a["visits"]),reverse=True)
+    return {
+        "start":start,"end":end,"visits":visits,"newClients":new_clients,
+        "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments),
+        "returnsUsd":_usd(returns),"deliveredQty":delivered_qty,"soldQty":sold_qty,
+        "acceptedCashUsd":_usd(accepted),"cashierExpensesUsd":_usd(expenses),
+        "workSeconds":work_seconds,"distanceKm":round(distance_km,2),
+        "agents":agents,
+    }
 
 
 def dashboard(db, now=None):
@@ -201,12 +314,18 @@ def dashboard(db, now=None):
         WHERE status='pending'""").fetchone()[0]
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
+    report_today=_period_report(db,today,now+1,staff,clients,recent_visits,now)
+    report_week=_period_report(db,week,now+1,staff,clients,recent_visits,now)
+    report_month=_period_report(db,since,now+1,staff,clients,recent_visits,now)
     series=[]
     for k in range(6,-1,-1):
         day=today-k*86400
-        next_day=day+86400
+        next_day=min(day+86400,now+1)
+        daily=_period_report(db,day,next_day,staff,clients,recent_visits,now)
         series.append({"day":datetime.fromtimestamp(day,TZ).strftime("%d.%m"),
-                       "visits":sum(1 for _,ts in recent_visits if day<=ts<next_day)})
+                       "visits":daily["visits"],"deliveredUsd":daily["deliveredUsd"],
+                       "paymentsUsd":daily["paymentsUsd"]})
+    total_debt=sum(int(v or 0) for v in debt_by_client.values())
     return {
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
         "clientCount":int(all_clients),"clientsTruncated":int(all_clients)>MAX_CLIENTS,
@@ -214,14 +333,8 @@ def dashboard(db, now=None):
         "summary":{"agentCount":len(agents),"workingAgents":sum(a["shiftOpen"] for a in agents),
                    "visitsToday":sum(visits_today.values()),"newClientsToday":int(new_today),
                    "overdueClients":red_count,"acceptedTodayUsd":_usd(cash_total),
-                   "pendingUsd":_usd(pending_total)},
-        "reports":{"week":{"visits":sum(v>=week for _,v in recent_visits),
-                           "newClients":int(db.execute(
-                               "SELECT COUNT(*) FROM clients WHERE created_ts>=?",
-                               (week,)).fetchone()[0])},
-                   "month":{"visits":len(recent_visits),"newClients":int(db.execute(
-                               "SELECT COUNT(*) FROM clients WHERE created_ts>=?",
-                               (since,)).fetchone()[0])},
+                   "pendingUsd":_usd(pending_total),"debtUsd":_usd(total_debt)},
+        "reports":{"today":report_today,"week":report_week,"month":report_month,
                    "series":series}
     }
 
