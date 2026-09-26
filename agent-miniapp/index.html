@@ -144,11 +144,19 @@ function renderDetail(){
  $("detailName").textContent=c.name;
  var photo=c.photoUrl?'<img class="client-photo" src="'+esc(c.photoUrl)+'" alt="'+esc(c.name)+' rasmi" loading="eager">':'<div class="client-photo-fallback">▦</div>';
  var body='<div class="card client-profile">'+photo+'<div class="client-profile-copy"><div class="client-profile-head"><div><h3>'+esc(c.name)+'</h3><p class="muted">'+esc(c.person||"Mijoz")+'</p></div><span class="pill '+status(c)+' profile-status">'+esc(c.status||"Holat")+'</span></div>'+detailLine("Telefonlar",c.phone)+detailLine("Manzil",c.address)+detailLine("Mas’ul agent",c.agent)+detailLine("Qo‘shilgan sana",date(c.createdTs))+detailLine("Oxirgi tashrif",date(c.lastTs))+detailLine("Keyingi tashrif",c.followup||"Belgilanmagan")+detailLine("Izoh",c.note||c.comment)+detailLine("USD qarz",fmt(c.debtUsd)+" USD")+'</div></div>';
- body+='<div class="card"><b>Do‘kondagi mahsulot qoldig‘i</b>'+[1,3,5].map(function(p){return detailLine(p+" kg gruntovka",(c.stock[String(p)]||0)+" dona")}).join("")+'</div>';
+ var stockRows=(data.products||[]).filter(function(p){return Number(c.stock&&c.stock[String(p.pack)]||0)!==0}).map(function(p){
+   return detailLine(p.name,(c.stock[String(p.pack)]||0)+" dona");
+ });
+ body+='<div class="card"><b>Do‘kondagi mahsulot qoldig‘i</b>'+(stockRows.join("")||'<p class="muted">Tovar qoldig‘i yo‘q.</p>')+'</div>';
  if(detailData){
   var visits=detailData.visits||[],events=detailData.events||[];
   body+='<div class="title">Tashriflar tarixi</div><div class="card">'+(visits.length?visits.slice(0,10).map(function(v){return detailLine(date(v.ts)+" · "+(v.actor||"Agent"),(v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
-  body+='<div class="title">So‘nggi operatsiyalar</div><div class="card">'+(events.length?events.slice(0,12).map(function(ev){var names={delivery:"Tovar berildi",payment:"To‘lov olindi",return:"Tovar qaytdi",sold:"Sotildi",order:"Buyurtma",visit:"Tashrif"};var value=ev.amountUsd?fmt(ev.amountUsd)+" USD":ev.qty?ev.pack+" kg · "+ev.qty+" dona":"";return detailLine(date(ev.ts)+" · "+(ev.actor||"Agent"),(names[ev.kind]||ev.kind)+(value?" · "+value:""))}).join(""):'<p class="muted">Operatsiyalar hali yo‘q.</p>')+'</div>';
+  body+='<div class="title">So‘nggi operatsiyalar</div><div class="card">'+(events.length?events.slice(0,12).map(function(ev){
+    var names={delivery:"Tovar berildi",payment:"To‘lov olindi",return:"Tovar qaytdi",sold:"Sotildi",order:"Buyurtma",visit:"Tashrif"};
+    var prod=(data.products||[]).find(function(p){return p.pack===ev.pack});
+    var value=ev.amountUsd?fmt(ev.amountUsd)+" USD":ev.qty?(prod?prod.name:("SKU "+ev.pack))+" · "+ev.qty+" dona":"";
+    return detailLine(date(ev.ts)+" · "+(ev.actor||"Agent"),(names[ev.kind]||ev.kind)+(value?" · "+value:""));
+  }).join(""):'<p class="muted">Operatsiyalar hali yo‘q.</p>')+'</div>';
  }
  if(Number.isFinite(c.lat)&&Number.isFinite(c.lon))body+='<button class="secondary" type="button" id="navigateClient" style="width:100%;margin-bottom:14px">➤ Navigator</button>';
  $("detailBody").innerHTML=body;
@@ -170,7 +178,7 @@ function renderReports(){
  if(!data)return;document.querySelectorAll("[data-period]").forEach(function(b){b.classList.toggle("active",b.dataset.period===period)});
  var p=data.period[period]||{};
  $("reportCards").innerHTML=[["Tashriflar",p.visits||0],["Yangi mijoz",p.newClients||0],["Mijozdan olingan",fmt(p.paymentsUsd||0)+" USD"],["Jami mijozlar",data.clientCount]].map(function(r){return '<div class="card kpi"><div class="small">'+r[0]+'</div><div class="num">'+r[1]+'</div></div>'}).join("");
- $("productStock").innerHTML=data.products.map(function(p){return '<div class="card flex between"><div><b>'+esc(p.name)+' · '+p.pack+' kg</b><p class="tiny">Narx: '+fmt(p.priceUsd)+' USD/dona</p></div><span class="pill">'+p.stock+' dona</span></div>'}).join("")||'<div class="card muted">Tovarlar topilmadi.</div>';
+ $("productStock").innerHTML=data.products.map(function(p){return '<div class="card flex between"><div><b>'+esc(p.name)+'</b><p class="tiny">Narx: '+fmt(p.priceUsd)+' USD/dona</p></div><span class="pill">'+p.stock+' dona</span></div>'}).join("")||'<div class="card muted">Tovarlar topilmadi.</div>';
 }
 function loadLeaflet(){
  if(window.L)return Promise.resolve(window.L);if(mapPromise)return mapPromise;
@@ -199,7 +207,7 @@ function field(name,label,type,placeholder,required){
  return '<label for="'+name+'">'+label+'</label><input id="'+name+'" name="'+name+'" type="'+(type||"text")+'" '+(type==="number"?'step="any" inputmode="decimal"':"")+' placeholder="'+esc(placeholder||"")+'" '+(required?"required":"")+' autocomplete="off">';
 }
 function clientSelect(){return '<label>Mijoz</label><select name="clientId" required>'+data.clients.map(function(c){return '<option value="'+c.id+'" '+(c.id===selected?"selected":"")+'>'+esc(c.name)+'</option>'}).join("")+'</select>'}
-function packLine(i){return '<div class="grid2"><div><label>Qadoq</label><select name="pack'+i+'">'+data.products.map(function(p){return '<option value="'+p.pack+'">'+p.pack+' kg · '+fmt(p.priceUsd)+' USD</option>'}).join("")+'</select></div><div>'+field("qty"+i,"Dona","number","1",true)+'</div></div>'}
+function packLine(i){return '<div class="grid2"><div><label>Mahsulot</label><select name="pack'+i+'">'+data.products.map(function(p){return '<option value="'+p.pack+'">'+esc(p.name)+' · '+fmt(p.priceUsd)+' USD</option>'}).join("")+'</select></div><div>'+field("qty"+i,"Dona","number","1",true)+'</div></div>'}
 function openForm(action){
  if(!data)return;formAction=action;backPage=current;nonce=null;reviewing=false;
  var names={client:"Yangi mijoz",visit:"Tashrif qo‘shish",delivery:"Tovar berish",payment:"Mijozdan pul olish",return:"Tovar qaytarish",handover:"Kassirga topshirish"};
@@ -230,7 +238,7 @@ async function saveForm(e){
  e.preventDefault();if(busy)return;var payload=formPayload();
  if(!reviewing){
   var total=0,detail="";
-  if(payload.items){payload.items.forEach(function(it){var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=it.pack+" kg × "+it.qty+" dona; "})}
+  if(payload.items){payload.items.forEach(function(it){var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
   else detail=formAction==="payment"||formAction==="handover"?fmt(payload.amount)+" USD":formAction==="client"?payload.shop:payload.status;
   $("review").textContent="Tasdiqlashdan oldin tekshiring: "+detail+(payload.items&&formAction==="delivery"?" · Taxminiy hisob: "+fmt(total)+" USD":"");
   $("review").style.display="block";$("submitForm").textContent="✓ Tasdiqlash va saqlash";reviewing=true;nonce=crypto.randomUUID().replace(/-/g,"");return;
