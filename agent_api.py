@@ -429,10 +429,13 @@ def mutate(db,agent,action,payload,request_id,now=None):
             raise ValueError("Mijoz maqomi noto‘g‘ri.")
         followup=payload.get("followup") or None
         followup=cs.normalize(status,followup)
+        photo_file=str(payload.get("photoFileId") or "").strip()
+        if photo_file and not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",photo_file):
+            raise ValueError("Mijoz fotosi identifikatori noto‘g‘ri.")
         cur=db.execute("""INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,
             comment,payment_due,created_ts,map_only)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,1) RETURNING id""",
-            (agent,name," · ".join(phones),address,lat,lon,None,shop,note,None,now))
+            (agent,name," · ".join(phones),address,lat,lon,photo_file or None,shop,note,None,now))
         cid=int(cur.fetchone()[0])
         cs.add_visit(db,agent,cid,status,note,followup)
         return {"ok":True,"clientId":cid,"message":"Mijoz real bazaga saqlandi."}
