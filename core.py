@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
@@ -106,6 +108,8 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
@@ -710,14 +714,69 @@ def accept(db,actor,hid,accepted=True):
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
 
 def cashier_balance_usd(db):
-    """Accepted agent handovers less cashier expenses, in USD cents.
+    """Accepted agent handovers less cashier expenses and agent funding, in USD cents.
 
-    Only agent handovers accepted by a cashier count as cashier income.
-    Pending/rejected handovers, customer payments, and manual cashier income do not.
+    Agent funding is a cash transfer out of the cashier into a separate agent
+    expense wallet. Agent spending later consumes that wallet and must not be
+    deducted from the cashier a second time.
     """
     accepted=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'").fetchone()[0]
     spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
-    return int(accepted or 0)-int(spent or 0)
+    funded=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'").fetchone()[0]
+    return int(accepted or 0)-int(spent or 0)-int(funded or 0)
+
+
+def agent_fund_balance_usd(db,agent):
+    row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_usd
+        WHEN kind='expense' THEN -amount_usd ELSE 0 END),0)
+        FROM agent_funds WHERE agent=?""",(agent,)).fetchone()
+    return int(row[0] or 0)
+
+
+def fund_agent_expense(db,actor,agent,amount_usd,note,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Агент ҳисобини фақат кассир ёки админ тўлдиради.')
+    target=db.execute("SELECT name FROM users WHERE id=? AND role='agent'",(agent,)).fetchone()
+    if not target:raise ValueError('Агент топилмади.')
+    if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
+        raise ValueError('Сумма нотўғри.')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(7806292501)').fetchone()
+    lock_agent(db,agent)
+    if db.execute('SELECT 1 FROM agent_funds WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу операция аллақачон сақланган.')
+    if amount_usd>cashier_balance_usd(db):
+        raise ValueError('Кассада агентга бериш учун етарли пул йўқ.')
+    row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,category,note,source,ts)
+        VALUES(?,?,'topup',?,'',?,?,?) RETURNING id""",
+        (agent,actor,amount_usd,note.strip(),source,int(time.time()))).fetchone()
+    return int(row[0])
+
+
+def add_agent_expense(db,actor,amount_usd,category,note,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0]!='agent':
+        raise ValueError('Харажатни фақат агент ўз ҳисобидан киритади.')
+    if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
+        raise ValueError('Харажат суммаси нотўғри.')
+    if category not in CASHIER_EXPENSE_CATEGORIES:
+        raise ValueError('Харажат турини рўйхатдан танланг.')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
+    lock_agent(db,actor)
+    if db.execute('SELECT 1 FROM agent_funds WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу операция аллақачон сақланган.')
+    if amount_usd>agent_fund_balance_usd(db,actor):
+        raise ValueError('Агент харажат ҳисобида етарли пул йўқ.')
+    row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,category,note,source,ts)
+        VALUES(?,?,'expense',?,?,?,?,?) RETURNING id""",
+        (actor,actor,amount_usd,category,note.strip(),source,int(time.time()))).fetchone()
+    return int(row[0])
 
 
 CASHIER_INCOME_CATEGORIES=(
