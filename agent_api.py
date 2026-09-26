@@ -438,9 +438,6 @@ def mutate(db,agent,action,payload,request_id,now=None):
                 raise ValueError("Mahsulot miqdori noto‘g‘ri.")
             required[pack]=required.get(pack,0)+qty
             clean.append((pack,qty))
-        for pack,qty in required.items():
-            if core.agent_stock(db,agent,pack)<qty:
-                raise ValueError(f"{core.product_name(pack)} agent qoldig‘ida yetarli emas.")
         status="active" if clean else str(payload.get("status") or "interested")
         if status not in cs.LABELS:
             raise ValueError("Mijoz maqomi noto‘g‘ri.")
@@ -507,9 +504,6 @@ def mutate(db,agent,action,payload,request_id,now=None):
             except (TypeError,ValueError):raise ValueError("Tovar miqdori noto‘g‘ri.")
             if pack not in core.PRODUCTS or qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
             required[pack]=required.get(pack,0)+qty;clean.append((pack,qty))
-        for pack,qty in required.items():
-            if core.agent_stock(db,agent,pack)<qty:
-                raise ValueError(f"{core.product_name(pack)} agent qoldig‘ida yetarli emas.")
         for idx,(pack,qty) in enumerate(clean):
             core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Mini App',
                         _source(agent,request_id,idx+1),currency='USD')
