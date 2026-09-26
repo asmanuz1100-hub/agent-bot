@@ -3,6 +3,8 @@ import hashlib
 import json
 import re
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import core
 import cashier_pending
 import cashier_daily
@@ -16,6 +18,66 @@ def require_cashier(db, actor):
     return row[0]
 
 
+TZ = ZoneInfo('Asia/Tashkent')
+
+
+def _cashier_summary(db):
+    now = datetime.now(TZ)
+    start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    end = int((now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).timestamp())
+    accepted_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE status='accepted' AND accepted_ts>=? AND accepted_ts<?""",(start,end)).fetchone()[0] or 0)
+    expense_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+        WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    funded_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
+        WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    pending = db.execute("""SELECT COUNT(*) AS count,
+        COALESCE(SUM(amount_usd),0) AS usd, COALESCE(SUM(amount),0) AS uzs
+        FROM handovers WHERE status='pending'""").fetchone()
+    wallet_total = int(db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_usd
+        WHEN kind='expense' THEN -amount_usd ELSE 0 END),0) FROM agent_funds""").fetchone()[0] or 0)
+    return {
+        'acceptedToday': accepted_today,
+        'cashExpenseToday': expense_today,
+        'fundedToday': funded_today,
+        'cashOutToday': expense_today + funded_today,
+        'netToday': accepted_today - expense_today - funded_today,
+        'pendingCount': int(pending['count'] or 0),
+        'pendingUsd': int(pending['usd'] or 0),
+        'pendingUzs': int(pending['uzs'] or 0),
+        'agentWalletTotal': wallet_total,
+    }
+
+
+def _cashier_activity(db):
+    rows=[]
+    for x in db.execute("""SELECT h.id,h.agent,h.cashier,h.amount_usd,h.amount,h.status,
+            h.ts,h.accepted_ts,a.name AS agent_name,c.name AS actor_name
+            FROM handovers h LEFT JOIN users a ON a.id=h.agent LEFT JOIN users c ON c.id=h.cashier
+            WHERE h.status!='pending' ORDER BY COALESCE(h.accepted_ts,h.ts) DESC LIMIT 40""").fetchall():
+        rows.append({'kind':'handover','id':int(x['id']),'ts':int(x['accepted_ts'] or x['ts'] or 0),
+                     'status':x['status'],'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount'] or 0),
+                     'agent_name':x['agent_name'] or str(x['agent']),'actor_name':x['actor_name'] or '',
+                     'note':''})
+    for x in db.execute("""SELECT e.id,e.amount_usd,e.amount_uzs,e.currency,e.category,e.recipient,e.note,e.ts,
+            u.name AS actor_name FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
+            ORDER BY e.ts DESC LIMIT 40""").fetchall():
+        rows.append({'kind':'cash_expense','id':int(x['id']),'ts':int(x['ts'] or 0),
+                     'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount_uzs'] or 0),
+                     'currency':x['currency'],'category':x['category'],'recipient':x['recipient'],
+                     'actor_name':x['actor_name'] or '','note':x['note'] or ''})
+    for x in db.execute("""SELECT f.id,f.kind,f.amount_usd,f.category,f.note,f.ts,
+            a.name AS agent_name,u.name AS actor_name FROM agent_funds f
+            LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
+            ORDER BY f.ts DESC LIMIT 60""").fetchall():
+        rows.append({'kind':'agent_'+x['kind'],'id':int(x['id']),'ts':int(x['ts'] or 0),
+                     'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':0,
+                     'category':x['category'] or '','agent_name':x['agent_name'] or '',
+                     'actor_name':x['actor_name'] or '','note':x['note'] or ''})
+    rows.sort(key=lambda x:(x['ts'],x['id']),reverse=True)
+    return rows[:80]
+
+
 def dashboard(db, actor):
     name = require_cashier(db, actor)
     pending = [dict(x) for x in db.execute("""SELECT h.*,u.name AS agent_name FROM handovers h
@@ -27,12 +89,14 @@ def dashboard(db, actor):
         LEFT JOIN users u ON u.id=e.cashier ORDER BY e.ts DESC,e.id DESC LIMIT 100""").fetchall()]
     agents = [{'id': int(x['id']), 'name': x['name'], 'fund_balance': core.agent_fund_balance_usd(db,int(x['id']))}
               for x in db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()]
+    agents.sort(key=lambda x:(-x['fund_balance'],x['name'] or ''))
     agent_funds = [dict(x) for x in db.execute("""SELECT f.*,a.name AS agent_name,u.name AS actor_name
         FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
         ORDER BY f.ts DESC,f.id DESC LIMIT 100""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),
             'pending': pending, 'history': history, 'expenses': expenses,
-            'agents': agents, 'agentFunds': agent_funds,
+            'agents': agents, 'agentFunds': agent_funds, 'summary': _cashier_summary(db),
+            'activity': _cashier_activity(db),
             'categories': list(core.CASHIER_EXPENSE_CATEGORIES), 'daily': cashier_daily.report(db)}
 
 
