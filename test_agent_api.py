@@ -82,6 +82,21 @@ class AgentApiTests(unittest.TestCase):
                 'status':'interested','note':'Test'
             },'client_no_gps1',self.now)
 
+    def test_add_client_can_store_camera_photo_file_id(self):
+        out=agent_api.mutate(self.db,2,'add_client',{
+            'shopName':'Foto Shop','name':'Ali Vali',
+            'phone':'+998901112244','address':'Qo‘qon',
+            'lat':40.54,'lon':70.94,'status':'interested',
+            'note':'Kamera orqali olindi',
+            'photoFileId':'AgACAgQAAxkBAA_camera_file_123456789'
+        },'camera_client_123',self.now)
+        self.assertTrue(out['ok'])
+        row=self.db.execute("SELECT photo FROM clients WHERE id=?",(out['clientId'],)).fetchone()
+        self.assertEqual(row[0],'AgACAgQAAxkBAA_camera_file_123456789')
+        snap=agent_api.snapshot(self.db,2,self.now)
+        client=next(x for x in snap['clients'] if x['id']==out['clientId'])
+        self.assertTrue(client['hasPhoto'])
+
     def test_delivery_visit_payment_return_and_handover_use_core_rules(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
         delivery=agent_api.mutate(self.db,2,'delivery',
