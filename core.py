@@ -698,7 +698,7 @@ def handover(db,a,value,source,currency='UZS'):
 
 def accept(db,actor,hid,accepted=True):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not r or r[0]!='cashier': raise ValueError('Фақат кассир тасдиқлайди.')
+    if not r or r[0] not in ('cashier','admin'): raise ValueError('Фақат кассир ёки админ тасдиқлайди.')
     row=db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'",(hid,)).fetchone()
     if not row: raise ValueError('Топшириқ топилмади ёки аввал тасдиқланган.')
     lock_agent(db,row['agent'])
@@ -741,8 +741,8 @@ def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
 
 def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not identity or identity[0]!='cashier':
-        raise ValueError('Харажатни фақат кассир киритиши мумкин.')
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
     if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
         raise ValueError('Харажат суммаси нотўғри.')
     if category not in CASHIER_EXPENSE_CATEGORIES:
@@ -786,8 +786,8 @@ def cashier_rate(db):
 
 def set_cashier_rate(db,actor,rate,source):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not identity or identity[0]!='cashier':
-        raise ValueError('Курсни фақат кассир белгилайди.')
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Курсни фақат кассир ёки админ белгилайди.')
     if isinstance(rate,bool) or not isinstance(rate,int) or not 100<=rate<=10**7:
         raise ValueError('1 USD учун бутун сўмда курс киритинг (100–10 000 000).')
     if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
