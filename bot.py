@@ -958,8 +958,6 @@ def finish(db,u,s,source):
         products=v.get('products') or []
         required={}
         for item in products:required[item['pack']]=required.get(item['pack'],0)+item['units']
-        for pack,qty in required.items():
-            if agent_stock(db,u,pack)<qty:raise ValueError(f'Агентда {product_name(pack)}дан етарли миқдор йўқ.')
         entered=set(parse_phones(v['phone']))
         for row in db.execute('SELECT phone FROM clients WHERE phone IS NOT NULL').fetchall():
             try:existing=set(parse_phones(row[0]))
@@ -976,8 +974,6 @@ def finish(db,u,s,source):
         products=v.get('products') or []
         required={}
         for item in products:required[item['pack']]=required.get(item['pack'],0)+item['units']
-        for pack,qty in required.items():
-            if agent_stock(db,u,pack)<qty:raise ValueError(f'Агентда {product_name(pack)}дан етарли миқдор йўқ.')
         for index,item in enumerate(products,1):
             record(db,u,u,v['client'],'delivery',item['pack'],item['units'],0,'',-(int(source)*100+index),currency='USD')
         cs.add_visit(db,u,v['client'],'active','Товар берилди: '+', '.join(product_name(item['pack'])+' '+str(item['units'])+' дона' for item in products))
@@ -1939,14 +1935,10 @@ def serve_webhook(db,base_url):
                         except (TypeError,ValueError):subject=0
                         if not any(x['id']==subject for x in admin_agents):
                             if action in ('dashboard','snapshot'):
-                                answer_agent(200,{'adminMode':True,'readOnly':True,'agents':admin_agents,
-                                    'selectedAgentId':None,'message':'Ko‘rish uchun agentni tanlang.'});return
-                            answer_agent(400,{'error':'Ko‘rish uchun faol agentni tanlang.'});return
-                        if action not in ('dashboard','snapshot','client_detail','route'):
-                            answer_agent(403,{'error':'Admin nazorat rejimi faqat ko‘rish uchun.'});return
+                                answer_agent(200,{'adminMode':True,'readOnly':False,'agents':admin_agents,
+                                    'selectedAgentId':None,'message':'Ishlash uchun agentni tanlang.'});return
+                            answer_agent(400,{'error':'Ishlash uchun faol agentni tanlang.'});return
                     if action=='photo_upload':
-                        if actor_role!='agent':
-                            answer_agent(403,{'error':'Foto olish faqat agent uchun.'});return
                         image=decode_agent_camera_image(payload.get('imageData'))
                         data={'ok':True,'photoFileId':upload_agent_camera_photo(actor,image),
                               'message':'Foto tayyor.'}
@@ -1961,22 +1953,26 @@ def serve_webhook(db,base_url):
                         data=agent_api.route(local,subject)
                         local.commit()
                     else:
-                        data=agent_api.mutate(local,actor,action,payload,
+                        # Admin temporarily operates the selected agent workspace.
+                        # The agent remains the ledger subject so stock, cash, debt,
+                        # shift and reports stay internally consistent.
+                        effective_agent=subject if admin_mode else actor
+                        data=agent_api.mutate(local,effective_agent,action,payload,
                                               payload.get('requestId') or payload.get('nonce'))
                         notify=data.pop('_notify',None)
                         local.commit()
                         if notify and not data.get('duplicate'):
                             if notify.get('kind')=='payment':
-                                notify_cashiers_payment(local,actor,notify['client'],notify['amount'])
+                                notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'])
                             elif notify.get('kind')=='handover':
-                                notify_cashiers_handover(local,actor,notify['handoverId'],notify['amount'])
+                                notify_cashiers_handover(local,effective_agent,notify['handoverId'],notify['amount'])
                             elif notify.get('kind')=='agent_expense':
-                                notify_agent_expense(local,actor,notify['expenseId'],notify['amount'],
+                                notify_agent_expense(local,effective_agent,notify['expenseId'],notify['amount'],
                                                      notify['category'],notify['note'],notify['balance'])
                             elif notify.get('kind')=='shift_end':
-                                notify_shift_end(local,actor,notify['shiftId'])
+                                notify_shift_end(local,effective_agent,notify['shiftId'])
                     if admin_mode:
-                        data['adminMode']=True;data['readOnly']=True
+                        data['adminMode']=True;data['readOnly']=False
                         data['agents']=admin_agents;data['selectedAgentId']=subject
                     attach_client_photo_urls(data)
                     answer_agent(200,data)
