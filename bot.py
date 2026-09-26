@@ -258,7 +258,7 @@ def allowed(db,u,action):
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_expenses')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -275,21 +275,17 @@ def menu(db,u):
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
-    if r=='cashier' and CASHIER_MINIAPP_URL:
+    if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
         rows.insert(0,['📱 Кассир Mini App'])
     return rows
 
 def show_cashier_menu(db,u):
     r=role(db,u)
-    if r=='cashier':
+    if r in ('cashier','admin'):
         rows=[['📱 Кассир Mini App'],['➖ Расход USD','➖ Расход UZS'],
               ['📥 Касса','⏳ Тасдиқланмаган пуллар'],['💱 Касса курси','📊 Кунлик касса'],
               ['📋 Харажатлар тарихи'],['⬅️ Меню']]
-        send(u,'💰 КАССИР БЎЛИМИ\nКиримни кассир қўлда киритмайди. Пул фақат агент топширганда ва кассир тасдиқлаганда кассага кирим бўлади.',rows)
-        return
-    if r=='admin':
-        send(u,'💰 КАССИР БЎЛИМИ · назорат режими',
-             [['📥 Касса','⏳ Тасдиқланмаган пуллар'],['📊 Кунлик касса','📋 Харажатлар тарихи'],['⬅️ Меню']])
+        send(u,'💰 КАССИР БЎЛИМИ · тўлиқ ҳуқуқ\nКиримни қўлда киритиш мумкин эмас. Пул фақат агент топширганда ва кассир ёки админ тасдиқлаганда кассага кирим бўлади.',rows)
         return
     raise ValueError('Касса бўлимига рухсат йўқ.')
 
@@ -465,8 +461,8 @@ def cashier_expenses_report(db,u):
 
 
 def cashier_pending_keyboard(db,u,limit=10):
-    """Cashier-only quick review buttons for currently pending handovers."""
-    if role(db,u)!='cashier':
+    """Cashier/admin quick review buttons for currently pending handovers."""
+    if role(db,u) not in ('cashier','admin'):
         return menu(db,u)
     rows=db.execute("""SELECT id FROM handovers WHERE status='pending'
         ORDER BY ts DESC,id DESC LIMIT ?""",(max(1,min(int(limit),20)),)).fetchall()
@@ -476,7 +472,7 @@ def cashier_pending_keyboard(db,u,limit=10):
 
 
 def review_handover(db,u,hid):
-    if role(db,u)!='cashier':raise ValueError('Фақат кассир пулни қабул қилади.')
+    if role(db,u) not in ('cashier','admin'):raise ValueError('Фақат кассир ёки админ пулни қабул қилади.')
     row=db.execute("SELECT h.*,ua.name AS agent_name FROM handovers h LEFT JOIN users ua ON ua.id=h.agent WHERE h.id=? AND h.status='pending'",(hid,)).fetchone()
     if not row:raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
     save(db,u,{'action':'handover_review','step':0,'values':{'handover':hid}})
@@ -514,7 +510,7 @@ def cashbox_report(db,u):
     if pending:
         for x in pending:
             out.append(f"#{x['id']} · {x['agent_name'] or x['agent']} · {fmt(x['amount_usd'])} USD · {stamp(x['ts'])}"
-                       +(f"\nКўриб чиқиш: /review {x['id']}" if role(db,u)=='cashier' else ''))
+                       +(f"\nКўриб чиқиш: /review {x['id']}" if role(db,u) in ('cashier','admin') else ''))
     else:out.append('Йўқ.')
     out.extend(['','✅/❌ ОХИРГИ КАССИР ҲАРАКАТЛАРИ'])
     if recent:
@@ -1106,7 +1102,7 @@ def handle(db,update):
     decision=re.fullmatch(r'(✅ Қабул қилиш|❌ Рад этиш) #([1-9][0-9]*)',text)
     if decision:
         hid=int(decision.group(2))
-        if (role(db,u)!='cashier' or not reviewed or reviewed.get('action')!='handover_review'
+        if (role(db,u) not in ('cashier','admin') or not reviewed or reviewed.get('action')!='handover_review'
                 or reviewed.get('values',{}).get('handover')!=hid):
             raise ValueError('Аввал /review орқали топшириқни очинг.')
         text=('/accept ' if decision.group(1).startswith('✅') else '/reject ')+str(hid)
@@ -1114,7 +1110,7 @@ def handle(db,update):
         if not re.fullmatch(r'/(?:accept|reject) [1-9][0-9]*',text):
             raise ValueError('Топшириқ рақами нотўғри.')
         hid=int(text.split()[1]);accepted=text.startswith('/accept ')
-        if (role(db,u)!='cashier' or not reviewed or reviewed.get('action')!='handover_review'
+        if (role(db,u) not in ('cashier','admin') or not reviewed or reviewed.get('action')!='handover_review'
                 or reviewed.get('values',{}).get('handover')!=hid):
             raise ValueError('Аввал /review орқали топшириқни очинг.')
         row=db.execute("""SELECT h.*,ua.name AS agent_name FROM handovers h
@@ -1783,8 +1779,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor)!='cashier':
-                        answer_cashier(403,{'error':'Бу бўлим фақат кассир учун.'});return
+                    if role(local,actor) not in ('cashier','admin'):
+                        answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
