@@ -36,16 +36,23 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
-    def test_admin_read_only_agent_selector(self):
+    def test_admin_full_agent_selector_and_write_mode(self):
         for term in ('id="adminPicker"','id="adminAgent"','adminAgentId',
-                     'data.adminMode','data.readOnly','admin-readonly'):
+                     'data.adminMode','admin-full','ADMIN · TO‘LIQ REJIM',
+                     'Admin to‘liq rejimi: ishlash uchun agentni tanlang.'):
             self.assertIn(term,self.html)
+        self.assertNotIn('admin-readonly',self.html)
+        self.assertNotIn('Admin nazorat rejimi xavfsiz emas.',self.html)
 
     def test_customer_row_opens_and_loads_real_detail_card(self):
         for term in ('if(page==="detail")renderDetail()','function loadClientDetail(',
                      'request("client_detail"','Tashriflar tarixi',
                      'So‘nggi operatsiyalar','loadClientDetail(selected)'):
             self.assertIn(term,self.html)
+
+    def test_product_picker_allows_negative_stock_display(self):
+        self.assertIn("qoldiq '+p.agentStock",self.html)
+        self.assertNotIn('qoldiq yetarli emas',self.html.lower())
 
     def test_product_ui_uses_catalog_name_not_internal_sku_as_weight(self):
         for term in (
