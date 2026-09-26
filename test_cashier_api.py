@@ -32,15 +32,28 @@ class CashierMiniAppTests(unittest.TestCase):
         api.review(self.db,3,self.hid);self.db.commit()
         self.mutate('accept',handoverId=self.hid)
 
-    def test_cashier_only_and_read_only_dashboard(self):
-        for actor in (1,2,99):
+    def test_cashier_and_admin_can_open_dashboard_but_agent_cannot(self):
+        for actor in (2,99):
             with self.assertRaises(ValueError):api.dashboard(self.db,actor)
             with self.assertRaises(ValueError):api.review(self.db,actor,self.hid)
             with self.assertRaises(ValueError):self.mutate('rate',actor=actor,rate='12500')
-        d=api.dashboard(self.db,3)
-        self.assertEqual(d['balance'],0)
-        self.assertEqual(len(d['pending']),1)
-        self.assertIn('daily',d)
+        for actor in (1,3):
+            d=api.dashboard(self.db,actor)
+            self.assertEqual(d['balance'],0)
+            self.assertEqual(len(d['pending']),1)
+            self.assertIn('daily',d)
+
+    def test_admin_has_full_cashier_mutations_but_manual_income_stays_closed(self):
+        api.review(self.db,1,self.hid);self.db.commit()
+        self.mutate('accept',actor=1,handoverId=self.hid,requestId='admin-accept-01')
+        self.assertEqual(core.cashier_balance_usd(self.db),6000)
+        self.mutate('expense',actor=1,requestId='admin-expense-01',currency='USD',amount='10.00',
+                    category=core.CASHIER_EXPENSE_CATEGORIES[0],recipient='Fuel')
+        self.assertEqual(core.cashier_balance_usd(self.db),5000)
+        self.mutate('rate',actor=1,requestId='admin-rate-0001',rate='12500')
+        self.assertEqual(core.cashier_rate(self.db),12500)
+        with self.assertRaises(ValueError):
+            self.mutate('income',actor=1,requestId='admin-income-01',amount='100')
 
     def test_accept_requires_review_and_cannot_double_count(self):
         with self.assertRaises(ValueError):self.mutate('accept',handoverId=self.hid)
@@ -100,6 +113,7 @@ class CashierMiniAppTests(unittest.TestCase):
             return result
         self.assertEqual(post({'action':'dashboard'})['code'],401)
         self.assertEqual(post({'initData':signed_data('test-token',2)})['code'],403)
+        self.assertEqual(post({'initData':signed_data('test-token',1)})['code'],200)
         auth={'initData':signed_data('test-token',3)}
         self.assertEqual(post(auth)['code'],200)
         self.assertEqual(post({**auth,'action':'review','handoverId':self.hid})['code'],200)
@@ -111,9 +125,14 @@ class CashierMiniAppTests(unittest.TestCase):
         self.assertEqual(result['code'],200)
         self.assertEqual(core.cashier_balance_usd(self.db),6000)
 
-    def test_launcher_uses_signed_inline_button(self):
+    def test_launcher_uses_signed_inline_button_for_cashier_and_admin(self):
         self.assertIn('📱 Кассир Mini App',[x for row in bot.menu(self.db,3) for x in row])
+        self.assertIn('📱 Кассир Mini App',[x for row in bot.menu(self.db,1) for x in row])
         msg={'message':{'from':{'id':3},'chat':{'id':3,'type':'private'},'text':'📱 Кассир Mini App','date':int(time.time())}}
+        with patch.object(bot,'api') as send:
+            bot.handle(self.db,msg)
+            self.assertEqual(send.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]['web_app']['url'],bot.CASHIER_MINIAPP_URL)
+        msg['message']['from']['id']=1;msg['message']['chat']['id']=1
         with patch.object(bot,'api') as send:
             bot.handle(self.db,msg)
             self.assertEqual(send.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]['web_app']['url'],bot.CASHIER_MINIAPP_URL)
