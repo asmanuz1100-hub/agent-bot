@@ -44,7 +44,7 @@ class CashierUzsDailyTests(unittest.TestCase):
         self.assertIn('🍽 Тушлик',core.CASHIER_EXPENSE_CATEGORIES)
         self.assertTrue(bot.allowed(self.db,3,'cashier_rate'))
         self.assertTrue(bot.allowed(self.db,3,'cashier_expense_uzs'))
-        self.assertFalse(bot.allowed(self.db,1,'cashier_rate'))
+        self.assertTrue(bot.allowed(self.db,1,'cashier_rate'))
         self.assertFalse(bot.allowed(self.db,2,'cashier_expense_uzs'))
         self.assertIsNone(core.cashier_rate(self.db))
         self.assertEqual(core.set_cashier_rate(self.db,3,12500,3005),12500)

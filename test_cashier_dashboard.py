@@ -34,7 +34,7 @@ class CashierDashboardTests(unittest.TestCase):
             self.assertIn('10.00 USD',text)
             self.assertIn('Ali Agent',text)
             self.assertIn('Baraka dokon',text)
-            self.assertNotIn('/accept 1',text)
+            self.assertIn('/review 1',text)
         with patch.object(bot,'send') as send:
             bot.cashbox_report(self.db,3)
             self.assertIn('/review 1',send.call_args.args[1])

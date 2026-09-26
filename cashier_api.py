@@ -10,9 +10,9 @@ import manager_api
 
 
 def require_cashier(db, actor):
-    row = db.execute("SELECT name FROM users WHERE id=? AND role='cashier'", (actor,)).fetchone()
+    row = db.execute("SELECT name FROM users WHERE id=? AND role IN ('cashier','admin')", (actor,)).fetchone()
     if not row:
-        raise ValueError('Бу бўлим фақат кассир учун.')
+        raise ValueError('Бу бўлим фақат кассир ёки админ учун.')
     return row[0]
 
 
