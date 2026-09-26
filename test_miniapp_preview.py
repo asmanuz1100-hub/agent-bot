@@ -68,7 +68,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
         self.assertIn('wallet.history||[]',self.html)
-        self.assertIn('wallet.categories||[]',self.html)
+        self.assertIn('(data.expenseWallet||{}).categories||[]',self.html)
         self.assertIn('Xarajat faqat shu balansdan yechiladi.',self.html)
 
     def test_javascript_parses(self):
