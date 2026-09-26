@@ -139,7 +139,25 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
         self.assertIn('Number(c.debtUsd||0)',self.html)
-        self.assertIn('Number(p.stock)<0?"red":""',self.html)
+        self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
+
+    def test_client_card_layout_does_not_overlap_content(self):
+        self.assertNotIn('\\n.customer-hero{',self.html)
+        self.assertIn('.customer-hero{position:relative',self.html)
+        self.assertIn('.client-actions{position:static',self.html)
+        self.assertNotIn('.client-actions{position:sticky',self.html)
+
+    def test_report_is_compact_and_includes_stock_summary(self):
+        for term in (
+            'class="report-kpis"','id="reportStockTotal"','id="reportNegativeCount"',
+            'class="report-stock-list"','class="report-stock-item"',
+            'Berilgan tovar','Xarajat balansi','Jami qoldiq','Minus qoldiq',
+            'products.reduce(function(sum,x)','negative=products.filter',
+            'an-bn||String(a.name).localeCompare'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('min-height:82px',self.html)
+        self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
 
     def test_javascript_parses(self):
         if not shutil.which("node"):
