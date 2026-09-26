@@ -387,11 +387,11 @@ def route(db,agent):
             "points":points}
 
 
-def mutate(db,agent,action,payload,request_id,now=None):
+def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
     now=int(time.time() if now is None else now)
     _require_agent(db,agent)
     feature=FEATURE_ACTION.get(action)
-    if feature:_feature(db,agent,feature)
+    if feature and not admin_override:_feature(db,agent,feature)
     core.lock_agent(db,agent)
     if not _reserve(db,agent,request_id,action):
         return {"ok":True,"duplicate":True,"message":"Bu so‘rov avval saqlangan."}
@@ -511,15 +511,17 @@ def mutate(db,agent,action,payload,request_id,now=None):
             f"{core.product_name(pack)} {qty} dona" for pack,qty in clean))
         return {"ok":True,"message":"Tovar topshirildi va mijoz qarzi yangilandi."}
     if action=="payment":
-        ok,msg=_live_ready(db,agent,now=now)
-        if not ok:raise ValueError(msg)
+        if not admin_override:
+            ok,msg=_live_ready(db,agent,now=now)
+            if not ok:raise ValueError(msg)
         amount=core.money(payload.get("amount"))
         core.record(db,agent,agent,cid,'payment',0,0,amount,'Mini App',source,currency='USD')
         return {"ok":True,"message":f"{_usd(amount):.2f} USD to‘lov saqlandi.",
                 "_notify":{"kind":"payment","client":cid,"amount":amount}}
     if action=="return":
-        ok,msg=_live_ready(db,agent,now=now)
-        if not ok:raise ValueError(msg)
+        if not admin_override:
+            ok,msg=_live_ready(db,agent,now=now)
+            if not ok:raise ValueError(msg)
         items=payload.get("items")
         if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:
             raise ValueError("Qaytariladigan tovarni kiriting.")
