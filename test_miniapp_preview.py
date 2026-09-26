@@ -71,6 +71,17 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('(data.expenseWallet||{}).categories||[]',self.html)
         self.assertIn('Xarajat faqat shu balansdan yechiladi.',self.html)
 
+    def test_new_client_uses_real_camera_capture_and_upload(self):
+        for term in (
+            'id="cameraInput"','capture="environment"','id="takePhoto"',
+            'id="cameraPreview"','id="photoFileId"','photo_upload',
+            'function compressCameraFile(','function uploadCameraFile(',
+            'Avval do‘konning real fotosini oling.','Foto ✅'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('canvas.toDataURL("image/jpeg"',self.html)
+        self.assertIn('data-action="client"',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
