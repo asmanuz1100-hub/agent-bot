@@ -171,7 +171,7 @@ function renderDetail(){
  var stockRows=(data.products||[]).filter(function(p){return Number(c.stock&&c.stock[String(p.pack)]||0)!==0}).map(function(p){
    var qty=Number(c.stock[String(p.pack)]||0);return '<div class="stock-item"><b>'+esc(p.name)+'</b><span>'+qty+' dona</span></div>';
  });
- body+='<div class="detail-section-title"><b>Do‘kondagi mahsulotlar</b><small>'+stockRows.length+' xil</small></div><div class="card"><div class="stock-list">'+(stockRows.join("")||'<p class="muted">Tovar qoldig‘i yo‘q.</p>')+'</div></div>';
+ body+='<div class="detail-section-title"><b>Do‘kondagi mahsulot qoldig‘i</b><small>'+stockRows.length+' xil</small></div><div class="card"><div class="stock-list">'+(stockRows.join("")||'<p class="muted">Tovar qoldig‘i yo‘q.</p>')+'</div></div>';
  if(detailData){
   var visits=detailData.visits||[],events=detailData.events||[];
   body+='<div class="detail-section-title"><b>Tashriflar tarixi</b><small>Oxirgi '+Math.min(visits.length,8)+'</small></div><div class="card">'+(visits.length?visits.slice(0,8).map(function(v){return '<div class="timeline-item"><small>'+date(v.ts)+' · '+esc(v.actor||"Agent")+'</small><b>'+esc((v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))+'</b></div>'}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
