@@ -157,7 +157,7 @@ def _client_snapshot(db,now):
     stock_rows=db.execute("""SELECT client,pack,
         COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
                           WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
-        FROM events WHERE client IS NOT NULL AND pack IN (1,3,5)
+        FROM events WHERE client IS NOT NULL AND pack>0
         GROUP BY client,pack""").fetchall()
     stocks={}
     for x in stock_rows:
@@ -181,20 +181,19 @@ def _client_snapshot(db,now):
             "createdTs":int(c['created_ts'] or 0) or None,
             "hasPhoto":bool(c['photo']),
             "debtUsd":_usd(debt.get(cid,0)),
-            "stock":{"1":stocks.get(cid,{}).get(1,0),
-                     "3":stocks.get(cid,{}).get(3,0),
-                     "5":stocks.get(cid,{}).get(5,0)}
+            "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
         })
     return result
 
 
 def _products(db,agent):
     out=[]
-    for pack in (1,3,5):
+    for pack in core.product_ids():
         out.append({"pack":pack,"name":core.product_name(pack),
+                    "weightKg":core.product_weight(pack),
                     "priceUsd":_usd(core.product_price(db,pack)),
                     "agentStock":int(core.agent_stock(db,agent,pack)),
-                    "blockUnits":int(core.units_per_block(pack))})
+                    "blockUnits":core.block_units(pack)})
     return out
 
 
@@ -319,7 +318,7 @@ def snapshot(db,agent,now=None):
         item["comment"]=item.get("note","")
         item["status"]=item.get("statusLabel") or item.get("status")
         clients.append(item)
-    products=[{"pack":x["pack"],"name":x["name"],"priceUsd":x["priceUsd"],
+    products=[{"pack":x["pack"],"name":x["name"],"weightKg":x["weightKg"],"priceUsd":x["priceUsd"],
                "stock":x["agentStock"],"blockUnits":x["blockUnits"]} for x in base["products"]]
     shift=base["shift"]
     return {"generatedTs":base["generatedTs"],"timezone":base["timezone"],
@@ -452,7 +451,7 @@ def mutate(db,agent,action,payload,request_id,now=None):
             if not isinstance(item,dict):raise ValueError("Tovar noto‘g‘ri.")
             try:pack=int(item.get("pack"));qty=int(item.get("qty"))
             except (TypeError,ValueError):raise ValueError("Tovar miqdori noto‘g‘ri.")
-            if pack not in (1,3,5) or qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
+            if pack not in core.PRODUCTS or qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
             required[pack]=required.get(pack,0)+qty;clean.append((pack,qty))
         for pack,qty in required.items():
             if core.agent_stock(db,agent,pack)<qty:
@@ -481,7 +480,7 @@ def mutate(db,agent,action,payload,request_id,now=None):
             if not isinstance(item,dict):raise ValueError("Qaytarish noto‘g‘ri.")
             try:pack=int(item.get("pack"));qty=int(item.get("qty"))
             except (TypeError,ValueError):raise ValueError("Qaytarish miqdori noto‘g‘ri.")
-            if pack not in (1,3,5) or qty<=0 or qty>100000:
+            if pack not in core.PRODUCTS or qty<=0 or qty>100000:
                 raise ValueError("Qaytarish miqdori noto‘g‘ri.")
             clean.append((pack,qty))
         for pack,qty in clean:

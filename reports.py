@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
-from core import route_stats,product_name,distance
+from core import route_stats,product_name,product_ids,distance
 import customer_status as cs
 import client_ledger as ledger
 TZ=ZoneInfo('Asia/Tashkent')
@@ -187,7 +187,7 @@ def agent_clients_map_html(db,agent,action_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in product_ids())
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -249,7 +249,7 @@ def admin_clients_map_html(db,actor,card_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in product_ids())
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -308,9 +308,11 @@ def client_card_html(db,actor,client_id,photo_url=None):
     finance_summary=e(ledger.summary(db,client_id))
     finance_history=e(ledger.recent_text(db,client_id,100))
     due=e(customer['payment_due'] or 'Аниқ эмас')
+    product_rows=[(pack,int(client_stock_total(db,client_id,pack))) for pack in product_ids()]
+    product_rows=[item for item in product_rows if item[1]]
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
-                     str(int(client_stock_total(db,client_id,pack)))+
-                     ' дона</td></tr>' for pack in (1,3,5))
+                     str(qty)+' дона</td></tr>' for pack,qty in product_rows)
+    if not products:products='<tr><td colspan="2">Товар қолдиғи йўқ</td></tr>'
     debt=client_debt_usd(db,client_id)
     old=legacy_debt_uzs(db,client_id)
     legacy=('<div class="field">Эски сўм ҳисоби: <strong>'+f'{old/100:,.2f} сўм'+'</strong></div>') if old else ''
@@ -608,13 +610,16 @@ def reconciliation(db,actor,client,start=None,end=None):
     elif start is not None and end is not None:a,b=dates(start,end)
     else:raise ValueError('Иккала санани ҳам киритинг ёки умумий акт сверкадан фойдаланинг.')
     opening_row=db.execute("""SELECT
-        COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=1 AND kind='delivery' THEN qty WHEN pack=1 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=3 AND kind='delivery' THEN qty WHEN pack=3 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=5 AND kind='delivery' THEN qty WHEN pack=5 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0)
+        COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0)
         FROM events WHERE client=? AND ts<?""",(client,a)).fetchone()
     opening=int(opening_row[0] or 0)
-    stocks={1:int(opening_row[1] or 0),3:int(opening_row[2] or 0),5:int(opening_row[3] or 0)}
+    stocks={pack:0 for pack in product_ids()}
+    opening_stock_rows=db.execute("""SELECT pack,
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
+                          WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
+        FROM events WHERE client=? AND ts<? AND pack>0 GROUP BY pack""",(client,a)).fetchall()
+    for item in opening_stock_rows:
+        stocks[int(item['pack'])]=int(item['qty'] or 0)
     events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd FROM events
         WHERE client=? AND ts>=? AND ts<? AND kind IN ('delivery','sold','return','payment')
         ORDER BY ts,id""",(client,a,b)).fetchall()
@@ -626,7 +631,9 @@ def reconciliation(db,actor,client,start=None,end=None):
     for e in events:
         k=e['kind']
         if k not in ('delivery','sold','return','payment'):continue
-        if k in ('delivery','sold','return'):stocks[e['pack']]+=e['qty']*(1 if k=='delivery' else -1)
+        if k in ('delivery','sold','return'):
+            pack=int(e['pack'] or 0)
+            stocks[pack]=stocks.get(pack,0)+e['qty']*(1 if k=='delivery' else -1)
         charge=e['amount'] if k=='sold' else 0;credit=e['amount'] if k=='payment' else 0
         balance+=charge-credit;sales+=charge;payments+=credit
         usd_charge=e['amount_usd'] if k=='delivery' else 0
@@ -669,9 +676,12 @@ def reconciliation_xlsx(r):
     stock_row=header_row+max(1,len(r['rows']))+3
     ws.merge_cells(start_row=stock_row,start_column=1,end_row=stock_row,end_column=8)
     ws.cell(stock_row,1,'МИЖОЗДАГИ СОТИЛМАГАН ТОВАР');ws.cell(stock_row,1).font=Font(bold=True,color='FFFFFF');ws.cell(stock_row,1).fill=PatternFill('solid',fgColor='123747')
-    for offset,pack in enumerate((1,3,5),1):
+    stock_packs=[pack for pack in product_ids() if r['opening_stock'].get(pack,0) or r['closing_stock'].get(pack,0)]
+    if not stock_packs:
+        ws.cell(stock_row+1,1,'Товар қолдиғи йўқ');ws.merge_cells(start_row=stock_row+1,start_column=1,end_row=stock_row+1,end_column=8)
+    for offset,pack in enumerate(stock_packs,1):
         ws.cell(stock_row+offset,1,product_name(pack));ws.merge_cells(start_row=stock_row+offset,start_column=1,end_row=stock_row+offset,end_column=6)
-        ws.cell(stock_row+offset,7,'Қолдиқ');ws.cell(stock_row+offset,8,r['closing_stock'][pack])
+        ws.cell(stock_row+offset,7,'Қолдиқ');ws.cell(stock_row+offset,8,r['closing_stock'].get(pack,0))
     widths=[9,20,30,30,10,21,23,18]
     for idx,width in enumerate(widths,1):ws.column_dimensions[chr(64+idx)].width=width
     ws.freeze_panes='A11';ws.sheet_view.showGridLines=False
@@ -702,7 +712,10 @@ def reconciliation_pdf(r):
     if len(data)==1:data.append([Paragraph('Операциялар йўқ',normal),'','','','','','',''])
     operations=Table(data,colWidths=[10*mm,28*mm,42*mm,45*mm,13*mm,28*mm,31*mm,25*mm],repeatRows=1)
     operations.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#087F8C')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
-    stock=[[Paragraph('<b>Товар</b>',normal),Paragraph('<b>Қолдиқ, дона</b>',normal)]]+[[Paragraph(esc(product_name(pack)),normal),Paragraph(str(r['closing_stock'][pack]),right)] for pack in (1,3,5)]
+    stock_packs=[pack for pack in product_ids() if r['opening_stock'].get(pack,0) or r['closing_stock'].get(pack,0)]
+    stock=[[Paragraph('<b>Товар</b>',normal),Paragraph('<b>Қолдиқ, дона</b>',normal)]]
+    stock += ([[Paragraph(esc(product_name(pack)),normal),Paragraph(str(r['closing_stock'].get(pack,0)),right)] for pack in stock_packs]
+              if stock_packs else [[Paragraph('Товар қолдиғи йўқ',normal),Paragraph('0',right)]])
     stock_table=Table(stock,colWidths=[90*mm,30*mm])
     stock_table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#123747')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('PADDING',(0,0),(-1,-1),5)]))
     story=[Paragraph('ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА',title),Spacer(1,3*mm),info_table,Spacer(1,4*mm),operations,Spacer(1,4*mm),stock_table,Spacer(1,3*mm),Paragraph('Масъул ходим: ____________________     Мижоз: ____________________',normal)]
@@ -806,7 +819,9 @@ def m(x):return f'{x/100:,.2f}'.replace(',',' ')
 
 def reconciliation_html(r):
     c=r['client'];esc=lambda x:escape(str(x),quote=True)
-    stock=''.join(f'<tr><td>{escape(product_name(p))}</td><td>{r["opening_stock"][p]}</td><td>{r["closing_stock"][p]}</td></tr>' for p in (1,3,5))
+    stock_packs=[p for p in product_ids() if r["opening_stock"].get(p,0) or r["closing_stock"].get(p,0)]
+    stock=''.join(f'<tr><td>{escape(product_name(p))}</td><td>{r["opening_stock"].get(p,0)}</td><td>{r["closing_stock"].get(p,0)}</td></tr>' for p in stock_packs)
+    if not stock:stock='<tr><td colspan="3">Товар қолдиғи йўқ</td></tr>'
     rows=''.join('<tr>'+''.join(f'<td>{esc(v)}</td>' for v in [x['id'],x['time'],x['kind'],product_name(x['pack']) if x['pack'] else '—',x['qty'] or '—',m(x['usd_charge']),m(x['usd_credit']),m(x['usd_balance'])])+'</tr>' for x in r['rows'])
     return f'''<!doctype html><html lang="uz"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ички ҳисоб — акт сверка</title><style>
 body{{font:14px Arial,sans-serif;color:#15243b;background:#eef3f8;margin:0;padding:24px}}main{{max-width:1000px;margin:auto;background:white;padding:36px}}h1{{color:#174e87;margin:8px 0}}.muted{{color:#52647a}}.cards{{display:flex;flex-wrap:wrap;gap:16px;margin:24px 0}}.card{{padding:16px;background:#edf4fb;flex:1;min-width:160px}}strong{{display:block;font-size:20px;margin-top:8px}}table{{border-collapse:collapse;width:100%;font-size:12px;margin:18px 0}}th{{background:#174e87;color:white}}td,th{{padding:9px;border:1px solid #d3dce8;text-align:left}}.scroll{{overflow:auto}}footer{{margin-top:32px}}@media print{{body{{background:white;padding:0}}main{{padding:0}}thead{{display:table-header-group}}tr{{break-inside:avoid}}button{{display:none}}}}@page{{size:A4 landscape;margin:14mm}}

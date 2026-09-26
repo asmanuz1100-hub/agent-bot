@@ -47,7 +47,7 @@ FLOW={
  'agent_deactivate':[('agent','Ҳисобини ёпиш учун агентни танланг:')],
  'client':[('location','1) 📍 Дўконнинг жорий локациясини юборинг:'),('photo','2) 📷 Дўкон/витрина расмини юборинг:'),('phone','3) 📞 1–3 та телефон рақамини киритинг. Рақамларни вергул, / ёки янги қатор билан ажратинг:'),('name','4) 👤 Мижоз исми:'),('shop_name','5) 🏪 Дўкон номи:'),('address','6) 🏠 Дўкон манзили:'),('comment','7) 📝 Мижоз нимани хоҳлади? Қисқа комментария ёзинг:'),('payment_due','8) 📅 Тўловни қачон қилади? YYYY-MM-DD форматда ёзинг ёки «Аниқ эмас»ни танланг.'),('pack','9) 📦 Берилган товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта берилди?')],
  'delivery':[('client','Мижозни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
- 'order':[('client','Мижозни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
+ 'order':[('client','Мижозни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'sold':[('client','Мижозни танланг:'),('pack','Қайси товар сотилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?')],
  'return':[('client','Мижозни танланг:'),('pack','Қайси товар қайтарилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта қайтарилди?')],
  'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган тўлов (USD):')],
@@ -56,7 +56,7 @@ FLOW={
  'cashier_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (USD):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_expense_uzs':[('category','Сўмдаги харажат турини танланг:'),('amount','Харажат суммасини бутун сўмда киритинг (масалан: 100000):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_rate':[('rate','Касса учун 1 USD неча сўм? Фақат бутун сон киритинг (масалан: 12500):')],
- 'load':[('agent','Агентни танланг:'),('pack','Грунтовка 7/1 — қадоқ (кг):'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
+ 'load':[('agent','Агентни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
  'admin_add':[('id','Админ қиладиган ходимнинг Telegram ID рақамини киритинг (аввал рўйхатдан ўтган бўлса ҳам бўлади):'),('name','Админ сифатида кўринадиган исмини киритинг:')],
  'agent_transfer':[('agent','Эски агентни танланг (аввал сменаси тугаган бўлсин):'),('id','Янги Telegram ID рақамини киритинг:')],
@@ -348,13 +348,14 @@ def report_agents(db,u):
     for row in rows:
         a=row['id']; clients=db.execute('SELECT COUNT(*) FROM clients WHERE agent=?',(a,)).fetchone()[0]
         shift=db.execute('SELECT id FROM shifts WHERE agent=? AND end IS NULL',(a,)).fetchone()
-        stock=' | '.join(f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in (1,3,5))
+        stock_rows=[f'{product_name(p)}: {agent_stock(db,a,p)} дона' for p in product_ids() if agent_stock(db,a,p)]
+        stock=' | '.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ'
         out.append(f"\n{row['name']} ({a})\nҲолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}\nМижозлар: {clients}\nНақд пул: {fmt(cash_usd(db,a))} USD\n{stock}")
     send(u,'\n'.join(out),admin_agent_menu(u))
 
 def report_prices(db,u):
     lines=['ТОВАР ВА НАРХЛАР']
-    for p in (1,3,5):
+    for p in product_ids():
         price=product_price(db,p)
         lines.append(f"\n{product_name(p)}\nНарх: {fmt(price)+' USD / дона' if price else 'киритилмаган'}")
     send(u,'\n'.join(lines)+"\n\nℹ️ Янги товар топшириш ва тўловлар USD ҳисобда юритилади. Эски UZS операциялар алоҳида сақланади.",[['✏️ Нарх киритиш'],['⬅️ Админ меню']])
@@ -597,12 +598,16 @@ def prompt(db,u,s):
     if key=='location':keys=[[{'text':'📍 Жорий локацияни юбориш','request_location':True}]]
     if s['action']=='cashier_rate':msg+=f"\nЖорий курс: {cashier_rate(db):,} сўм / USD" if cashier_rate(db) else '\nҲали курс белгиланмаган.'
     if s['action']=='cashier_expense_uzs' and key=='amount':msg+=f"\n💱 1 USD = {cashier_rate(db):,} сўм. Сўмдаги сумма USDга автомат ҳисобланади."
-    if key=='pack':keys=[[product_name(p)] for p in (1,3,5)]
+    if key=='pack':keys=[[product_name(p)] for p in product_ids()]
     if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs'):keys=[[c] for c in CASHIER_EXPENSE_CATEGORIES]
     if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
-        keys=[['Дона','Блок']]
-        msg+=f'\n1 блок = {units_per_block(s["values"]["pack"])} дона ({product_name(s["values"]["pack"])}).'
+        block=block_units(s["values"]["pack"])
+        keys=[['Дона','Блок']] if block else [['Дона']]
+        if block:
+            msg+=f'\n1 блок = {block} дона ({product_name(s["values"]["pack"])}).'
+        else:
+            msg+='\nБу товар учун ҳозирча фақат дона ҳисоби киритилган.'
     if key=='role':keys=[['agent','cashier']]
     if key=='status':keys=[[label] for label in cs.LABELS.values()]
     if key=='name' and s['action']=='admin_add':
@@ -689,7 +694,8 @@ def client_visible(db,u,cid):
 def show_client_card(db,u,cid):
     c=client_visible(db,u,cid)
     a=c['agent'];debt=client_debt_usd(db,cid);old_debt=legacy_debt_uzs(db,cid)
-    stock='\n'.join(f'• {product_name(p)}: {client_stock_total(db,cid,p)} дона' for p in (1,3,5))
+    stock_rows=[f'• {product_name(p)}: {client_stock_total(db,cid,p)} дона' for p in product_ids() if client_stock_total(db,cid,p)]
+    stock='\n'.join(stock_rows) if stock_rows else '• Товар қолдиғи йўқ'
     coords=(f"https://www.google.com/maps?q={c['lat']},{c['lon']}"
             if c['lat'] is not None and c['lon'] is not None else 'Локация киритилмаган')
     name=c['name'] or 'Номсиз'
@@ -758,18 +764,21 @@ def start_delivery_edit(db,u,cid,event_id):
     if int(row['amount_usd'] or 0)<=0:
         raise ValueError('Бу эски топширишда USD нархи сақланмаган. Автомат тузатиб бўлмайди.')
     save(db,u,{'action':'delivery_edit_pack','step':0,'values':{'client':cid,'event':event_id}})
-    keys=[[product_name(p)] for p in (1,3,5)]
+    keys=[[product_name(p)] for p in product_ids()]
     keys.extend([['⬅️ Мижоз карточкаси'],['❌ Бекор қилиш']])
     send(u,f"Танланган ёзув #{event_id}\nҲозир: {product_name(row['pack'])} · {row['qty']} дона · {fmt(row['amount_usd'])} USD\nЯнги товар турини танланг:",keys)
 
 def delivery_edit_choose_pack(db,u,s,text):
-    by_name={product_name(p):p for p in (1,3,5)}
+    by_name={product_name(p):p for p in product_ids()}
     if text not in by_name:raise ValueError('Товарни рўйхатдан танланг.')
     pack=by_name[text]
     s={'action':'delivery_edit_unit','step':0,'values':{**s['values'],'pack':pack}}
     save(db,u,s)
-    send(u,f"{product_name(pack)}\nМиқдорни қандай киритасиз?\n1 блок = {units_per_block(pack)} дона.",
-         [['Дона','Блок'],['⬅️ Мижоз карточкаси','❌ Бекор қилиш']])
+    block=block_units(pack)
+    detail=(f"\n1 блок = {block} дона." if block else "\nБу товар учун фақат дона ҳисоби.")
+    unit_keys=['Дона','Блок'] if block else ['Дона']
+    send(u,f"{product_name(pack)}\nМиқдорни қандай киритасиз?"+detail,
+         [unit_keys,['⬅️ Мижоз карточкаси','❌ Бекор қилиш']])
 
 def delivery_edit_choose_unit(db,u,s,text):
     if text not in ('Дона','Блок'):raise ValueError('Дона ёки Блокни танланг.')
@@ -1200,7 +1209,8 @@ def handle(db,update):
             return
         if action=='clients':report_clients(db,u);return
         if action=='balance':
-            send(u,'Қўлингиздаги товар:\n'+'\n'.join(f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in (1,3,5))+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
+            stock_rows=[f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in product_ids() if agent_stock(db,u,p)]
+            send(u,'Қўлингиздаги товар:\n'+('\n'.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ')+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
         if action=='cashbox':cashbox_report(db,u);return
         if action=='cashier_pending':
             send(u,cashier_pending.report(db),cashier_pending_keyboard(db,u));return
@@ -1421,12 +1431,12 @@ def handle(db,update):
                 raise ValueError('Мижоз топилмади ёки бу амал учун ҳали товар берилмаган.')
         if key=='agent' and not db.execute("SELECT 1 FROM users WHERE id=? AND role='agent'",(v,)).fetchone():raise ValueError('Агент топилмади.')
     elif key=='pack':
-        by_name={product_name(p):p for p in (1,3,5)}
+        by_name={product_name(p):p for p in product_ids()}
         if text in by_name:v=by_name[text]
         else:
             try:v=int(text)
             except ValueError:raise ValueError('Товарни рўйхатдан танланг.')
-        if v not in (1,3,5):raise ValueError('Товарни рўйхатдан танланг.')
+        if v not in PRODUCTS:raise ValueError('Товарни рўйхатдан танланг.')
     elif key=='status':
         v=next((k for k,label in cs.LABELS.items() if text==label),None)
         if not v:raise ValueError('Ҳолатни тугмадан танланг.')
@@ -1456,6 +1466,8 @@ def handle(db,update):
         v=text
     elif key=='unit':
         if text not in ('Дона','Блок'):raise ValueError('Дона ёки Блокни танланг.')
+        if text=='Блок' and not block_units(s['values']['pack']):
+            raise ValueError('Бу товар учун блок ҳисоби белгиланмаган. Дона танланг.')
         v=text
     elif key=='role':
         if text not in ('agent','cashier'):raise ValueError('agent ёки cashier танланг.')

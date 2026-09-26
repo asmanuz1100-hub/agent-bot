@@ -1,17 +1,59 @@
 import sqlite3, json, time, math, re, os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-PRODUCTS={
-    1:'Грунтовка 7/1 — 1 кг',
-    3:'Грунтовка 7/1 — 3 кг',
-    5:'Грунтовка 7/1 — 5 кг',
-}
+PRODUCT_CATALOG={
+    # Existing Gruntovka 7/1 SKUs keep their historical IDs.
+    1:   {'name':'Грунтовка 7/1 — 1 кг','weight_kg':1,'block_units':10,'default_price':0},
+    3:   {'name':'Грунтовка 7/1 — 3 кг','weight_kg':3,'block_units':6,'default_price':0},
+    5:   {'name':'Грунтовка 7/1 — 5 кг','weight_kg':5,'block_units':2,'default_price':0},
 
-PACK_UNITS={1:10,3:6,5:2}
+    # Emulsion SKUs use unique internal IDs because several products share
+    # the same 4/7/10/20 kg package sizes.
+    1004:{'name':'Эмульсия — Стен и потолков — 4 кг','weight_kg':4,'block_units':None,'default_price':375},
+    1007:{'name':'Эмульсия — Стен и потолков — 7 кг','weight_kg':7,'block_units':None,'default_price':565},
+    1010:{'name':'Эмульсия — Стен и потолков — 10 кг','weight_kg':10,'block_units':None,'default_price':785},
+    1020:{'name':'Эмульсия — Стен и потолков — 20 кг','weight_kg':20,'block_units':None,'default_price':1500},
+
+    2004:{'name':'Эмульсия — Фасадная — 4 кг','weight_kg':4,'block_units':None,'default_price':390},
+    2007:{'name':'Эмульсия — Фасадная — 7 кг','weight_kg':7,'block_units':None,'default_price':590},
+    2010:{'name':'Эмульсия — Фасадная — 10 кг','weight_kg':10,'block_units':None,'default_price':820},
+    2020:{'name':'Эмульсия — Фасадная — 20 кг','weight_kg':20,'block_units':None,'default_price':1565},
+
+    3004:{'name':'Эмульсия — Моющаяся / A-baza — 4 кг','weight_kg':4,'block_units':None,'default_price':415},
+    3007:{'name':'Эмульсия — Моющаяся / A-baza — 7 кг','weight_kg':7,'block_units':None,'default_price':635},
+    3010:{'name':'Эмульсия — Моющаяся / A-baza — 10 кг','weight_kg':10,'block_units':None,'default_price':885},
+    3020:{'name':'Эмульсия — Моющаяся / A-baza — 20 кг','weight_kg':20,'block_units':None,'default_price':1700},
+
+    4004:{'name':'Эмульсия — B-baza — 4 кг','weight_kg':4,'block_units':None,'default_price':530},
+    4007:{'name':'Эмульсия — B-baza — 7 кг','weight_kg':7,'block_units':None,'default_price':840},
+    4010:{'name':'Эмульсия — B-baza — 10 кг','weight_kg':10,'block_units':None,'default_price':1180},
+    4020:{'name':'Эмульсия — B-baza — 20 кг','weight_kg':20,'block_units':None,'default_price':2285},
+
+    5004:{'name':'Эмульсия — C-baza — 4 кг','weight_kg':4,'block_units':None,'default_price':545},
+    5007:{'name':'Эмульсия — C-baza — 7 кг','weight_kg':7,'block_units':None,'default_price':850},
+    5010:{'name':'Эмульсия — C-baza — 10 кг','weight_kg':10,'block_units':None,'default_price':1190},
+    5020:{'name':'Эмульсия — C-baza — 20 кг','weight_kg':20,'block_units':None,'default_price':2300},
+}
+PRODUCTS={sku:item['name'] for sku,item in PRODUCT_CATALOG.items()}
+PRODUCT_WEIGHTS={sku:int(item['weight_kg']) for sku,item in PRODUCT_CATALOG.items()}
+PRODUCT_DEFAULT_PRICES={sku:int(item['default_price']) for sku,item in PRODUCT_CATALOG.items()}
+PACK_UNITS={sku:int(item['block_units']) for sku,item in PRODUCT_CATALOG.items() if item['block_units']}
+
+def product_ids():
+    return tuple(PRODUCTS.keys())
+
+def product_weight(pack):
+    try:return PRODUCT_WEIGHTS[int(pack)]
+    except (KeyError,TypeError,ValueError):raise ValueError('Нотўғри товар.')
+
+def block_units(pack):
+    try:return PACK_UNITS.get(int(pack))
+    except (TypeError,ValueError):return None
 
 def units_per_block(pack):
-    try:return PACK_UNITS[int(pack)]
-    except (KeyError,TypeError,ValueError):raise ValueError('Нотўғри товар қадоғи.')
+    units=block_units(pack)
+    if not units:raise ValueError('Бу товар учун блок миқдори белгиланмаган.')
+    return units
 
 AGENT_FEATURES=(
     'client','clients','delivery','order','sold',
@@ -165,7 +207,8 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,name in PRODUCTS.items():
-            db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
+            db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
+                       (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
         _promote_8068123777_to_admin_once(db)
         _backfill_unbilled_deliveries(db)
         db.commit()
@@ -197,7 +240,8 @@ def connect(path,initialize=True):
     for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     for pack,name in PRODUCTS.items():
-        db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,0) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',(pack,name))
+        db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
+                   (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
     _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
     db.execute('PRAGMA journal_mode=WAL')
@@ -607,7 +651,7 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         c=db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone()
         if not c: raise ValueError('Мижоз топилмади.')
     if kind in ('load','delivery','sold','return','order'):
-        if pack not in (1,3,5) or not isinstance(qty,int) or qty<=0: raise ValueError('Қадоқ ёки миқдор нотўғри.')
+        if pack not in PRODUCTS or not isinstance(qty,int) or qty<=0: raise ValueError('Товар ёки миқдор нотўғри.')
     if kind=='delivery' and agent_stock(db,agent,pack)<qty: raise ValueError('Агентда етарли товар йўқ. Админ кирим қилсин.')
     if kind in ('sold','return') and client_stock_total(db,client,pack)<qty: raise ValueError('Мижозда етарли товар йўқ.')
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
