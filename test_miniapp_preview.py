@@ -139,7 +139,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
         self.assertIn('Number(c.debtUsd||0)',self.html)
-        self.assertIn('Number(p.stock)<0?"red":""',self.html)
+        self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
 
     def test_client_card_layout_does_not_overlap_content(self):
         self.assertNotIn('\\n.customer-hero{',self.html)
