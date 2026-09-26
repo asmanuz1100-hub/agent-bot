@@ -14,6 +14,8 @@ import cashier_daily
 import customer_status as cs
 import manager_api
 import agent_api
+import cashier_api
+from pathlib import Path
 STOP=False
 def stop_signal(*_):
     global STOP
@@ -26,6 +28,7 @@ TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.stri
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
 AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-agent-live-v1').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -272,12 +275,14 @@ def menu(db,u):
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
+    if r=='cashier' and CASHIER_MINIAPP_URL:
+        rows.insert(0,['📱 Кассир Mini App'])
     return rows
 
 def show_cashier_menu(db,u):
     r=role(db,u)
     if r=='cashier':
-        rows=[['➖ Расход USD','➖ Расход UZS'],
+        rows=[['📱 Кассир Mini App'],['➖ Расход USD','➖ Расход UZS'],
               ['📥 Касса','⏳ Тасдиқланмаган пуллар'],['💱 Касса курси','📊 Кунлик касса'],
               ['📋 Харажатлар тарихи'],['⬅️ Меню']]
         send(u,'💰 КАССИР БЎЛИМИ\nКиримни кассир қўлда киритмайди. Пул фақат агент топширганда ва кассир тасдиқлаганда кассага кирим бўлади.',rows)
@@ -1032,6 +1037,12 @@ def handle(db,update):
                  'asman.shift.end.v1':'⏹ Ишни тугатиш'}
         if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
         text=actions[payload]
+    if text=='📱 Кассир Mini App':
+        cashier_api.require_cashier(db,u)
+        api('sendMessage',chat_id=u,text='📱 Кассир панели · Қуйидаги тугмадан очинг.',
+            reply_markup={'inline_keyboard':[[{'text':'📱 Кассир панелини очиш',
+                'web_app':{'url':CASHIER_MINIAPP_URL}}]]})
+        return
     if text=='📱 Раҳбар Mini App':
         if r!='admin' or not MANAGER_MINIAPP_URL:
             raise ValueError('Фақат админ.')
@@ -1629,6 +1640,8 @@ def serve_webhook(db,base_url):
             self.end_headers()
         def do_GET(self):
             path=urlparse(self.path).path
+            if path in ('/cashier','/cashier/'):
+                self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8');return
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
             m=re.fullmatch(r'/map/overall/(day|week|month)/(\d{10,})/([0-9a-f]{32})',path)
@@ -1755,6 +1768,46 @@ def serve_webhook(db,base_url):
                 return
             self._reply(404,b'Not found')
         def do_POST(self):
+            if urlparse(self.path).path=='/api/cashier':
+                def answer_cashier(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                                'application/json; charset=utf-8')
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 2<=length<=20000:raise ValueError('Invalid length')
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):raise ValueError('Invalid payload')
+                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                except (ValueError,TypeError):
+                    answer_cashier(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
+                local=None
+                try:
+                    local=request_db()
+                    if role(local,actor)!='cashier':
+                        answer_cashier(403,{'error':'Бу бўлим фақат кассир учун.'});return
+                    action=payload.get('action','dashboard')
+                    if action=='dashboard':data=cashier_api.dashboard(local,actor)
+                    elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
+                    else:data=cashier_api.mutate(local,actor,action,payload)
+                    notify=data.pop('_notify',None)
+                    local.commit()
+                    if notify:
+                        try:
+                            recipients=set(admin_ids(local))
+                            if notify.get('agent'):recipients.add(notify['agent'])
+                            _safe_send_many(recipients,notify['text'])
+                        except Exception:logging.exception('Cashier Mini App notification failed')
+                    answer_cashier(200,data)
+                except (ValueError,TypeError,OverflowError) as exc:
+                    if local is not None:local.rollback()
+                    answer_cashier(400,{'error':str(exc)})
+                except Exception:
+                    if local is not None:local.rollback()
+                    logging.exception('Cashier Mini App request failed')
+                    answer_cashier(500,{'error':'Сақлаб бўлмади. Қайта уриниб кўринг.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
             if urlparse(self.path).path=='/api/agent':
                 headers=self._agent_headers()
                 if headers is None or self.path!='/api/agent':
