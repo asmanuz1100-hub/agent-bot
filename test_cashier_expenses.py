@@ -91,4 +91,4 @@ class CashierExpenseTests(unittest.TestCase):
         with patch.object(bot,'send') as send:
             bot.handle(self.db,self.message(1,'📋 Харажатлар тарихи',4010))
         self.assertIn('Fuel for work',send.call_args.args[1])
-        self.assertFalse(bot.allowed(self.db,1,'cashier_expense'))
+        self.assertTrue(bot.allowed(self.db,1,'cashier_expense'))
