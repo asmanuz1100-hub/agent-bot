@@ -133,7 +133,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         for term in (
             'class="customer-hero','class="profile-grid"',
             'USD qarz','id="callClient"','id="navigateClient"',
-            'Do‘kondagi mahsulotlar','class="stock-item"',
+            'Do‘kondagi mahsulot qoldig‘i','class="stock-item"',
             'class="timeline-item"','Tashriflar tarixi','So‘nggi operatsiyalar',
             'window.location.href="tel:"+digits'
         ):
