@@ -656,7 +656,9 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         if not c: raise ValueError('Мижоз топилмади.')
     if kind in ('load','delivery','sold','return','order'):
         if pack not in PRODUCTS or not isinstance(qty,int) or qty<=0: raise ValueError('Товар ёки миқдор нотўғри.')
-    if kind=='delivery' and agent_stock(db,agent,pack)<qty: raise ValueError('Агентда етарли товар йўқ. Админ кирим қилсин.')
+    # Delivery is allowed even when the accounting stock is zero or negative.
+    # A negative agent stock is an operational discrepancy to reconcile later;
+    # it must not block a real customer delivery.
     if kind in ('sold','return') and client_stock_total(db,client,pack)<qty: raise ValueError('Мижозда етарли товар йўқ.')
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
     if kind=='payment' and (not isinstance(value,int) or value<=0): raise ValueError('Сумма киритилмаган.')
