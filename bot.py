@@ -436,6 +436,16 @@ def notify_cashiers_handover(db,agent,hid,amount_usd):
     _safe_send_many(cashier_ids(db),text,
                     [[f'🔎 Кўриб чиқиш #{hid}'],['⏳ Тасдиқланмаган пуллар']])
 
+def notify_agent_expense(db,agent,expense_id,amount_usd,category,note,balance):
+    text=(f"🧾 АГЕНТ ХАРАЖАТИ #{expense_id}\n"
+          f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
+          f"📌 Тури: {category}\n"
+          f"💵 Сумма: {fmt(amount_usd)} USD\n"
+          f"📝 Изоҳ: {note}\n"
+          f"💼 Харажат ҳисобида қолди: {fmt(balance)} USD\n"
+          f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
+    _safe_send_many([*cashier_ids(db),*admin_ids(db)],text)
+
 def notify_shift_end(db,agent,shift_id):
     try:
         report=reports.shift_summary(db,agent,shift_id)
@@ -1899,6 +1909,9 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_payment(local,actor,notify['client'],notify['amount'])
                             elif notify.get('kind')=='handover':
                                 notify_cashiers_handover(local,actor,notify['handoverId'],notify['amount'])
+                            elif notify.get('kind')=='agent_expense':
+                                notify_agent_expense(local,actor,notify['expenseId'],notify['amount'],
+                                                     notify['category'],notify['note'],notify['balance'])
                             elif notify.get('kind')=='shift_end':
                                 notify_shift_end(local,actor,notify['shiftId'])
                     if admin_mode:

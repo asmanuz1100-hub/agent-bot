@@ -300,6 +300,16 @@ def snapshot(db,agent,now=None):
     handovers=[{"id":int(h["id"]),"amountUsd":_usd(h["amount_usd"]),
                 "status":h["status"],"ts":int(h["ts"]),
                 "acceptedTs":int(h["accepted_ts"] or 0) or None} for h in hand_rows]
+    fund_rows=db.execute("""SELECT f.id,f.kind,f.amount_usd,f.category,f.note,f.ts,
+        u.name AS actor_name FROM agent_funds f LEFT JOIN users u ON u.id=f.actor
+        WHERE f.agent=? ORDER BY f.ts DESC,f.id DESC LIMIT 100""",(agent,)).fetchall()
+    expense_wallet={
+        "balanceUsd":_usd(core.agent_fund_balance_usd(db,agent)),
+        "categories":list(core.CASHIER_EXPENSE_CATEGORIES),
+        "history":[{"id":int(x["id"]),"kind":x["kind"],"amountUsd":_usd(x["amount_usd"]),
+                    "category":x["category"] or "","note":x["note"] or "",
+                    "actor":x["actor_name"] or "","ts":int(x["ts"])} for x in fund_rows]
+    }
     def p(lo):
         row=db.execute("""SELECT
           COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
@@ -327,7 +337,7 @@ def snapshot(db,agent,now=None):
                   "liveAttached":shift["liveConnected"],
                   "gps":{"ts":shift["lastGpsTs"],"lat":shift["lat"],"lon":shift["lon"]}},
             "features":base["features"],"clients":clients,"products":products,
-            "events":events,"handovers":handovers,
+            "events":events,"handovers":handovers,"expenseWallet":expense_wallet,
             "summary":{"visitsToday":base["summary"]["visitsToday"],
                        "newClientsToday":base["summary"]["newClientsToday"],
                        "paymentTodayUsd":base["summary"]["paymentsTodayUsd"],
@@ -433,6 +443,18 @@ def mutate(db,agent,action,payload,request_id,now=None):
         hid=int(row[0]) if row else None
         return {"ok":True,"handoverId":hid,"message":"Kassaga topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
                 "_notify":{"kind":"handover","handoverId":hid,"amount":amount}}
+    if action=="agent_expense":
+        category=str(payload.get("category") or "").strip()
+        note=str(payload.get("note") or "").strip()
+        if not note:raise ValueError("Xarajat izohini kiriting.")
+        amount=core.money(payload.get("amount"))
+        expense_source=abs(source)
+        expense_id=core.add_agent_expense(db,agent,amount,category,note,expense_source)
+        balance=core.agent_fund_balance_usd(db,agent)
+        return {"ok":True,"expenseId":expense_id,"balanceUsd":_usd(balance),
+                "message":f"Xarajat saqlandi. Qoldiq: {_usd(balance):.2f} USD.",
+                "_notify":{"kind":"agent_expense","expenseId":expense_id,"amount":amount,
+                           "category":category,"note":note,"balance":balance}}
     cid=int(payload.get("clientId") or 0)
     _client(db,cid)
     if action=="visit":
