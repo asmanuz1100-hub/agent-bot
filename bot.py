@@ -302,10 +302,11 @@ def role(db,u):
 
 def allowed(db,u,action):
     r=role(db,u)
+    if action=='load':return False
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
-    return (r=='admin' and action in ('user','agent_add','load','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_expense','agent_expense_balance') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+    return (r=='admin' and action in ('user','agent_add','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_expense','agent_expense_balance') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -354,7 +355,7 @@ def admin_agent_menu(uid=None):
     keys=[
         ['📋 Агентлар рўйхати','👤 Агент профили'],
         ['➕ Агент қўшиш'],
-        ['📍 Агент маршрути','🚚 Агентга товар'],
+        ['📍 Агент маршрути'],
         ['✏️ Агент номини ўзгартириш'],
         ['💲 Товар ва нархлар'],
         ['⬅️ Админ меню']
@@ -931,6 +932,8 @@ def tracking(db,u,a):
 
 def finish(db,u,s,source):
     a=s['action']; v=s['values']
+    if a=='load':
+        raise ValueError('Агентга товар бериш ҳозирча вақтинча ўчирилган.')
     if not allowed(db,u,a):raise ValueError('Рухсат йўқ.')
     if a in ('payment','return') and role(db,u)=='agent':
         if not db.execute('SELECT 1 FROM clients WHERE id=?',(v.get('client'),)).fetchone():
@@ -1216,6 +1219,9 @@ def handle(db,update):
         return
     action=BTN.get(text)
     if action:
+        if action=='load':
+            db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+            raise ValueError('Агентга товар бериш ҳозирча вақтинча ўчирилган.')
         if not allowed(db,u,action):raise ValueError('Бу амалга рухсат йўқ.')
         if action=='location_help':
             send(u,location_help_text(),[['⬅️ Меню']]);return

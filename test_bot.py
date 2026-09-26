@@ -730,6 +730,19 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.product_price(self.db,1),core.money('12000'))
   with self.assertRaises(ValueError):core.set_product_price(self.db,2,1,core.money('13000'))
 
+ def test_admin_agent_stock_load_is_temporarily_disabled(self):
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
+  self.assertFalse(bot.allowed(self.db,1,'load'))
+  self.assertNotIn('🚚 Агентга товар',[x for row in bot.admin_agent_menu(1) for x in row])
+  before=self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0]
+  with patch.object(bot,'send'):
+   with self.assertRaisesRegex(ValueError,'вақтинча ўчирилган'):
+    bot.handle(self.db,msg(299,'🚚 Агентга товар'))
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0],before)
+  with self.assertRaisesRegex(ValueError,'вақтинча ўчирилган'):
+   bot.finish(self.db,1,{'action':'load','values':{'agent':2,'pack':1,'unit':'Дона','qty':5}},29999)
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0],before)
+
  def test_admin_agent_management_and_price_flow(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
   with patch.object(bot,'send') as send:
