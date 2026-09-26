@@ -59,6 +59,18 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('it.pack+" kg × "',self.html)
         self.assertNotIn('[1,3,5].map(function(p)',self.html)
 
+    def test_agent_expense_wallet_ui_is_present(self):
+        for term in (
+            'id="expenseBalance"','id="expenseList"','id="homeExpenseBalance"',
+            'data-action="agent_expense"','agent_expense:"Xarajat qilish"',
+            'data.expenseWallet','Xarajat hisobi tarixi',
+            'Kassirdan ajratilgan mablag‘ qoldig‘i',
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('wallet.history||[]',self.html)
+        self.assertIn('wallet.categories||[]',self.html)
+        self.assertIn('Xarajat faqat shu balansdan yechiladi.',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
