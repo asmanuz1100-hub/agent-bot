@@ -23,7 +23,7 @@ main{padding:0 16px 18px}section.view{display:none}section.view.active{display:b
 input,select,textarea{width:100%;background:#fff;border:1px solid #dfe7f2;border-radius:12px;padding:12px;color:var(--navy);min-height:45px}
 textarea{min-height:83px;resize:vertical}label{display:block;font-size:11px;font-weight:700;color:#72829d;margin:14px 2px 6px}
 .tools{display:flex;gap:7px;overflow-x:auto;padding:6px 0 12px}.chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:8px 10px;white-space:nowrap;color:#687c98;font-size:11px}.chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.balance{background:linear-gradient(125deg,#2367f5,#447eff);color:#fff;border:0;padding:20px}.balance .num{font-size:30px;font-weight:900;margin:10px 0}.balance .muted{color:#dbe6ff}
+.balance{background:linear-gradient(125deg,#2367f5,#447eff);color:#fff;border:0;padding:20px}.balance .num{font-size:30px;font-weight:900;margin:10px 0}.balance .muted{color:#dbe6ff}.expense-balance{background:linear-gradient(135deg,#101e39,#1d3558);color:#fff;border:0;padding:20px}.expense-balance .num{font-size:30px;font-weight:900;margin:10px 0}.expense-balance .muted{color:#bfd0e8}.money-summary{display:grid;grid-template-columns:1fr 1fr;gap:9px}.money-summary .card{margin:0}.money-summary strong{display:block;font-size:17px;margin-top:5px}.expense-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.expense-row .copy{min-width:0}.expense-row .copy b{display:block;font-size:12px}.expense-row .copy small{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45}.expense-row .amount{font-weight:850;font-size:12px;white-space:nowrap}.expense-row .amount.plus{color:var(--green)}.expense-row .amount.minus{color:var(--red)}
 nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:40;max-width:430px;width:100%;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:7px 7px calc(7px + env(safe-area-inset-bottom))}
 nav button{border:0;background:transparent;min-height:44px;border-radius:11px;font-size:9px;color:var(--muted);font-weight:650}nav button span{display:block;font-size:20px;line-height:24px}nav button.active{background:#e9f0ff;color:var(--blue)}
 #gate{position:fixed;inset:0;z-index:100;background:#f4f7fd;display:grid;place-items:center;padding:21px}#gate.hidden{display:none}#gate .card{width:min(100%,390px);text-align:center;padding:26px}#gate h1{font-size:24px;color:var(--blue);margin:0 0 10px}#gate p{line-height:1.65;font-size:12px;color:#546785;white-space:pre-line}
@@ -52,13 +52,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  </div>
  <div class="title">Ish kunini boshqarish</div>
  <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">Lokatsiya faqat Telegram orqali sizning roziligingiz bilan ulashiladi.</p><div class="grid2"><button type="button" class="primary" id="startShift">▶ Ishni boshlash</button><button type="button" class="secondary" id="endShift">■ Ishni tugatish</button></div><p class="tiny">Ish tugaganda Telegram chatida jonli lokatsiya ulashishni ham o‘zingiz to‘xtating.</p></div>
- <div class="title">Tezkor amallar</div><div class="grid2"><button type="button" class="primary" data-action="client">＋ Yangi mijoz</button><button type="button" class="secondary" data-page="clients">▦ Mijozlar</button><button type="button" class="secondary" data-page="map">⌖ Xarita</button><button type="button" class="secondary" data-page="reports">◷ Hisobot</button></div>
+ <div class="title">Tezkor amallar</div><div class="grid2"><button type="button" class="primary" data-action="client">＋ Yangi mijoz</button><button type="button" class="secondary" data-page="clients">▦ Mijozlar</button><button type="button" class="secondary" data-page="map">⌖ Xarita</button><button type="button" class="secondary" data-page="reports">◷ Hisobot</button><button type="button" class="secondary" data-action="agent_expense">🧾 Xarajat qilish</button><button type="button" class="secondary" data-page="cash">💼 Pul va xarajat</button></div>
+ <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">USD</span></div></div>
  <div class="title">Qayta tashrif kerak</div><div id="homePlan"></div>
 </section>
 <section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><div class="tools" id="mapFilters"></div><div id="map"></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
 <section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
 <section class="view" id="page-detail"><div class="flex between"><h2 class="screenhead" id="detailName">Mijoz</h2><button class="secondary" data-page="clients">‹ Orqaga</button></div><div id="detailBody"></div><div class="grid2 client-actions"><button class="primary" data-action="delivery">▣ Tovar berish</button><button class="secondary" data-action="visit">＋ Tashrif</button><button class="secondary" data-action="payment">↓ Pul olish</button><button class="secondary" data-action="return">↩ Tovar qaytarish</button></div></section>
-<section class="view" id="page-cash"><h2 class="screenhead">Kassa nazorati</h2><div class="card balance"><div class="muted">Kassirga topshirish mumkin</div><div class="num" id="cashFree">—</div><div class="muted" id="cashHold"></div></div><button class="primary" data-action="handover">↗ Kassirga topshirish</button><div class="title">So‘nggi to‘lovlar</div><div id="cashList"></div><div class="title">Kassirga topshirishlar</div><div id="handoverList"></div></section>
+<section class="view" id="page-cash"><h2 class="screenhead">Pul va xarajat</h2><div class="card balance"><div class="muted">Mijozlardan yig‘ilgan · kassirga topshirish mumkin</div><div class="num" id="cashFree">—</div><div class="muted" id="cashHold"></div></div><div class="card expense-balance"><div class="muted">Xarajat hisobim</div><div class="num" id="expenseBalance">—</div><div class="muted">Bu pul kassir tomonidan xizmat xarajatlari uchun ajratilgan.</div></div><div class="grid2"><button class="primary" data-action="handover">↗ Kassirga topshirish</button><button class="secondary" data-action="agent_expense">🧾 Xarajat qilish</button></div><div class="title">Xarajat hisobi tarixi</div><div id="expenseList"></div><div class="title">So‘nggi mijoz to‘lovlari</div><div id="cashList"></div><div class="title">Kassirga topshirishlar</div><div id="handoverList"></div></section>
 <section class="view" id="page-reports"><h2 class="screenhead">Agent hisoboti</h2><div class="tools" id="reportFilters"><button class="chip active" data-period="day">Bugun</button><button class="chip" data-period="week">Hafta</button><button class="chip" data-period="month">Oy</button></div><div class="grid2" id="reportCards"></div><div class="title">Mahsulot qoldig‘i</div><div id="productStock"></div><div class="title">Oxirgi GPS marshrut</div><div class="card"><p class="muted" id="routeSummary">Marshrut yuklanmagan</p><button class="secondary" id="myRoute">Marshrutni ko‘rish</button><div id="routeMap" style="height:260px;display:none;margin-top:12px;border-radius:15px"></div></div></section>
 <section class="view" id="page-form"><div class="flex between"><h2 class="screenhead" id="formTitle">Amal</h2><button class="secondary" id="cancelForm">‹ Orqaga</button></div><form id="operationForm"><div id="formFields"></div><div class="card" id="review" style="display:none"></div><button type="submit" id="submitForm" class="primary" style="margin-top:13px">Davom etish · Tekshirish</button></form></section>
 </main><nav><button type="button" data-page="home" class="active"><span>⌂</span>Asosiy</button><button type="button" data-page="map"><span>⌖</span>Xarita</button><button type="button" data-page="clients"><span>▦</span>Mijozlar</button><button type="button" data-page="cash"><span>◫</span>Kassa</button><button type="button" data-page="reports"><span>◷</span>Hisobot</button></nav></div>
@@ -104,6 +105,7 @@ async function refresh(){
   $("kNew").textContent=data.summary.newClientsToday;
   $("kPaid").textContent=fmt(data.summary.paymentTodayUsd);
   $("kGoods").textContent=data.summary.goodsToday;
+  $("homeExpenseBalance").textContent=fmt((data.expenseWallet||{}).balanceUsd||0)+" USD";
   $("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";
   $("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");
   $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Ish boshlandi. Telegram chatida jonli lokatsiyani qo‘lda ulang."):"Ishni boshlashdan oldin jonli GPS talab qilinmaydi.";
@@ -168,8 +170,15 @@ async function loadClientDetail(id){
 }
 function renderCash(){
  if(!data)return;
+ var wallet=data.expenseWallet||{balanceUsd:0,history:[],categories:[]};
  $("cashFree").textContent=fmt(data.summary.cashAvailableUsd)+" USD";
  $("cashHold").textContent="Qo‘ldagi jami: "+fmt(data.summary.cashOnHandUsd)+" USD. Kutilayotgan topshirishlar chegirilgan.";
+ $("expenseBalance").textContent=fmt(wallet.balanceUsd||0)+" USD";
+ $("homeExpenseBalance").textContent=fmt(wallet.balanceUsd||0)+" USD";
+ $("expenseList").innerHTML=(wallet.history||[]).map(function(x){
+   var top=x.kind==="topup",label=top?"Kassirdan tushdi":(x.category||"Xarajat");
+   return '<div class="card expense-row"><div class="copy"><b>'+esc(label)+'</b><small>'+date(x.ts)+(x.actor?" · "+esc(x.actor):"")+(x.note?"<br>"+esc(x.note):"")+'</small></div><span class="amount '+(top?"plus":"minus")+'">'+(top?"+":"−")+fmt(x.amountUsd)+' USD</span></div>';
+ }).join("")||'<div class="card muted">Xarajat hisobida hali harakat yo‘q.</div>';
  var payments=data.events.filter(function(e){return e.kind==="payment"});
  $("cashList").innerHTML=payments.slice(0,60).map(function(e){return '<div class="card"><div class="flex between"><b>'+esc(e.shop)+'</b><span class="pill green">+'+fmt(e.amountUsd)+' USD</span></div><p class="tiny">'+date(e.ts)+'</p></div>'}).join("")||'<div class="card muted">To‘lovlar hozircha yo‘q.</div>';
  $("handoverList").innerHTML=data.handovers.map(function(h){var label=h.status==="accepted"?"Qabul qilindi":h.status==="rejected"?"Rad etildi":"Kassir tasdig‘ida";return '<div class="card"><div class="flex between"><b>'+fmt(h.amountUsd)+' USD</b><span class="pill '+(h.status==="accepted"?"green":h.status==="pending"?"yellow":"red")+'">'+label+'</span></div><p class="tiny">'+date(h.ts)+'</p></div>'}).join("")||'<div class="card muted">Kassirga topshirishlar yo‘q.</div>';
@@ -210,7 +219,7 @@ function clientSelect(){return '<label>Mijoz</label><select name="clientId" requ
 function packLine(i){return '<div class="grid2"><div><label>Mahsulot</label><select name="pack'+i+'">'+data.products.map(function(p){return '<option value="'+p.pack+'">'+esc(p.name)+' · '+fmt(p.priceUsd)+' USD</option>'}).join("")+'</select></div><div>'+field("qty"+i,"Dona","number","1",true)+'</div></div>'}
 function openForm(action){
  if(!data)return;formAction=action;backPage=current;nonce=null;reviewing=false;
- var names={client:"Yangi mijoz",visit:"Tashrif qo‘shish",delivery:"Tovar berish",payment:"Mijozdan pul olish",return:"Tovar qaytarish",handover:"Kassirga topshirish"};
+ var names={client:"Yangi mijoz",visit:"Tashrif qo‘shish",delivery:"Tovar berish",payment:"Mijozdan pul olish",return:"Tovar qaytarish",handover:"Kassirga topshirish",agent_expense:"Xarajat qilish"};
  if(!names[action])return;$("formTitle").textContent=names[action];
  var h="";
  if(action==="client"){
@@ -219,9 +228,15 @@ function openForm(action){
   '<div class="card"><b>2 · Mijoz ma’lumotlari</b>'+field("shop","Do‘kon nomi","text","Masalan, Baraka do‘koni",true)+field("person","Mijoz ismi","text","Ism familiya",true)+field("phone","Telefonlar (vergul bilan, 1–3 ta)","tel","+998 90 ...",true)+field("address","Manzil","text","Ko‘cha va mo‘ljal",true)+field("note","Izoh","text","Mijoz ehtiyoji, kelishuv",true)+
   '<label>Holati</label><select name="status" id="status"><option value="interested">Taklif berilgan</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option><option value="active">Tovar olgan</option></select>'+field("followup","Keyingi tashrif (kutilmoqda bo‘lsa majburiy)","date","",false)+'</div>';
  }else{
-  if(action!=="handover")h=clientSelect();
+  if(action!=="handover"&&action!=="agent_expense")h=clientSelect();
   if(action==="visit")h+='<label>Natija</label><select name="status"><option value="interested">Taklif berildi</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option><option value="active">Tovar olgan</option></select>'+field("note","Suhbat izohi","text","Nima kelishildi?",true)+field("followup","Keyingi tashrif sanasi","date","",false);
   if(action==="payment"||action==="handover")h+=field("amount","Summa (USD)","number","0.00",true);
+  if(action==="agent_expense"){
+   var cats=((data.expenseWallet||{}).categories||[]);
+   h='<div class="card"><b>Joriy xarajat balansi</b><div style="font-size:28px;font-weight:900;margin-top:8px">'+fmt((data.expenseWallet||{}).balanceUsd||0)+' USD</div><p class="muted">Xarajat faqat shu balansdan yechiladi.</p></div>'+
+     '<label>Xarajat turi</label><select name="category" required>'+cats.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join("")+'</select>'+
+     field("amount","Xarajat summasi (USD)","number","0.00",true)+field("note","Izoh","text","Masalan: 20 litr benzin",true);
+  }
   if(action==="delivery"||action==="return")h+='<div class="card"><b>Mahsulotlar</b><div id="items">'+packLine(0)+'</div><button type="button" class="secondary" id="addItem" style="margin-top:12px">＋ Yana mahsulot</button></div>';
  }
  $("formFields").innerHTML=h;$("review").style.display="none";$("submitForm").textContent="Davom etish · Tekshirish";go("form");
@@ -239,7 +254,7 @@ async function saveForm(e){
  if(!reviewing){
   var total=0,detail="";
   if(payload.items){payload.items.forEach(function(it){var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
-  else detail=formAction==="payment"||formAction==="handover"?fmt(payload.amount)+" USD":formAction==="client"?payload.shop:payload.status;
+  else detail=formAction==="payment"||formAction==="handover"?fmt(payload.amount)+" USD":formAction==="agent_expense"?(payload.category+" · "+fmt(payload.amount)+" USD · "+payload.note):formAction==="client"?payload.shop:payload.status;
   $("review").textContent="Tasdiqlashdan oldin tekshiring: "+detail+(payload.items&&formAction==="delivery"?" · Taxminiy hisob: "+fmt(total)+" USD":"");
   $("review").style.display="block";$("submitForm").textContent="✓ Tasdiqlash va saqlash";reviewing=true;nonce=crypto.randomUUID().replace(/-/g,"");return;
  }
@@ -254,7 +269,7 @@ async function saveForm(e){
  }catch(err){notify(err.message||"Amal saqlanmadi. Tekshirib qayta urinib ko‘ring.");}
  finally{busy=false;$("submitForm").disabled=false}
 }
-async function refreshAfterWrite(){data=await request("snapshot");$("gate").classList.add("hidden");$("greet").textContent="Assalomu alaykum, "+data.me.name+"!";$("kVisits").textContent=data.summary.visitsToday;$("kNew").textContent=data.summary.newClientsToday;$("kPaid").textContent=fmt(data.summary.paymentTodayUsd);$("kGoods").textContent=data.summary.goodsToday;$("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";$("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");$("startShift").disabled=data.me.shiftOpen;$("endShift").disabled=!data.me.shiftOpen;renderHome();renderClients();renderDetail();renderCash();renderReports()}
+async function refreshAfterWrite(){data=await request("snapshot");$("gate").classList.add("hidden");$("greet").textContent="Assalomu alaykum, "+data.me.name+"!";$("kVisits").textContent=data.summary.visitsToday;$("kNew").textContent=data.summary.newClientsToday;$("kPaid").textContent=fmt(data.summary.paymentTodayUsd);$("kGoods").textContent=data.summary.goodsToday;$("homeExpenseBalance").textContent=fmt((data.expenseWallet||{}).balanceUsd||0)+" USD";$("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";$("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");$("startShift").disabled=data.me.shiftOpen;$("endShift").disabled=!data.me.shiftOpen;renderHome();renderClients();renderDetail();renderCash();renderReports()}
 async function shift(kind){
  if(busy)return;if(kind==="shift_end"&&!window.confirm("Ish kunini tugatasizmi? Telegram jonli lokatsiya ulashishni ham o‘zingiz to‘xtating."))return;
  if(kind==="shift_start"&&!window.confirm("Ish davomida admin siz Telegram chatidan ulagan jonli lokatsiyani ko‘rishi mumkin. Ishni boshlaysizmi?"))return;
