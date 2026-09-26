@@ -75,8 +75,8 @@ class ManagerMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
-    def test_report_product_badge_uses_real_weight_not_internal_sku(self):
-        self.assertIn('p.weightKg!=null?p.weightKg:"—"',self.html)
+    def test_report_product_pie_uses_real_weight_not_internal_sku(self):
+        self.assertIn('slice.product&&slice.product.weightKg!=null',self.html)
         self.assertIn('["Hajmi",(p.weightKg!=null?p.weightKg+" kg":"—")]',self.html)
         self.assertNotIn("escapeHtml(String(p.pack))+'<i>kg</i>",self.html)
 
