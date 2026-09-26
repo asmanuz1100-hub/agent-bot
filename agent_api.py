@@ -411,11 +411,7 @@ def mutate(db,agent,action,payload,request_id,now=None):
     if action in ("client","add_client"):
         shop=str(payload.get("shopName") or payload.get("shop") or "").strip()
         name=str(payload.get("name") or payload.get("person") or "").strip() or shop
-        address=str(payload.get("address") or "").strip()
-        note=str(payload.get("note") or "").strip()
         if not shop or len(shop)>120:raise ValueError("Do‘kon nomini kiriting.")
-        if not address or len(address)>300:raise ValueError("Manzilni kiriting.")
-        if not note or len(note)>1000:raise ValueError("Mijoz bilan suhbat izohini kiriting.")
         phones=_parse_phones(payload.get("phone"))
         entered=set(phones)
         for row in db.execute("SELECT phone FROM clients WHERE phone IS NOT NULL").fetchall():
@@ -424,21 +420,54 @@ def mutate(db,agent,action,payload,request_id,now=None):
             if entered & existing:raise ValueError("Telefon raqamlaridan biri avval kiritilgan.")
         lat,lon=_coord(payload.get("lat"),payload.get("lon"))
         if lat is None:raise ValueError("Mijoz joylashuvini GPS orqali belgilang.")
-        status=str(payload.get("status") or "interested")
-        if status not in cs.LABELS:
-            raise ValueError("Mijoz maqomi noto‘g‘ri.")
-        followup=payload.get("followup") or None
-        followup=cs.normalize(status,followup)
+        address=str(payload.get("address") or "").strip()
+        if len(address)>300:raise ValueError("Manzil juda uzun.")
+        if not address:address=f"GPS: {lat:.6f}, {lon:.6f}"
         photo_file=str(payload.get("photoFileId") or "").strip()
         if photo_file and not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",photo_file):
             raise ValueError("Mijoz fotosi identifikatori noto‘g‘ri.")
+        items=payload.get("items") or []
+        if not isinstance(items,list) or len(items)>MAX_WRITE_ITEMS:
+            raise ValueError("Mahsulotlar ro‘yxati noto‘g‘ri.")
+        clean=[];required={}
+        for item in items:
+            if not isinstance(item,dict):raise ValueError("Mahsulot noto‘g‘ri.")
+            try:pack=int(item.get("pack"));qty=int(item.get("qty"))
+            except (TypeError,ValueError):raise ValueError("Mahsulot miqdori noto‘g‘ri.")
+            if pack not in core.PRODUCTS or qty<=0 or qty>100000:
+                raise ValueError("Mahsulot miqdori noto‘g‘ri.")
+            required[pack]=required.get(pack,0)+qty
+            clean.append((pack,qty))
+        for pack,qty in required.items():
+            if core.agent_stock(db,agent,pack)<qty:
+                raise ValueError(f"{core.product_name(pack)} agent qoldig‘ida yetarli emas.")
+        status="active" if clean else str(payload.get("status") or "interested")
+        if status not in cs.LABELS:
+            raise ValueError("Mijoz maqomi noto‘g‘ri.")
+        followup=None if clean else (payload.get("followup") or None)
+        followup=cs.normalize(status,followup)
+        note=str(payload.get("note") or "").strip()
+        if len(note)>1000:raise ValueError("Izoh juda uzun.")
+        if not note:
+            note=("Tovar berildi" if clean else "Yangi mijoz · mahsulot hozircha berilmadi")
         cur=db.execute("""INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,
             comment,payment_due,created_ts,map_only)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,1) RETURNING id""",
             (agent,name," · ".join(phones),address,lat,lon,photo_file or None,shop,note,None,now))
         cid=int(cur.fetchone()[0])
+        if clean:
+            for idx,(pack,qty) in enumerate(clean):
+                core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Yangi mijoz · Mini App',
+                            _source(agent,request_id,idx+1),currency='USD')
+            visit_note="Tovar berildi: "+", ".join(
+                f"{core.product_name(pack)} {qty} dona" for pack,qty in clean)
+            if note and note!="Tovar berildi":visit_note+=" · "+note
+            cs.add_visit(db,agent,cid,'active',visit_note,None)
+            return {"ok":True,"clientId":cid,"deliveredItems":len(clean),
+                    "message":"Mijoz va mahsulotlar real bazaga saqlandi."}
         cs.add_visit(db,agent,cid,status,note,followup)
-        return {"ok":True,"clientId":cid,"message":"Mijoz real bazaga saqlandi."}
+        return {"ok":True,"clientId":cid,"deliveredItems":0,
+                "message":"Mijoz mahsulotsiz prospekt sifatida saqlandi."}
     if action=="handover":
         amount=core.money(payload.get("amount"))
         core.handover(db,agent,amount,source,currency='USD')
