@@ -49,7 +49,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
 
     def test_product_ui_uses_catalog_name_not_internal_sku_as_weight(self):
         for term in (
-            'esc(p.name)+\' · \'+fmt(p.priceUsd)+\' USD\'',
+            "esc(p.name)+' · '+fmt(p.priceUsd)+' USD</option>'",
             'prod?prod.name:("SKU "+ev.pack)',
             'p?p.name:("SKU "+it.pack)',
             'Do‘kondagi mahsulot qoldig‘i',
