@@ -174,7 +174,8 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     for row in product_rows:
         pack=int(row["pack"]);kind=row["kind"];qty=int(row["qty"] or 0);cents=int(row["amount_usd"] or 0)
         item=products.setdefault(pack,{
-            "pack":pack,"name":product_names.get(pack) or f"{pack} kg",
+            "pack":pack,"name":product_names.get(pack) or core.product_name(pack),
+            "weightKg":core.PRODUCT_WEIGHTS.get(pack),
             "deliveredQty":0,"deliveredUsd":0.0,
             "soldQty":0,"returnedQty":0,"returnedUsd":0.0,
             "sharePct":0.0,
