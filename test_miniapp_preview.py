@@ -117,6 +117,30 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('Avval do‘konning real fotosini oling.',self.html)
         self.assertIn('Foto ✅',self.html)
 
+    def test_premium_home_control_center_is_present(self):
+        for term in (
+            'id="homeCommand"','id="homeCashAvailable"','id="homeUrgentCount"',
+            'id="homeNextClient"','BUGUNGI HOLAT','class="quick-grid"',
+            'Lokatsiya → foto → telefon → mahsulot',
+            'homeCommandTitle'
+        ):
+            if isinstance(term,str):
+                self.assertIn(term,self.html)
+        self.assertIn('var urgent=data.clients.filter',self.html)
+        self.assertIn('btn.dataset.client=next.id',self.html)
+
+    def test_premium_client_card_has_debt_contact_stock_and_timeline(self):
+        for term in (
+            'class="customer-hero','class="profile-grid"',
+            'USD qarz','id="callClient"','id="navigateClient"',
+            'Do‘kondagi mahsulot qoldig‘i','class="stock-item"',
+            'class="timeline-item"','Tashriflar tarixi','So‘nggi operatsiyalar',
+            'window.location.href="tel:"+digits'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('Number(c.debtUsd||0)',self.html)
+        self.assertIn('Number(p.stock)<0?"red":""',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
