@@ -875,7 +875,7 @@ function renderReport(){
  $("report-products").innerHTML=products.map(function(p){
    var share=Math.max(0,Math.min(100,Number(p.sharePct||0)));
    return '<button type="button" class="report-product-card" data-report-product="'+p.pack+'">'+
-     '<span class="report-product-pack">'+escapeHtml(String(p.pack))+'<i>kg</i></span>'+
+     '<span class="report-product-pack">'+escapeHtml(String(p.weightKg!=null?p.weightKg:"—"))+'<i>kg</i></span>'+
      '<span class="report-product-main"><span class="report-product-title"><b>'+escapeHtml(p.name)+'</b><em>'+share.toLocaleString("uz-UZ",{maximumFractionDigits:1})+'%</em></span>'+
      '<span class="report-product-bar"><i style="width:'+share+'%"></i></span>'+
      '<small><b>📦 '+p.deliveredQty+' dona</b><b>💵 '+money(p.deliveredUsd)+' $</b><b>🛍 '+p.soldQty+' sotildi</b>'+(p.returnedQty?'<b>↩ '+p.returnedQty+' qaytdi</b>':'')+'</small></span>'+
@@ -912,7 +912,7 @@ function showReportProduct(pack){
  var data=reportData[reportKey()]||{},list=Array.isArray(data.products)?data.products:[],p=list.find(function(x){return Number(x.pack)===Number(pack)});
  if(!p)return;
  var rows=[
-  ["Davr",reportLabel()],["Mahsulot",p.name],["Berilgan",p.deliveredQty+" dona"],
+  ["Davr",reportLabel()],["Mahsulot",p.name],["Hajmi",(p.weightKg!=null?p.weightKg+" kg":"—")],["Berilgan",p.deliveredQty+" dona"],
   ["Realizatsiya",money(p.deliveredUsd)+" USD"],["Davr ulushi",Number(p.sharePct||0).toLocaleString("uz-UZ",{maximumFractionDigits:1})+"%"],
   ["Sotilgani qayd etilgan",p.soldQty+" dona"],["Qaytarilgan",p.returnedQty+" dona"],
   ["Qaytgan summa",money(p.returnedUsd)+" USD"]
