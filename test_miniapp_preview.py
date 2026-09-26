@@ -82,6 +82,34 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('canvas.toDataURL("image/jpeg"',self.html)
         self.assertIn('data-action="client"',self.html)
 
+    def test_new_client_fast_wizard_has_five_large_steps(self):
+        for term in (
+            'class="client-wizard-progress"','data-step="1">📍','data-step="2">📷',
+            'data-step="3">📞','data-step="4">🏪','data-step="5">📦',
+            'function renderClientWizardStep()','function clientWizardValidate(step)',
+            'function advanceClientWizard()','id="wizardBack"',
+            'id="locationStatus"','class="wizard-input"',
+        ):
+            self.assertIn(term,self.html)
+
+    def test_fast_wizard_product_step_supports_delivery_or_prospect(self):
+        for term in (
+            'data-client-product-mode="delivery"','data-client-product-mode="none"',
+            'id="clientProductItems"','id="clientProspectOptions"',
+            'function clientPackLine(i)','id="clientAddItem"',
+            'payload.productMode=clientProductMode',
+            'Mahsulot berildimi yoki yo‘qmi',
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('payload.items.push({pack:Number(fd.get("clientPack"+j)),qty:q})',self.html)
+        self.assertIn('Mijoz xaritada prospekt sifatida saqlanadi',self.html)
+
+    def test_fast_wizard_keeps_camera_as_required_second_step(self):
+        self.assertIn('capture="environment"',self.html)
+        self.assertIn('if(step===2)',self.html)
+        self.assertIn('Avval do‘konning real fotosini oling.',self.html)
+        self.assertIn('Foto ✅',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
