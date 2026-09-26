@@ -97,6 +97,45 @@ class AgentApiTests(unittest.TestCase):
         client=next(x for x in snap['clients'] if x['id']==out['clientId'])
         self.assertTrue(client['hasPhoto'])
 
+    def test_fast_wizard_can_create_client_with_initial_products(self):
+        out=agent_api.mutate(self.db,2,'add_client',{
+            'shopName':'Fast Shop','name':'Vali',
+            'phone':'+998901234568','lat':40.54,'lon':70.94,
+            'photoFileId':'AgACAgQAAxkBAA_fast_wizard_photo_123456',
+            'items':[{'pack':1,'qty':4},{'pack':3,'qty':2}]
+        },'wizard_products_123',self.now)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['deliveredItems'],2)
+        cid=out['clientId']
+        row=self.db.execute('SELECT map_only,address,photo FROM clients WHERE id=?',(cid,)).fetchone()
+        self.assertEqual(row['map_only'],0)
+        self.assertTrue(row['address'].startswith('GPS: '))
+        self.assertEqual(row['photo'],'AgACAgQAAxkBAA_fast_wizard_photo_123456')
+        self.assertEqual(core.client_stock_total(self.db,cid,1),4)
+        self.assertEqual(core.client_stock_total(self.db,cid,3),2)
+        self.assertEqual(core.agent_stock(self.db,2,1),26)
+        self.assertEqual(core.agent_stock(self.db,2,3),10)
+        self.assertEqual(core.client_debt_usd(self.db,cid),2000)
+        visit=self.db.execute('SELECT status,note FROM client_visits WHERE client=? ORDER BY id DESC LIMIT 1',(cid,)).fetchone()
+        self.assertEqual(visit['status'],'active')
+        self.assertIn('Tovar berildi',visit['note'])
+
+    def test_fast_wizard_can_save_no_product_prospect_with_minimal_fields(self):
+        out=agent_api.mutate(self.db,2,'add_client',{
+            'shopName':'Prospekt Shop','name':'Anvar',
+            'phone':'+998901234569','lat':40.55,'lon':70.95,
+            'photoFileId':'AgACAgQAAxkBAA_fast_wizard_photo_987654',
+            'status':'waiting','followup':'2026-09-26'
+        },'wizard_prospect_123',self.now)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['deliveredItems'],0)
+        cid=out['clientId']
+        row=self.db.execute('SELECT map_only,address,comment FROM clients WHERE id=?',(cid,)).fetchone()
+        self.assertEqual(row['map_only'],1)
+        self.assertTrue(row['address'].startswith('GPS: '))
+        self.assertIn('mahsulot hozircha berilmadi',row['comment'])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE client=? AND kind='delivery'",(cid,)).fetchone()[0],0)
+
     def test_delivery_visit_payment_return_and_handover_use_core_rules(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
         delivery=agent_api.mutate(self.db,2,'delivery',
