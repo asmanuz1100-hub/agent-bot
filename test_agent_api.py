@@ -136,6 +136,37 @@ class AgentApiTests(unittest.TestCase):
         self.assertIn('mahsulot hozircha berilmadi',row['comment'])
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE client=? AND kind='delivery'",(cid,)).fetchone()[0],0)
 
+    def test_delivery_can_continue_when_agent_stock_becomes_negative(self):
+        self.add_client('negative_stock_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        out=agent_api.mutate(self.db,2,'delivery',
+            {'clientId':cid,'items':[{'pack':1,'qty':35}]},
+            'negative_stock_delivery',self.now)
+        self.assertTrue(out['ok'])
+        self.assertEqual(core.agent_stock(self.db,2,1),-5)
+        self.assertEqual(core.client_stock_total(self.db,cid,1),35)
+        self.assertEqual(core.client_debt_usd(self.db,cid),8750)
+
+    def test_admin_override_can_use_disabled_agent_actions_without_live_gps(self):
+        self.add_client('admin_override_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        core.set_agent_feature(self.db,1,2,'delivery',False)
+        core.set_agent_feature(self.db,1,2,'payment',False)
+        with self.assertRaisesRegex(ValueError,'o‘chirilgan'):
+            agent_api.mutate(self.db,2,'delivery',
+                {'clientId':cid,'items':[{'pack':1,'qty':1}]},
+                'disabled_delivery_normal',self.now)
+        delivered=agent_api.mutate(self.db,2,'delivery',
+            {'clientId':cid,'items':[{'pack':1,'qty':31}]},
+            'disabled_delivery_admin',self.now,admin_override=True)
+        self.assertTrue(delivered['ok'])
+        self.assertEqual(core.agent_stock(self.db,2,1),-1)
+        paid=agent_api.mutate(self.db,2,'payment',
+            {'clientId':cid,'amount':'10.00'},
+            'payment_admin_override',self.now,admin_override=True)
+        self.assertTrue(paid['ok'])
+        self.assertEqual(core.cash_usd(self.db,2),1000)
+
     def test_delivery_visit_payment_return_and_handover_use_core_rules(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
         delivery=agent_api.mutate(self.db,2,'delivery',
