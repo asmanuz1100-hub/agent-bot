@@ -914,7 +914,7 @@ function renderReport(){
    var share=productTotal>0?slice.value/productTotal*100:0;
    var display=productMetric==="deliveredUsd"?money(slice.value)+" USD":Math.round(slice.value).toLocaleString("uz-UZ")+" dona";
    var inner='<span class="product-pie-dot" style="--slice-color:'+pieColors[i%pieColors.length]+'"></span>'+
-     '<span class="product-pie-copy"><b>'+escapeHtml(slice.name)+'</b><small>'+share.toLocaleString("uz-UZ",{maximumFractionDigits:1})+'% ulush · '+escapeHtml(productMeta.row)+'</small><strong>'+escapeHtml(display)+'</strong></span>';
+     '<span class="product-pie-copy"><b>'+escapeHtml(slice.name)+'</b><small>'+(slice.product&&slice.product.weightKg!=null?escapeHtml(String(slice.product.weightKg))+' kg · ':'')+share.toLocaleString("uz-UZ",{maximumFractionDigits:1})+'% ulush · '+escapeHtml(productMeta.row)+'</small><strong>'+escapeHtml(display)+'</strong></span>';
    return slice.pack!=null?'<button type="button" class="product-pie-item" data-report-product="'+slice.pack+'">'+inner+'</button>':'<div class="product-pie-item">'+inner+'</div>';
  }).join("")||'<div class="empty product-chart-empty">Tanlangan davrda mahsulot harakati yo‘q</div>';
 
