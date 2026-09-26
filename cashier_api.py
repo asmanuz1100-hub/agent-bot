@@ -25,8 +25,14 @@ def dashboard(db, actor):
         WHERE h.status!='pending' ORDER BY h.accepted_ts DESC,h.id DESC LIMIT 100""").fetchall()]
     expenses = [dict(x) for x in db.execute("""SELECT e.*,u.name AS cashier_name FROM cashier_expenses e
         LEFT JOIN users u ON u.id=e.cashier ORDER BY e.ts DESC,e.id DESC LIMIT 100""").fetchall()]
+    agents = [{'id': int(x['id']), 'name': x['name'], 'fund_balance': core.agent_fund_balance_usd(db,int(x['id']))}
+              for x in db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()]
+    agent_funds = [dict(x) for x in db.execute("""SELECT f.*,a.name AS agent_name,u.name AS actor_name
+        FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
+        ORDER BY f.ts DESC,f.id DESC LIMIT 100""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),
             'pending': pending, 'history': history, 'expenses': expenses,
+            'agents': agents, 'agentFunds': agent_funds,
             'categories': list(core.CASHIER_EXPENSE_CATEGORIES), 'daily': cashier_daily.report(db)}
 
 
@@ -42,7 +48,7 @@ def review(db, actor, hid):
 
 def mutate(db, actor, action, payload):
     require_cashier(db, actor)
-    if action not in ('accept', 'reject', 'expense', 'rate'):
+    if action not in ('accept', 'reject', 'expense', 'rate', 'fund'):
         raise ValueError('Амал нотўғри.')
     rid = payload.get('requestId', '')
     if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,96}', rid):
@@ -67,6 +73,18 @@ def mutate(db, actor, action, payload):
         core.accept(db, actor, hid, action=='accept')
         amount = f"{cashier_pending.usd(row['amount_usd'])} USD" if row['amount_usd'] else f"{cashier_pending.usd(row['amount'])} сўм"
         notify = {'agent': int(row['agent']), 'text': f"{'✅ ҚАБУЛ ҚИЛИНДИ' if action=='accept' else '❌ РАД ЭТИЛДИ'}\nТопшириш #{hid} · {amount}\nКассир: {require_cashier(db,actor)}"}
+    elif action == 'fund':
+        agent = int(payload.get('agentId') or 0)
+        amount = core.money(payload.get('amount'))
+        note = payload.get('note', '')
+        fid = core.fund_agent_expense(db, actor, agent, amount, note, source)
+        balance = core.agent_fund_balance_usd(db, agent)
+        agent_row = db.execute("SELECT name FROM users WHERE id=? AND role='agent'", (agent,)).fetchone()
+        notify = {'agent': agent, 'text': f"💳 АГЕНТ ҲИСОБИ ТЎЛДИРИЛДИ #{fid}\n"
+                  f"Агент: {agent_row[0] if agent_row else agent}\n"
+                  f"Сумма: {cashier_pending.usd(amount)} USD\n"
+                  f"Янги харажат баланси: {cashier_pending.usd(balance)} USD\n"
+                  f"Кассир: {require_cashier(db,actor)}"}
     elif action == 'expense':
         currency = payload.get('currency')
         args = (payload.get('category'), payload.get('recipient'), payload.get('note', ''), source)
