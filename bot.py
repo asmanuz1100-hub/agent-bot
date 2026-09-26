@@ -1958,7 +1958,8 @@ def serve_webhook(db,base_url):
                         # shift and reports stay internally consistent.
                         effective_agent=subject if admin_mode else actor
                         data=agent_api.mutate(local,effective_agent,action,payload,
-                                              payload.get('requestId') or payload.get('nonce'))
+                                              payload.get('requestId') or payload.get('nonce'),
+                                              admin_override=admin_mode)
                         notify=data.pop('_notify',None)
                         local.commit()
                         if notify and not data.get('duplicate'):
