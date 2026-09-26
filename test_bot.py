@@ -1,4 +1,4 @@
-import unittest, time
+import unittest, time, base64, io, json
 from unittest.mock import patch
 import core, bot
 
@@ -21,6 +21,20 @@ class Tests(unittest.TestCase):
   self.assertEqual(bot.photo_content_type(b'RIFF\x08\x00\x00\x00WEBP'),'image/webp')
   with self.assertRaises(ValueError):
    bot.photo_content_type(b'not_an_image')
+
+ def test_agent_camera_image_decoder_and_upload_file_id(self):
+  raw=bytes([255,216,255])+b'x'*300
+  data='data:image/jpeg;base64,'+base64.b64encode(raw).decode()
+  self.assertEqual(bot.decode_agent_camera_image(data),raw)
+  with self.assertRaises(ValueError):
+   bot.decode_agent_camera_image('data:text/plain;base64,SGVsbG8=')
+  response={'ok':True,'result':{'message_id':77,'photo':[{'file_id':'small'},{'file_id':'camera-file-id'}]}}
+  fake=io.BytesIO(json.dumps(response).encode())
+  with patch.object(bot,'TOKEN','local-token'),patch.object(bot.urllib.request,'urlopen',return_value=fake) as opening,patch.object(bot,'api',return_value=True) as api:
+   self.assertEqual(bot.upload_agent_camera_photo(2,raw),'camera-file-id')
+   req=opening.call_args.args[0]
+   self.assertIn('/botlocal-token/sendPhoto',req.full_url)
+   api.assert_called_once_with('deleteMessage',chat_id=2,message_id=77)
 
  def test_consignment_not_debt(self):
   self.rec('load',12,actor=1);self.rec('delivery',4)
