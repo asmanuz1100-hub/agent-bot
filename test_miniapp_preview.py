@@ -122,7 +122,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'id="homeCommand"','id="homeCashAvailable"','id="homeUrgentCount"',
             'id="homeNextClient"','BUGUNGI HOLAT','class="quick-grid"',
             'Lokatsiya → foto → telefon → mahsulot',
-            'Muhim: '+String if False else 'homeCommandTitle'
+            'homeCommandTitle'
         ):
             if isinstance(term,str):
                 self.assertIn(term,self.html)
