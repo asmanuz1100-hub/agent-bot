@@ -141,6 +141,51 @@ def photo_content_type(content):
         return 'image/webp'
     raise ValueError('unsupported_image_format')
 
+def decode_agent_camera_image(value):
+    """Decode a small camera image uploaded by the authenticated Agent Mini App."""
+    if not isinstance(value,str) or len(value)>1_700_000:
+        raise ValueError('Foto hajmi juda katta.')
+    match=re.fullmatch(r'data:(image/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)',value)
+    if not match:
+        raise ValueError('Foto formati noto‘g‘ri.')
+    try:
+        content=base64.b64decode(match.group(2),validate=True)
+    except Exception:
+        raise ValueError('Foto ma’lumoti buzilgan.')
+    if len(content)<128 or len(content)>1_200_000:
+        raise ValueError('Foto 1.2 MB dan oshmasin.')
+    actual=photo_content_type(content)
+    if actual!=match.group(1):
+        raise ValueError('Foto turi mos kelmadi.')
+    return content
+
+def upload_agent_camera_photo(chat_id,content):
+    """Upload a camera image through Telegram, keep only its durable file_id, then remove the temporary message."""
+    mime=photo_content_type(content)
+    ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[mime]
+    boundary='----asman'+uuid.uuid4().hex
+    def field(name,value):
+        return (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n').encode()
+    body=field('chat_id',str(int(chat_id)))+field('disable_notification','true')
+    body+=(f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="agent-camera.{ext}"\r\n'
+          f'Content-Type: {mime}\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
+    req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendPhoto',data=body,
+        headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+    with urllib.request.urlopen(req,timeout=25) as res:
+        result=json.load(res)
+    if not result.get('ok'):
+        raise ValueError('Foto Telegramga saqlanmadi.')
+    message=result.get('result') or {}
+    photos=message.get('photo') or []
+    if not photos or not photos[-1].get('file_id'):
+        raise ValueError('Foto identifikatori olinmadi.')
+    file_id=str(photos[-1]['file_id'])
+    try:
+        api('deleteMessage',chat_id=int(chat_id),message_id=int(message.get('message_id')))
+    except Exception:
+        logging.warning('Temporary Agent Mini App camera message could not be deleted chat=%s',chat_id)
+    return file_id
+
 def customer_photo_bytes(file_id):
     """Fetch a signed customer photo server-side, with a small bounded in-memory cache."""
     global _PHOTO_CACHE_SIZE
@@ -1860,11 +1905,14 @@ def serve_webhook(db,base_url):
                                 'application/json; charset=utf-8',headers)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if length<2 or length>100_000:
+                    if length<2 or length>1_900_000:
                         answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):
                         answer_agent(400,{'error':'So‘rov noto‘g‘ri.'});return
+                    action=str(payload.get('action') or 'dashboard')
+                    if action!='photo_upload' and length>100_000:
+                        answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
                     answer_agent(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
@@ -1890,7 +1938,14 @@ def serve_webhook(db,base_url):
                             answer_agent(400,{'error':'Ko‘rish uchun faol agentni tanlang.'});return
                         if action not in ('dashboard','snapshot','client_detail','route'):
                             answer_agent(403,{'error':'Admin nazorat rejimi faqat ko‘rish uchun.'});return
-                    if action in ('dashboard','snapshot'):
+                    if action=='photo_upload':
+                        if actor_role!='agent':
+                            answer_agent(403,{'error':'Foto olish faqat agent uchun.'});return
+                        image=decode_agent_camera_image(payload.get('imageData'))
+                        data={'ok':True,'photoFileId':upload_agent_camera_photo(actor,image),
+                              'message':'Foto tayyor.'}
+                        local.commit()
+                    elif action in ('dashboard','snapshot'):
                         data=agent_api.snapshot(local,subject) if action=='snapshot' else agent_api.dashboard(local,subject)
                         local.commit()
                     elif action=='client_detail':
