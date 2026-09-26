@@ -37,6 +37,10 @@ def report(db,now=None):
           FROM handovers WHERE status='accepted' AND COALESCE(accepted_ts,ts)<?""",(start,)).fetchone()[0] or 0)
     opening_expense=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
           FROM cashier_expenses WHERE ts<?""",(start,)).fetchone()[0] or 0)
+    opening_funded=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
+          FROM agent_funds WHERE kind='topup' AND ts<?""",(start,)).fetchone()[0] or 0)
+    funded=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
+          FROM agent_funds WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
     expense=db.execute("""SELECT
          COALESCE(SUM(amount_usd),0) AS usd_equivalent,
          COALESCE(SUM(CASE WHEN currency='UZS' THEN amount_uzs ELSE 0 END),0) AS original_uzs,
@@ -45,12 +49,16 @@ def report(db,now=None):
     pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0)
           FROM handovers WHERE status='pending'""").fetchone()[0] or 0)
     rate=core.cashier_rate(db)
-    opening=opening_income-opening_expense
-    closing=opening+cash_accepted-int(expense['usd_equivalent'] or 0)
+    opening=opening_income-opening_expense-opening_funded
+    closing=opening+cash_accepted-int(expense['usd_equivalent'] or 0)-funded
     rows=db.execute("""SELECT e.ts,e.currency,e.amount_uzs,e.amount_usd,e.rate_uzs_per_usd,
           e.category,e.recipient,u.name AS cashier_name FROM cashier_expenses e
           LEFT JOIN users u ON u.id=e.cashier
           WHERE e.ts>=? AND e.ts<? ORDER BY e.ts DESC,e.id DESC LIMIT 25""",(start,end)).fetchall()
+    funded_rows=db.execute("""SELECT f.ts,f.amount_usd,a.name AS agent_name,u.name AS actor_name
+          FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
+          WHERE f.kind='topup' AND f.ts>=? AND f.ts<? ORDER BY f.ts DESC,f.id DESC LIMIT 20""",
+          (start,end)).fetchall()
     accepted=db.execute("""SELECT h.ts,h.accepted_ts,h.amount_usd,u.name AS agent_name
           FROM handovers h LEFT JOIN users u ON u.id=h.agent
           WHERE h.status='accepted' AND h.accepted_ts>=? AND h.accepted_ts<?
@@ -62,6 +70,7 @@ def report(db,now=None):
        f"🧾 Бугун сўмдаги харажат: {som(expense['original_uzs'])} сўм",
        f"🧾 Бугун USD харажати: {usd(expense['original_usd'])} USD",
        f"💱 Харажатларнинг жами USD эквиваленти: {usd(expense['usd_equivalent'])} USD",
+       f"💳 Бугун агент харажат ҳисобларига берилган: {usd(funded)} USD",
        f"💰 Кун охиридаги ҳисобий қолдиқ: {usd(closing)} USD",
        f"⏳ Ҳали тасдиқланмаган топшириқ: {usd(pending)} USD (қолдиққа қўшилмаган)",
        f"👥 Бугун агентлар мижоздан олган: {usd(collected)} USD (кассир кирими эмас)",
@@ -73,6 +82,12 @@ def report(db,now=None):
         out.extend(f"• {datetime.fromtimestamp(int(h['accepted_ts']),TZ).strftime('%H:%M')} · "
                    f"{h['agent_name'] or 'Агент'} · {usd(h['amount_usd'])} USD" for h in accepted)
     else:out.append("Ҳали қабул қилинмаган.")
+    out.extend(["","💳 БУГУН АГЕНТЛАРГА БЕРИЛГАН ХАРАЖАТ ПУЛИ:"])
+    if funded_rows:
+        out.extend(f"• {datetime.fromtimestamp(int(x['ts']),TZ).strftime('%H:%M')} · "
+                   f"{x['agent_name'] or 'Агент'} · {usd(x['amount_usd'])} USD · "
+                   f"{x['actor_name'] or 'Кассир'}" for x in funded_rows)
+    else:out.append("Ҳали агентга харажат пули берилмаган.")
     out.extend(["","🧾 БУГУНГИ ХАРАЖАТЛАР:"])
     if rows:
         for e in rows:
@@ -81,6 +96,6 @@ def report(db,now=None):
             out.append(f"• {datetime.fromtimestamp(int(e['ts']),TZ).strftime('%H:%M')} · {e['category']}"
                        f"\n{original} → {usd(e['amount_usd'])} USD · {e['recipient']}")
     else:out.append("Ҳали харажат киритилмаган.")
-    out.append("\nℹ️ Қолдиқ — тизимда кассир тасдиқлаган пуллар минус қайд қилинган харажатларнинг USD эквиваленти. "
+    out.append("\nℹ️ Қолдиқ — кассир тасдиқлаган пуллар минус касса харажатлари ва агент харажат ҳисобларига берилган пул. "
                "Бу ҳақиқий сўм ва доллар банкнотлари қолдиғини ёки аввалги дастурдан ташқари нақдни алоҳида ҳисобламайди.")
     return '\n'.join(out)
