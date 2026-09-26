@@ -74,13 +74,21 @@ class CashierIncomePolicyTests(unittest.TestCase):
             'Transport','',3005)
         self.assertEqual(core.cashier_balance_usd(self.db),core.money('70'))
 
-    def test_admin_cashier_section_remains_read_only(self):
+    def test_admin_cashier_section_has_full_cashier_actions_but_no_manual_income(self):
         self.assertTrue(bot.allowed(self.db,1,'cashier_menu'))
+        self.assertTrue(bot.allowed(self.db,1,'cashier_expense'))
+        self.assertTrue(bot.allowed(self.db,1,'cashier_expense_uzs'))
+        self.assertTrue(bot.allowed(self.db,1,'cashier_rate'))
         with patch.object(bot,'send') as send:
             bot.show_cashier_menu(self.db,1)
         flat=sum(send.call_args.args[2],[])
-        self.assertNotIn('➕ Кирим USD',flat)
+        self.assertIn('📱 Кассир Mini App',flat)
+        self.assertIn('➖ Расход USD',flat)
+        self.assertIn('➖ Расход UZS',flat)
+        self.assertIn('💱 Касса курси',flat)
         self.assertIn('📊 Кунлик касса',flat)
+        self.assertNotIn('➕ Кирим USD',flat)
+        self.assertNotIn('➕ Кирим UZS',flat)
 
 
 if __name__=='__main__':
