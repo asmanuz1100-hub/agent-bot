@@ -47,6 +47,18 @@ class LiveAgentMiniAppTests(unittest.TestCase):
                      'So‘nggi operatsiyalar','loadClientDetail(selected)'):
             self.assertIn(term,self.html)
 
+    def test_product_ui_uses_catalog_name_not_internal_sku_as_weight(self):
+        for term in (
+            "esc(p.name)+' · '+fmt(p.priceUsd)+' USD</option>'",
+            'prod?prod.name:("SKU "+ev.pack)',
+            'p?p.name:("SKU "+it.pack)',
+            'Do‘kondagi mahsulot qoldig‘i',
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn("p.pack+' kg · '+fmt(p.priceUsd)",self.html)
+        self.assertNotIn('it.pack+" kg × "',self.html)
+        self.assertNotIn('[1,3,5].map(function(p)',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
