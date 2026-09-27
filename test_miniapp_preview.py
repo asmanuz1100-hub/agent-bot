@@ -230,7 +230,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('data-photo-src=',self.html)
 
     def test_palette_and_map_assets_are_deterministic(self):
-        self.assertIn('<meta name="color-scheme" content="only light">', self.html)
+        self.assertIn('<meta name="color-scheme" content="light dark">', self.html)
         self.assertNotIn('html.tg-android', self.html)
         for asset in ('leaflet.js', 'leaflet.css', 'LICENSE'):
             self.assertTrue((HTML.parent/'vendor'/'leaflet'/asset).is_file())
