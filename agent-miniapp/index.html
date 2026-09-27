@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#101e39">
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
 *{box-sizing:border-box}html{background:var(--tg-bg)}html,body{margin:0;background:var(--tg-bg);color:var(--tg-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
 .app{width:100%;max-width:430px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--paper);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-.app>header{display:block;position:relative;background:var(--tg-header);background-color:var(--tg-header);background-image:none;color:var(--tg-header-text);padding:calc(19px + env(safe-area-inset-top)) 19px 32px;border-top:5px solid #2367f5;}
+.app>header{display:block;position:relative;background:var(--tg-header);background-color:var(--tg-header);background-image:none;color:var(--tg-header-text);padding:19px 19px 32px;border-top:5px solid #2367f5;}
 .app>header .top{display:flex;align-items:center;justify-content:space-between}
 .app>header .logo,.app>header .greet{color:var(--tg-header-text)}.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:var(--tg-hint);letter-spacing:1px;font-weight:700}
 .greet{font-size:20px;font-weight:800;margin-top:26px}.sub{font-size:12px;color:var(--tg-hint);margin-top:5px}
@@ -32,7 +32,7 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:40;max-w
 nav button{border:0;background:transparent;min-height:44px;border-radius:11px;font-size:9px;color:var(--muted);font-weight:650}nav button span{display:block;font-size:20px;line-height:24px}nav button.active{background:#e9f0ff;color:var(--blue)}
 #gate{position:fixed;inset:0;z-index:100;background:#f4f7fd;display:grid;place-items:center;padding:21px}#gate.hidden{display:none}#gate .card{width:min(100%,390px);text-align:center;padding:26px}#gate h1{font-size:24px;color:var(--blue);margin:0 0 10px}#gate p{line-height:1.65;font-size:12px;color:#546785;white-space:pre-line}
 #notice{position:fixed;z-index:80;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#12243e;color:#fff;padding:11px 14px;border-radius:13px;display:none;width:min(92%,390px);font-size:12px;box-shadow:0 10px 25px #0003}
-#mapShell{position:relative;border-radius:16px;background:#eaf0ed}#map{height:410px;width:100%;position:relative;z-index:0;background:#eaf0ed;border-radius:16px;overflow:hidden}.map-status{position:absolute;z-index:700;top:10px;left:56px;right:10px;display:none;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:9px;line-height:1.4;box-shadow:0 7px 18px #101e3922}.map-status.show{display:block}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
+#mapShell{position:relative;border-radius:16px;background:#eaf0ed;overflow:hidden}#map{height:calc(100dvh - 265px);min-height:330px;max-height:520px;width:100%;position:relative;z-index:0;background:#eaf0ed;border-radius:16px;overflow:hidden}.map-status{position:absolute;z-index:700;top:10px;left:56px;right:10px;display:none;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:9px;line-height:1.4;box-shadow:0 7px 18px #101e3922}.map-status.show{display:block}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
 .line{border-top:1px solid var(--line);padding:11px 0}.line:first-child{border:0}.line b{font-size:12px}.line small{display:block;font-size:10px;color:var(--muted)}
 .bar{height:10px;border-radius:10px;background:#e9f0ff;overflow:hidden;margin:6px 0 10px}.bar i{display:block;height:100%;background:var(--blue)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
@@ -367,20 +367,20 @@ function renderReports(){
 // Both assets must finish before Leaflet measures and positions map panes.
 // Serve the pinned distribution locally: a CDN CSS failure must not become a broken map.
 function loadLeaflet(){
+ if(window.L)return Promise.resolve(window.L);
  if(mapPromise)return mapPromise;
- var assets=[];
- mapPromise=Promise.all([['link','./vendor/leaflet/leaflet.css'],['script','./vendor/leaflet/leaflet.js']].map(function(asset){
-  return new Promise(function(resolve,reject){
-   var el=document.createElement(asset[0]);assets.push(el);
-   var timer=setTimeout(function(){finish(Error("Xarita yuklash vaqti tugadi."))},15000);
-   function finish(error){clearTimeout(timer);el.onload=el.onerror=null;error?reject(error):resolve()}
-   el.onload=function(){finish()};el.onerror=function(){finish(Error("Xarita fayli yuklanmadi."))};
-   if(asset[0]==="link"){el.rel="stylesheet";el.href=asset[1]}else{el.src=asset[1];el.async=true}
-   document.head.appendChild(el);
-  });
- })).then(function(){if(!window.L)throw Error("Xarita kutubxonasi mavjud emas.");return window.L}).catch(function(e){
-  assets.forEach(function(el){el.remove()});mapPromise=null;throw e;
- });
+ mapPromise=new Promise(function(resolve,reject){
+  var css=document.createElement("link");
+  css.rel="stylesheet";
+  css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  document.head.appendChild(css);
+  var js=document.createElement("script");
+  js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  js.async=true;
+  js.onload=function(){window.L?resolve(window.L):reject(Error("Xarita kutubxonasi mavjud emas."))};
+  js.onerror=function(){reject(Error("Xarita yuklanmadi."))};
+  document.body.appendChild(js);
+ }).catch(function(e){mapPromise=null;throw e});
  return mapPromise;
 }
 function resizeMaps(){
