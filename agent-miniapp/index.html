@@ -2,13 +2,13 @@
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101e39"><meta name="color-scheme" content="light dark">
 <title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{--tg-bg:var(--tg-theme-bg-color,#f4f7fd);--tg-text:var(--tg-theme-text-color,#101e39);--tg-header:var(--tg-theme-header-bg-color,#101e39);--tg-section:var(--tg-theme-section-bg-color,#fff);--tg-hint:var(--tg-theme-hint-color,#8190a7);--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:var(--tg-bg);--muted:var(--tg-hint);--line:#e5ecf5}
+:root{--tg-bg:var(--tg-theme-bg-color,#f4f7fd);--tg-text:var(--tg-theme-text-color,#101e39);--tg-header:var(--tg-theme-header-bg-color,#101e39);--tg-header-text:var(--tg-theme-text-color,#fff);--tg-section:var(--tg-theme-section-bg-color,#fff);--tg-hint:var(--tg-theme-hint-color,#8190a7);--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:var(--tg-bg);--muted:var(--tg-hint);--line:var(--tg-theme-section-separator-color,#e5ecf5)}
 *{box-sizing:border-box}html{color-scheme:light dark;background:var(--tg-bg)}html,body{margin:0;background:var(--tg-bg);color:var(--tg-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
 .app{width:100%;max-width:430px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--paper);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-.app>header{display:block;position:relative;background:var(--tg-header);background-color:var(--tg-header);background-image:none;color:var(--tg-text);padding:calc(19px + env(safe-area-inset-top)) 19px 32px;border-top:5px solid #2367f5;}
+.app>header{display:block;position:relative;background:var(--tg-header);background-color:var(--tg-header);background-image:none;color:var(--tg-header-text);padding:calc(19px + env(safe-area-inset-top)) 19px 32px;border-top:5px solid #2367f5;}
 .app>header .top{display:flex;align-items:center;justify-content:space-between}
-.app>header .logo,.app>header .greet{color:var(--tg-text)}.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:var(--tg-hint);letter-spacing:1px;font-weight:700}
+.app>header .logo,.app>header .greet{color:var(--tg-header-text)}.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:var(--tg-hint);letter-spacing:1px;font-weight:700}
 .greet{font-size:20px;font-weight:800;margin-top:26px}.sub{font-size:12px;color:var(--tg-hint);margin-top:5px}
 @media(max-width:600px){.app{max-width:none;width:100%;margin:0}.app>header{width:100%}nav{max-width:none;width:100%}}
 main{padding:0 16px 18px}section.view{display:none}section.view.active{display:block}.screenhead{font-weight:850;font-size:20px;margin:20px 0 12px}
@@ -21,7 +21,7 @@ main{padding:0 16px 18px}section.view{display:none}section.view.active{display:b
 .primary{background:var(--blue);color:#fff;border:0;border-radius:14px;padding:14px;font-weight:800;width:100%;min-height:49px}.secondary{background:#e9f0ff;color:var(--blue);border:0;border-radius:13px;padding:11px;font-weight:750}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rowbtn{display:flex;width:100%;gap:11px;align-items:center;border:1px solid var(--line);background:var(--tg-section);color:var(--tg-text);border-radius:15px;padding:12px;margin-bottom:9px;text-align:left;min-height:68px}
 .icon{width:42px;height:42px;border-radius:12px;background:#e9f0ff;color:var(--blue);display:grid;place-items:center;font-size:19px;flex:none}.grow{flex:1;min-width:0}.grow b{display:block;font-size:13px}.grow small{display:block;font-size:10px;color:var(--muted);line-height:1.6}.hide{display:none!important}
-input,select,textarea{width:100%;background:var(--tg-section);border:1px solid #dfe7f2;border-radius:12px;padding:12px;color:var(--tg-text);-webkit-text-fill-color:var(--tg-text);caret-color:var(--blue);opacity:1;min-height:45px}
+input,select,textarea{width:100%;background:var(--tg-section);border:1px solid var(--line);border-radius:12px;padding:12px;color:var(--tg-text);-webkit-text-fill-color:var(--tg-text);caret-color:var(--blue);opacity:1;min-height:45px}
 input::placeholder,textarea::placeholder{color:var(--tg-hint);-webkit-text-fill-color:var(--tg-hint);opacity:1}
 input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,textarea:-webkit-autofill,select:-webkit-autofill{-webkit-text-fill-color:var(--tg-text);caret-color:var(--blue);-webkit-box-shadow:0 0 0 1000px var(--tg-section) inset;box-shadow:0 0 0 1000px var(--tg-section) inset;}
 
@@ -869,10 +869,15 @@ async function showMyRoute(force){
   notify(e.message||"Marshrut ochilmadi");
  }finally{routeBusy=false}
 }
-// One light palette for all clients, independent of Telegram's theme variables.
+function telegramThemeColor(name,fallback){
+ var value=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+ return value||fallback;
+}
 function syncTelegramChrome(){
  if(!tg)return;
- [function(){if(tg.setHeaderColor)tg.setHeaderColor("#101e39")},function(){if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}].forEach(function(fn){try{fn()}catch(e){}});
+ var header=telegramThemeColor("--tg-theme-header-bg-color","#101e39");
+ var bg=telegramThemeColor("--tg-theme-bg-color","#f4f7fd");
+ [function(){if(tg.setHeaderColor)tg.setHeaderColor(header)},function(){if(tg.setBackgroundColor)tg.setBackgroundColor(bg)}].forEach(function(fn){try{fn()}catch(e){}});
 }
 if(tg){
  try{tg.ready();tg.expand()}catch(e){}
