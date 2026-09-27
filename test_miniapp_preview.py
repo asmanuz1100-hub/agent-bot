@@ -181,7 +181,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
     def test_delivery_cart_return_mode_uses_customer_stock(self):
         self.assertIn('formAction==="return"',self.html)
         self.assertIn('Mijozda: ',self.html)
-        self.assertIn('Qaytarish uchun qoldiq yetarli emas:',self.html)
+        self.assertIn('Qaytarish miqdori mijozdagi qoldiqdan ko‘p:',self.html)
 
     def test_javascript_parses(self):
         if not shutil.which("node"):
