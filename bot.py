@@ -1759,7 +1759,13 @@ def serve_webhook(db,base_url):
         def _manager_headers(self):
             return self._cors_headers('https://asman-manager-miniapp-test.onrender.com')
         def _agent_headers(self):
-            return self._cors_headers('https://asman-agent-miniapp-v2-test.onrender.com')
+            origin=self.headers.get('Origin','')
+            allowed={
+                'https://asman-agent-miniapp-v2-test.onrender.com',
+                'https://asman-agent-v2-manager-base-test.onrender.com',
+            }
+            if origin not in allowed:return None
+            return self._cors_headers(origin)
         def do_OPTIONS(self):
             req_path=urlparse(self.path).path
             headers=self._manager_headers() if req_path=='/api/manager' else (
