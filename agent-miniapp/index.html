@@ -60,7 +60,9 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 label{color:#72829d!important}
 nav{background:#fff!important;color:#101e39!important}
 #gate{background:#f4f7fd!important}
-#mapShell{overflow:hidden!important}#map{width:100%!important;position:relative!important;z-index:0!important}
+#mapShell{overflow:hidden!important;contain:layout paint}#map{width:100%!important;position:relative!important;z-index:0!important;transform:none!important}
+#page-map:not(.active) #mapShell{visibility:hidden!important;pointer-events:none!important}
+.camera-box,.camera-live-wrap,.camera-live,.camera-preview{position:relative;z-index:2}
 @media(prefers-color-scheme:dark){
  html,body,.app{background:#f4f7fd!important;color:#101e39!important}
  .app>header{background:#101e39!important;color:#fff!important}
@@ -164,6 +166,8 @@ async function refresh(){
 function go(page){
  if(!data)return;
  if(page==="detail"&&!client())page="clients";
+ var previous=current;
+ if(previous==="map"&&page!=="map")destroyClientMap();
  current=page;document.querySelectorAll("section.view").forEach(function(el){el.classList.toggle("active",el.id==="page-"+page)});
  document.querySelectorAll("nav button").forEach(function(b){b.classList.toggle("active",b.dataset.page===page)});
  window.scrollTo(0,0);
@@ -383,6 +387,20 @@ function loadLeaflet(){
  }).catch(function(e){mapPromise=null;throw e});
  return mapPromise;
 }
+function destroyClientMap(){
+ var oldMap=map;
+ map=null;mapPins=null;mapTiles=null;
+ if(oldMap){
+  try{oldMap.off()}catch(e){}
+  try{oldMap.remove()}catch(e){}
+ }
+ var shell=$("mapShell"),node=$("map");
+ if(shell&&node){
+  var fresh=document.createElement("div");
+  fresh.id="map";
+  node.replaceWith(fresh);
+ }
+}
 function resizeMaps(){
  requestAnimationFrame(function(){
   [map,routeMap].forEach(function(m){if(m&&m.getContainer().offsetWidth&&m.getContainer().offsetHeight)m.invalidateSize({animate:false,pan:false})});
@@ -556,6 +574,7 @@ function stopLiveCamera(){
 }
 async function startLiveCamera(){
  if(cameraUploading)return;
+ destroyClientMap();
  var statusEl=$("cameraStatus"),fallback=$("fallbackCamera"),wrap=$("cameraLiveWrap"),video=$("cameraLive"),open=$("takePhoto");
  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
   if(fallback)fallback.style.display="block";
