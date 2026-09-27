@@ -7,7 +7,7 @@ inventory/cash rules and customer_status visit rules.
 import hashlib
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import core
@@ -433,19 +433,87 @@ def client_detail(db,agent,cid,now=None):
     }
 
 
-def route(db,agent):
+def route(db,agent,period=None,now=None):
     _require_agent(db,agent)
-    shift=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts WHERE agent=?
-        ORDER BY id DESC LIMIT 1""",(agent,)).fetchone()
-    if not shift:return {"start":None,"end":None,"points":[]}
-    rows=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=?
-        ORDER BY ts DESC,id DESC LIMIT 1500""",(shift['id'],)).fetchall()
-    points=[]
-    for p in reversed(rows):
-        lat,lon=_coord(p['lat'],p['lon'])
-        if lat is not None:points.append({"lat":lat,"lon":lon,"ts":int(p['ts'])})
-    return {"start":int(shift['start']),"end":int(shift['end_ts']) if shift['end_ts'] else None,
-            "points":points}
+    now=int(time.time() if now is None else now)
+    if period is None:
+        shift=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts WHERE agent=?
+            ORDER BY id DESC LIMIT 1""",(agent,)).fetchone()
+        if not shift:return {"start":None,"end":None,"points":[]}
+        rows=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=?
+            ORDER BY ts DESC,id DESC LIMIT 1500""",(shift['id'],)).fetchall()
+        points=[]
+        for p in reversed(rows):
+            lat,lon=_coord(p['lat'],p['lon'])
+            if lat is not None:points.append({"lat":lat,"lon":lon,"ts":int(p['ts'])})
+        return {"start":int(shift['start']),"end":int(shift['end_ts']) if shift['end_ts'] else None,
+                "points":points}
+
+    period=str(period or "").lower()
+    if period not in ("day","week","month"):
+        raise ValueError("GPS hisobot davri noto‘g‘ri.")
+    today=_midnight(now)
+    start=today if period=="day" else today-6*86400 if period=="week" else today-29*86400
+    shifts=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts
+        WHERE agent=? AND start<=? AND ("end" IS NULL OR "end">=?)
+        ORDER BY start,id""",(agent,now,start)).fetchall()
+
+    total_km=0.0;work_seconds=0;gps_points=0;gaps=0;stops=0
+    segments=[];first_ts=None;last_ts=None
+    for shift in shifts:
+        lo=max(start,int(shift["start"]))
+        hi=min(now,int(shift["end_ts"]) if shift["end_ts"] else now)
+        if hi<lo:continue
+        work_seconds+=max(0,hi-lo)
+        rows=db.execute("""SELECT lat,lon,ts,accuracy FROM points
+            WHERE shift=? AND ts>=? AND ts<=? ORDER BY ts,id""",
+            (shift["id"],lo,hi)).fetchall()
+        pts=[]
+        for row in rows:
+            lat,lon=_coord(row["lat"],row["lon"])
+            if lat is None:continue
+            pts.append({"lat":lat,"lon":lon,"ts":int(row["ts"]),
+                        "accuracy":float(row["accuracy"] or 0)})
+        if not pts:continue
+        gps_points+=len(pts)
+        first_ts=pts[0]["ts"] if first_ts is None else min(first_ts,pts[0]["ts"])
+        last_ts=pts[-1]["ts"] if last_ts is None else max(last_ts,pts[-1]["ts"])
+        stats=core.route_stats(pts,lo,hi)
+        total_km+=float(stats["km"] or 0);gaps+=len(stats["gaps"]);stops+=len(stats["stops"])
+
+        current=[];prev=None
+        for p in pts:
+            if p["accuracy"]>100:
+                if current:segments.append(current);current=[]
+                prev=None;continue
+            if prev:
+                dt=p["ts"]-prev["ts"]
+                if dt>300 or dt<=0 or core.distance(prev,p)/max(1,dt)>55:
+                    if current:segments.append(current)
+                    current=[]
+            current.append({"lat":p["lat"],"lon":p["lon"],"ts":p["ts"],
+                            "accuracy":round(p["accuracy"],1)})
+            prev=p
+        if current:segments.append(current)
+
+    # Keep map payload bounded without changing distance calculation, which uses all stored points above.
+    visible=sum(len(seg) for seg in segments)
+    if visible>8000:
+        step=max(2,(visible+7999)//8000)
+        sampled=[]
+        for seg in segments:
+            if len(seg)<=2:sampled.append(seg);continue
+            part=seg[::step]
+            if part[-1] is not seg[-1]:part.append(seg[-1])
+            sampled.append(part)
+        segments=sampled
+    points=[p for seg in segments for p in seg]
+    return {"period":period,"start":start,"end":now,
+            "firstGpsTs":first_ts,"lastGpsTs":last_ts,
+            "km":round(total_km,2),"workSeconds":int(work_seconds),
+            "shiftCount":len(shifts),"gpsPoints":int(gps_points),
+            "stops":int(stops),"gaps":int(gaps),
+            "points":points,"segments":segments}
 
 
 def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
