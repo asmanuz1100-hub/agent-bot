@@ -124,9 +124,16 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 
 
 /* Agent V2 TEST: Manager Mini App Android-safe shell, only map + customers enabled initially. */
-#page-cash,#page-report,#nav-cash,#nav-report,#agent-management-open,#agent-list,#map-card{display:none!important}
+#agent-management-open,#agent-list,#map-card{display:none!important}
 #agent-filters button[data-agent-filter]{display:none!important}
 .agent-v2-badge{font-size:9px;font-weight:850;padding:4px 7px;border-radius:999px;background:#e8f0ff;color:#245edb;margin-left:7px}
+.agent-work-card{background:#fff;border:1px solid #e7edf6;border-radius:18px;padding:14px;box-shadow:0 5px 18px #17335a0a;margin-top:12px}.agent-work-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.agent-work-head b{font-size:14px}.agent-work-head small{display:block;color:#7b8798;font-size:10px;margin-top:3px}.agent-work-pill{padding:5px 9px;border-radius:999px;font-size:10px;font-weight:800;background:#eef3f8;color:#627087}.agent-work-pill.on{background:#e7f8f0;color:#087b51}
+.agent-action-grid,.agent-sheet-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.agent-action-grid button,.agent-sheet-actions button{border:0;border-radius:13px;padding:11px 10px;font-size:11px;font-weight:800;background:#eef3ff;color:#245edb;text-align:left}.agent-action-grid button.primary,.agent-sheet-actions button.primary{background:#246bfd;color:#fff}.agent-sheet-actions button.wide{grid-column:1/-1}
+.agent-form label{display:block;font-size:10px;font-weight:800;color:#536175;margin:10px 0 5px}.agent-form input,.agent-form select,.agent-form textarea{width:100%;box-sizing:border-box;border:1px solid #dfe7f1;background:#fff;color:#182235;border-radius:12px;padding:11px;font-size:12px;outline:none}.agent-form textarea{min-height:76px;resize:vertical}.agent-form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.agent-form-note{font-size:10px;color:#78869a;line-height:1.45;margin-top:8px}.agent-form-submit{width:100%;border:0;border-radius:13px;background:#246bfd;color:#fff;padding:12px;font-weight:850;margin-top:13px}.agent-form-submit.secondary{background:#eef3f8;color:#334155}
+.agent-item-row{display:grid;grid-template-columns:1.5fr .7fr auto;gap:7px;align-items:end;margin-top:8px}.agent-item-row button{border:0;border-radius:10px;background:#fff0f2;color:#c8334d;padding:10px 8px;font-weight:900}.agent-photo-preview{width:100%;max-height:230px;object-fit:cover;border-radius:14px;display:none;margin-top:10px}.agent-photo-state{font-size:10px;color:#637083;margin-top:6px}
+.agent-cash-hero{background:linear-gradient(135deg,#10203d,#1f4f97);color:#fff;border-radius:20px;padding:17px}.agent-cash-hero small{opacity:.72}.agent-cash-hero strong{display:block;font-size:28px;margin-top:5px}.agent-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.agent-mini-stat{background:#fff;border:1px solid #e7edf5;border-radius:14px;padding:11px}.agent-mini-stat small{display:block;color:#7b8798;font-size:9px}.agent-mini-stat b{display:block;font-size:14px;margin-top:4px}
+.agent-list-card{background:#fff;border:1px solid #e7edf5;border-radius:14px;padding:11px;margin-top:8px}.agent-list-card .top{display:flex;justify-content:space-between;gap:8px}.agent-list-card small{display:block;color:#7b8798;margin-top:4px;font-size:9px}.agent-report-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.agent-report-card{background:#fff;border:1px solid #e7edf5;border-radius:15px;padding:12px}.agent-report-card small{display:block;color:#7b8798;font-size:9px}.agent-report-card b{display:block;font-size:15px;margin-top:5px}.agent-route-map{height:320px;border-radius:16px;overflow:hidden;background:#eaf0ed;margin-top:10px}.agent-report-tabs{display:flex;gap:7px;overflow:auto;margin:10px 0}.agent-report-tabs button{border:0;border-radius:999px;padding:7px 11px;font-size:10px;font-weight:800;background:#edf2f7;color:#617087}.agent-report-tabs button.active{background:#246bfd;color:#fff}.agent-collection{background:#fff8e8;border:1px solid #ffe1a0;border-radius:14px;padding:11px;margin-top:8px}.agent-collection b{font-size:11px}.agent-collection small{display:block;color:#7a6337;margin-top:4px;font-size:9px}
+
 </style>
 </head>
 <body class="pb-24">
@@ -215,6 +222,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
                 <button type="button" data-page="report"><i>◔</i><b>Hisobot</b><small>Hafta va oy</small></button>
             </div>
         </section>
+        <section id="agent-v2-work-panel"></section>
     </main>
 
     <!-- 2. AGENTLAR (Xarita) -->
@@ -264,174 +272,35 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
     <label>Saralash<select id="customer-sort"><option value="newest">Yangi qo‘shilgan</option><option value="debt">Qarz katta</option><option value="oldest-contact">Eng uzoq tashrif</option><option value="name">Nomi A–Z</option></select></label>
   </div>
 </section>
-<div id="customer-list"></div>
+<button type="button" class="mini-btn primary" style="width:100%;margin-bottom:10px" data-agent-action="client">＋ Yangi mijoz</button><div id="customer-list"></div>
 </div>
 
 <!-- 4. KASSA -->
-    <div id="page-cash" class="page-content max-w-md mx-auto p-4 space-y-3 executive-page">
-        <section class="cash-exec-hero">
-            <div class="cash-exec-label">KASSA NAZORATI</div>
-            <div class="cash-exec-row">
-                <div><span>Joriy hisobiy qoldiq</span><strong id="cash-total">0.00 USD</strong><small id="cash-summary">Tasdiqlangan agent pullari − kassa rasxodlari</small></div>
-                <div class="cash-exec-badge"><span>⏳</span><b id="cash-pending-inline">0.00</b><small>USD kutilmoqda</small></div>
-            </div>
-        </section>
-        <div class="cash-kpi-grid">
-          <div class="cash-kpi"><small id="cash-kpi-1-label">Bugun qabul qilindi</small><b id="cash-kpi-1">0.00 USD</b></div>
-          <div class="cash-kpi"><small id="cash-kpi-2-label">Bugun rasxod</small><b id="cash-kpi-2">0.00 USD</b></div>
-          <div class="cash-kpi"><small id="cash-kpi-3-label">Sof o‘zgarish</small><b id="cash-kpi-3">0.00 USD</b></div>
-        </div>
-        <div class="filters executive-tabs" id="cash-tabs">
-          <button class="chip active" data-cash-tab="today">Bugun</button>
-          <button class="chip" data-cash-tab="week">7 kun</button>
-          <button class="chip" data-cash-tab="pending">Tasdiqlanmagan</button>
-        </div>
-        <div class="exec-section-title compact"><div><small>OPERATSIYALAR</small><h3>Kassa harakatlari</h3></div><span id="cash-entry-count">0 ta</span></div>
-        <div id="txn-list"></div>
-    </div>
-
+<div id="page-cash" class="page-content max-w-md mx-auto p-4 space-y-3 executive-page">
+  <section class="agent-cash-hero"><small>AGENT KASSASI</small><strong id="agent-cash-free">0.00 USD</strong><small id="agent-cash-note">Kassirga topshirish mumkin</small></section>
+  <div class="agent-mini-grid"><div class="agent-mini-stat"><small>Qo‘ldagi jami</small><b id="agent-cash-onhand">0.00 USD</b></div><div class="agent-mini-stat"><small>Xarajat balansi</small><b id="agent-expense-balance">0 UZS</b></div></div>
+  <div class="agent-sheet-actions"><button class="primary" data-agent-action="handover">↗ Kassirga topshirish</button><button data-agent-action="agent_expense">🧾 Xarajat qilish</button></div>
+  <div class="exec-section-title compact"><div><small>XARAJAT HISOBI</small><h3>So‘nggi harakatlar</h3></div></div><div id="agent-expense-history"></div>
+  <div class="exec-section-title compact"><div><small>MIJOZ TO‘LOVLARI</small><h3>So‘nggi tushumlar</h3></div></div><div id="agent-payment-history"></div>
+  <div class="exec-section-title compact"><div><small>KASSIRGA TOPSHIRISH</small><h3>Holatlar</h3></div></div><div id="agent-handover-history"></div>
+</div>
 <!-- 5. HISOBOT -->
-    <div id="page-report" class="page-content max-w-md mx-auto p-4 space-y-3 executive-page">
-        <section class="report-head report-head-v2">
-            <div>
-                <span>ASMAN · RAHBAR TAHLILI</span>
-                <h2>Umumiy tahlil</h2>
-                <p>Realizatsiya, tushum, qarz, mijozlar va agentlar holati</p>
-            </div>
-            <span class="report-live-mark">● JONLI</span>
-        </section>
-
-        <div class="filters executive-tabs report-period-tabs" id="report-tabs">
-          <button class="chip" data-report-tab="today">Bugun</button>
-          <button class="chip active" data-report-tab="week">7 kun</button>
-          <button class="chip" data-report-tab="month">30 kun</button>
-          <button class="chip" data-report-tab="agents">Agentlar</button>
-        </div>
-
-        <section class="report-live-strip">
-            <div><span>Faol agent</span><b id="report-active-agents">0</b></div>
-            <div><span>Nazoratda</span><b id="report-overdue">0</b></div>
-            <div><span>Joriy qarz</span><b id="report-current-debt">0.00 $</b></div>
-        </section>
-
-        <section class="analysis-insights">
-          <div class="analysis-insight">
-            <span>Tushum / realizatsiya</span>
-            <b id="report-payment-ratio">—</b>
-            <small>Eski qarz tushumi sabab 100% dan yuqori bo‘lishi mumkin</small>
-          </div>
-          <div class="analysis-insight">
-            <span>Davr qarz o‘zgarishi</span>
-            <b id="report-receivable-change">0.00 $</b>
-            <small id="report-receivable-note">Berilgan − to‘lov − qaytarish</small>
-          </div>
-          <div class="analysis-insight">
-            <span>Realizatsiya dinamikasi</span>
-            <b id="report-delivered-delta">—</b>
-            <small>Oldingi mos davrga nisbatan</small>
-          </div>
-          <div class="analysis-insight">
-            <span>Tushum dinamikasi</span>
-            <b id="report-payments-delta">—</b>
-            <small>Oldingi mos davrga nisbatan</small>
-          </div>
-        </section>
-
-        <section class="analysis-status-card">
-          <div class="exec-section-title compact">
-            <div><small>MIJOZLAR HOLATI</small><h3>Qayta tashrif nazorati</h3></div>
-            <span id="analysis-client-total">0 mijoz</span>
-          </div>
-          <div class="analysis-status-bar" aria-label="Mijozlar holati taqsimoti">
-            <i id="analysis-fresh-bar" class="fresh"></i>
-            <i id="analysis-yellow-bar" class="yellow"></i>
-            <i id="analysis-red-bar" class="red"></i>
-            <i id="analysis-scheduled-bar" class="scheduled"></i>
-          </div>
-          <div class="analysis-status-legend">
-            <span><i class="fresh"></i>0–2 kun <b id="analysis-fresh-count">0</b></span>
-            <span><i class="yellow"></i>3–4 kun <b id="analysis-yellow-count">0</b></span>
-            <span><i class="red"></i>5+ kun <b id="analysis-red-count">0</b></span>
-            <span><i class="scheduled"></i>Rejada <b id="analysis-scheduled-count">0</b></span>
-          </div>
-        </section>
-
-        <section class="analysis-map-card">
-          <div class="exec-section-title compact">
-            <div><small>HUDUDIY TAHLIL</small><h3>Mijozlar va agentlar xaritasi</h3></div>
-            <span id="analysis-map-count">—</span>
-          </div>
-          <div id="analysis-map"></div>
-          <div class="analysis-map-legend">
-            <span><i class="fresh"></i>Mijoz</span>
-            <span><i class="red"></i>Nazorat</span>
-            <span><i class="agent"></i>Agent</span>
-          </div>
-          <p id="analysis-map-note">Joriy saqlangan mijoz nuqtalari va agentlarning so‘nggi GPS joylashuvi.</p>
-        </section>
-
-        <div class="report-grid report-business-grid">
-          <div class="report-kpi report-money"><span>📦 Realizatsiya</span><b id="report-delivered">0.00 $</b><small>Berilgan tovar summasi</small></div>
-          <div class="report-kpi report-money green"><span>💰 Mijozdan olindi</span><b id="report-payments">0.00 $</b><small>Agent qayd etgan to‘lov</small></div>
-          <div class="report-kpi"><span>✓ Tashriflar</span><b id="report-visits">0</b><small id="report-period-label">Tanlangan davr</small></div>
-          <div class="report-kpi"><span>＋ Yangi mijozlar</span><b id="report-new">0</b><small>Davr ichida qo‘shilgan</small></div>
-          <div class="report-kpi"><span>◷ Ish vaqti</span><b id="report-work">0s 00d</b><small>Agent smenalari jami</small></div>
-          <div class="report-kpi"><span>⌁ Masofa</span><b id="report-distance">0 km</b><small>GPS bo‘yicha hisoblangan</small></div>
-        </div>
-
-        <section class="report-finance-strip">
-            <div><span>Kassir qabul qilgan</span><b id="report-accepted-cash">0.00 USD</b></div>
-            <div><span>Kassa xarajati</span><b id="report-cash-expense">0.00 USD</b></div>
-            <div><span>Qaytarilgan tovar</span><b id="report-returns">0.00 USD</b></div>
-        </section>
-
-        <section class="report-product-section">
-          <div class="exec-section-title compact">
-            <div><small>MAHSULOTLAR KESIMI</small><h3>Mahsulot harakati · Pie chart</h3></div>
-            <span id="report-top-product">—</span>
-          </div>
-          <div class="product-chart-tabs" aria-label="Mahsulot diagrammasi ko‘rsatkichi">
-            <button type="button" class="active" data-product-metric="deliveredUsd">Realizatsiya $</button>
-            <button type="button" data-product-metric="deliveredQty">Berilgan</button>
-            <button type="button" data-product-metric="soldQty">Sotilgan</button>
-            <button type="button" data-product-metric="returnedQty">Qaytgan</button>
-          </div>
-          <div class="product-pie-stage">
-            <div id="report-product-pie" class="product-pie" role="img" aria-label="Mahsulotlar ulushi">
-              <div class="product-pie-center"><small id="report-product-total-label">Jami realizatsiya</small><b id="report-product-total">0.00 USD</b></div>
-            </div>
-          </div>
-          <div class="product-pie-leader"><small>Diagramma yetakchisi</small><b id="report-product-leader">—</b></div>
-          <div id="report-products" class="product-pie-legend"></div>
-          <div class="product-chart-note">Pie chartda eng katta 6 ta mahsulot alohida, qolganlari “Boshqalar” sifatida ko‘rsatiladi. Mahsulotni bosib batafsil hisobotni oching.</div>
-        </section>
-
-        <section class="exec-chart-card report-chart-v2">
-          <div class="exec-section-title compact">
-            <div><small>7 KUNLIK DINAMIKA</small><h3 id="report-chart-title">Tashriflar</h3></div>
-            <span id="report-chart-total">0</span>
-          </div>
-          <div class="report-metric-tabs">
-              <button type="button" class="active" data-report-metric="visits">Tashrif</button>
-              <button type="button" data-report-metric="deliveredUsd">Realizatsiya</button>
-              <button type="button" data-report-metric="paymentsUsd">Tushum</button>
-          </div>
-          <div class="bars report-bars" id="bar-chart"></div>
-        </section>
-
-        <section id="report-agent-section" class="report-agent-section">
-          <div class="exec-section-title compact">
-            <div><small>AGENTLAR KESIMI</small><h3>Agent natijalari</h3></div>
-            <span id="report-agent-period">7 kun</span>
-          </div>
-          <div id="report-agents"></div>
-        </section>
-
-        <div class="report-footnote">ℹ️ “Realizatsiya” — tizimda mijozga <b>tovar berilgan</b> paytdagi USD summa. “Sotildi” qaydi bu summaga qayta qo‘shilmaydi.</div>
-    </div>
-
-<!-- Bottom Navigation Bar (Telegram UI Kit Tabbar standartida) -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-2 px-4 z-50 max-w-md mx-auto shadow-lg">
+<div id="page-report" class="page-content max-w-md mx-auto p-4 space-y-3 executive-page">
+  <section class="report-head report-head-v2"><div><span>ASMAN · AGENT TAHLILI</span><h2>Agent hisoboti</h2><p>Realizatsiya, to‘lov, mijozlar, qoldiq va GPS</p></div><span class="report-live-mark">● REAL</span></section>
+  <div class="agent-report-tabs"><button class="active" data-agent-period="day">Bugun</button><button data-agent-period="week">7 kun</button><button data-agent-period="month">30 kun</button></div>
+  <div class="agent-report-grid">
+    <div class="agent-report-card"><small>Realizatsiya</small><b id="agent-report-delivery">0.00 USD</b></div><div class="agent-report-card"><small>Mijozdan olindi</small><b id="agent-report-payment">0.00 USD</b></div>
+    <div class="agent-report-card"><small>Tashriflar</small><b id="agent-report-visits">0</b></div><div class="agent-report-card"><small>Yangi mijoz</small><b id="agent-report-new">0</b></div>
+    <div class="agent-report-card"><small>Berilgan dona</small><b id="agent-report-goods">0</b></div><div class="agent-report-card"><small>Qaytgan</small><b id="agent-report-return">0.00 USD</b></div>
+    <div class="agent-report-card"><small>Joriy qarz</small><b id="agent-report-debt">0.00 USD</b></div><div class="agent-report-card"><small>Qo‘ldagi pul</small><b id="agent-report-cash">0.00 USD</b></div>
+  </div>
+  <div class="exec-section-title compact"><div><small>MAHSULOTLAR</small><h3>Qoldiq va harakat</h3></div></div><div id="agent-report-products"></div>
+  <div class="exec-section-title compact"><div><small>MIJOZLAR</small><h3>Holat va qarzdorlik</h3></div></div><div id="agent-report-clients"></div>
+  <div class="exec-section-title compact"><div><small>GPS</small><h3>Marshrut va ish vaqti</h3></div><button id="agent-route-refresh" class="mini-btn">↻</button></div>
+  <div class="agent-report-grid"><div class="agent-report-card"><small>Masofa</small><b id="agent-route-km">—</b></div><div class="agent-report-card"><small>Ish vaqti</small><b id="agent-route-work">—</b></div><div class="agent-report-card"><small>GPS nuqta</small><b id="agent-route-points">—</b></div><div class="agent-report-card"><small>Smenalar</small><b id="agent-route-shifts">—</b></div></div>
+  <div id="agent-route-map" class="agent-route-map"></div>
+</div>
+<nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-2 px-4 z-50 max-w-md mx-auto shadow-lg">
         <div class="flex justify-between items-center text-center">
             <button data-page="home" id="nav-home" class="flex flex-col items-center text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-house text-lg"></i>
@@ -465,6 +334,7 @@ var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",reportProductMetric:"deliveredUsd",selectedAgent:null,ready:false};
 var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;
 var adminAgentId=null;
+var agentData=null,agentFull=false,agentSelectedClientId=null,agentPeriod="day",agentRouteMap=null,agentRouteLayer=null,agentPhotoFileId="",agentPhotoUploading=false,agentOpBusy=false;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_agent_v2_test_prefs_v1";
 var prefs=loadPrefs();
@@ -534,7 +404,7 @@ async function loadDashboard(){
    state.ready=false;return
   }
   if(!data||!data.me)throw Error(data&&data.message?data.message:"Agent akkaunti topilmadi.");
-  customers=Array.isArray(data.clients)?data.clients:[];
+  agentData=data;agentFull=false;customers=Array.isArray(data.clients)?data.clients:[];
   summary=data.summary||{};generatedTs=data.generatedTs||0;dashboardToday=Math.floor((generatedTs||Date.now()/1000)/86400)*86400;
   cashData={};reportData={};txns=[];agents=[];
   state.ready=true;$("auth-gate").classList.add("hidden");
@@ -559,18 +429,20 @@ async function loadDashboard(){
   var updated=$("home-updated");if(updated)updated.textContent="Agent V2 TEST · "+when(generatedTs);
 
   if(data.truncated)toast("Mijozlar ko‘p: ro‘yxatda dastlabki 5000 ta ko‘rsatilgan.");
-  renderCustomers();
+  renderCustomers();renderAgentHomeV2();
   if(state.page==="map")initMap();
+  if(state.page==="cash")loadAgentFullAndRender("cash");
+  if(state.page==="report")loadAgentFullAndRender("report");
  }catch(e){gate("Agent V2 kirish xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
  finally{refreshing=false;if(refresh)refresh.disabled=false}
 }
 function switchPage(id){
  if(!state.ready)return;
- if(id!=="home"&&id!=="map"&&id!=="customers")id="home";
+ if(!["home","map","customers","cash","report"].includes(id))id="home";
  state.page=id;document.querySelectorAll(".page-content").forEach(function(p){p.classList.toggle("active",p.id==="page-"+id)});
  document.querySelectorAll("nav button[data-page]").forEach(function(b){var active=b.dataset.page===id;b.classList.toggle("active",active);b.classList.toggle("text-blue-600",active);b.classList.toggle("text-gray-400",!active)});
  $("header-title").textContent=titles[id]||"ASMAN";window.scrollTo(0,0);
- if(id==="map")initMap();if(id==="customers")renderCustomers();
+ if(id==="map")initMap();if(id==="customers")renderCustomers();if(id==="cash")loadAgentFullAndRender("cash");if(id==="report")loadAgentFullAndRender("report");
 }
 window.switchPage=switchPage;
 function agentStatus(a){return !a.shiftOpen?(a.lastGpsTs?"Smena yopiq · oxirgi GPS saqlangan":"Smena yopiq · GPS yo‘q"):a.locationSource==="last"?"Ishda · jonli GPS yo‘q, oxirgi joylashuv":a.status==="active"?"Ishda · GPS faol":"Ishda · GPS eskirgan"}
@@ -721,7 +593,7 @@ function renderAgentV2Customer(detail){
   (events.length?events.slice(0,15).map(function(e){return '<div class="client-event-row"><span>'+escapeHtml(clientKindLabel(e.kind))+' · '+escapeHtml(when(e.ts))+'</span><b>'+escapeHtml(clientMoneyLine(e))+'</b></div>'}).join(""):'<div class="customer-empty-small">Operatsiya yo‘q</div>')+
   '</section><section class="customer-control-section"><h4>📝 Tashriflar</h4>'+
   (visits.length?visits.slice(0,12).map(function(v){return '<div class="client-event-row"><span>'+escapeHtml(v.statusLabel||v.status||"Tashrif")+' · '+escapeHtml(when(v.ts))+'</span><b>'+escapeHtml(v.note||"")+'</b></div>'}).join(""):'<div class="customer-empty-small">Tashrif qaydi yo‘q</div>')+
-  '</section><div class="settings-note">TEST bosqich: hozir xarita, mijozlar va kartochka Manager App arxitekturasida tekshirilmoqda. Agent amallari keyingi bosqichda qo‘shiladi.</div></div>';
+  '</section><div class="agent-sheet-actions"><button class="primary" data-agent-action="delivery" data-agent-client="'+c.id+'">📦 Tovar berish</button><button data-agent-action="payment" data-agent-client="'+c.id+'">💰 Pul olish</button><button data-agent-action="return" data-agent-client="'+c.id+'">↩ Qaytarish</button><button data-agent-action="visit" data-agent-client="'+c.id+'">📝 Tashrif</button><button class="wide" data-agent-action="client_edit" data-agent-client="'+c.id+'">✏️ Ma’lumotlarni tahrirlash</button></div></div>';
  openSheet("Mijoz kartochkasi",body)
 }
 async function showCustomer(id){
@@ -1214,7 +1086,7 @@ document.addEventListener("click",function(e){
  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
  if(b.id==="customer-filter-reset"){state.customerFilter="all";state.customerAgent="all";state.customerDebt="all";state.customerStatus="all";state.customerSort="newest";$("customer-agent-filter").value="all";$("customer-debt-filter").value="all";$("customer-status-filter").value="all";$("customer-sort").value="newest";document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter==="all")});renderCustomers();return}
  if(b.id==="manager-settings"){showManagerSettings();return}
- if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();if(state.page==="report")renderAnalysisMap();toast("Agent V2 sozlamalari saqlandi");return}
+ if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();if(state.page==="report")loadAgentFullAndRender("report");toast("Agent V2 sozlamalari saqlandi");return}
  if(b.dataset.clientEdit){openCustomerEdit(Number(b.dataset.clientEdit));return}
  if(b.dataset.clientEditPreview){previewCustomerEdit(Number(b.dataset.clientEditPreview));return}
  if(b.id==="client-edit-confirm"){commitCustomerEdit();return}
