@@ -463,7 +463,8 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",reportProductMetric:"deliveredUsd",selectedAgent:null,ready:false};
-var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;\nvar adminAgentId=null;
+var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;
+var adminAgentId=null;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_agent_v2_test_prefs_v1";
 var prefs=loadPrefs();
@@ -507,7 +508,7 @@ async function request(action,arg){
  if(!tg||!tg.initData){throw Error("Haqiqiy ma’lumotlarni ko‘rish uchun Telegram botdagi Agent V2 TEST tugmasidan kiring. Oddiy brauzer havolasi orqali kirish yopiq.")}
  var controller=new AbortController();var timeout=setTimeout(function(){controller.abort()},60000);
  try{
-  var payload={initData:tg.initData,action:action};
+  var payload={initData:tg.initData,action:action};if(adminAgentId)payload.agentId=adminAgentId;
   if(arg&&typeof arg==="object")Object.assign(payload,arg);else if(arg!=null)payload.agentId=arg;
   var res=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,
    body:JSON.stringify(payload)});
@@ -523,6 +524,15 @@ async function loadDashboard(){
  if(!state.ready)gate("Agent V2 · TEST","Haqiqiy Agent ma’lumotlari tekshirilmoqda…");
  try{
   var data=await request("quick_snapshot");
+  if(data&&data.adminMode&&!data.me){
+   var gateEl=$("auth-gate"),msg=$("auth-message"),title=$("auth-title");
+   if(title)title.textContent="Agent V2 · TEST · Admin";
+   if(msg)msg.innerHTML='<div style="text-align:left"><b>Test uchun agentni tanlang</b><select id="agent-v2-admin-select" style="width:100%;margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff">'+
+    (data.agents||[]).map(function(a){return '<option value="'+a.id+'">'+escapeHtml(a.name)+'</option>'}).join("")+
+    '</select><button id="agent-v2-admin-open" style="width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;background:#2563eb;color:white;font-weight:800">Agentni ochish</button></div>';
+   if(gateEl)gateEl.classList.remove("hidden");
+   state.ready=false;return
+  }
   if(!data||!data.me)throw Error(data&&data.message?data.message:"Agent akkaunti topilmadi.");
   customers=Array.isArray(data.clients)?data.clients:[];
   summary=data.summary||{};generatedTs=data.generatedTs||0;dashboardToday=Math.floor((generatedTs||Date.now()/1000)/86400)*86400;
@@ -1194,6 +1204,10 @@ async function showRoute(id){
 }
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
+ if(b.id==="agent-v2-admin-open"){
+  var select=$("agent-v2-admin-select");adminAgentId=select?Number(select.value||0):0;
+  if(adminAgentId)loadDashboard();return
+ }
  if(b.dataset.page){switchPage(b.dataset.page);return}
  if(!state.ready)return;
  if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
