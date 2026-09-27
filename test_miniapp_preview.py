@@ -177,19 +177,42 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertNotIn('renderHome();renderClients();renderDetail();renderCash();renderReports();',self.html)
 
-    def test_customer_list_photos_are_strict_lazy_and_detail_photo_is_priority(self):
+    def test_customer_photos_use_android_safe_eager_then_native_lazy_loading(self):
         for term in (
-            'function activateLazyPhotos(root)',
-            'IntersectionObserver',
-            'data-photo-src=',
-            'rootMargin:"140px 0px"',
-            'activateLazyPhotos($("homePlan"))',
-            'activateLazyPhotos($("clientList"))',
-            'fetchpriority="high"',
+            'function shopRow(c,eager)',
+            'loading="eager" fetchpriority="high"',
+            'loading="lazy"',
+            'list.map(function(c,i){return shopRow(c,i<8)}',
+            'target.map(function(c){return shopRow(c,true)}',
             'decoding="async"'
         ):
             self.assertIn(term,self.html)
-        self.assertNotIn("<img src=\"'+esc(c.photoUrl)+'\" alt=\"\" loading=\"lazy\"",self.html)
+        self.assertNotIn('IntersectionObserver',self.html)
+        self.assertNotIn('data-photo-src=',self.html)
+
+    def test_android_webview_uses_full_width_fixed_dark_header(self):
+        for term in (
+            '<meta name="color-scheme" content="light">',
+            'maximum-scale=1',
+            'color-scheme:light',
+            '.app>header{display:block!important',
+            'background:#101e39!important',
+            '.app>header .logo,.app>header .greet{color:#fff!important}',
+            '@media(max-width:600px){.app{max-width:none!important;width:100%!important',
+            'nav{max-width:none!important;width:100%!important}'
+        ):
+            self.assertIn(term,self.html)
+
+    def test_leaflet_loader_has_android_cdn_fallback_and_timeout(self):
+        for term in (
+            'function loadExternalScript(url,timeout)',
+            'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+            'unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+            'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css',
+            'setTimeout(function(){if(done)return;done=true;js.remove();reject(Error("timeout"))}',
+            'mapStatus("Xarita yuklanmoqda…",true)'
+        ):
+            self.assertIn(term,self.html)
 
     def test_client_card_layout_does_not_overlap_content(self):
         self.assertNotIn('\\n.customer-hero{',self.html)
