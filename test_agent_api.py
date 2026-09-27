@@ -247,7 +247,7 @@ class AgentApiTests(unittest.TestCase):
             (203,self.now-20*86400-600,self.now-20*86400),
         ]
         for sid,start,end in shifts:
-            self.db.execute('INSERT INTO shifts(id,agent,start,end,live_id) VALUES(?,?,?,?,?)',
+            self.db.execute('INSERT INTO shifts(id,agent,start,"end",live_id) VALUES(?,?,?,?,?)',
                             (sid,2,start,end,700+sid))
             self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',
                             (sid,start+100,40.5400,70.9400,8))
