@@ -297,6 +297,27 @@ def dashboard(db,agent,now=None):
 
 
 
+def _collection_tasks(db,agent):
+    rows=db.execute("""SELECT t.id,t.client,t.debt_usd,t.note,t.created_ts,
+        c.name,c.shop_name,c.phone,c.address
+        FROM collection_tasks t LEFT JOIN clients c ON c.id=t.client
+        WHERE t.agent=? AND t.status='open'
+        ORDER BY t.created_ts DESC,t.id DESC LIMIT 100""",(agent,)).fetchall()
+    out=[]
+    for x in rows:
+        current=core.client_debt_usd(db,int(x['client']))
+        if current<=0:
+            db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE id=? AND status='open'",
+                       (int(time.time()),int(x['id'])))
+            continue
+        out.append({"id":int(x['id']),"clientId":int(x['client']),
+                    "client":x['shop_name'] or x['name'] or f"Mijoz #{x['client']}",
+                    "phone":x['phone'] or "","address":x['address'] or "",
+                    "assignedDebtUsd":_usd(x['debt_usd']),"currentDebtUsd":_usd(current),
+                    "note":x['note'] or "","createdTs":int(x['created_ts'] or 0)})
+    return out
+
+
 def quick_snapshot(db,agent,now=None):
     """Fast first-paint payload for Agent Mini App.
 
@@ -354,6 +375,7 @@ def quick_snapshot(db,agent,now=None):
               "liveAttached":bool(shift and shift["live_id"] is not None),
               "gps":{"ts":int(point["ts"]) if point else None,"lat":lat,"lon":lon}},
         "features":features,"clients":clients,"products":products,
+        "collectionTasks":_collection_tasks(db,agent),
         "events":[],"handovers":[],"expenseWallet":wallet,
         "cashierRateUzsPerUsd":core.cashier_rate(db),
         "summary":{"visitsToday":visit_today,"newClientsToday":new_today,
@@ -485,6 +507,7 @@ def snapshot(db,agent,now=None):
                   "liveAttached":shift["liveConnected"],
                   "gps":{"ts":shift["lastGpsTs"],"lat":shift["lat"],"lon":shift["lon"]}},
             "features":base["features"],"clients":clients,"products":products,
+            "collectionTasks":_collection_tasks(db,agent),
             "events":events,"handovers":handovers,"expenseWallet":expense_wallet,
             "cashierRateUzsPerUsd":core.cashier_rate(db),
             "summary":{"visitsToday":base["summary"]["visitsToday"],
@@ -786,6 +809,9 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         else:
             raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
         core.record(db,agent,agent,cid,'payment',0,0,amount,note,source,currency='USD')
+        if core.client_debt_usd(db,cid)<=0:
+            db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
+                       (int(time.time()),cid))
         return {"ok":True,"message":message,"convertedUsd":_usd(amount),
                 "rateUzsPerUsd":rate if currency=="UZS" else core.cashier_rate(db),
                 "_notify":notify}
@@ -812,5 +838,8 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                         _source(agent,request_id,idx+1),currency='USD')
         cs.add_visit(db,agent,cid,'active','Tovar qaytarildi: '+', '.join(
             f"{core.product_name(pack)} {qty} dona" for pack,qty in clean))
+        if core.client_debt_usd(db,cid)<=0:
+            db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
+                       (int(time.time()),cid))
         return {"ok":True,"message":"Tovar qaytarildi va qarz yangilandi."}
     raise ValueError("Amal noto‘g‘ri.")
