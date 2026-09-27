@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101e39">
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#101e39">
 <title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{--tg-bg:var(--tg-theme-bg-color,#f4f7fd);--tg-text:var(--tg-theme-text-color,#101e39);--tg-header:var(--tg-theme-header-bg-color,#101e39);--tg-header-text:var(--tg-theme-text-color,#fff);--tg-section:var(--tg-theme-section-bg-color,#fff);--tg-hint:var(--tg-theme-hint-color,#8190a7);--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:var(--tg-bg);--muted:var(--tg-hint);--line:var(--tg-theme-section-separator-color,#e5ecf5)}
+:root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
 *{box-sizing:border-box}html{background:var(--tg-bg)}html,body{margin:0;background:var(--tg-bg);color:var(--tg-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
 .app{width:100%;max-width:430px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--paper);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
@@ -60,7 +60,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 label{color:#72829d!important}
 nav{background:#fff!important;color:#101e39!important}
 #gate{background:#f4f7fd!important}
-#mapShell{overflow:visible!important}#map{width:100%!important;position:relative!important;z-index:0!important}
+#mapShell{overflow:hidden!important}#map{width:100%!important;position:relative!important;z-index:0!important}
 @media(prefers-color-scheme:dark){
  html,body,.app{background:#f4f7fd!important;color:#101e39!important}
  .app>header{background:#101e39!important;color:#fff!important}
@@ -387,10 +387,6 @@ function resizeMaps(){
  requestAnimationFrame(function(){
   [map,routeMap].forEach(function(m){if(m&&m.getContainer().offsetWidth&&m.getContainer().offsetHeight)m.invalidateSize({animate:false,pan:false})});
  });
-}
-if(window.ResizeObserver){
- var mapResizeObserver=new ResizeObserver(resizeMaps);
- [$("map"),$("routeMap")].forEach(function(el){if(el)mapResizeObserver.observe(el)});
 }
 window.addEventListener("resize",resizeMaps);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)resizeMaps()});
@@ -889,14 +885,12 @@ async function showMyRoute(force){
   notify(e.message||"Marshrut ochilmadi");
  }finally{routeBusy=false}
 }
-function syncTelegramChrome(){
- if(!tg)return;
- [function(){if(tg.setHeaderColor)tg.setHeaderColor("#101e39")},function(){if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}].forEach(function(fn){try{fn()}catch(e){}});
-}
 if(tg){
- try{tg.ready();tg.expand()}catch(e){}
- syncTelegramChrome();
- if(tg.onEvent){tg.onEvent("themeChanged",syncTelegramChrome);tg.onEvent("viewportChanged",resizeMaps)}
+ try{
+  tg.ready();tg.expand();
+  if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");
+  if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd");
+ }catch(e){}
 }
 document.addEventListener("focusin",function(e){if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))document.body.classList.add("editing")});
 document.addEventListener("focusout",function(){setTimeout(function(){if(!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))document.body.classList.remove("editing")},0)});
