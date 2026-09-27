@@ -36,17 +36,13 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
-    def test_android_map_avoids_canvas_overlays_and_forces_tile_visibility(self):
+    def test_maps_use_markers_without_global_pane_overrides(self):
         for term in (
             'className:"client-map-icon"',
             'class="client-map-pin"',
             'L.marker([c.lat,c.lon]',
             'className:"route-point-icon"',
             'L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#2367f5"',
-            'html.tg-android img.leaflet-tile',
-            'visibility:visible!important',
-            'mix-blend-mode:normal!important',
-            'document.documentElement.classList.add("tg-android")',
             'tg.setBackgroundColor("#f4f7fd")'
         ):
             self.assertIn(term,self.html)
@@ -144,26 +140,11 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('canvas.toDataURL("image/jpeg"',self.html)
         self.assertIn('data-action="client"',self.html)
 
-    def test_android_wizard_inputs_force_visible_text_and_show_live_mirrors(self):
-        for term in (
-            '-webkit-text-fill-color:#101e39!important',
-            'caret-color:#2367f5!important',
-            'input::placeholder,textarea::placeholder',
-            'input:-webkit-autofill',
-            '-webkit-box-shadow:0 0 0 1000px #fff inset!important',
-            '.wizard-input{color:#101e39!important',
-            '-webkit-appearance:none!important',
-            'forced-color-adjust:none!important',
-            'id="phone" name="phone" type="tel"',
-            'id="person" name="person" type="text"',
-            'id="phoneMirror" class="wizard-live-value"',
-            'id="personMirror" class="wizard-live-value"',
-            'id="shopMirror" class="wizard-live-value"',
-            'function updateWizardMirrors()',
-            'Telefon: ','Mijoz: ','Do‘kon: ',
-            'if(formAction==="client")updateWizardMirrors()'
-        ):
-            self.assertIn(term,self.html)
+    def test_wizard_has_native_inputs_without_duplicate_text_mirrors(self):
+        for name in ('phone', 'person', 'shop'):
+            self.assertIn('id="'+name+'" name="'+name+'"', self.html)
+        self.assertNotIn('wizard-live-value', self.html)
+        self.assertNotIn('updateWizardMirrors', self.html)
 
     def test_new_client_fast_wizard_has_five_large_steps(self):
         for term in (
@@ -248,27 +229,12 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('IntersectionObserver',self.html)
         self.assertNotIn('data-photo-src=',self.html)
 
-    def test_android_webview_uses_platform_specific_readable_header(self):
-        for term in (
-            '<meta name="color-scheme" content="light">',
-            'maximum-scale=1',
-            'html.tg-android{color-scheme:only light!important',
-            'html.tg-android .app>header{background:#f4f7fd!important',
-            'html.tg-android .app>header .logo,html.tg-android .app>header .greet{color:#101e39!important',
-            'tg.setHeaderColor(String(tg.platform||"").toLowerCase()==="android"?"#f4f7fd":"#101e39")'
-        ):
-            self.assertIn(term,self.html)
-
-
-    def test_leaflet_loader_matches_working_manager_loader(self):
-        for term in (
-            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-            'js.async=true',
-            'window.L?resolve(window.L):reject(Error("Xarita kutubxonasi mavjud emas."))'
-        ):
-            self.assertIn(term,self.html)
-        self.assertNotIn('function loadExternalScript(url,timeout)',self.html)
+    def test_palette_and_map_assets_are_deterministic(self):
+        self.assertIn('<meta name="color-scheme" content="only light">', self.html)
+        self.assertNotIn('html.tg-android', self.html)
+        for asset in ('leaflet.js', 'leaflet.css', 'LICENSE'):
+            self.assertTrue((HTML.parent/'vendor'/'leaflet'/asset).is_file())
+        self.assertNotIn('https://unpkg.com', self.html)
 
     def test_agent_home_shows_cashier_debt_collection_tasks(self):
         for term in (
