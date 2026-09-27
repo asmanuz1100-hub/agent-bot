@@ -418,7 +418,11 @@ function formPayload(){
  var fd=new FormData($("operationForm")),payload={};
  for(var pair of fd.entries())payload[pair[0]]=pair[1];
  if(formAction==="delivery"||formAction==="return"){
-  payload.items=[];var i=0;while(fd.has("pack"+i)){payload.items.push({pack:Number(fd.get("pack"+i)),qty:String(fd.get("qty"+i))});i++}
+  payload.items=[];
+  $("items").querySelectorAll(".delivery-row").forEach(function(row){
+   var sel=row.querySelector('select[name^="pack"]'),inp=row.querySelector('input[name^="qty"]');
+   if(sel&&inp)payload.items.push({pack:Number(sel.value),qty:String(Math.max(1,Math.floor(Number(inp.value)||1)))});
+  });
  }
  if(formAction==="client"){
   payload.items=[];
