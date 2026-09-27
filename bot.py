@@ -27,8 +27,8 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
-AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260925-agent-live-v1').strip()
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/').strip()
+AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260927-android-v2').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260927-android-v2').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -1757,7 +1757,7 @@ def serve_webhook(db,base_url):
         def do_GET(self):
             path=urlparse(self.path).path
             if path in ('/cashier','/cashier/'):
-                self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8');return
+                self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
             m=re.fullmatch(r'/map/overall/(day|week|month)/(\d{10,})/([0-9a-f]{32})',path)
