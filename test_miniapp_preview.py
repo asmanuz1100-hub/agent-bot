@@ -231,6 +231,19 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_agent_home_shows_cashier_debt_collection_tasks(self):
+        for term in (
+            'id="collectionTaskSection"',
+            'id="collectionTaskList"',
+            '📌 Kassir topshiriqlari',
+            'data.collectionTasks||[]',
+            'Qarz undirish · ',
+            'currentDebtUsd',
+            'Mijoz kartasini ochish →',
+            'data-client="'+t.clientId+'"'
+        ):
+            self.assertIn(term,self.html)
+
     def test_client_card_layout_does_not_overlap_content(self):
         self.assertNotIn('\\n.customer-hero{',self.html)
         self.assertIn('.customer-hero{position:relative',self.html)
