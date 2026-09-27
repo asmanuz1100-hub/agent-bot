@@ -36,6 +36,25 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
+    def test_android_map_avoids_canvas_overlays_and_forces_tile_visibility(self):
+        for term in (
+            'className:"client-map-icon"',
+            'class="client-map-pin"',
+            'L.marker([c.lat,c.lon]',
+            'className:"route-point-icon"',
+            'L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#2367f5"',
+            'html.tg-android img.leaflet-tile',
+            'visibility:visible!important',
+            'mix-blend-mode:normal!important',
+            'document.documentElement.classList.add("tg-android")',
+            'tg.setBackgroundColor("#f4f7fd")'
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn('renderer:mapCanvas',self.html)
+        self.assertNotIn('renderer:routeCanvas',self.html)
+        self.assertNotIn('mapCanvas=L.canvas',self.html)
+        self.assertNotIn('routeCanvas=L.canvas',self.html)
+
     def test_client_and_route_maps_match_working_manager_base_map(self):
         for term in (
             'id="mapShell"','id="mapStatus"',
@@ -125,7 +144,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('canvas.toDataURL("image/jpeg"',self.html)
         self.assertIn('data-action="client"',self.html)
 
-    def test_android_wizard_inputs_force_visible_text_and_autofill_colors(self):
+    def test_android_wizard_inputs_force_visible_text_and_show_live_mirrors(self):
         for term in (
             '-webkit-text-fill-color:#101e39!important',
             'caret-color:#2367f5!important',
@@ -133,8 +152,16 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'input:-webkit-autofill',
             '-webkit-box-shadow:0 0 0 1000px #fff inset!important',
             '.wizard-input{color:#101e39!important',
+            '-webkit-appearance:none!important',
+            'forced-color-adjust:none!important',
             'id="phone" name="phone" type="tel"',
-            'id="person" name="person" type="text"'
+            'id="person" name="person" type="text"',
+            'id="phoneMirror" class="wizard-live-value"',
+            'id="personMirror" class="wizard-live-value"',
+            'id="shopMirror" class="wizard-live-value"',
+            'function updateWizardMirrors()',
+            'Telefon: ','Mijoz: ','Do‘kon: ',
+            'if(formAction==="client")updateWizardMirrors()'
         ):
             self.assertIn(term,self.html)
 
@@ -221,18 +248,17 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('IntersectionObserver',self.html)
         self.assertNotIn('data-photo-src=',self.html)
 
-    def test_android_webview_uses_full_width_fixed_dark_header(self):
+    def test_android_webview_uses_platform_specific_readable_header(self):
         for term in (
             '<meta name="color-scheme" content="light">',
             'maximum-scale=1',
-            'color-scheme:light',
-            '.app>header{display:block!important',
-            'background:#101e39!important',
-            '.app>header .logo,.app>header .greet{color:#fff!important}',
-            '@media(max-width:600px){.app{max-width:none!important;width:100%!important',
-            'nav{max-width:none!important;width:100%!important}'
+            'html.tg-android{color-scheme:only light!important',
+            'html.tg-android .app>header{background:#f4f7fd!important',
+            'html.tg-android .app>header .logo,html.tg-android .app>header .greet{color:#101e39!important',
+            'tg.setHeaderColor(String(tg.platform||"").toLowerCase()==="android"?"#f4f7fd":"#101e39")'
         ):
             self.assertIn(term,self.html)
+
 
     def test_leaflet_loader_matches_working_manager_loader(self):
         for term in (
