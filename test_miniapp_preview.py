@@ -88,7 +88,13 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertIn('wallet.history||[]',self.html)
         self.assertIn('(data.expenseWallet||{}).categories||[]',self.html)
-        self.assertIn('Xarajat faqat shu balansdan yechiladi.',self.html)
+        self.assertIn('balanceUzs',self.html)
+        self.assertIn('Xarajat faqat shu so‘m balansidan yechiladi.',self.html)
+        self.assertIn('Xarajat summasi (UZS)',self.html)
+        self.assertIn('name="expectedRate"',self.html)
+        self.assertIn('USD ekv.: ',self.html)
+        self.assertIn('rateUzsPerUsd',self.html)
+        self.assertIn('fmtSom((data.expenseWallet||{}).balanceUzs||0)+" UZS"',self.html)
 
     def test_new_client_uses_real_camera_capture_and_upload(self):
         for term in (
