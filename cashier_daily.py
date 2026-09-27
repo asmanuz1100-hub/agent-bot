@@ -55,7 +55,7 @@ def report(db,now=None):
           e.category,e.recipient,u.name AS cashier_name FROM cashier_expenses e
           LEFT JOIN users u ON u.id=e.cashier
           WHERE e.ts>=? AND e.ts<? ORDER BY e.ts DESC,e.id DESC LIMIT 25""",(start,end)).fetchall()
-    funded_rows=db.execute("""SELECT f.ts,f.amount_usd,a.name AS agent_name,u.name AS actor_name
+    funded_rows=db.execute("""SELECT f.ts,f.amount_usd,f.amount_uzs,f.rate_uzs_per_usd,a.name AS agent_name,u.name AS actor_name
           FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
           WHERE f.kind='topup' AND f.ts>=? AND f.ts<? ORDER BY f.ts DESC,f.id DESC LIMIT 20""",
           (start,end)).fetchall()
@@ -70,7 +70,7 @@ def report(db,now=None):
        f"🧾 Бугун сўмдаги харажат: {som(expense['original_uzs'])} сўм",
        f"🧾 Бугун USD харажати: {usd(expense['original_usd'])} USD",
        f"💱 Харажатларнинг жами USD эквиваленти: {usd(expense['usd_equivalent'])} USD",
-       f"💳 Бугун агент харажат ҳисобларига берилган: {usd(funded)} USD",
+       f"💳 Бугун агент харажат ҳисобларига берилган: {som(sum(int(x['amount_uzs'] or 0) for x in funded_rows))} сўм → {usd(funded)} USD",
        f"💰 Кун охиридаги ҳисобий қолдиқ: {usd(closing)} USD",
        f"⏳ Ҳали тасдиқланмаган топшириқ: {usd(pending)} USD (қолдиққа қўшилмаган)",
        f"👥 Бугун агентлар мижоздан олган: {usd(collected)} USD (кассир кирими эмас)",
@@ -85,8 +85,8 @@ def report(db,now=None):
     out.extend(["","💳 БУГУН АГЕНТЛАРГА БЕРИЛГАН ХАРАЖАТ ПУЛИ:"])
     if funded_rows:
         out.extend(f"• {datetime.fromtimestamp(int(x['ts']),TZ).strftime('%H:%M')} · "
-                   f"{x['agent_name'] or 'Агент'} · {usd(x['amount_usd'])} USD · "
-                   f"{x['actor_name'] or 'Кассир'}" for x in funded_rows)
+                   f"{x['agent_name'] or 'Агент'} · {som(x['amount_uzs'])} сўм → {usd(x['amount_usd'])} USD · "
+                   f"курс {som(x['rate_uzs_per_usd'])} · {x['actor_name'] or 'Кассир'}" for x in funded_rows)
     else:out.append("Ҳали агентга харажат пули берилмаган.")
     out.extend(["","🧾 БУГУНГИ ХАРАЖАТЛАР:"])
     if rows:
