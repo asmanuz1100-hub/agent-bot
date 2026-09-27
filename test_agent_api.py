@@ -67,6 +67,42 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(baraka['stock']['1'],4)
         self.assertNotIn('Alibek Karimov',str(snap))
 
+    def test_snapshot_report_analytics_are_agent_scoped_and_financially_complete(self):
+        self.add_client('report_client_123')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        self.db.execute("INSERT INTO clients(agent,name,phone,address,created_ts,map_only) VALUES(4,'Other Shop','+998909876543','X',?,0)",(self.now,))
+        other=self.db.execute("SELECT id FROM clients WHERE agent=4").fetchone()[0]
+
+        core.record(self.db,2,2,cid,'delivery',1,4,0,'',8101,currency='USD')
+        core.record(self.db,2,2,cid,'sold',1,1,0,'',8102,currency='USD')
+        core.record(self.db,2,2,cid,'payment',0,0,500,'',8103,currency='USD')
+        core.record(self.db,2,2,cid,'return',1,1,0,'',8104,currency='USD')
+        core.record(self.db,4,4,other,'delivery',1,99,0,'',8199,currency='USD')
+        self.db.execute('UPDATE events SET ts=? WHERE source BETWEEN 8101 AND 8199',(self.now,))
+        self.db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,category,note,source,ts)
+            VALUES(2,2,'expense',125,'Fuel','Test',9101,?)""",(self.now,))
+        self.db.execute("""INSERT INTO handovers(agent,amount,amount_usd,status,cashier,source,ts,accepted_ts)
+            VALUES(2,0,300,'accepted',3,9201,?,?)""",(self.now,self.now))
+        self.db.commit()
+
+        snap=agent_api.snapshot(self.db,2,self.now)
+        day=snap['period']['day']
+        self.assertEqual(snap['clientCount'],1)
+        self.assertEqual(snap['reportAnalytics']['clients']['total'],1)
+        self.assertEqual(day['deliveryQty'],4)
+        self.assertEqual(day['deliveryUsd'],10)
+        self.assertEqual(day['soldQty'],1)
+        self.assertEqual(day['returnQty'],1)
+        self.assertEqual(day['returnUsd'],2.5)
+        self.assertEqual(day['paymentsUsd'],5)
+        self.assertEqual(day['expenseUsd'],1.25)
+        self.assertEqual(day['handoverAcceptedUsd'],3)
+        product=next(x for x in snap['reportAnalytics']['products']['day'] if x['pack']==1)
+        self.assertEqual(product['deliveryQty'],4)
+        self.assertEqual(product['soldQty'],1)
+        self.assertEqual(product['returnQty'],1)
+        self.assertEqual(snap['reportAnalytics']['series'][-1]['deliveryQty'],4)
+
     def test_add_client_is_real_gps_required_and_idempotent(self):
         first=self.add_client()
         self.db.commit()
