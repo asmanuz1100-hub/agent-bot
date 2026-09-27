@@ -459,15 +459,18 @@ def admin_ids(db):
     ids=[int(r[0]) for r in db.execute("SELECT id FROM users WHERE role='admin'").fetchall()]
     return list(set(ids)|set(ADMINS))
 
-def notify_cashiers_payment(db,agent,client,amount_usd):
+def notify_cashiers_payment(db,agent,client,amount_usd,currency='USD',amount_uzs=None,rate=None):
     c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
     if not c:return
     label=c['shop_name'] or c['name'] or f'Мижоз #{client}'
     debt=client_debt_usd(db,client)
+    original=(f"{int(amount_uzs):,} UZS → {fmt(amount_usd)} USD\n"
+              f"💱 Курс: 1 USD = {int(rate):,} UZS\n"
+              if currency=='UZS' and amount_uzs and rate else f"{fmt(amount_usd)} USD\n")
     text=(f"💰 МИЖОЗДАН ПУЛ ОЛИНДИ\n"
           f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
           f"🏪 Мижоз: {label} · #{client}\n"
-          f"💵 Олинди: {fmt(amount_usd)} USD\n"
+          f"💵 Олинди: {original}"
           f"📉 Қолган қарз: {fmt(debt)} USD\n"
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many(cashier_ids(db),text)
@@ -1964,7 +1967,9 @@ def serve_webhook(db,base_url):
                         local.commit()
                         if notify and not data.get('duplicate'):
                             if notify.get('kind')=='payment':
-                                notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'])
+                                notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'],
+                                                        notify.get('currency','USD'),notify.get('amountUzs'),
+                                                        notify.get('rate'))
                             elif notify.get('kind')=='handover':
                                 notify_cashiers_handover(local,effective_agent,notify['handoverId'],notify['amount'])
                             elif notify.get('kind')=='agent_expense':

@@ -203,6 +203,64 @@ class AgentApiTests(unittest.TestCase):
         self.assertTrue(paid['ok'])
         self.assertEqual(core.cash_usd(self.db,2),1000)
 
+    def test_agent_can_edit_client_profile_without_touching_financial_history(self):
+        self.add_client('edit_client_123')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        core.record(self.db,2,2,cid,'delivery',1,4,0,'',9301,currency='USD')
+        before_events=self.db.execute("SELECT COUNT(*) FROM events WHERE client=?",(cid,)).fetchone()[0]
+        before_debt=core.client_debt_usd(self.db,cid)
+
+        out=agent_api.mutate(self.db,2,'client_edit',{
+            'clientId':cid,'shopName':'Yangi Baraka','name':'Valijon',
+            'phone':'+998 90 111 22 33, +998 91 444 55 66',
+            'address':'Yangi manzil','note':'Telefon yangilandi'
+        },'edit_client_profile_123',self.now)
+        self.assertTrue(out['ok'])
+        row=self.db.execute("SELECT name,shop_name,phone,address,comment FROM clients WHERE id=?",(cid,)).fetchone()
+        self.assertEqual(row['name'],'Valijon')
+        self.assertEqual(row['shop_name'],'Yangi Baraka')
+        self.assertEqual(row['phone'],'+998901112233 · +998914445566')
+        self.assertEqual(row['address'],'Yangi manzil')
+        self.assertEqual(row['comment'],'Telefon yangilandi')
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE client=?",(cid,)).fetchone()[0],before_events)
+        self.assertEqual(core.client_debt_usd(self.db,cid),before_debt)
+        self.assertGreaterEqual(self.db.execute("SELECT COUNT(*) FROM client_edits WHERE client=?",(cid,)).fetchone()[0],5)
+
+    def test_uzs_payment_uses_only_cashier_rate_and_books_usd_equivalent(self):
+        self.add_client('uzs_payment_client_123')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        core.record(self.db,2,2,cid,'delivery',1,4,0,'',9401,currency='USD')
+        self.live_shift()
+        core.set_cashier_rate(self.db,3,12800,9402)
+
+        snap=agent_api.snapshot(self.db,2,self.now)
+        self.assertEqual(snap['cashierRateUzsPerUsd'],12800)
+        out=agent_api.mutate(self.db,2,'payment',{
+            'clientId':cid,'currency':'UZS','amount':'64000','expectedRate':'12800'
+        },'uzs_payment_12345',self.now)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['convertedUsd'],5.0)
+        self.assertEqual(out['rateUzsPerUsd'],12800)
+        self.assertEqual(core.client_debt_usd(self.db,cid),500)
+        event=self.db.execute("SELECT amount_usd,note FROM events WHERE client=? AND kind='payment' ORDER BY id DESC LIMIT 1",(cid,)).fetchone()
+        self.assertEqual(event['amount_usd'],500)
+        self.assertIn('64000 UZS',event['note'])
+        self.assertIn('12800 UZS',event['note'])
+
+    def test_uzs_payment_rejects_missing_or_changed_cashier_rate(self):
+        self.add_client('uzs_rate_guard_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        self.live_shift()
+        with self.assertRaisesRegex(ValueError,'Kassir hali kurs belgilamagan'):
+            agent_api.mutate(self.db,2,'payment',{
+                'clientId':cid,'currency':'UZS','amount':'50000'
+            },'uzs_no_rate_123',self.now)
+        core.set_cashier_rate(self.db,3,12500,9501)
+        with self.assertRaisesRegex(ValueError,'kursni o‘zgartirdi'):
+            agent_api.mutate(self.db,2,'payment',{
+                'clientId':cid,'currency':'UZS','amount':'50000','expectedRate':'12400'
+            },'uzs_changed_rate_123',self.now)
+
     def test_delivery_visit_payment_return_and_handover_use_core_rules(self):
         self.add_client();cid=self.db.execute('SELECT id FROM clients').fetchone()[0]
         delivery=agent_api.mutate(self.db,2,'delivery',

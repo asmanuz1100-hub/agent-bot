@@ -28,6 +28,7 @@ FEATURE_ACTION={
     "client":"client",
     "add_client":"client",
     "client_detail":"clients",
+    "client_edit":"clients",
     "visit":"visit",
     "delivery":"delivery",
     "payment":"payment",
@@ -178,6 +179,7 @@ def _client_snapshot(db,now):
             "status":status,"statusLabel":STATUS_LABELS.get(status,status),
             "age":age,"days":days,"lastTs":last or None,"followup":followup,
             "note":(v['note'] if v else c['comment']) or "",
+            "profileComment":c['comment'] or "",
             "createdTs":int(c['created_ts'] or 0) or None,
             "hasPhoto":bool(c['photo']),
             "debtUsd":_usd(debt.get(cid,0)),
@@ -393,6 +395,7 @@ def snapshot(db,agent,now=None):
                   "gps":{"ts":shift["lastGpsTs"],"lat":shift["lat"],"lon":shift["lon"]}},
             "features":base["features"],"clients":clients,"products":products,
             "events":events,"handovers":handovers,"expenseWallet":expense_wallet,
+            "cashierRateUzsPerUsd":core.cashier_rate(db),
             "summary":{"visitsToday":base["summary"]["visitsToday"],
                        "newClientsToday":base["summary"]["newClientsToday"],
                        "paymentTodayUsd":base["summary"]["paymentsTodayUsd"],
@@ -614,7 +617,27 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                 "_notify":{"kind":"agent_expense","expenseId":expense_id,"amount":amount,
                            "category":category,"note":note,"balance":balance}}
     cid=int(payload.get("clientId") or 0)
-    _client(db,cid)
+    current_client=_client(db,cid)
+    if action=="client_edit":
+        shop=str(payload.get("shopName") or payload.get("shop") or "").strip()
+        person=str(payload.get("name") or payload.get("person") or "").strip()
+        if not shop or len(shop)>120:raise ValueError("Do‘kon nomini kiriting.")
+        if len(person)>120:raise ValueError("Mijoz ismi juda uzun.")
+        phones=_parse_phones(payload.get("phone"))
+        entered=set(phones)
+        for row in db.execute("SELECT id,phone FROM clients WHERE id<>? AND phone IS NOT NULL",(cid,)).fetchall():
+            try:existing=set(_parse_phones(row["phone"]))
+            except ValueError:continue
+            if entered & existing:raise ValueError("Telefon raqamlaridan biri boshqa mijozda mavjud.")
+        address=str(payload.get("address") or "").strip()
+        note=str(payload.get("note") or payload.get("comment") or "").strip()
+        if len(address)>300:raise ValueError("Manzil juda uzun.")
+        if len(note)>1000:raise ValueError("Izoh juda uzun.")
+        values={"shop_name":shop,"name":person,"phone":" · ".join(phones),
+                "address":address,"comment":note}
+        core.edit_client(db,agent,cid,values)
+        return {"ok":True,"clientId":cid,
+                "message":"Mijoz ma’lumotlari yangilandi. Savdo va qarz tarixi o‘zgarmadi."}
     if action=="visit":
         status=str(payload.get("status") or "")
         note=str(payload.get("note") or "").strip()
@@ -643,10 +666,33 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         if not admin_override:
             ok,msg=_live_ready(db,agent,now=now)
             if not ok:raise ValueError(msg)
-        amount=core.money(payload.get("amount"))
-        core.record(db,agent,agent,cid,'payment',0,0,amount,'Mini App',source,currency='USD')
-        return {"ok":True,"message":f"{_usd(amount):.2f} USD to‘lov saqlandi.",
-                "_notify":{"kind":"payment","client":cid,"amount":amount}}
+        currency=str(payload.get("currency") or "USD").upper()
+        if currency=="USD":
+            amount=core.money(payload.get("amount"))
+            note="Mini App · USD"
+            message=f"{_usd(amount):.2f} USD to‘lov saqlandi."
+            notify={"kind":"payment","client":cid,"amount":amount,"currency":"USD"}
+        elif currency=="UZS":
+            rate=core.cashier_rate(db)
+            if rate is None:
+                raise ValueError("Kassir hali kurs belgilamagan. UZS to‘lov qabul qilib bo‘lmaydi.")
+            expected_raw=payload.get("expectedRate")
+            if expected_raw not in (None,""):
+                expected=core.parse_whole_som(expected_raw,"Kurs")
+                if expected!=rate:
+                    raise ValueError("Kassir kursni o‘zgartirdi. Yangi kursni ko‘rib to‘lovni qayta tasdiqlang.")
+            som=core.parse_whole_som(payload.get("amount"),"To‘lov")
+            amount=core.som_to_usd_cents(som,rate)
+            note=f"Mini App · {som} UZS · 1 USD = {rate} UZS"
+            message=f"{som:,} UZS → {_usd(amount):.2f} USD to‘lov saqlandi. Kurs: 1 USD = {rate:,} UZS."
+            notify={"kind":"payment","client":cid,"amount":amount,"currency":"UZS",
+                    "amountUzs":som,"rate":rate}
+        else:
+            raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
+        core.record(db,agent,agent,cid,'payment',0,0,amount,note,source,currency='USD')
+        return {"ok":True,"message":message,"convertedUsd":_usd(amount),
+                "rateUzsPerUsd":rate if currency=="UZS" else core.cashier_rate(db),
+                "_notify":notify}
     if action=="return":
         if not admin_override:
             ok,msg=_live_ready(db,agent,now=now)
