@@ -179,6 +179,7 @@ def _client_snapshot(db,now):
             "status":status,"statusLabel":STATUS_LABELS.get(status,status),
             "age":age,"days":days,"lastTs":last or None,"followup":followup,
             "note":(v['note'] if v else c['comment']) or "",
+            "profileComment":c['comment'] or "",
             "createdTs":int(c['created_ts'] or 0) or None,
             "hasPhoto":bool(c['photo']),
             "debtUsd":_usd(debt.get(cid,0)),
