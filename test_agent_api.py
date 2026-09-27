@@ -103,6 +103,22 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(product['returnQty'],1)
         self.assertEqual(snap['reportAnalytics']['series'][-1]['deliveryQty'],4)
 
+    def test_quick_snapshot_keeps_first_paint_data_without_heavy_histories(self):
+        self.add_client('quick_snapshot_client')
+        snap=agent_api.quick_snapshot(self.db,2,self.now)
+        self.assertTrue(snap['quick'])
+        self.assertEqual(snap['me']['id'],2)
+        self.assertIn('clients',snap)
+        self.assertIn('products',snap)
+        self.assertIn('summary',snap)
+        self.assertIn('expenseWallet',snap)
+        self.assertIn('cashierRateUzsPerUsd',snap)
+        self.assertEqual(snap['events'],[])
+        self.assertEqual(snap['handovers'],[])
+        self.assertEqual(snap['expenseWallet']['history'],[])
+        self.assertEqual(snap['reportAnalytics'],{})
+        self.assertIn('cashAvailableUsd',snap['summary'])
+
     def test_add_client_is_real_gps_required_and_idempotent(self):
         first=self.add_client()
         self.db.commit()
