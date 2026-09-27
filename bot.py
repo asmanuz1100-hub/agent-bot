@@ -59,8 +59,8 @@ FLOW={
  'cashier_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (USD):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_expense_uzs':[('category','Сўмдаги харажат турини танланг:'),('amount','Харажат суммасини бутун сўмда киритинг (масалан: 100000):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_rate':[('rate','Касса учун 1 USD неча сўм? Фақат бутун сон киритинг (масалан: 12500):')],
- 'agent_fund':[('agent','Қайси агентнинг харажат ҳисобини тўлдирасиз?'),('amount','Агентга ажратиладиган сумма (USD):'),('note','Изоҳ киритинг (масалан: йўл ва ёқилғи учун):')],
- 'agent_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (USD):'),('note','Нима учун сарфланди? Изоҳ киритинг:')],
+ 'agent_fund':[('agent','Қайси агентнинг харажат ҳисобини тўлдирасиз?'),('amount','Агентга ажратиладиган сумма (сўм):'),('note','Изоҳ киритинг (масалан: йўл ва ёқилғи учун):')],
+ 'agent_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (сўм):'),('note','Нима учун сарфланди? Изоҳ киритинг:')],
  'load':[('agent','Агентни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'user':[('id','Ходимнинг Telegram ID рақами:'),('role','Ходим вазифаси:'),('name','Ходим исми:')],
  'admin_add':[('id','Админ қиладиган ходимнинг Telegram ID рақамини киритинг (аввал рўйхатдан ўтган бўлса ҳам бўлади):'),('name','Админ сифатида кўринадиган исмини киритинг:')],
@@ -485,13 +485,15 @@ def notify_cashiers_handover(db,agent,hid,amount_usd):
     _safe_send_many(cashier_ids(db),text,
                     [[f'🔎 Кўриб чиқиш #{hid}'],['⏳ Тасдиқланмаган пуллар']])
 
-def notify_agent_expense(db,agent,expense_id,amount_usd,category,note,balance):
+def notify_agent_expense(db,agent,expense_id,amount_usd,amount_uzs,rate,category,note,balance_uzs):
     text=(f"🧾 АГЕНТ ХАРАЖАТИ #{expense_id}\n"
           f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
           f"📌 Тури: {category}\n"
-          f"💵 Сумма: {fmt(amount_usd)} USD\n"
+          f"💵 Сумма: {int(amount_uzs):,} сўм\n"
+          f"💱 Курс: 1 USD = {int(rate):,} сўм\n"
+          f"📊 Умумий ҳисоб учун: {fmt(amount_usd)} USD\n"
           f"📝 Изоҳ: {note}\n"
-          f"💼 Харажат ҳисобида қолди: {fmt(balance)} USD\n"
+          f"💼 Харажат ҳисобида қолди: {int(balance_uzs):,} сўм\n"
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many([*cashier_ids(db),*admin_ids(db)],text)
 
@@ -999,22 +1001,27 @@ def finish(db,u,s,source):
         if v['id'] in ADMINS:raise ValueError('Бу Telegram ID аллақачон асосий админ.')
         admin_result=add_or_promote_admin(db,u,v['id'],v['name'])
     elif a=='agent_fund':
-        fund_value=money(v['amount'])
-        fund_id=fund_agent_expense(db,u,v['agent'],fund_value,v['note'],source)
-        fund_balance=agent_fund_balance_usd(db,v['agent'])
+        fund_uzs=parse_whole_som(v['amount'])
+        fund_id,fund_value,fund_rate=fund_agent_expense_uzs(
+            db,u,v['agent'],fund_uzs,v['note'],source,expected_rate=v.get('rate_at_entry'))
+        fund_balance=agent_fund_balance_uzs(db,v['agent'])
         agent_name=_staff_name(db,v['agent'])
         fund_text=(f'💳 АГЕНТ ҲИСОБИ ТЎЛДИРИЛДИ #{fund_id}\nАгент: {agent_name}\n'
-                   f'Сумма: {fmt(fund_value)} USD\nИзоҳ: {v["note"]}\n'
-                   f'Агент харажат баланси: {fmt(fund_balance)} USD\n'
-                   f'Касса қолдиғи: {fmt(cashier_balance_usd(db))} USD')
+                   f'Сумма: {fund_uzs:,} сўм\nКурс: 1 USD = {fund_rate:,} сўм\n'
+                   f'Умумий ҳисоб учун: {fmt(fund_value)} USD\nИзоҳ: {v["note"]}\n'
+                   f'Агент харажат баланси: {fund_balance:,} сўм\n'
+                   f'Касса ҳисобий қолдиғи: {fmt(cashier_balance_usd(db))} USD')
         _safe_send_many([v['agent'],*admin_ids(db)],fund_text)
     elif a=='agent_expense':
-        expense_value=money(v['amount'])
-        expense_id=add_agent_expense(db,u,expense_value,v['category'],v['note'],source)
-        expense_balance=agent_fund_balance_usd(db,u)
+        expense_uzs=parse_whole_som(v['amount'])
+        expense_id,expense_value,expense_rate=add_agent_expense_uzs(
+            db,u,expense_uzs,v['category'],v['note'],source,expected_rate=v.get('rate_at_entry'))
+        expense_balance=agent_fund_balance_uzs(db,u)
         expense_text=(f'🧾 АГЕНТ ХАРАЖАТИ #{expense_id}\nАгент: {_staff_name(db,u)}\n'
-                      f'Тури: {v["category"]}\nСумма: {fmt(expense_value)} USD\n'
-                      f'Изоҳ: {v["note"]}\nҚолдиқ: {fmt(expense_balance)} USD')
+                      f'Тури: {v["category"]}\nСумма: {expense_uzs:,} сўм\n'
+                      f'Курс: 1 USD = {expense_rate:,} сўм\n'
+                      f'Умумий ҳисоб учун: {fmt(expense_value)} USD\n'
+                      f'Изоҳ: {v["note"]}\nҚолдиқ: {expense_balance:,} сўм')
         _safe_send_many([*cashier_ids(db),*admin_ids(db)],expense_text)
     elif a=='cashier_rate':
         rate=set_cashier_rate(db,u,int(v['rate']),source)
@@ -1071,11 +1078,12 @@ def finish(db,u,s,source):
     elif a=='agent_transfer':
         send(u,f"✅ Агент аккаунти алмаштирилди: {v['agent']} → {v['id']}. Эски IDга кириш ёпилди, янги агент /start юборсин. Мижозлар, товар ва пул тарихи сақланди.",menu(db,u))
     elif a=='agent_fund':
-        send(u,f'✅ Агент {_staff_name(db,v["agent"])} ҳисоби {fmt(fund_value)} USD га тўлдирилди. '
-             f'Агент баланси: {fmt(fund_balance)} USD. Касса қолдиғи: {fmt(cashier_balance_usd(db))} USD',menu(db,u))
+        send(u,f'✅ Агент {_staff_name(db,v["agent"])} ҳисоби {fund_uzs:,} сўмга тўлдирилди. '
+             f'Агент баланси: {fund_balance:,} сўм. USD эквиваленти: {fmt(fund_value)} USD',menu(db,u))
     elif a=='agent_expense':
-        send(u,f'✅ Харажат #{expense_id} сақланди: {fmt(expense_value)} USD. '
-             f'Харажат ҳисобида қолди: {fmt(expense_balance)} USD',menu(db,u))
+        send(u,f'✅ Харажат #{expense_id} сақланди: {expense_uzs:,} сўм. '
+             f'Харажат ҳисобида қолди: {expense_balance:,} сўм. '
+             f'Умумий ҳисоб: {fmt(expense_value)} USD',menu(db,u))
     elif a=='cashier_expense_uzs':
         send(u,f'✅ Харажат #{expense_id} сақланди: {amount_uzs:,} сўм = {fmt(expense_value)} USD '
              f'(курс: 1 USD = {expense_rate:,} сўм). Админга хабарнома юборилди.\n'
@@ -1303,21 +1311,23 @@ def handle(db,update):
         if action=='clients':report_clients(db,u);return
         if action=='balance':
             stock_rows=[f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in product_ids() if agent_stock(db,u,p)]
-            send(u,'Қўлингиздаги товар:\n'+('\n'.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ')+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+f'\n💼 Харажат ҳисоби: {fmt(agent_fund_balance_usd(db,u))} USD'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
+            send(u,'Қўлингиздаги товар:\n'+('\n'.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ')+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+f'\n💼 Харажат ҳисоби: {agent_fund_balance_uzs(db,u):,} сўм'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
         if action=='cashbox':cashbox_report(db,u);return
         if action=='cashier_pending':
             send(u,cashier_pending.report(db),cashier_pending_keyboard(db,u));return
         if action=='cashier_expenses':cashier_expenses_report(db,u);return
         if action=='agent_expense_balance':
-            rows=db.execute("""SELECT kind,amount_usd,category,note,ts FROM agent_funds
+            rows=db.execute("""SELECT kind,amount_usd,amount_uzs,rate_uzs_per_usd,category,note,ts FROM agent_funds
                 WHERE agent=? ORDER BY ts DESC,id DESC LIMIT 15""",(u,)).fetchall()
-            out=[f'💼 ХАРАЖАТ ҲИСОБИМ\nҚолдиқ: {fmt(agent_fund_balance_usd(db,u))} USD']
+            out=[f'💼 ХАРАЖАТ ҲИСОБИМ\nҚолдиқ: {agent_fund_balance_uzs(db,u):,} сўм']
             if rows:
                 out.append('')
                 for x in rows:
                     sign='+' if x['kind']=='topup' else '−'
                     label='Кассирдан' if x['kind']=='topup' else (x['category'] or 'Харажат')
-                    out.append(f"{sign}{fmt(x['amount_usd'])} USD · {label} · {stamp(x['ts'])}"+(f"\n{x['note']}" if x['note'] else ''))
+                    original=(f"{int(x['amount_uzs']):,} сўм" if int(x['amount_uzs'] or 0)>0 else f"{fmt(x['amount_usd'])} USD · эски ёзув")
+                    fx=(f" · {fmt(x['amount_usd'])} USD · курс {int(x['rate_uzs_per_usd']):,}" if int(x['amount_uzs'] or 0)>0 else '')
+                    out.append(f"{sign}{original}{fx} · {label} · {stamp(x['ts'])}"+(f"\n{x['note']}" if x['note'] else ''))
             send(u,'\n'.join(out),menu(db,u));return
         if action=='cashier_daily':
             send(u,cashier_daily.report(db),menu(db,u));return
@@ -1554,14 +1564,16 @@ def handle(db,update):
         if v<100 or v>10**7:raise ValueError('Курс: 100–10 000 000 сўм киритинг.')
     elif key=='qty':v=count(text)
     elif key=='amount':
-        if s['action']=='cashier_expense_uzs':
+        if s['action'] in ('cashier_expense_uzs','agent_fund','agent_expense'):
             rate=cashier_rate(db)
             if rate is None:raise ValueError('Аввал касса курсини белгиланг.')
             amount_uzs=parse_whole_som(text)
             parsed_amount=som_to_usd_cents(amount_uzs,rate)
             s['values']['rate_at_entry']=rate
-            if parsed_amount>cashier_balance_usd(db):
+            if s['action'] in ('cashier_expense_uzs','agent_fund') and parsed_amount>cashier_balance_usd(db):
                 raise ValueError('Кассада етарли қабул қилинган пул йўқ. Аввал агент топшириғини кассир тасдиқласин.')
+            if s['action']=='agent_expense' and amount_uzs>agent_fund_balance_uzs(db,u):
+                raise ValueError('Харажат ҳисобида етарли сўм йўқ.')
             v=str(amount_uzs)
         else:
             parsed_amount=money(text)
@@ -1974,7 +1986,8 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_handover(local,effective_agent,notify['handoverId'],notify['amount'])
                             elif notify.get('kind')=='agent_expense':
                                 notify_agent_expense(local,effective_agent,notify['expenseId'],notify['amount'],
-                                                     notify['category'],notify['note'],notify['balance'])
+                                                     notify['amountUzs'],notify['rate'],notify['category'],
+                                                     notify['note'],notify['balanceUzs'])
                             elif notify.get('kind')=='shift_end':
                                 notify_shift_end(local,effective_agent,notify['shiftId'])
                     if admin_mode:

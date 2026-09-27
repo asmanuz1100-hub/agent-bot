@@ -302,13 +302,16 @@ def snapshot(db,agent,now=None):
     handovers=[{"id":int(h["id"]),"amountUsd":_usd(h["amount_usd"]),
                 "status":h["status"],"ts":int(h["ts"]),
                 "acceptedTs":int(h["accepted_ts"] or 0) or None} for h in hand_rows]
-    fund_rows=db.execute("""SELECT f.id,f.kind,f.amount_usd,f.category,f.note,f.ts,
+    fund_rows=db.execute("""SELECT f.id,f.kind,f.amount_usd,f.amount_uzs,f.rate_uzs_per_usd,f.category,f.note,f.ts,
         u.name AS actor_name FROM agent_funds f LEFT JOIN users u ON u.id=f.actor
         WHERE f.agent=? ORDER BY f.ts DESC,f.id DESC LIMIT 100""",(agent,)).fetchall()
     expense_wallet={
+        "balanceUzs":int(core.agent_fund_balance_uzs(db,agent)),
         "balanceUsd":_usd(core.agent_fund_balance_usd(db,agent)),
         "categories":list(core.CASHIER_EXPENSE_CATEGORIES),
         "history":[{"id":int(x["id"]),"kind":x["kind"],"amountUsd":_usd(x["amount_usd"]),
+                    "amountUzs":int(x["amount_uzs"] or 0),
+                    "rateUzsPerUsd":int(x["rate_uzs_per_usd"] or 0),
                     "category":x["category"] or "","note":x["note"] or "",
                     "actor":x["actor_name"] or "","ts":int(x["ts"])} for x in fund_rows]
     }
@@ -608,14 +611,19 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         category=str(payload.get("category") or "").strip()
         note=str(payload.get("note") or "").strip()
         if not note:raise ValueError("Xarajat izohini kiriting.")
-        amount=core.money(payload.get("amount"))
+        amount_uzs=core.parse_whole_som(payload.get("amount"),"Xarajat")
+        expected_rate=payload.get("expectedRate")
+        expected_rate=(core.parse_whole_som(expected_rate,"Kurs") if expected_rate not in (None,"") else None)
         expense_source=abs(source)
-        expense_id=core.add_agent_expense(db,agent,amount,category,note,expense_source)
-        balance=core.agent_fund_balance_usd(db,agent)
-        return {"ok":True,"expenseId":expense_id,"balanceUsd":_usd(balance),
-                "message":f"Xarajat saqlandi. Qoldiq: {_usd(balance):.2f} USD.",
-                "_notify":{"kind":"agent_expense","expenseId":expense_id,"amount":amount,
-                           "category":category,"note":note,"balance":balance}}
+        expense_id,amount_usd,rate=core.add_agent_expense_uzs(
+            db,agent,amount_uzs,category,note,expense_source,expected_rate=expected_rate)
+        balance_uzs=core.agent_fund_balance_uzs(db,agent)
+        return {"ok":True,"expenseId":expense_id,"balanceUzs":balance_uzs,
+                "convertedUsd":_usd(amount_usd),"rateUzsPerUsd":rate,
+                "message":f"Xarajat saqlandi: {amount_uzs:,} UZS. Qoldiq: {balance_uzs:,} UZS.",
+                "_notify":{"kind":"agent_expense","expenseId":expense_id,"amount":amount_usd,
+                           "amountUzs":amount_uzs,"rate":rate,
+                           "category":category,"note":note,"balanceUzs":balance_uzs}}
     cid=int(payload.get("clientId") or 0)
     current_client=_client(db,cid)
     if action=="client_edit":

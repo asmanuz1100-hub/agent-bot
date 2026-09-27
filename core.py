@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
-CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
@@ -210,6 +210,8 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
+        db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
+        db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,name in PRODUCTS.items():
             db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
                        (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
@@ -243,6 +245,9 @@ def connect(path,initialize=True):
     expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
     for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
+    fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
+    for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
+        if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
     for pack,name in PRODUCTS.items():
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
                    (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
@@ -733,6 +738,83 @@ def agent_fund_balance_usd(db,agent):
         WHEN kind='expense' THEN -amount_usd ELSE 0 END),0)
         FROM agent_funds WHERE agent=?""",(agent,)).fetchone()
     return int(row[0] or 0)
+
+
+def agent_fund_balance_uzs(db,agent):
+    """Spendable agent expense wallet in UZS.
+
+    New wallet operations are stored natively in UZS. Legacy USD-only rows are
+    translated at the current cashier rate only to avoid losing an old balance
+    during the one-way migration to UZS.
+    """
+    row=db.execute("""SELECT
+        COALESCE(SUM(CASE WHEN amount_uzs>0 AND kind='topup' THEN amount_uzs
+                          WHEN amount_uzs>0 AND kind='expense' THEN -amount_uzs ELSE 0 END),0) AS uzs,
+        COALESCE(SUM(CASE WHEN amount_uzs=0 AND kind='topup' THEN amount_usd
+                          WHEN amount_uzs=0 AND kind='expense' THEN -amount_usd ELSE 0 END),0) AS legacy_usd
+        FROM agent_funds WHERE agent=?""",(agent,)).fetchone()
+    balance=int(row['uzs'] or 0)
+    legacy=int(row['legacy_usd'] or 0)
+    rate=cashier_rate(db)
+    if legacy and rate:
+        balance+=int((Decimal(legacy)*Decimal(rate)/Decimal(100)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    return balance
+
+
+def fund_agent_expense_uzs(db,actor,agent,amount_uzs,note,source,expected_rate=None):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Агент ҳисобини фақат кассир ёки админ тўлдиради.')
+    target=db.execute("SELECT name FROM users WHERE id=? AND role='agent'",(agent,)).fetchone()
+    if not target:raise ValueError('Агент топилмади.')
+    if not isinstance(amount_uzs,int) or isinstance(amount_uzs,bool) or amount_uzs<=0:
+        raise ValueError('Сўм миқдори нотўғри.')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    lock_agent(db,agent)
+    if db.execute('SELECT 1 FROM agent_funds WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу операция аллақачон сақланган.')
+    rate=cashier_rate(db)
+    if rate is None:raise ValueError('Аввал «💱 Касса курси» бўлимида 1 USD курсини белгиланг.')
+    if expected_rate is not None and int(expected_rate)!=rate:
+        raise ValueError('Курс ўзгарган. Янги курсда агент балансини қайта киритинг.')
+    amount_usd=som_to_usd_cents(amount_uzs,rate)
+    if amount_usd>cashier_balance_usd(db):
+        raise ValueError('Кассада агентга бериш учун етарли пул йўқ.')
+    row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,amount_uzs,rate_uzs_per_usd,category,note,source,ts)
+        VALUES(?,?,'topup',?,?,?,'',?,?,?) RETURNING id""",
+        (agent,actor,amount_usd,amount_uzs,rate,note.strip(),source,int(time.time()))).fetchone()
+    return int(row[0]),amount_usd,rate
+
+
+def add_agent_expense_uzs(db,actor,amount_uzs,category,note,source,expected_rate=None):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0]!='agent':
+        raise ValueError('Харажатни фақат агент ўз ҳисобидан киритади.')
+    if not isinstance(amount_uzs,int) or isinstance(amount_uzs,bool) or amount_uzs<=0:
+        raise ValueError('Харажат суммаси нотўғри.')
+    if category not in CASHIER_EXPENSE_CATEGORIES:
+        raise ValueError('Харажат турини рўйхатдан танланг.')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or source<=0:raise ValueError('Операция ID нотўғри.')
+    lock_agent(db,actor)
+    if db.execute('SELECT 1 FROM agent_funds WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу операция аллақачон сақланган.')
+    if amount_uzs>agent_fund_balance_uzs(db,actor):
+        raise ValueError('Агент харажат ҳисобида етарли сўм йўқ.')
+    rate=cashier_rate(db)
+    if rate is None:raise ValueError('Аввал касса курсини белгиланг.')
+    if expected_rate is not None and int(expected_rate)!=rate:
+        raise ValueError('Курс ўзгарган. Янги курсда харажатни қайта тасдиқланг.')
+    amount_usd=som_to_usd_cents(amount_uzs,rate)
+    row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,amount_uzs,rate_uzs_per_usd,category,note,source,ts)
+        VALUES(?,?,'expense',?,?,?,?,?,?,?) RETURNING id""",
+        (actor,actor,amount_usd,amount_uzs,rate,category,note.strip(),source,int(time.time()))).fetchone()
+    return int(row[0]),amount_usd,rate
 
 
 def fund_agent_expense(db,actor,agent,amount_usd,note,source):
