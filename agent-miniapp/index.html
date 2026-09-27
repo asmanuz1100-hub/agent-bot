@@ -177,7 +177,7 @@ function go(page){
 }
 function status(c){return c.age==="fresh"?"green":c.age==="yellow"?"yellow":c.age==="red"?"red":c.age==="scheduled"?"":"unknown"}
 function statusText(c){return c.age==="scheduled"?"Rejada: "+c.followup:c.age==="unknown"?"Sana yo‘q":c.days+" kun"}
-function shopRow(c,eager){var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-client-photo="'+c.id+'" src="'+esc(c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
+function shopRow(c,eager,withPhoto){if(withPhoto===undefined)withPhoto=true;var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=withPhoto&&c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-client-photo="'+c.id+'" src="'+esc(c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
 function renderHome(){
  var urgent=data.clients.filter(function(c){return c.age==="yellow"||c.age==="red"}).sort(function(a,b){return (b.days||0)-(a.days||0)});
  var target=urgent.slice(0,4),next=urgent[0]||null,tasks=(data.collectionTasks||[]);
@@ -209,7 +209,7 @@ function renderClients(){
  if(!data)return;filterButtons("clientFilters",filter);
  var q=$("search").value.trim().toLowerCase(),list=data.clients.filter(function(c){return(filter==="all"||c.age===filter)&&(!q||(c.name+" "+c.person+" "+c.address+" "+c.phone).toLowerCase().includes(q))});
  $("clientCount").textContent=list.length+" mijoz";
- $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
+ $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8,i<8)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
 }
 function detailLine(name,value){return '<div class="line"><small>'+esc(name)+'</small><b>'+esc(value==null?"—":value)+'</b></div>'}
 function dialPhone(c){
@@ -420,7 +420,7 @@ async function renderMap(){
  if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);
  var list=data.clients.filter(function(c){return(mapFilter==="all"||c.age===mapFilter)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
  $("mapNote").textContent=list.length+" ta mijozning real koordinatasi. Nuqtani bosib kartochkasini oching.";
- $("mapList").innerHTML=list.slice(0,50).map(function(c,i){return shopRow(c,i<4)}).join("");
+ $("mapList").innerHTML=list.slice(0,50).map(function(c){return shopRow(c,false,false)}).join("");
  try{
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
