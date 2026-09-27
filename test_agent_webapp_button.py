@@ -47,5 +47,9 @@ class AgentMiniAppButtonTests(unittest.TestCase):
             self.assertEqual(button['web_app']['url'],bot.AGENT_V2_TEST_URL)
             self.assertIn('Agent V2 TEST',api.call_args.kwargs['text'])
 
+
+    def test_agent_v2_origin_is_allowed_by_backend_cors(self):
+        self.assertIn('https://asman-agent-v2-manager-base-test.onrender.com',open('bot.py',encoding='utf-8').read())
+
 if __name__=='__main__':
     unittest.main()
