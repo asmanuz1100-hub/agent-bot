@@ -77,7 +77,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,fullDataLoaded=false,photoObserver=null,cameraUploading=false,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapTileFallback=false,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
+var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,fullDataLoaded=false,photoObserver=null,cameraUploading=false,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapTileFallback=false,mapPromise=null,mapCanvas=null,routeLine=null,routeMap=null,routeCanvas=null,adminAgentId=null;
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -381,13 +381,14 @@ async function renderMap(){
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
    map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([40.54,70.94],9);
+   mapCanvas=L.canvas({padding:.5});
    installClientMapTiles(L,false);
    mapPins=L.featureGroup().addTo(map)
   }
   mapPins.clearLayers();
   list.forEach(function(c){var color=c.age==="red"?"#e55265":c.age==="yellow"?"#e89d2c":c.age==="fresh"?"#0daf79":"#2367f5";
-   var icon=L.divIcon({className:"",html:'<span style="display:block;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px #0004;background:'+color+'"></span>',iconSize:[20,20],iconAnchor:[10,10]});
-   L.marker([c.lat,c.lon],{icon:icon,title:c.name||"Mijoz"}).addTo(mapPins).on("click",function(){selected=c.id;go("detail")});
+   L.circleMarker([c.lat,c.lon],{renderer:mapCanvas,radius:9,color:"#ffffff",weight:3,fillColor:color,fillOpacity:1,opacity:1})
+    .addTo(mapPins).on("click",function(){selected=c.id;go("detail")});
   });
   if(!list.length){mapStatus("Tanlangan filtr bo‘yicha GPS manzilli mijoz topilmadi.",true)}
   else if(mapTiles)mapStatus("",false);
@@ -750,16 +751,17 @@ async function showMyRoute(force){
   }
   var L=await loadLeaflet();
   if(!routeMap){
-   routeMap=L.map("routeMap",{zoomControl:true}).setView([r.points[0].lat,r.points[0].lon],12);
+   routeMap=L.map("routeMap",{zoomControl:true,preferCanvas:true}).setView([r.points[0].lat,r.points[0].lon],12);
+   routeCanvas=L.canvas({padding:.5});
    L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",{maxZoom:19,subdomains:"abc",attribution:"© OpenStreetMap contributors · HOT"}).addTo(routeMap);
    routeLine=L.featureGroup().addTo(routeMap);
   }
   routeLine.clearLayers();
   var segments=(r.segments&&r.segments.length?r.segments:[r.points]);
-  segments.forEach(function(seg){if(seg.length>1)L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#2367f5",weight:4,opacity:.9}).addTo(routeLine)});
+  segments.forEach(function(seg){if(seg.length>1)L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{renderer:routeCanvas,color:"#2367f5",weight:4,opacity:.9,lineCap:"round",lineJoin:"round"}).addTo(routeLine)});
   var first=r.points[0],last=r.points[r.points.length-1];
-  L.circleMarker([first.lat,first.lon],{radius:7,weight:3,color:"#0daf79",fillOpacity:1}).bindPopup("Boshlanish · "+date(first.ts)).addTo(routeLine);
-  L.circleMarker([last.lat,last.lon],{radius:7,weight:3,color:"#e55265",fillOpacity:1}).bindPopup("Oxirgi GPS · "+date(last.ts)).addTo(routeLine);
+  L.circleMarker([first.lat,first.lon],{renderer:routeCanvas,radius:8,weight:3,color:"#ffffff",fillColor:"#0daf79",fillOpacity:1}).bindPopup("Boshlanish · "+date(first.ts)).addTo(routeLine);
+  L.circleMarker([last.lat,last.lon],{renderer:routeCanvas,radius:8,weight:3,color:"#ffffff",fillColor:"#e55265",fillOpacity:1}).bindPopup("Oxirgi GPS · "+date(last.ts)).addTo(routeLine);
   $("routeMapEmpty").style.display="none";
   setTimeout(function(){routeMap.invalidateSize();var bounds=routeLine.getBounds();if(bounds.isValid())routeMap.fitBounds(bounds.pad(.16),{maxZoom:16})},30);
  }catch(e){
