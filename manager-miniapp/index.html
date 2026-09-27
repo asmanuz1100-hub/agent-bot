@@ -650,7 +650,7 @@ function renderCustomers(){
  $("customer-result-count").textContent=list.length+" mijoz";
  $("customer-list").innerHTML=list.map(function(c){
  var cls=c.age==="fresh"?"green":c.age==="yellow"?"amber":c.age==="red"?"red":"blue";
- var media=c.photoUrl?'<span class="shop-ico photo"><img src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy" decoding="async" width="56" height="56"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="customer-side"><b class="customer-debt-mini">'+money(c.debtUsd)+' $</b><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></span></button>'
+ var media=c.photoUrl?'<span class="shop-ico photo"><img data-client-photo="'+c.id+'" src="'+escapeHtml(c.photoUrl)+'" alt="" loading="lazy" decoding="async" width="56" height="56"></span>':'<span class="shop-ico">▦</span>'; return '<button type="button" class="customer-card" data-customer="'+c.id+'">'+media+'<span class="customer-copy"><b>'+escapeHtml(c.name)+'</b><small>'+escapeHtml(c.address)+' · '+escapeHtml(c.agent)+'</small></span><span class="customer-side"><b class="customer-debt-mini">'+money(c.debtUsd)+' $</b><span class="age '+cls+'">'+escapeHtml(ageLabel(c))+'</span></span></button>'
  }).join("")||'<div class="empty">Filtr bo‘yicha mijoz topilmadi</div>';
 }
 function clientKindLabel(kind){
@@ -662,8 +662,8 @@ function clientMoneyLine(e){
  return e.amountUsd?money(e.amountUsd)+" USD":"";
 }
 function renderCustomerControl(c){
- var local=customers.find(function(x){return x.id===c.id}),photo=local&&local.photoUrl?
- '<img class="customer-photo" src="'+escapeHtml(local.photoUrl)+'" alt="" loading="eager">':
+ var local=customers.find(function(x){return x.id===c.id}),photoUrl=c.photoUrl||(local&&local.photoUrl),photo=photoUrl?
+ '<img class="customer-photo" data-client-photo="'+c.id+'" src="'+escapeHtml(photoUrl)+'" alt="" loading="eager">':
  '<div class="customer-photo-fallback">▦</div>';
  var stockTotal=(c.stocks||[]).reduce(function(v,x){return v+Number(x.qty||0)},0);
  var body='<div class="customer-control">'+
@@ -1223,8 +1223,23 @@ document.addEventListener("error",function(e){
  if(!img.closest(".customer-card>.shop-ico.photo")&&!img.classList.contains("customer-photo"))return;
  if(!img.dataset.photoRetried){
   img.dataset.photoRetried="1";
-  var original=img.currentSrc||img.src;
-  setTimeout(function(){if(img.isConnected)img.src=original+(original.includes("?")?"&":"?")+"photo_retry=1";},1100);
+  var clientId=Number(img.dataset.clientPhoto||0);
+  setTimeout(async function(){
+   if(!img.isConnected)return;
+   try{
+    if(clientId){
+     var fresh=await request("client_detail",{clientId:clientId});
+     var freshUrl=fresh&&fresh.photoUrl;
+     if(freshUrl){
+      var cached=customers.find(function(c){return c.id===clientId});
+      if(cached)cached.photoUrl=freshUrl;
+      img.src=freshUrl+(freshUrl.includes("?")?"&":"?")+"photo_retry=1";
+      return;
+     }
+    }
+   }catch(_e){}
+   img.dispatchEvent(new Event("error"));
+  },350);
   return;
  }
  if(img.closest(".customer-card>.shop-ico.photo")){
