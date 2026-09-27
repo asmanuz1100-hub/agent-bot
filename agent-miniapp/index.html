@@ -28,7 +28,7 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:40;max-w
 nav button{border:0;background:transparent;min-height:44px;border-radius:11px;font-size:9px;color:var(--muted);font-weight:650}nav button span{display:block;font-size:20px;line-height:24px}nav button.active{background:#e9f0ff;color:var(--blue)}
 #gate{position:fixed;inset:0;z-index:100;background:#f4f7fd;display:grid;place-items:center;padding:21px}#gate.hidden{display:none}#gate .card{width:min(100%,390px);text-align:center;padding:26px}#gate h1{font-size:24px;color:var(--blue);margin:0 0 10px}#gate p{line-height:1.65;font-size:12px;color:#546785;white-space:pre-line}
 #notice{position:fixed;z-index:80;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#12243e;color:#fff;padding:11px 14px;border-radius:13px;display:none;width:min(92%,390px);font-size:12px;box-shadow:0 10px 25px #0003}
-#map{height:410px;background:#eaf0ed;border-radius:16px;overflow:hidden}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
+#mapShell{position:relative;border-radius:16px;overflow:hidden;background:#eaf0ed}#map{height:410px;background:#eaf0ed;border-radius:16px;overflow:hidden}.map-status{position:absolute;z-index:700;top:10px;left:56px;right:10px;display:none;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:9px;line-height:1.4;box-shadow:0 7px 18px #101e3922}.map-status.show{display:block}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
 .line{border-top:1px solid var(--line);padding:11px 0}.line:first-child{border:0}.line b{font-size:12px}.line small{display:block;font-size:10px;color:var(--muted)}
 .bar{height:10px;border-radius:10px;background:#e9f0ff;overflow:hidden;margin:6px 0 10px}.bar i{display:block;height:100%;background:var(--blue)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
@@ -63,7 +63,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">USD</span></div></div>
  <div class="title">Qayta tashrif kerak</div><div id="homePlan"></div>
 </section>
-<section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><div class="tools" id="mapFilters"></div><div id="map"></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
+<section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><div class="tools" id="mapFilters"></div><div id="mapShell"><div id="map"></div><div id="mapStatus" class="map-status" role="status"></div></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
 <section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
 <section class="view" id="page-detail"><div class="flex between"><h2 class="screenhead" id="detailName">Mijoz</h2><button class="secondary" data-page="clients">‹ Orqaga</button></div><div id="detailBody"></div><div class="grid2 client-actions"><button class="primary" data-action="delivery">▣ Tovar berish</button><button class="secondary" data-action="visit">＋ Tashrif</button><button class="secondary" data-action="payment">↓ Pul olish</button><button class="secondary" data-action="return">↩ Tovar qaytarish</button></div></section>
 <section class="view" id="page-cash"><h2 class="screenhead">Pul va xarajat</h2><div class="card balance"><div class="muted">Mijozlardan yig‘ilgan · kassirga topshirish mumkin</div><div class="num" id="cashFree">—</div><div class="muted" id="cashHold"></div></div><div class="card expense-balance"><div class="muted">Xarajat hisobim</div><div class="num" id="expenseBalance">—</div><div class="muted">Bu pul kassir tomonidan xizmat xarajatlari uchun ajratilgan.</div></div><div class="grid2"><button class="primary" data-action="handover">↗ Kassirga topshirish</button><button class="secondary" data-action="agent_expense">🧾 Xarajat qilish</button></div><div class="title">Xarajat hisobi tarixi</div><div id="expenseList"></div><div class="title">So‘nggi mijoz to‘lovlari</div><div id="cashList"></div><div class="title">Kassirga topshirishlar</div><div id="handoverList"></div></section>
@@ -76,7 +76,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,cameraUploading=false,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
+var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,cameraUploading=false,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapTileFallback=false,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -292,6 +292,31 @@ function loadLeaflet(){
   var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.onload=function(){window.L?resolve(window.L):reject(Error("Xarita yuklanmadi"))};js.onerror=function(){reject(Error("Xarita yuklanmadi"))};document.body.appendChild(js);
  }).catch(function(e){mapPromise=null;throw e});return mapPromise;
 }
+function mapStatus(message,show){
+ var el=$("mapStatus");if(!el)return;el.textContent=message||"";el.classList.toggle("show",!!show);
+}
+function installClientMapTiles(L,fallback){
+ if(!map)return;
+ if(mapTiles){try{map.removeLayer(mapTiles)}catch(e){}}
+ mapTileFallback=!!fallback;
+ var failures=0,url=fallback?"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png":"https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+ var options=fallback?{maxZoom:20,subdomains:"abcd",attribution:"© OpenStreetMap contributors · © CARTO"}:{maxZoom:19,subdomains:"abc",attribution:"© OpenStreetMap contributors · HOT"};
+ mapTiles=L.tileLayer(url,options);
+ mapTiles.on("tileload",function(){mapStatus("",false)});
+ mapTiles.on("load",function(){mapStatus("",false)});
+ mapTiles.on("tileerror",function(){
+  failures++;
+  if(!mapTileFallback&&failures>=2){mapStatus("Asosiy xarita serveri javob bermadi. Zaxira xarita yuklanmoqda…",true);installClientMapTiles(L,true)}
+  else if(mapTileFallback&&failures>=3){mapStatus("Fon xaritani yuklab bo‘lmadi. Markerlar va mijoz koordinatalari ishlayapti; internetni tekshirib qayta oching.",true)}
+ });
+ mapTiles.addTo(map);
+}
+function fitClientMap(){
+ if(!map||!mapPins||current!=="map")return;
+ map.invalidateSize({animate:false,pan:false});
+ var layers=mapPins.getLayers();
+ if(layers.length){var bounds=mapPins.getBounds();if(bounds&&bounds.isValid())map.fitBounds(bounds.pad(.18),{maxZoom:15,animate:false})}
+}
 async function renderMap(){
  if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);
  var list=data.clients.filter(function(c){return(mapFilter==="all"||c.age===mapFilter)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
@@ -299,14 +324,20 @@ async function renderMap(){
  $("mapList").innerHTML=list.slice(0,50).map(shopRow).join("");
  try{
   var L=await loadLeaflet();if(current!=="map")return;
-  if(!map){map=L.map("map",{zoomControl:true}).setView([40.54,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);mapPins=L.featureGroup().addTo(map)}
-  map.invalidateSize();mapPins.clearLayers();
+  if(!map){
+   map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([40.54,70.94],9);
+   installClientMapTiles(L,false);
+   mapPins=L.featureGroup().addTo(map)
+  }
+  mapPins.clearLayers();
   list.forEach(function(c){var color=c.age==="red"?"#e55265":c.age==="yellow"?"#e89d2c":c.age==="fresh"?"#0daf79":"#2367f5";
    var icon=L.divIcon({className:"",html:'<span style="display:block;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px #0004;background:'+color+'"></span>',iconSize:[20,20],iconAnchor:[10,10]});
-   L.marker([c.lat,c.lon],{icon:icon}).addTo(mapPins).on("click",function(){selected=c.id;go("detail")});
+   L.marker([c.lat,c.lon],{icon:icon,title:c.name||"Mijoz"}).addTo(mapPins).on("click",function(){selected=c.id;go("detail")});
   });
-  if(list.length)map.fitBounds(mapPins.getBounds().pad(.2),{maxZoom:14});
- }catch(e){$("mapNote").textContent="Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi."}
+  if(!list.length){mapStatus("Tanlangan filtr bo‘yicha GPS manzilli mijoz topilmadi.",true)}
+  else if(mapTiles)mapStatus("",false);
+  setTimeout(fitClientMap,60);setTimeout(fitClientMap,360);
+ }catch(e){mapStatus("Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi.",true);$("mapNote").textContent="Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi."}
 }
 function field(name,label,type,placeholder,required){
  return '<label for="'+name+'">'+label+'</label><input id="'+name+'" name="'+name+'" type="'+(type||"text")+'" '+(type==="number"?'step="any" inputmode="decimal"':"")+' placeholder="'+esc(placeholder||"")+'" '+(required?"required":"")+' autocomplete="off">';
