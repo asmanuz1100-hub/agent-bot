@@ -386,7 +386,7 @@ var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",reportProductMetric:"deliveredUsd",selectedAgent:null,ready:false};
 var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;
-var adminAgentId=null;
+var adminAgentId=Number(sessionStorage.getItem("asman_agent_v2_admin_agent")||0)||null;
 var agentData=null,agentFull=false,agentSelectedClientId=null,agentPeriod="day",agentRouteMap=null,agentRouteLayer=null,agentPhotoFileId="",agentPhotoUploading=false,agentOpBusy=false,agentClientStep=1;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_agent_v2_test_prefs_v1";
@@ -447,6 +447,7 @@ async function loadDashboard(){
  if(!state.ready)gate("Agent V2 · TEST","Haqiqiy Agent ma’lumotlari tekshirilmoqda…");
  try{
   var data=await request("quick_snapshot");
+  if(data&&!data.adminMode){adminAgentId=null;try{sessionStorage.removeItem("asman_agent_v2_admin_agent")}catch(_e){}}
   if(data&&data.adminMode&&!data.me){
    var gateEl=$("auth-gate"),msg=$("auth-message"),title=$("auth-title");
    if(title)title.textContent="Agent V2 · TEST · Admin";
@@ -793,7 +794,7 @@ async function submitAgentOperation(form){
  agentOpBusy=true;try{var out=await request(action,Object.assign({},p,{nonce:agentUuid()}));toast(out.message||"Saqlandi");closeSheet();agentFull=false;await loadDashboard();if(out.clientId)await showCustomer(out.clientId)}catch(e){toast(e.message||"Saqlanmadi")}finally{agentOpBusy=false}
 }
 async function agentUploadPhoto(file){
- if(!file)return;agentPhotoUploading=true;var stateEl=$("agent-photo-state");if(stateEl)stateEl.textContent="Foto yuklanmoqda…";
+ if(!file)return;agentPhotoUploading=true;var stateEl=$("agent-real-camera-state")||$("agent-photo-state");if(stateEl)stateEl.textContent="Foto yuklanmoqda…";
  try{
   var dataUrl=await new Promise(function(resolve,reject){var img=new Image(),fr=new FileReader();fr.onload=function(){img.onload=function(){var max=1280,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext("2d").drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL("image/jpeg",.78))};img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)});
   var out=await request("photo_upload",{imageData:dataUrl});agentPhotoFileId=out.photoFileId||"";if(!agentPhotoFileId)throw Error("Foto ID olinmadi");var pr=$("agent-real-camera-preview")||$("agent-photo-preview");if(pr){pr.src=dataUrl;pr.style.display="block"}if(stateEl)stateEl.textContent="✓ Foto tayyor";
@@ -1302,7 +1303,7 @@ document.addEventListener("click",function(e){
  if(b.dataset.agentRemoveItem!==undefined){var row=b.closest("[data-agent-item]");if(row)row.remove();return}
  if(b.id==="agent-v2-admin-open"){
   var select=$("agent-v2-admin-select");adminAgentId=select?Number(select.value||0):0;
-  if(adminAgentId)loadDashboard();return
+  if(adminAgentId){try{sessionStorage.setItem("asman_agent_v2_admin_agent",String(adminAgentId))}catch(_e){}loadDashboard()}return
  }
  if(b.dataset.page){switchPage(b.dataset.page);return}
  if(!state.ready)return;
