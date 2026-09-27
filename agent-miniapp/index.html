@@ -287,7 +287,7 @@ function updateDeliveryCart(){
  });
  if($("deliveryTotalQty"))$("deliveryTotalQty").textContent=totalQty+" dona";
  if($("deliveryGrandTotal"))$("deliveryGrandTotal").textContent=fmt(total)+" USD";
- var w=$("deliveryWarning");if(w){if(warnings.length){w.textContent=(formAction==="delivery"?"Qoldiq minusga tushadi: ":"Qaytarish uchun qoldiq yetarli emas: ")+warnings.join(" · ");w.classList.add("show")}else{w.textContent="";w.classList.remove("show")}}
+ var w=$("deliveryWarning");if(w){if(warnings.length){w.textContent=(formAction==="delivery"?"Qoldiq minusga tushadi: ":"Qaytarish miqdori mijozdagi qoldiqdan ko‘p: ")+warnings.join(" · ");w.classList.add("show")}else{w.textContent="";w.classList.remove("show")}}
  reviewing=false;nonce=null;$("review").style.display="none";$("submitForm").textContent="Davom etish · Tekshirish";
 }
 function clientPackLine(i){return '<div class="grid2 client-pack-line"><div><label>Mahsulot</label><select name="clientPack'+i+'">'+data.products.map(function(p){return '<option value="'+p.pack+'">'+esc(p.name)+' · qoldiq '+p.agentStock+' · '+fmt(p.priceUsd)+' USD</option>'}).join("")+'</select></div><div>'+field("clientQty"+i,"Dona","number","1",false)+'</div></div>'}
