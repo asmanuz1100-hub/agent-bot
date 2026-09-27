@@ -463,7 +463,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var state={page:"home",agentFilter:"all",customerFilter:"all",customerAgent:"all",customerDebt:"all",customerStatus:"all",customerSort:"newest",cashTab:"today",reportTab:"week",reportMetric:"visits",reportProductMetric:"deliveredUsd",selectedAgent:null,ready:false};
-var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;
+var agents=[],customers=[],txns=[],summary=null,cashData=null,reportData=null,generatedTs=0,dashboardToday=0;\nvar adminAgentId=null;
 var leafletPromise=null,map=null,markers=null,routeLayer=null,periodMap=null,analysisMap=null,analysisLayer=null,periodDetailToken=0,refreshing=false,refreshTimer=null,pendingClientEdit=null,pendingAgentAction=null,primaryAdmin=false;
 var PREF_KEY="asman_agent_v2_test_prefs_v1";
 var prefs=loadPrefs();
