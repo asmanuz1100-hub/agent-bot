@@ -240,7 +240,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'Qarz undirish · ',
             'currentDebtUsd',
             'Mijoz kartasini ochish →',
-            'data-client="'+t.clientId+'"'
+            "data-client=\"'+t.clientId+'\""
         ):
             self.assertIn(term,self.html)
 
