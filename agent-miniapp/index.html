@@ -21,7 +21,10 @@ main{padding:0 16px 18px}section.view{display:none}section.view.active{display:b
 .primary{background:var(--blue);color:#fff;border:0;border-radius:14px;padding:14px;font-weight:800;width:100%;min-height:49px}.secondary{background:#e9f0ff;color:var(--blue);border:0;border-radius:13px;padding:11px;font-weight:750}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rowbtn{display:flex;width:100%;gap:11px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:15px;padding:12px;margin-bottom:9px;text-align:left;min-height:68px}
 .icon{width:42px;height:42px;border-radius:12px;background:#e9f0ff;color:var(--blue);display:grid;place-items:center;font-size:19px;flex:none}.grow{flex:1;min-width:0}.grow b{display:block;font-size:13px}.grow small{display:block;font-size:10px;color:var(--muted);line-height:1.6}.hide{display:none!important}
-input,select,textarea{width:100%;background:#fff;border:1px solid #dfe7f2;border-radius:12px;padding:12px;color:var(--navy);min-height:45px}
+input,select,textarea{width:100%;background:#fff!important;border:1px solid #dfe7f2;border-radius:12px;padding:12px;color:#101e39!important;-webkit-text-fill-color:#101e39!important;caret-color:#2367f5!important;opacity:1!important;min-height:45px}
+input::placeholder,textarea::placeholder{color:#9aa7ba!important;-webkit-text-fill-color:#9aa7ba!important;opacity:1!important}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,textarea:-webkit-autofill,select:-webkit-autofill{-webkit-text-fill-color:#101e39!important;caret-color:#2367f5!important;-webkit-box-shadow:0 0 0 1000px #fff inset!important;box-shadow:0 0 0 1000px #fff inset!important;transition:background-color 99999s ease-out 0s}
+.wizard-input{color:#101e39!important;-webkit-text-fill-color:#101e39!important;background:#fff!important;caret-color:#2367f5!important}
 textarea{min-height:83px;resize:vertical}label{display:block;font-size:11px;font-weight:700;color:#72829d;margin:14px 2px 6px}
 .tools{display:flex;gap:7px;overflow-x:auto;padding:6px 0 12px}.chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:8px 10px;white-space:nowrap;color:#687c98;font-size:11px}.chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 .balance{background:linear-gradient(125deg,#2367f5,#447eff);color:#fff;border:0;padding:20px}.balance .num{font-size:30px;font-weight:900;margin:10px 0}.balance .muted{color:#dbe6ff}.expense-balance{background:linear-gradient(135deg,#101e39,#1d3558);color:#fff;border:0;padding:20px}.expense-balance .num{font-size:30px;font-weight:900;margin:10px 0}.expense-balance .muted{color:#bfd0e8}.money-summary{display:grid;grid-template-columns:1fr 1fr;gap:9px}.money-summary .card{margin:0}.money-summary strong{display:block;font-size:17px;margin-top:5px}.expense-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.expense-row .copy{min-width:0}.expense-row .copy b{display:block;font-size:12px}.expense-row .copy small{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45}.expense-row .amount{font-weight:850;font-size:12px;white-space:nowrap}.expense-row .amount.plus{color:var(--green)}.expense-row .amount.minus{color:var(--red)}
@@ -336,61 +339,32 @@ function renderReports(){
   stockToggle.setAttribute("aria-expanded",reportStockExpanded?"true":"false");
  }
 }
-function loadExternalScript(url,timeout){
- return new Promise(function(resolve,reject){
-  var js=document.createElement("script"),done=false,timer=setTimeout(function(){if(done)return;done=true;js.remove();reject(Error("timeout"))},timeout||7000);
-  js.src=url;js.async=true;js.onload=function(){if(done)return;done=true;clearTimeout(timer);resolve()};js.onerror=function(){if(done)return;done=true;clearTimeout(timer);reject(Error("load"))};document.body.appendChild(js);
- });
-}
-function ensureLeafletCss(){
- if(document.querySelector('link[data-leaflet-css]'))return;
- var css=document.createElement("link");css.rel="stylesheet";css.dataset.leafletCss="1";css.href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
-}
 function loadLeaflet(){
  if(window.L)return Promise.resolve(window.L);if(mapPromise)return mapPromise;
- ensureLeafletCss();mapStatus("Xarita yuklanmoqda…",true);
- var cdns=["https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js","https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"];
- mapPromise=(async function(){
-  for(var i=0;i<cdns.length;i++){
-   try{await loadExternalScript(cdns[i],6500);if(window.L)return window.L}catch(e){}
-  }
-  throw Error("Xarita kutubxonasi yuklanmadi");
- })().catch(function(e){mapPromise=null;throw e});
+ mapPromise=new Promise(function(resolve,reject){
+  var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
+  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.async=true;
+  js.onload=function(){window.L?resolve(window.L):reject(Error("Xarita kutubxonasi mavjud emas."))};
+  js.onerror=function(){reject(Error("Xarita yuklanmadi."))};
+  document.body.appendChild(js);
+ }).catch(function(e){mapPromise=null;throw e});
  return mapPromise;
 }
 function mapStatus(message,show){
  var el=$("mapStatus");if(!el)return;el.textContent=message||"";el.classList.toggle("show",!!show);
 }
-function installResilientTiles(L,target,setLayer,statusFn){
- var sources=[
-  {url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",options:{maxZoom:19,attribution:"© OpenStreetMap contributors"}},
-  {url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",options:{maxZoom:20,subdomains:"abcd",attribution:"© OpenStreetMap contributors · © CARTO"}}
- ],active=null,generation=0;
- function use(index){
-  generation++;var myGeneration=generation,loaded=0,failures=0,source=sources[index];
-  if(active){try{target.removeLayer(active)}catch(e){}}
-  if(statusFn)statusFn(index?"Zaxira xarita yuklanmoqda…":"Xarita foni yuklanmoqda…",true);
-  active=L.tileLayer(source.url,source.options);
-  if(setLayer)setLayer(active);
-  active.on("tileload",function(){if(myGeneration!==generation)return;loaded++;if(statusFn)statusFn("",false)});
-  active.on("load",function(){if(myGeneration!==generation)return;if(statusFn)statusFn("",false)});
-  active.on("tileerror",function(){
-   if(myGeneration!==generation)return;failures++;
-   if(failures>=2&&index+1<sources.length){use(index+1)}
-   else if(failures>=3&&index===sources.length-1&&statusFn)statusFn("Fon xaritani yuklab bo‘lmadi. GPS nuqtalari ishlayapti.",true);
-  });
-  active.addTo(target);
-  setTimeout(function(){
-   if(myGeneration!==generation||loaded>0)return;
-   if(index+1<sources.length)use(index+1);
-   else if(statusFn)statusFn("Fon xaritani yuklab bo‘lmadi. GPS nuqtalari ishlayapti.",true);
-  },4000);
- }
- use(0);
+function installManagerParityTiles(L,target){
+ return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:17,updateWhenIdle:true,keepBuffer:1,attribution:"© OpenStreetMap contributors"
+ }).addTo(target);
 }
 function installClientMapTiles(L){
  if(!map)return;
- installResilientTiles(L,map,function(layer){mapTiles=layer},function(message,show){mapStatus(message,show)});
+ if(mapTiles){try{map.removeLayer(mapTiles)}catch(e){}}
+ mapTiles=installManagerParityTiles(L,map);
+ mapTiles.on("loading",function(){mapStatus("Xarita yuklanmoqda…",true)});
+ mapTiles.on("load",function(){mapStatus("",false)});
+ mapTiles.on("tileerror",function(){mapStatus("Xarita foni yuklanmadi. Rahbar App xarita serveri bilan qayta urinib ko‘ring.",true)});
 }
 function fitClientMap(){
  if(!map||!mapPins||current!=="map")return;
@@ -418,7 +392,7 @@ async function renderMap(){
   });
   if(!list.length){mapStatus("Tanlangan filtr bo‘yicha GPS manzilli mijoz topilmadi.",true)}
   else if(mapTiles)mapStatus("",false);
-  setTimeout(fitClientMap,60);setTimeout(fitClientMap,360);
+  map.invalidateSize(false);setTimeout(fitClientMap,120);setTimeout(fitClientMap,500);
  }catch(e){mapStatus("Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi.",true);$("mapNote").textContent="Xarita ochilmadi. Mijozlar ro‘yxati pastda ishlaydi."}
 }
 function field(name,label,type,placeholder,required){
@@ -833,7 +807,7 @@ async function showMyRoute(force){
   if(!routeMap){
    routeMap=L.map("routeMap",{zoomControl:true,preferCanvas:true}).setView([r.points[0].lat,r.points[0].lon],12);
    routeCanvas=L.canvas({padding:.5});
-   installResilientTiles(L,routeMap,null,null);
+   installManagerParityTiles(L,routeMap);
    routeLine=L.featureGroup().addTo(routeMap);
   }
   routeLine.clearLayers();

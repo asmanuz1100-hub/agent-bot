@@ -36,22 +36,23 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
-    def test_client_and_route_maps_have_timeout_fallback_tiles(self):
+    def test_client_and_route_maps_match_working_manager_base_map(self):
         for term in (
-            'id="mapShell"','id="mapStatus"','function installResilientTiles',
+            'id="mapShell"','id="mapStatus"',
+            'function installManagerParityTiles',
             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'basemaps.cartocdn.com/light_all',
-            'setTimeout(function(){',
-            '},4000)',
-            'Zaxira xarita yuklanmoqda',
-            'Fon xaritani yuklab bo‘lmadi.',
+            'maxZoom:17,updateWhenIdle:true,keepBuffer:1',
             'function installClientMapTiles',
-            'installResilientTiles(L,map',
-            'installResilientTiles(L,routeMap,null,null)',
-            'function fitClientMap()','setTimeout(fitClientMap,60)',
-            'setTimeout(fitClientMap,360)','map.invalidateSize({animate:false,pan:false})'
+            'mapTiles=installManagerParityTiles(L,map)',
+            'installManagerParityTiles(L,routeMap)',
+            'function fitClientMap()',
+            'map.invalidateSize(false)',
+            'setTimeout(fitClientMap,120)',
+            'setTimeout(fitClientMap,500)'
         ):
             self.assertIn(term,self.html)
+        self.assertNotIn('function installResilientTiles',self.html)
+        self.assertNotIn('basemaps.cartocdn.com',self.html)
         self.assertNotIn('tile.openstreetmap.fr/hot',self.html)
 
     def test_photo_step_supports_live_camera_and_gallery_picker(self):
@@ -123,6 +124,19 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertIn('canvas.toDataURL("image/jpeg"',self.html)
         self.assertIn('data-action="client"',self.html)
+
+    def test_android_wizard_inputs_force_visible_text_and_autofill_colors(self):
+        for term in (
+            '-webkit-text-fill-color:#101e39!important',
+            'caret-color:#2367f5!important',
+            'input::placeholder,textarea::placeholder',
+            'input:-webkit-autofill',
+            '-webkit-box-shadow:0 0 0 1000px #fff inset!important',
+            '.wizard-input{color:#101e39!important',
+            'id="phone" name="phone" type="tel"',
+            'id="person" name="person" type="text"'
+        ):
+            self.assertIn(term,self.html)
 
     def test_new_client_fast_wizard_has_five_large_steps(self):
         for term in (
@@ -220,16 +234,15 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
-    def test_leaflet_loader_has_android_cdn_fallback_and_timeout(self):
+    def test_leaflet_loader_matches_working_manager_loader(self):
         for term in (
-            'function loadExternalScript(url,timeout)',
-            'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
-            'unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-            'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css',
-            'setTimeout(function(){if(done)return;done=true;js.remove();reject(Error("timeout"))}',
-            'mapStatus("Xarita yuklanmoqda…",true)'
+            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+            'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+            'js.async=true',
+            'window.L?resolve(window.L):reject(Error("Xarita kutubxonasi mavjud emas."))'
         ):
             self.assertIn(term,self.html)
+        self.assertNotIn('function loadExternalScript(url,timeout)',self.html)
 
     def test_agent_home_shows_cashier_debt_collection_tasks(self):
         for term in (
