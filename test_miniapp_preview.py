@@ -218,11 +218,12 @@ class LiveAgentMiniAppTests(unittest.TestCase):
 
     def test_customer_photos_use_android_safe_eager_then_native_lazy_loading(self):
         for term in (
-            'function shopRow(c,eager)',
+            'function shopRow(c,eager,withPhoto)',
             'loading="eager" fetchpriority="high"',
             'loading="lazy"',
-            'list.map(function(c,i){return shopRow(c,i<8)}',
+            'list.map(function(c,i){return shopRow(c,i<8,i<8)}',
             'target.map(function(c){return shopRow(c,true)}',
+            'list.slice(0,50).map(function(c){return shopRow(c,false,false)}',
             'decoding="async"'
         ):
             self.assertIn(term,self.html)
