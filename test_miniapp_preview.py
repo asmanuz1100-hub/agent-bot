@@ -159,6 +159,30 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('min-height:82px',self.html)
         self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
 
+    def test_fast_delivery_cart_has_steppers_totals_and_negative_stock_warning(self):
+        for term in (
+            'class="delivery-cart"','class="delivery-row"',
+            'class="qty-stepper"','data-qty-step="-1"','data-qty-step="1"',
+            'id="deliveryTotalQty"','id="deliveryGrandTotal"',
+            'id="deliveryWarning"','function updateDeliveryCart()',
+            'Qoldiq minusga tushadi:','Agent qoldiq: ',
+            'Qoldiq yetmasa ham berish mumkin'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('stock<qty',self.html)
+        self.assertIn('stock-qty',self.html)
+
+    def test_delivery_cart_payload_survives_middle_row_removal(self):
+        self.assertIn('querySelectorAll(".delivery-row").forEach(function(row)',self.html)
+        self.assertIn('data-remove-delivery',self.html)
+        self.assertIn('row.remove();updateDeliveryCart()',self.html)
+        self.assertNotIn('while(fd.has("pack"+i))',self.html)
+
+    def test_delivery_cart_return_mode_uses_customer_stock(self):
+        self.assertIn('formAction==="return"',self.html)
+        self.assertIn('Mijozda: ',self.html)
+        self.assertIn('Qaytarish miqdori mijozdagi qoldiqdan ko‘p:',self.html)
+
     def test_javascript_parses(self):
         if not shutil.which("node"):
             self.skipTest("node unavailable")
