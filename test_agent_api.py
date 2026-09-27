@@ -240,6 +240,44 @@ class AgentApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'jonli lokatsiya'):
             agent_api.mutate(self.db,2,'return',{'clientId':cid,'items':[{'pack':1,'qty':1}]},'ret_no_live12',self.now)
 
+    def test_period_gps_report_combines_shifts_distance_hours_and_map_segments(self):
+        shifts=[
+            (201,self.now-600,self.now),
+            (202,self.now-3*86400-600,self.now-3*86400),
+            (203,self.now-20*86400-600,self.now-20*86400),
+        ]
+        for sid,start,end in shifts:
+            self.db.execute('INSERT INTO shifts(id,agent,start,end,live_id) VALUES(?,?,?,?,?)',
+                            (sid,2,start,end,700+sid))
+            self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',
+                            (sid,start+100,40.5400,70.9400,8))
+            self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',
+                            (sid,start+300,40.5410,70.9410,9))
+        self.db.execute('INSERT INTO shifts(id,agent,start,end,live_id) VALUES(?,?,?,?,?)',
+                        (299,4,self.now-600,self.now,999))
+        self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?)',
+                        (299,self.now-300,41.0,71.0,5))
+
+        day=agent_api.route(self.db,2,'day',self.now)
+        week=agent_api.route(self.db,2,'week',self.now)
+        month=agent_api.route(self.db,2,'month',self.now)
+
+        self.assertEqual(day['shiftCount'],1)
+        self.assertEqual(week['shiftCount'],2)
+        self.assertEqual(month['shiftCount'],3)
+        self.assertEqual(day['workSeconds'],600)
+        self.assertEqual(week['workSeconds'],1200)
+        self.assertEqual(month['workSeconds'],1800)
+        self.assertEqual(day['gpsPoints'],2)
+        self.assertEqual(week['gpsPoints'],4)
+        self.assertEqual(month['gpsPoints'],6)
+        self.assertGreater(day['km'],0)
+        self.assertGreater(week['km'],day['km'])
+        self.assertGreater(month['km'],week['km'])
+        self.assertTrue(day['segments'])
+        self.assertEqual(day['segments'][0][0]['lat'],40.54)
+        self.assertEqual(day['period'],'day')
+
     def test_shift_start_end_route_and_disabled_feature(self):
         start=agent_api.mutate(self.db,2,'shift_start',{},'shift_start12',self.now)
         self.db.commit()
