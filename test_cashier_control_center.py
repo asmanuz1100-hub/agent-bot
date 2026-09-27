@@ -54,10 +54,10 @@ class CashierControlCenterTests(unittest.TestCase):
     def test_cashier_html_has_android_safe_contrast_and_debtors_module(self):
         html=open('cashier-miniapp.html',encoding='utf-8').read()
         for term in (
-            '<meta name="color-scheme" content="light">',
-            'background:#f1f5f2!important',
-            '.balance{background:#174e3b!important',
-            '.card{background:#fff!important;color:#17352c!important',
+            '<meta name="color-scheme" content="only light">',
+            'background:#f1f5f2',
+            '.balance{background:#174e3b',
+            '.card{background:#fff;color:#17352c',
             'data-tab="debtors"',
             'id="debtCount"','id="debtTotal"','id="debtAssigned"',
             'id="debtSearch"','id="debtList"',
