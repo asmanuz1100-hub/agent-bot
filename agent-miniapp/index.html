@@ -1,15 +1,16 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101e39">
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101e39"><meta name="color-scheme" content="light">
 <title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
-*{box-sizing:border-box}html,body{margin:0;background:#edf2fb;color:var(--navy);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box}html{color-scheme:light;background:#edf2fb!important}html,body{margin:0;background:#edf2fb!important;color:var(--navy);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
-.app{max-width:430px;margin:auto;min-height:100dvh;background:var(--paper);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-header{background:var(--navy);color:#fff;padding:calc(19px + env(safe-area-inset-top)) 19px 32px;border-top:5px solid var(--blue)}
-header .top{display:flex;align-items:center;justify-content:space-between}
-.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:#c4d5f6;letter-spacing:1px;font-weight:700}
-.greet{font-size:20px;font-weight:800;margin-top:26px}.sub{font-size:12px;color:#b6c8e6;margin-top:5px}
+.app{width:100%;max-width:430px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--paper);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.app>header{display:block!important;position:relative;isolation:isolate;background:#101e39!important;background-color:#101e39!important;background-image:none!important;color:#fff!important;padding:calc(19px + env(safe-area-inset-top)) 19px 32px;border-top:5px solid #2367f5;forced-color-adjust:none;-webkit-print-color-adjust:exact}
+.app>header .top{display:flex;align-items:center;justify-content:space-between}
+.app>header .logo,.app>header .greet{color:#fff!important}.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:#c4d5f6!important;letter-spacing:1px;font-weight:700}
+.greet{font-size:20px;font-weight:800;margin-top:26px}.sub{font-size:12px;color:#b6c8e6!important;margin-top:5px}
+@media(max-width:600px){.app{max-width:none!important;width:100%!important;margin:0!important}.app>header{width:100%!important}nav{max-width:none!important;width:100%!important}}
 main{padding:0 16px 18px}section.view{display:none}section.view.active{display:block}.screenhead{font-weight:850;font-size:20px;margin:20px 0 12px}
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;margin:0 0 11px;box-shadow:0 5px 20px #101e3908}
 .flex{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.muted{color:var(--muted);font-size:11px}.tiny{font-size:10px;color:var(--muted)}.strong{font-weight:800}.title{font-weight:800;font-size:17px;margin:21px 0 11px}
@@ -148,18 +149,11 @@ function go(page){
 }
 function status(c){return c.age==="fresh"?"green":c.age==="yellow"?"yellow":c.age==="red"?"red":c.age==="scheduled"?"":"unknown"}
 function statusText(c){return c.age==="scheduled"?"Rejada: "+c.followup:c.age==="unknown"?"Sana yo‘q":c.days+" kun"}
-function activateLazyPhotos(root){
- var imgs=(root||document).querySelectorAll("img[data-photo-src]");
- if(!imgs.length)return;
- if(!("IntersectionObserver" in window)){imgs.forEach(function(img){img.src=img.dataset.photoSrc;delete img.dataset.photoSrc});return}
- if(!photoObserver)photoObserver=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(!entry.isIntersecting)return;var img=entry.target;photoObserver.unobserve(img);if(img.dataset.photoSrc){img.src=img.dataset.photoSrc;delete img.dataset.photoSrc}})},{rootMargin:"140px 0px"});
- imgs.forEach(function(img){photoObserver.observe(img)});
-}
-function shopRow(c){var media=c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-photo-src="'+esc(c.photoUrl)+'" alt="" decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
+function shopRow(c,eager){var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img src="'+esc(c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
 function renderHome(){
  var urgent=data.clients.filter(function(c){return c.age==="yellow"||c.age==="red"}).sort(function(a,b){return (b.days||0)-(a.days||0)});
  var target=urgent.slice(0,4),next=urgent[0]||null;
- $("homePlan").innerHTML=target.map(shopRow).join("")||'<div class="card muted">Hozircha kechikkan mijoz yo‘q.</div>';activateLazyPhotos($("homePlan"));
+ $("homePlan").innerHTML=target.map(function(c){return shopRow(c,true)}).join("")||'<div class="card muted">Hozircha kechikkan mijoz yo‘q.</div>';
  $("homeCashAvailable").textContent=fmt(data.summary.cashAvailableUsd||0)+" USD";
  $("homeUrgentCount").textContent=urgent.length+" ta";
  $("homeCommandTitle").textContent=data.me.shiftOpen?"Ish kuni davom etmoqda":"Ish kunini boshlang";
@@ -177,7 +171,7 @@ function renderClients(){
  if(!data)return;filterButtons("clientFilters",filter);
  var q=$("search").value.trim().toLowerCase(),list=data.clients.filter(function(c){return(filter==="all"||c.age===filter)&&(!q||(c.name+" "+c.person+" "+c.address+" "+c.phone).toLowerCase().includes(q))});
  $("clientCount").textContent=list.length+" mijoz";
- $("clientList").innerHTML=list.map(shopRow).join("")||'<div class="card muted">Mijoz topilmadi.</div>';activateLazyPhotos($("clientList"));
+ $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
 }
 function detailLine(name,value){return '<div class="line"><small>'+esc(name)+'</small><b>'+esc(value==null?"—":value)+'</b></div>'}
 function dialPhone(c){
@@ -331,12 +325,27 @@ function renderReports(){
   stockToggle.setAttribute("aria-expanded",reportStockExpanded?"true":"false");
  }
 }
+function loadExternalScript(url,timeout){
+ return new Promise(function(resolve,reject){
+  var js=document.createElement("script"),done=false,timer=setTimeout(function(){if(done)return;done=true;js.remove();reject(Error("timeout"))},timeout||7000);
+  js.src=url;js.async=true;js.onload=function(){if(done)return;done=true;clearTimeout(timer);resolve()};js.onerror=function(){if(done)return;done=true;clearTimeout(timer);reject(Error("load"))};document.body.appendChild(js);
+ });
+}
+function ensureLeafletCss(){
+ if(document.querySelector('link[data-leaflet-css]'))return;
+ var css=document.createElement("link");css.rel="stylesheet";css.dataset.leafletCss="1";css.href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
+}
 function loadLeaflet(){
  if(window.L)return Promise.resolve(window.L);if(mapPromise)return mapPromise;
- mapPromise=new Promise(function(resolve,reject){
-  var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
-  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.onload=function(){window.L?resolve(window.L):reject(Error("Xarita yuklanmadi"))};js.onerror=function(){reject(Error("Xarita yuklanmadi"))};document.body.appendChild(js);
- }).catch(function(e){mapPromise=null;throw e});return mapPromise;
+ ensureLeafletCss();mapStatus("Xarita yuklanmoqda…",true);
+ var cdns=["https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js","https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"];
+ mapPromise=(async function(){
+  for(var i=0;i<cdns.length;i++){
+   try{await loadExternalScript(cdns[i],6500);if(window.L)return window.L}catch(e){}
+  }
+  throw Error("Xarita kutubxonasi yuklanmadi");
+ })().catch(function(e){mapPromise=null;throw e});
+ return mapPromise;
 }
 function mapStatus(message,show){
  var el=$("mapStatus");if(!el)return;el.textContent=message||"";el.classList.toggle("show",!!show);
@@ -367,7 +376,7 @@ async function renderMap(){
  if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);
  var list=data.clients.filter(function(c){return(mapFilter==="all"||c.age===mapFilter)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
  $("mapNote").textContent=list.length+" ta mijozning real koordinatasi. Nuqtani bosib kartochkasini oching.";
- $("mapList").innerHTML=list.slice(0,50).map(shopRow).join("");
+ $("mapList").innerHTML=list.slice(0,50).map(function(c,i){return shopRow(c,i<4)}).join("");
  try{
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
