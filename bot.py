@@ -1950,7 +1950,7 @@ def serve_webhook(db,base_url):
                         data=agent_api.client_detail(local,subject,payload.get('clientId'))
                         local.commit()
                     elif action=='route':
-                        data=agent_api.route(local,subject)
+                        data=agent_api.route(local,subject,payload.get('period'))
                         local.commit()
                     else:
                         # Admin temporarily operates the selected agent workspace.
