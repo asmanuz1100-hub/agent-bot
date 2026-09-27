@@ -180,9 +180,23 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'id="reportStockTotal"','id="reportNegativeCount"',
             'id="productStock"','Agent qoldig‘i',
             'id="routeSummary"','id="myRoute"','id="routeMap"',
-            'Oxirgi GPS marshrut'
+            'GPS va ish vaqti'
         ):
             self.assertIn(term,self.html)
+
+    def test_gps_report_has_day_week_month_km_hours_points_shifts_and_map(self):
+        for term in (
+            'data-route-period="day"','data-route-period="week"','data-route-period="month"',
+            'id="routeKm"','id="routeHours"','id="routePoints"','id="routeShifts"',
+            'id="routeFirst"','id="routeLast"','id="routeStops"','id="routeGaps"',
+            'id="routeMapEmpty"','1 kun · 7 kun · 30 kun',
+            'request("route",{period:routePeriod})','workTime(r.workSeconds)',
+            'Number(r.gpsPoints||0)','Number(r.shiftCount||0)',
+            'r.segments&&r.segments.length','Boshlanish · ','Oxirgi GPS · '
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('if(b.dataset.routePeriod)',self.html)
+        self.assertIn('routeLoadedKey=""',self.html)
 
     def test_fast_delivery_cart_has_steppers_totals_and_negative_stock_warning(self):
         for term in (
