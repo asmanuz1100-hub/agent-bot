@@ -153,11 +153,43 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'USD qarz','id="callClient"','id="navigateClient"',
             'Do‘kondagi mahsulot qoldig‘i','class="stock-item"',
             'class="timeline-item"','Tashriflar tarixi','So‘nggi operatsiyalar',
-            'window.location.href="tel:"+digits'
+            "href=\"tel:'+esc(dialPhone(c))+'\""
         ):
             self.assertIn(term,self.html)
         self.assertIn('Number(c.debtUsd||0)',self.html)
         self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
+
+    def test_call_uses_native_tel_link_and_phone_normalization(self):
+        self.assertIn('function dialPhone(c)',self.html)
+        self.assertIn("href=\"tel:'+esc(dialPhone(c))+'\"",self.html)
+        self.assertIn('/^998\\d{9}$/.test(digits)',self.html)
+        self.assertNotIn('window.location.href="tel:"+digits',self.html)
+
+    def test_first_paint_uses_quick_snapshot_and_heavy_tabs_load_on_demand(self):
+        for term in (
+            'request(heavy?"snapshot":"quick_snapshot")',
+            'var heavy=current==="cash"||current==="reports"',
+            'fullDataLoaded=heavy',
+            'if((page==="cash"||page==="reports")&&!fullDataLoaded)',
+            'request("quick_snapshot")',
+            'function applySnapshotUi()'
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn('renderHome();renderClients();renderDetail();renderCash();renderReports();',self.html)
+
+    def test_customer_list_photos_are_strict_lazy_and_detail_photo_is_priority(self):
+        for term in (
+            'function activateLazyPhotos(root)',
+            'IntersectionObserver',
+            'data-photo-src=',
+            'rootMargin:"140px 0px"',
+            'activateLazyPhotos($("homePlan"))',
+            'activateLazyPhotos($("clientList"))',
+            'fetchpriority="high"',
+            'decoding="async"'
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn("<img src=\"'+esc(c.photoUrl)+'\" alt=\"\" loading=\"lazy\"",self.html)
 
     def test_client_card_layout_does_not_overlap_content(self):
         self.assertNotIn('\\n.customer-hero{',self.html)
