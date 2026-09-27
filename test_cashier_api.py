@@ -95,6 +95,7 @@ class CashierMiniAppTests(unittest.TestCase):
 
     def test_debtors_report_and_assignment_to_agent(self):
         self.db.execute("INSERT INTO clients(id,agent,name,shop_name,phone,address) VALUES(2,2,'Vali','Baraka','+998901112233','Bozor')")
+        self.db.execute("UPDATE products SET price=500 WHERE pack=1")
         core.record(self.db,2,2,2,'delivery',1,3,0,'',5101,currency='USD')
         debt=core.client_debt_usd(self.db,2)
         self.assertGreater(debt,0)
