@@ -134,6 +134,59 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 .agent-cash-hero{background:linear-gradient(135deg,#10203d,#1f4f97);color:#fff;border-radius:20px;padding:17px}.agent-cash-hero small{opacity:.72}.agent-cash-hero strong{display:block;font-size:28px;margin-top:5px}.agent-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.agent-mini-stat{background:#fff;border:1px solid #e7edf5;border-radius:14px;padding:11px}.agent-mini-stat small{display:block;color:#7b8798;font-size:9px}.agent-mini-stat b{display:block;font-size:14px;margin-top:4px}
 .agent-list-card{background:#fff;border:1px solid #e7edf5;border-radius:14px;padding:11px;margin-top:8px}.agent-list-card .top{display:flex;justify-content:space-between;gap:8px}.agent-list-card small{display:block;color:#7b8798;margin-top:4px;font-size:9px}.agent-report-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.agent-report-card{background:#fff;border:1px solid #e7edf5;border-radius:15px;padding:12px}.agent-report-card small{display:block;color:#7b8798;font-size:9px}.agent-report-card b{display:block;font-size:15px;margin-top:5px}.agent-route-map{height:320px;border-radius:16px;overflow:hidden;background:#eaf0ed;margin-top:10px}.agent-report-tabs{display:flex;gap:7px;overflow:auto;margin:10px 0}.agent-report-tabs button{border:0;border-radius:999px;padding:7px 11px;font-size:10px;font-weight:800;background:#edf2f7;color:#617087}.agent-report-tabs button.active{background:#246bfd;color:#fff}.agent-collection{background:#fff8e8;border:1px solid #ffe1a0;border-radius:14px;padding:11px;margin-top:8px}.agent-collection b{font-size:11px}.agent-collection small{display:block;color:#7a6337;margin-top:4px;font-size:9px}
 
+
+/* Agent V2 UX v3 — old Agent simplicity + Manager Android-safe lifecycle */
+body{max-width:430px;margin:0 auto;background:#f4f7fd!important}
+header{border-top:4px solid #2367f5!important;min-height:62px}
+.executive-home{padding-left:16px!important;padding-right:16px!important}
+.executive-home>.exec-section{display:none!important}
+.exec-hero{margin:0 -16px 0!important;padding:17px 18px 34px!important;background:linear-gradient(155deg,#101e39,#142b50)!important}
+.exec-hero h1{font-size:21px!important;margin-top:10px!important}
+.exec-hero p{font-size:10px!important}
+.exec-cash-grid{margin-top:18px!important}
+.exec-kpi-grid{margin-top:-19px!important}
+.exec-kpi-card{min-height:104px!important;display:block!important;padding:13px!important}
+.exec-kpi-icon{width:32px!important;height:32px!important;border-radius:50%!important}
+.exec-kpi-card strong{font-size:22px!important;margin-top:7px!important}
+.exec-kpi-card em{display:block!important;margin-top:4px!important}
+#agent-v2-work-panel{margin-top:20px}
+#agent-v2-work-panel>.exec-section-title{margin-bottom:10px}
+.agent-work-card{border-radius:18px!important;padding:15px!important;box-shadow:0 5px 20px #101e3908!important}
+.agent-work-head b{font-size:15px!important}.agent-work-head small{font-size:10px!important;line-height:1.5}
+.agent-action-grid{grid-template-columns:1fr 1fr!important;gap:9px!important}
+.agent-action-grid button{min-height:64px!important;padding:12px!important;border-radius:14px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;gap:4px!important}
+.agent-action-grid button.primary{background:#2367f5!important}
+.agent-mini-grid{margin-top:11px!important}
+.agent-mini-stat{border-radius:14px!important;padding:12px!important}
+#page-customers{padding-top:14px!important}
+#page-customers>.relative input{min-height:45px!important;border-radius:13px!important;background:#fff!important;color:#101e39!important;-webkit-text-fill-color:#101e39!important}
+.customer-advanced-filter{border-radius:14px!important}
+.customer-card{min-height:72px!important;border-radius:15px!important}
+#page-cash,#page-report{padding-top:16px!important}
+.agent-cash-hero{background:linear-gradient(125deg,#2367f5,#447eff)!important;border-radius:18px!important}
+.agent-cash-hero strong{font-size:30px!important}
+.agent-report-card{min-height:82px!important}
+nav{padding:7px 7px calc(7px + env(safe-area-inset-bottom))!important;border-radius:0!important}
+nav>div{width:100%}
+nav button{min-width:0!important;flex:1!important;min-height:48px!important;border-radius:11px!important}
+nav button.active{background:#e9f0ff!important;color:#2367f5!important}
+.sheet-bg{z-index:80!important}.sheet-bg .sheet{border-radius:22px 22px 0 0!important;max-height:92dvh!important}
+.sheet-head{position:sticky!important;top:0!important;z-index:3!important;background:#fff!important}
+.agent-form{padding-bottom:8px}
+.agent-form label{font-size:11px!important;color:#71829a!important}
+.agent-form input,.agent-form select,.agent-form textarea{min-height:45px!important;border-radius:12px!important;font-size:13px!important;background:#fff!important;color:#101e39!important;-webkit-text-fill-color:#101e39!important}
+.client-wizard-progress{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:2px 0 14px}
+.client-wizard-progress span{background:#f0f3f8;color:#8290a6;border-radius:10px;padding:8px 3px;text-align:center;font-size:8px;font-weight:800;line-height:1.25}
+.client-wizard-progress span.active{background:#2367f5;color:#fff}.client-wizard-progress span.done{background:#e4f8ee;color:#087b51}
+.agent-wizard-step{display:none}.agent-wizard-step.active{display:block}
+.agent-wizard-card{background:#fff;border:1px solid #e5ecf5;border-radius:17px;padding:14px}
+.agent-wizard-card h3{font-size:16px;margin:0 0 5px}.agent-wizard-card p{font-size:10px;color:#8190a7;line-height:1.5;margin:0 0 12px}
+.agent-wizard-number{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#e9f0ff;color:#2367f5;font-weight:900;margin-bottom:9px}
+.agent-wizard-nav{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.real-camera-card{background:#101e39;color:#fff;border-radius:16px;padding:14px;margin-top:8px}.real-camera-card small{display:block;color:#a9b8ce;font-size:9px;line-height:1.45}.real-camera-card button{margin-top:10px}
+.real-camera-preview{width:100%;height:210px;object-fit:cover;border-radius:14px;display:none;margin-top:10px}
+.camera-mode-badge{display:inline-block;background:#e4f8ee;color:#087b51;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:850;margin-bottom:8px}
+@media(max-width:360px){.exec-kpi-grid{gap:7px}.exec-kpi-card{padding:10px!important}.agent-action-grid{gap:7px!important}.client-wizard-progress span{font-size:7px;padding:7px 2px}}
 </style>
 </head>
 <body class="pb-24">
@@ -160,11 +213,11 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
         <section class="exec-hero">
             <div class="exec-hero-head">
                 <div>
-                    <span class="exec-kicker">ASMAN · CONTROL CENTER</span>
-                    <h1>Agent V2 boshqaruv markazi</h1>
+                    <span class="exec-kicker">ASMAN · AGENT PANELI</span>
+                    <h1 id="agent-home-greet">Assalomu alaykum!</h1>
                     <p id="home-updated">Real ma’lumotlar yuklanmoqda…</p>
                 </div>
-                <span class="exec-live"><i></i> JONLI</span>
+                <span class="exec-live"><i></i> REAL</span>
             </div>
             <div class="exec-cash-grid">
                 <div class="exec-cash-main">
@@ -182,20 +235,20 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 
         <section class="exec-kpi-grid">
             <button type="button" class="exec-kpi-card" data-page="map">
-                <span class="exec-kpi-icon blue">A</span>
-                <div><small>Agent</small><strong id="home-agent-count">—</strong><em id="home-active-agents">—</em></div>
+                <span class="exec-kpi-icon blue">↗</span>
+                <div><small>Bugungi tashrif</small><strong id="home-agent-count">—</strong><em id="home-active-agents">real tashrif</em></div>
             </button>
             <button type="button" class="exec-kpi-card" data-page="customers">
-                <span class="exec-kpi-icon violet">M</span>
-                <div><small>Jami mijoz</small><strong id="home-client-count">—</strong><em><span id="home-new-clients">—</span> yangi bugun</em></div>
+                <span class="exec-kpi-icon violet">＋</span>
+                <div><small>Yangi mijoz</small><strong id="home-client-count">—</strong><em><span id="home-new-clients">—</span> bugun</em></div>
             </button>
             <button type="button" class="exec-kpi-card" data-page="report">
-                <span class="exec-kpi-icon green">✓</span>
-                <div><small>Bugungi tashrif</small><strong id="home-visit-count">—</strong><em>Agent qaydi</em></div>
+                <span class="exec-kpi-icon green">$</span>
+                <div><small>Bugungi to‘lov</small><strong id="home-visit-count">—</strong><em>USD</em></div>
             </button>
             <button type="button" class="exec-kpi-card danger" data-page="customers">
-                <span class="exec-kpi-icon red">!</span>
-                <div><small>Nazorat kerak</small><strong id="home-overdue-count">—</strong><em>5+ kun tashrifsiz</em></div>
+                <span class="exec-kpi-icon red">▣</span>
+                <div><small>Berilgan tovar</small><strong id="home-overdue-count">—</strong><em>dona · bugun</em></div>
             </button>
         </section>
 
@@ -1298,6 +1351,7 @@ $("customer-sort").addEventListener("change",function(){state.customerSort=this.
 $("sheet-close").onclick=closeSheet;$("sheet-bg").addEventListener("click",function(e){if(e.target===$("sheet-bg"))closeSheet()});
 $("refresh-data").addEventListener("click",loadDashboard);$("auth-retry").addEventListener("click",loadDashboard);
 if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}catch(e){}}
+var workPanel=$("agent-v2-work-panel"),kpi=document.querySelector("#page-home .exec-kpi-grid");if(workPanel&&kpi)kpi.insertAdjacentElement("afterend",workPanel);
 updateManagerIdentity();scheduleRefresh();loadDashboard();
 })();
 
