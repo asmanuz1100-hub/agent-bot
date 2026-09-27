@@ -60,7 +60,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  <div class="title">Ish kunini boshqarish</div>
  <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">Lokatsiya faqat Telegram orqali sizning roziligingiz bilan ulashiladi.</p><div class="grid2"><button type="button" class="primary" id="startShift">▶ Ishni boshlash</button><button type="button" class="secondary" id="endShift">■ Ishni tugatish</button></div><p class="tiny">Ish tugaganda Telegram chatida jonli lokatsiya ulashishni ham o‘zingiz to‘xtating.</p></div>
  <div class="title">Tezkor amallar</div><div class="quick-grid"><button type="button" class="primary quick-tile" data-action="client"><b>＋ Yangi mijoz</b><small>Lokatsiya → foto → telefon → mahsulot</small></button><button type="button" class="secondary quick-tile" data-page="clients"><b>▦ Mijozlar</b><small>Qarz va tashriflar</small></button><button type="button" class="secondary quick-tile" data-page="map"><b>⌖ Xarita</b><small>Yaqin va kechikkan nuqtalar</small></button><button type="button" class="secondary quick-tile" data-page="cash"><b>💼 Pul</b><small>Kassa va xarajat</small></button></div>
- <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">USD</span></div></div>
+ <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">UZS</span></div></div>
  <div class="title">Qayta tashrif kerak</div><div id="homePlan"></div>
 </section>
 <section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><div class="tools" id="mapFilters"></div><div id="mapShell"><div id="map"></div><div id="mapStatus" class="map-status" role="status"></div></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
@@ -80,6 +80,7 @@ var data=null,current="home",selected=null,detailData=null,filter="all",mapFilte
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtSom(v){return Number(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}
 function date(ts){return ts?new Date(Number(ts)*1000).toLocaleString("uz-UZ",{timeZone:"Asia/Tashkent",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Ma’lumot yo‘q"}
 function notify(msg){$("notice").textContent=msg;$("notice").style.display="block";clearTimeout(notify.timer);notify.timer=setTimeout(function(){$("notice").style.display="none"},4500)}
 function fail(msg){$("gateMessage").textContent=msg;$("gate").classList.remove("hidden")}
@@ -111,7 +112,7 @@ async function refresh(){
   $("kNew").textContent=data.summary.newClientsToday;
   $("kPaid").textContent=fmt(data.summary.paymentTodayUsd);
   $("kGoods").textContent=data.summary.goodsToday;
-  $("homeExpenseBalance").textContent=fmt((data.expenseWallet||{}).balanceUsd||0)+" USD";
+  $("homeExpenseBalance").textContent=fmtSom((data.expenseWallet||{}).balanceUzs||0)+" UZS";
   $("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";
   $("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");
   $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Ish boshlandi. Telegram chatida jonli lokatsiyani qo‘lda ulang."):"Ishni boshlashdan oldin jonli GPS talab qilinmaydi.";
@@ -193,14 +194,16 @@ async function loadClientDetail(id){
 }
 function renderCash(){
  if(!data)return;
- var wallet=data.expenseWallet||{balanceUsd:0,history:[],categories:[]};
+ var wallet=data.expenseWallet||{balanceUzs:0,balanceUsd:0,history:[],categories:[]};
  $("cashFree").textContent=fmt(data.summary.cashAvailableUsd)+" USD";
  $("cashHold").textContent="Qo‘ldagi jami: "+fmt(data.summary.cashOnHandUsd)+" USD. Kutilayotgan topshirishlar chegirilgan.";
- $("expenseBalance").textContent=fmt(wallet.balanceUsd||0)+" USD";
- $("homeExpenseBalance").textContent=fmt(wallet.balanceUsd||0)+" USD";
+ $("expenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
+ $("homeExpenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
  $("expenseList").innerHTML=(wallet.history||[]).map(function(x){
-   var top=x.kind==="topup",label=top?"Kassirdan tushdi":(x.category||"Xarajat");
-   return '<div class="card expense-row"><div class="copy"><b>'+esc(label)+'</b><small>'+date(x.ts)+(x.actor?" · "+esc(x.actor):"")+(x.note?"<br>"+esc(x.note):"")+'</small></div><span class="amount '+(top?"plus":"minus")+'">'+(top?"+":"−")+fmt(x.amountUsd)+' USD</span></div>';
+   var top=x.kind==="topup",label=top?"Kassirdan tushdi":(x.category||"Xarajat"),hasUzs=Number(x.amountUzs||0)>0;
+   var amount=hasUzs?fmtSom(x.amountUzs)+" UZS":fmt(x.amountUsd)+" USD";
+   var fx=hasUzs?("<br>USD ekv.: "+fmt(x.amountUsd)+" USD · kurs "+fmtSom(x.rateUzsPerUsd)):"<br>Eski USD yozuvi";
+   return '<div class="card expense-row"><div class="copy"><b>'+esc(label)+'</b><small>'+date(x.ts)+(x.actor?" · "+esc(x.actor):"")+(x.note?"<br>"+esc(x.note):"")+fx+'</small></div><span class="amount '+(top?"plus":"minus")+'">'+(top?"+":"−")+amount+'</span></div>';
  }).join("")||'<div class="card muted">Xarajat hisobida hali harakat yo‘q.</div>';
  var payments=data.events.filter(function(e){return e.kind==="payment"});
  $("cashList").innerHTML=payments.slice(0,60).map(function(e){return '<div class="card"><div class="flex between"><b>'+esc(e.shop)+'</b><span class="pill green">+'+fmt(e.amountUsd)+' USD</span></div><p class="tiny">'+date(e.ts)+'</p></div>'}).join("")||'<div class="card muted">To‘lovlar hozircha yo‘q.</div>';
@@ -533,10 +536,13 @@ function openForm(action){
   }
   if(action==="handover")h+=field("amount","Summa (USD)","number","0.00",true);
   if(action==="agent_expense"){
-   var cats=((data.expenseWallet||{}).categories||[]);
-   h='<div class="card"><b>Joriy xarajat balansi</b><div style="font-size:28px;font-weight:900;margin-top:8px">'+fmt((data.expenseWallet||{}).balanceUsd||0)+' USD</div><p class="muted">Xarajat faqat shu balansdan yechiladi.</p></div>'+
+   var cats=((data.expenseWallet||{}).categories||[]),rate=Number(data.cashierRateUzsPerUsd||0);
+   h='<div class="card"><b>Joriy xarajat balansi</b><div style="font-size:28px;font-weight:900;margin-top:8px">'+fmtSom((data.expenseWallet||{}).balanceUzs||0)+' UZS</div><p class="muted">Xarajat faqat shu so‘m balansidan yechiladi.</p></div>'+
+     '<div class="payment-rate-card"><small>Kassir belgilagan kurs</small><b>'+(rate?("1 USD = "+fmtSom(rate)+" UZS"):"Kurs belgilanmagan")+'</b></div>'+
      '<label>Xarajat turi</label><select name="category" required>'+cats.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join("")+'</select>'+
-     field("amount","Xarajat summasi (USD)","number","0.00",true)+field("note","Izoh","text","Masalan: 20 litr benzin",true);
+     '<label>Xarajat summasi (UZS)</label><input name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="100000" required>'+
+     '<input type="hidden" name="expectedRate" value="'+(rate||"")+'">'+
+     field("note","Izoh","text","Masalan: 20 litr benzin",true);
   }
   if(action==="delivery"||action==="return")h+='<div class="card"><div class="delivery-head"><div><b>'+(action==="delivery"?"Mijozga tovar berish":"Tovar qaytarish")+'</b><small>'+(action==="delivery"?"Qoldiq yetmasa ham berish mumkin — minus qoldiq qizil ogohlantiriladi.":"Faqat mijozda mavjud tovar qaytariladi.")+'</small></div><span class="pill">'+(action==="delivery"?"USD":"QAYTARISH")+'</span></div><div id="items" class="delivery-cart">'+packLine(0)+'</div><button type="button" class="secondary" id="addItem" style="margin-top:12px;width:100%">＋ Yana mahsulot</button></div><div class="card delivery-summary"><div class="delivery-summary-grid"><div><small>Jami mahsulot</small><b id="deliveryTotalQty">0 dona</b></div><div><small>'+(action==="delivery"?"Jami summa":"Qaytarish qiymati")+'</small><b id="deliveryGrandTotal">0.00 USD</b></div></div><div id="deliveryWarning" class="delivery-warning"></div></div>';
  }
@@ -574,7 +580,7 @@ async function saveForm(e){
    if(payload.currency==="UZS"){var rate=Number(data.cashierRateUzsPerUsd||0),som=Number(payload.amount||0);detail=som.toLocaleString("en-US")+" UZS → "+fmt(rate?som/rate:0)+" USD · kurs "+(rate?rate.toLocaleString("en-US"):"yo‘q")}
    else detail=fmt(payload.amount)+" USD";
   }else if(formAction==="handover")detail=fmt(payload.amount)+" USD";
-  else if(formAction==="agent_expense")detail=payload.category+" · "+fmt(payload.amount)+" USD · "+payload.note;
+  else if(formAction==="agent_expense"){var expenseRate=Number(data.cashierRateUzsPerUsd||0),expenseSom=Number(payload.amount||0);detail=payload.category+" · "+fmtSom(expenseSom)+" UZS"+(expenseRate?" → "+fmt(expenseSom/expenseRate)+" USD · kurs "+fmtSom(expenseRate):"")+" · "+payload.note;}
   else if(formAction==="client_edit")detail=(payload.shop||"")+" · "+(payload.person||"")+" · "+(payload.phone||"");
   else if(formAction==="client")detail=payload.shop+" · "+payload.phone+" · Foto ✅ · "+(payload.items&&payload.items.length?payload.items.length+" xil mahsulot":"mahsulotsiz");
   else detail=payload.status;
@@ -594,7 +600,7 @@ async function saveForm(e){
  }catch(err){notify(err.message||"Amal saqlanmadi. Tekshirib qayta urinib ko‘ring.");}
  finally{busy=false;$("submitForm").disabled=false}
 }
-async function refreshAfterWrite(){data=await request("snapshot");$("gate").classList.add("hidden");$("greet").textContent="Assalomu alaykum, "+data.me.name+"!";$("kVisits").textContent=data.summary.visitsToday;$("kNew").textContent=data.summary.newClientsToday;$("kPaid").textContent=fmt(data.summary.paymentTodayUsd);$("kGoods").textContent=data.summary.goodsToday;$("homeExpenseBalance").textContent=fmt((data.expenseWallet||{}).balanceUsd||0)+" USD";$("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";$("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");$("startShift").disabled=data.me.shiftOpen;$("endShift").disabled=!data.me.shiftOpen;renderHome();renderClients();renderDetail();renderCash();renderReports()}
+async function refreshAfterWrite(){data=await request("snapshot");$("gate").classList.add("hidden");$("greet").textContent="Assalomu alaykum, "+data.me.name+"!";$("kVisits").textContent=data.summary.visitsToday;$("kNew").textContent=data.summary.newClientsToday;$("kPaid").textContent=fmt(data.summary.paymentTodayUsd);$("kGoods").textContent=data.summary.goodsToday;$("homeExpenseBalance").textContent=fmtSom((data.expenseWallet||{}).balanceUzs||0)+" UZS";$("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";$("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");$("startShift").disabled=data.me.shiftOpen;$("endShift").disabled=!data.me.shiftOpen;renderHome();renderClients();renderDetail();renderCash();renderReports()}
 async function shift(kind){
  if(busy)return;if(kind==="shift_end"&&!window.confirm("Ish kunini tugatasizmi? Telegram jonli lokatsiya ulashishni ham o‘zingiz to‘xtating."))return;
  if(kind==="shift_start"&&!window.confirm("Ish davomida admin siz Telegram chatidan ulagan jonli lokatsiyani ko‘rishi mumkin. Ishni boshlaysizmi?"))return;
