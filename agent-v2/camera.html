@@ -69,7 +69,7 @@ async function upload(){
  if(!dataUrl)return;status("Foto saqlanmoqda…",true);
  try{
   if(!tg||!tg.initData)throw Error("Telegram sessiyasi topilmadi");
-  var res=await fetch("https://asman-agent-test.onrender.com/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({initData:tg.initData,action:"photo_upload",imageData:dataUrl})});
+  var res=await fetch("https://asman-agent-test.onrender.com/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify(Object.assign({initData:tg.initData,action:"photo_upload",imageData:dataUrl},(Number(sessionStorage.getItem("asman_agent_v2_admin_agent")||0)?{agentId:Number(sessionStorage.getItem("asman_agent_v2_admin_agent"))}:{})))});
   var out=await res.json();if(!res.ok)throw Error(out.error||"Foto yuklanmadi");
   localStorage.setItem("asman_agent_v2_camera_result",JSON.stringify({photoFileId:out.photoFileId||"",preview:dataUrl,ts:Date.now()}));status("✓ Foto tayyor",true);setTimeout(goBack,250)
  }catch(e){status(e.message||"Foto saqlanmadi",true);setTimeout(function(){status("",false)},1800)}
