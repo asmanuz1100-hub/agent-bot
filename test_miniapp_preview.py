@@ -36,6 +36,18 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
+    def test_client_map_has_tile_fallback_status_and_mobile_resize_recovery(self):
+        for term in (
+            'id="mapShell"','id="mapStatus"','function installClientMapTiles',
+            'tile.openstreetmap.fr/hot','basemaps.cartocdn.com/light_all',
+            'function fitClientMap()','setTimeout(fitClientMap,60)',
+            'setTimeout(fitClientMap,360)','map.invalidateSize({animate:false,pan:false})',
+            'Asosiy xarita serveri javob bermadi. Zaxira xarita yuklanmoqda',
+            'Fon xaritani yuklab bo‘lmadi.'
+        ):
+            self.assertIn(term,self.html)
+        self.assertNotIn('L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png"',self.html)
+
     def test_admin_full_agent_selector_and_write_mode(self):
         for term in ('id="adminPicker"','id="adminAgent"','adminAgentId',
                      'data.adminMode','admin-full','ADMIN · TO‘LIQ REJIM',
