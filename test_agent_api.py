@@ -1,7 +1,7 @@
 """Real Agent Mini App API tests: live DB reads, write rules and idempotency."""
 import time
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import agent_api
@@ -161,7 +161,7 @@ class AgentApiTests(unittest.TestCase):
             'shopName':'Prospekt Shop','name':'Anvar',
             'phone':'+998901234569','lat':40.55,'lon':70.95,
             'photoFileId':'AgACAgQAAxkBAA_fast_wizard_photo_987654',
-            'status':'waiting','followup':'2026-09-26'
+            'status':'waiting','followup':(datetime.now().date()+timedelta(days=1)).isoformat()
         },'wizard_prospect_123',self.now)
         self.assertTrue(out['ok'])
         self.assertEqual(out['deliveredItems'],0)
@@ -212,7 +212,7 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(core.client_debt_usd(self.db,cid),5500)
         self.assertEqual(core.agent_stock(self.db,2,1),20)
         agent_api.mutate(self.db,2,'visit',
-            {'clientId':cid,'status':'waiting','note':'Ertaga kelishildi','followup':'2026-09-26'},
+            {'clientId':cid,'status':'waiting','note':'Ertaga kelishildi','followup':(datetime.now().date()+timedelta(days=1)).isoformat()},
             'visit_12345678',self.now)
         self.live_shift()
         pay=agent_api.mutate(self.db,2,'payment',
