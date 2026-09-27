@@ -241,6 +241,16 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', self.html)
         self.assertIn('#map{height:calc(100dvh - 265px);min-height:330px;max-height:520px', self.html)
 
+    def test_android_map_compositor_is_destroyed_before_camera_flow(self):
+        for term in (
+            'function destroyClientMap()',
+            'if(previous==="map"&&page!=="map")destroyClientMap()',
+            'async function startLiveCamera(){',
+            'destroyClientMap();',
+            '#page-map:not(.active) #mapShell{visibility:hidden!important;pointer-events:none!important}'
+        ):
+            self.assertIn(term,self.html)
+
     def test_agent_home_shows_cashier_debt_collection_tasks(self):
         for term in (
             'id="collectionTaskSection"',
