@@ -32,7 +32,7 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:40;max-w
 nav button{border:0;background:transparent;min-height:44px;border-radius:11px;font-size:9px;color:var(--muted);font-weight:650}nav button span{display:block;font-size:20px;line-height:24px}nav button.active{background:#e9f0ff;color:var(--blue)}
 #gate{position:fixed;inset:0;z-index:100;background:#f4f7fd;display:grid;place-items:center;padding:21px}#gate.hidden{display:none}#gate .card{width:min(100%,390px);text-align:center;padding:26px}#gate h1{font-size:24px;color:var(--blue);margin:0 0 10px}#gate p{line-height:1.65;font-size:12px;color:#546785;white-space:pre-line}
 #notice{position:fixed;z-index:80;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#12243e;color:#fff;padding:11px 14px;border-radius:13px;display:none;width:min(92%,390px);font-size:12px;box-shadow:0 10px 25px #0003}
-#mapShell{position:relative;border-radius:16px;overflow:hidden;background:#eaf0ed}#map{height:410px;background:#eaf0ed;border-radius:16px;overflow:hidden}.map-status{position:absolute;z-index:700;top:10px;left:56px;right:10px;display:none;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:9px;line-height:1.4;box-shadow:0 7px 18px #101e3922}.map-status.show{display:block}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
+#mapShell{position:relative;border-radius:16px;background:#eaf0ed}#map{height:410px;width:100%;position:relative;z-index:0;background:#eaf0ed;border-radius:16px;overflow:hidden}.map-status{position:absolute;z-index:700;top:10px;left:56px;right:10px;display:none;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:9px;line-height:1.4;box-shadow:0 7px 18px #101e3922}.map-status.show{display:block}.mapinfo{border-radius:12px;padding:10px;background:#e9f0ff;font-size:11px;color:#45608b;margin:10px 0}
 .line{border-top:1px solid var(--line);padding:11px 0}.line:first-child{border:0}.line b{font-size:12px}.line small{display:block;font-size:10px;color:var(--muted)}
 .bar{height:10px;border-radius:10px;background:#e9f0ff;overflow:hidden;margin:6px 0 10px}.bar i{display:block;height:100%;background:var(--blue)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
@@ -47,6 +47,26 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 input,select,textarea{scroll-margin-bottom:110px}
 body.editing nav{display:none}
 .grid2,.grid3,.kpis{min-width:0}.grid2>* , .grid3>*{min-width:0}
+
+/* Android Telegram WebView parity with the working Manager Mini App.
+   Final explicit palette prevents WebView dark-theme/native-control overrides. */
+html,body,.app{background:#f4f7fd!important;color:#101e39!important}
+.app>header{background:#101e39!important;background-color:#101e39!important;color:#fff!important}
+.app>header .logo,.app>header .greet{color:#fff!important}
+.app>header .tag{color:#c4d5f6!important}.app>header .sub{color:#b6c8e6!important}
+input,select,textarea{background:#fff!important;color:#101e39!important;-webkit-text-fill-color:#101e39!important;border-color:#dfe7f2!important;caret-color:#2367f5!important}
+input::placeholder,textarea::placeholder{color:#9aa7ba!important;-webkit-text-fill-color:#9aa7ba!important}
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,textarea:-webkit-autofill,select:-webkit-autofill{-webkit-text-fill-color:#101e39!important;-webkit-box-shadow:0 0 0 1000px #fff inset!important;box-shadow:0 0 0 1000px #fff inset!important}
+label{color:#72829d!important}
+nav{background:#fff!important;color:#101e39!important}
+#gate{background:#f4f7fd!important}
+#mapShell{overflow:visible!important}#map{width:100%!important;position:relative!important;z-index:0!important}
+@media(prefers-color-scheme:dark){
+ html,body,.app{background:#f4f7fd!important;color:#101e39!important}
+ .app>header{background:#101e39!important;color:#fff!important}
+ input,select,textarea{background:#fff!important;color:#101e39!important;-webkit-text-fill-color:#101e39!important;border-color:#dfe7f2!important}
+ nav{background:#fff!important;color:#101e39!important}
+}
 </style></head>
 <body>
 <div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ochish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
@@ -404,7 +424,7 @@ async function renderMap(){
  try{
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
-   map=L.map("map",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([40.54,70.94],9);
+   map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.54,70.94],9);
    installClientMapTiles(L);
    mapPins=L.featureGroup().addTo(map)
   }
@@ -869,15 +889,9 @@ async function showMyRoute(force){
   notify(e.message||"Marshrut ochilmadi");
  }finally{routeBusy=false}
 }
-function telegramThemeColor(name,fallback){
- var value=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
- return value||fallback;
-}
 function syncTelegramChrome(){
  if(!tg)return;
- var header=telegramThemeColor("--tg-theme-header-bg-color","#101e39");
- var bg=telegramThemeColor("--tg-theme-bg-color","#f4f7fd");
- [function(){if(tg.setHeaderColor)tg.setHeaderColor(header)},function(){if(tg.setBackgroundColor)tg.setBackgroundColor(bg)}].forEach(function(fn){try{fn()}catch(e){}});
+ [function(){if(tg.setHeaderColor)tg.setHeaderColor("#101e39")},function(){if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd")}].forEach(function(fn){try{fn()}catch(e){}});
 }
 if(tg){
  try{tg.ready();tg.expand()}catch(e){}
