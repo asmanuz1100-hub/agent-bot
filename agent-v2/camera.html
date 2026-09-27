@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ASMAN · Real kamera</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--paper:#08111f;--muted:#a8b7cc}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+body{overflow:hidden}.camera-app{height:100dvh;display:flex;flex-direction:column;background:#000;position:relative}
+.topbar{position:absolute;z-index:10;top:0;left:0;right:0;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;background:linear-gradient(#000b,#0000);display:flex;align-items:center;justify-content:space-between}
+.brand{font-weight:900;font-size:18px}.brand small{display:block;font-size:8px;letter-spacing:1.3px;color:#b8c6d9;margin-top:2px}.close{border:1px solid #ffffff30;background:#0006;color:#fff;width:38px;height:38px;border-radius:50%;font-size:20px}
+.stage{flex:1;position:relative;background:#02050a;display:grid;place-items:center;overflow:hidden}
+video,img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}img{display:none}
+.guide{position:absolute;z-index:3;inset:18% 9% 23%;border:2px solid #ffffffaa;border-radius:22px;box-shadow:0 0 0 9999px #0002;pointer-events:none}.guide:before,.guide:after{content:"";position:absolute;width:32px;height:32px;border-color:#fff}.guide:before{left:-2px;top:-2px;border-left:4px solid;border-top:4px solid;border-radius:7px 0 0 0}.guide:after{right:-2px;bottom:-2px;border-right:4px solid;border-bottom:4px solid;border-radius:0 0 7px 0}
+.hint{position:absolute;z-index:4;bottom:146px;left:20px;right:20px;text-align:center;font-size:12px;color:#eef3fa;text-shadow:0 1px 3px #000}
+.controls{position:absolute;z-index:8;left:0;right:0;bottom:0;padding:16px 20px calc(18px + env(safe-area-inset-bottom));background:linear-gradient(#0000,#000 38%);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px}
+.round{width:72px;height:72px;border-radius:50%;background:#fff;border:6px solid #ffffff55;box-shadow:0 0 0 2px #fff;justify-self:center}.round:active{transform:scale(.96)}
+.side{border:0;background:#ffffff18;color:#fff;border-radius:14px;padding:12px 10px;font-size:11px;font-weight:800}.side.right{justify-self:end}.side.left{justify-self:start}
+.review-actions{display:none;position:absolute;z-index:9;left:16px;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));gap:10px}.review-actions.show{display:grid;grid-template-columns:1fr 1fr}.review-actions button{border:0;border-radius:14px;padding:14px;font-weight:850;font-size:13px}.retake{background:#fff;color:#14213b}.use{background:var(--blue);color:#fff}
+.status{position:absolute;z-index:12;top:50%;left:50%;transform:translate(-50%,-50%);background:#0d1727e8;border:1px solid #ffffff20;border-radius:14px;padding:12px 15px;font-size:12px;display:none;max-width:80%;text-align:center}.status.show{display:block}
+.fallback{display:none;position:absolute;z-index:11;inset:0;background:#0a1220;padding:80px 22px 30px;text-align:center}.fallback.show{display:flex;flex-direction:column;justify-content:center;gap:14px}.fallback h2{margin:0}.fallback p{color:#b3c0d3;font-size:12px;line-height:1.5}.fallback label{display:block;background:var(--blue);padding:14px;border-radius:14px;font-weight:850}.fallback input{display:none}
+</style>
+</head>
+<body>
+<div class="camera-app">
+ <div class="topbar"><div class="brand">ASMAN<small>REAL KAMERA · DO‘KON FOTOSI</small></div><button class="close" id="close">×</button></div>
+ <div class="stage">
+  <video id="video" autoplay muted playsinline></video>
+  <img id="preview" alt="Olingan foto">
+  <div class="guide" id="guide"></div>
+  <div class="hint" id="hint">Do‘kon yoki vitrinani ramka ichiga joylashtiring</div>
+ </div>
+ <div class="controls" id="controls">
+  <button class="side left" id="cancel">← Orqaga</button>
+  <button class="round" id="capture" aria-label="Suratga olish"></button>
+  <button class="side right" id="switch">↻ Kamera</button>
+ </div>
+ <div class="review-actions" id="review"><button class="retake" id="retake">↻ Qayta olish</button><button class="use" id="use">✓ Shu rasmni ishlatish</button></div>
+ <div class="status" id="status">Kamera ochilmoqda…</div>
+ <div class="fallback" id="fallback"><h2>Kamerani ochib bo‘lmadi</h2><p>Telegram Android kamera ruxsatini bermadi. Telefon kamerasini native rejimda oching.</p><label>📷 Telefon kamerasini ochish<input id="file" type="file" accept="image/*" capture="environment"></label><button class="side" id="fallbackBack">← Orqaga</button></div>
+</div>
+<canvas id="canvas" style="display:none"></canvas>
+<script>
+(function(){
+"use strict";
+var tg=window.Telegram&&window.Telegram.WebApp,stream=null,facing="environment",dataUrl="";
+var $=function(id){return document.getElementById(id)};
+function status(msg,on){$("status").textContent=msg;$("status").classList.toggle("show",on!==false)}
+function goBack(){try{if(stream)stream.getTracks().forEach(function(t){t.stop()})}catch(e){}location.replace("./?camera_return=1&v=20260927-agent-premium-v3")}
+async function start(){
+ status("Kamera ochilmoqda…",true);
+ try{
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw Error("getUserMedia yo‘q");
+  if(stream)stream.getTracks().forEach(function(t){t.stop()});
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  $("video").srcObject=stream;await $("video").play();status("",false)
+ }catch(e){status("",false);$("fallback").classList.add("show")}
+}
+function capture(){
+ var v=$("video"),c=$("canvas");if(!v.videoWidth)return;
+ var max=1600,scale=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));c.width=Math.round(v.videoWidth*scale);c.height=Math.round(v.videoHeight*scale);
+ c.getContext("2d").drawImage(v,0,0,c.width,c.height);dataUrl=c.toDataURL("image/jpeg",.82);
+ $("preview").src=dataUrl;$("preview").style.display="block";$("video").style.display="none";$("guide").style.display="none";$("hint").style.display="none";$("controls").style.display="none";$("review").classList.add("show")
+}
+function retake(){dataUrl="";$("preview").style.display="none";$("video").style.display="block";$("guide").style.display="block";$("hint").style.display="block";$("controls").style.display="grid";$("review").classList.remove("show")}
+async function upload(){
+ if(!dataUrl)return;status("Foto saqlanmoqda…",true);
+ try{
+  if(!tg||!tg.initData)throw Error("Telegram sessiyasi topilmadi");
+  var res=await fetch("https://asman-agent-test.onrender.com/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({initData:tg.initData,action:"photo_upload",imageData:dataUrl})});
+  var out=await res.json();if(!res.ok)throw Error(out.error||"Foto yuklanmadi");
+  localStorage.setItem("asman_agent_v2_camera_result",JSON.stringify({photoFileId:out.photoFileId||"",preview:dataUrl,ts:Date.now()}));status("✓ Foto tayyor",true);setTimeout(goBack,250)
+ }catch(e){status(e.message||"Foto saqlanmadi",true);setTimeout(function(){status("",false)},1800)}
+}
+$("capture").onclick=capture;$("retake").onclick=retake;$("use").onclick=upload;$("cancel").onclick=goBack;$("close").onclick=goBack;$("fallbackBack").onclick=goBack;
+$("switch").onclick=function(){facing=facing==="environment"?"user":"environment";start()};
+$("file").addEventListener("change",function(){var f=this.files&&this.files[0];if(!f)return;var fr=new FileReader();fr.onload=function(){dataUrl=fr.result;var im=new Image();im.onload=function(){var c=$("canvas"),max=1600,sc=Math.min(1,max/Math.max(im.width,im.height));c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);c.getContext("2d").drawImage(im,0,0,c.width,c.height);dataUrl=c.toDataURL("image/jpeg",.82);$("fallback").classList.remove("show");$("preview").src=dataUrl;$("preview").style.display="block";$("video").style.display="none";$("guide").style.display="none";$("hint").style.display="none";$("controls").style.display="none";$("review").classList.add("show")};im.src=fr.result};fr.readAsDataURL(f)});
+if(tg){try{tg.ready();tg.expand();tg.setHeaderColor("#000000");tg.setBackgroundColor("#000000")}catch(e){}}
+start();
+})();
+</script>
+</body></html>
