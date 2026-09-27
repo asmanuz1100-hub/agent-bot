@@ -279,6 +279,77 @@ def dashboard(db,agent,now=None):
     }
 
 
+
+def quick_snapshot(db,agent,now=None):
+    """Fast first-paint payload for Agent Mini App.
+
+    Keeps the same essential shape as snapshot(), but skips report analytics,
+    long cash/event histories and product-period aggregation until the user
+    opens those sections.
+    """
+    now=int(time.time() if now is None else now)
+    user=_require_agent(db,agent)
+    today=_midnight(now)
+    clients_raw=_client_snapshot(db,now) if core.feature_enabled(db,agent,'clients') else []
+    clients=[]
+    for c in clients_raw:
+        item=dict(c)
+        item["agent"]=item.pop("owner")
+        item["agentId"]=item.pop("ownerId")
+        item["comment"]=item.get("note","")
+        item["status"]=item.get("statusLabel") or item.get("status")
+        clients.append(item)
+    products=[{"pack":x["pack"],"name":x["name"],"weightKg":x["weightKg"],"priceUsd":x["priceUsd"],
+               "stock":x["agentStock"],"blockUnits":x["blockUnits"]} for x in _products(db,agent)]
+
+    shift=db.execute('SELECT * FROM shifts WHERE agent=? AND "end" IS NULL ORDER BY id DESC LIMIT 1',
+                     (agent,)).fetchone()
+    point=None
+    if shift:
+        point=db.execute('SELECT lat,lon,ts,accuracy FROM points WHERE shift=? ORDER BY ts DESC,id DESC LIMIT 1',
+                         (shift['id'],)).fetchone()
+    lat,lon=_coord(point['lat'],point['lon']) if point else (None,None)
+
+    visit_today=int(db.execute("""SELECT COUNT(*) FROM client_visits
+        WHERE actor=? AND ts>=? AND ts<=?""",(agent,today,now)).fetchone()[0] or 0)
+    new_today=int(db.execute("""SELECT COUNT(*) FROM clients
+        WHERE agent=? AND created_ts>=? AND created_ts<=?""",(agent,today,now)).fetchone()[0] or 0)
+    payments_today=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM events
+        WHERE agent=? AND kind='payment' AND ts>=? AND ts<=?""",(agent,today,now)).fetchone()[0] or 0)
+    delivery_today=db.execute("""SELECT COALESCE(SUM(qty),0) FROM events
+        WHERE agent=? AND kind='delivery' AND ts>=? AND ts<=?""",(agent,today,now)).fetchone()
+
+    cash_on_hand=int(core.cash_usd(db,agent))
+    pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+        WHERE agent=? AND status='pending'""",(agent,)).fetchone()[0] or 0)
+    features={name:bool(core.feature_enabled(db,agent,name)) for name in core.AGENT_FEATURES}
+    owned_clients=[c for c in clients if int(c.get("agentId") or 0)==int(agent)]
+    wallet={
+        "balanceUzs":int(core.agent_fund_balance_uzs(db,agent)),
+        "balanceUsd":_usd(core.agent_fund_balance_usd(db,agent)),
+        "categories":list(core.CASHIER_EXPENSE_CATEGORIES),
+        "history":[]
+    }
+    return {
+        "generatedTs":now,"timezone":"Asia/Tashkent","quick":True,
+        "me":{"id":int(agent),"name":user["name"] or str(agent),
+              "shiftOpen":bool(shift),"shiftStart":int(shift["start"]) if shift else None,
+              "liveAttached":bool(shift and shift["live_id"] is not None),
+              "gps":{"ts":int(point["ts"]) if point else None,"lat":lat,"lon":lon}},
+        "features":features,"clients":clients,"products":products,
+        "events":[],"handovers":[],"expenseWallet":wallet,
+        "cashierRateUzsPerUsd":core.cashier_rate(db),
+        "summary":{"visitsToday":visit_today,"newClientsToday":new_today,
+                   "paymentTodayUsd":_usd(payments_today),
+                   "goodsToday":int(delivery_today[0] or 0),
+                   "cashOnHandUsd":_usd(cash_on_hand),
+                   "cashAvailableUsd":_usd(max(0,cash_on_hand-pending))},
+        "period":{"day":{},"week":{},"month":{}},
+        "reportAnalytics":{},
+        "clientCount":len(owned_clients),
+        "truncated":int(db.execute("SELECT COUNT(*) FROM clients").fetchone()[0] or 0)>MAX_CLIENTS
+    }
+
 def snapshot(db,agent,now=None):
     """Compatibility shape consumed by the premium Agent Mini App UI."""
     now=int(time.time() if now is None else now)
