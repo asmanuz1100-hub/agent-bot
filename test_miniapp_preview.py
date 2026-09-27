@@ -151,7 +151,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         for term in (
             'class="report-kpis"','id="reportStockTotal"','id="reportNegativeCount"',
             'class="report-stock-list"','class="report-stock-item"',
-            'Berilgan tovar','Xarajat balansi','Jami qoldiq','Minus qoldiq',
+            'Berilgan tovar','Agent xarajati','Jami qoldiq','Minus qoldiq',
             'products.reduce(function(sum,x)','negative=products.filter',
             'an-bn||String(a.name).localeCompare'
         ):
