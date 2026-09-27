@@ -187,6 +187,20 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('reportTrend="deliveryUsd"',self.html)
         self.assertIn('if(b.dataset.reportTrend)',self.html)
 
+    def test_product_report_defaults_to_top_three_and_can_expand_all(self):
+        for term in (
+            'id="reportProductsToggle"','Barchasi',
+            'reportProductsExpanded=false','movement.slice(0,3)',
+            'reportProductsExpanded?movement:movement.slice(0,3)',
+            'movement.length>3?"flex":"none"',
+            'reportProductsExpanded?"Yopish":"Barchasi · "+movement.length+" ta"',
+            'b.id==="reportProductsToggle"',
+            'reportProductsExpanded=!reportProductsExpanded',
+            'period=b.dataset.period;reportProductsExpanded=false'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('TOP 3 · berilgan · sotilgan · qaytgan',self.html)
+
     def test_agent_report_keeps_stock_and_route_sections_after_analytics_upgrade(self):
         for term in (
             'id="reportStockTotal"','id="reportNegativeCount"',
