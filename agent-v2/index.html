@@ -596,6 +596,115 @@ function renderAgentV2Customer(detail){
   '</section><div class="agent-sheet-actions"><button class="primary" data-agent-action="delivery" data-agent-client="'+c.id+'">📦 Tovar berish</button><button data-agent-action="payment" data-agent-client="'+c.id+'">💰 Pul olish</button><button data-agent-action="return" data-agent-client="'+c.id+'">↩ Qaytarish</button><button data-agent-action="visit" data-agent-client="'+c.id+'">📝 Tashrif</button><button class="wide" data-agent-action="client_edit" data-agent-client="'+c.id+'">✏️ Ma’lumotlarni tahrirlash</button></div></div>';
  openSheet("Mijoz kartochkasi",body)
 }
+
+function agentUuid(){return (crypto&&crypto.randomUUID?crypto.randomUUID().replace(/-/g,""):String(Date.now())+Math.random().toString(16).slice(2))}
+function agentSelectedClientFn(id){return customers.find(function(x){return Number(x.id)===Number(id)})}
+function agentProductsOptions(selected,stockMap,forReturn){
+ return (agentData&&agentData.products||[]).filter(function(p){return !forReturn||Number((stockMap||{})[String(p.pack)]||0)>0}).map(function(p){
+  var st=forReturn?Number((stockMap||{})[String(p.pack)]||0):Number(p.stock||0);
+  return '<option value="'+p.pack+'" '+(Number(selected)===Number(p.pack)?'selected':'')+'>'+escapeHtml(p.name)+' · '+money(p.priceUsd)+' USD · '+(forReturn?'mijozda ':'agentda ')+st+'</option>'
+ }).join("")
+}
+function renderAgentHomeV2(){
+ var host=$("agent-v2-work-panel");if(!host||!agentData||!agentData.me)return;
+ var me=agentData.me,tasks=agentData.collectionTasks||[],wallet=agentData.expenseWallet||{},sm=agentData.summary||{};
+ host.innerHTML='<div class="exec-section-title"><div><small>AGENT AMALLARI</small><h3>Ish kunini boshqarish</h3></div></div>'+
+ '<div class="agent-work-card"><div class="agent-work-head"><div><b>'+(me.shiftOpen?'Ish kuni boshlandi':'Ish kuni yopiq')+'</b><small>'+(me.shiftOpen?(me.liveAttached?'Jonli lokatsiya ulangan · '+escapeHtml(when(me.gps&&me.gps.ts)):'Telegram jonli lokatsiyasini ulang'):'Ishni boshlashga tayyor')+'</small></div><span class="agent-work-pill '+(me.shiftOpen?'on':'')+'">'+(me.shiftOpen?'ISHDA':'YOPIQ')+'</span></div>'+
+ '<div class="agent-action-grid"><button class="primary" data-agent-shift="'+(me.shiftOpen?'end':'start')+'">'+(me.shiftOpen?'■ Ishni tugatish':'▶ Ishni boshlash')+'</button><button data-agent-action="client">＋ Yangi mijoz</button><button data-page="customers">▦ Mijozlar</button><button data-page="cash">💼 Kassa</button></div>'+
+ '<div class="agent-mini-grid"><div class="agent-mini-stat"><small>Kassaga topshirish mumkin</small><b>'+money(sm.cashAvailableUsd||0)+' USD</b></div><div class="agent-mini-stat"><small>Xarajat balansi</small><b>'+Number(wallet.balanceUzs||0).toLocaleString("en-US")+' UZS</b></div></div></div>'+
+ (tasks.length?'<div class="exec-section-title compact"><div><small>KASSIR TOPSHIRIQLARI</small><h3>Qarz undirish</h3></div><span>'+tasks.length+' ta</span></div>'+tasks.slice(0,6).map(function(t){return '<button type="button" class="agent-collection" style="width:100%;text-align:left" data-customer="'+t.clientId+'"><b>'+escapeHtml(t.client)+' · '+money(t.currentDebtUsd)+' USD</b><small>'+escapeHtml(t.phone||"")+' · '+escapeHtml(t.address||"")+(t.note?' · '+escapeHtml(t.note):'')+'</small></button>'}).join(""):'');
+}
+async function loadAgentFullAndRender(page){
+ try{
+  if(!agentFull){
+   var full=await request("snapshot");agentData=full;agentFull=true;customers=Array.isArray(full.clients)?full.clients:customers;summary=full.summary||summary;generatedTs=full.generatedTs||generatedTs;renderCustomers();renderAgentHomeV2();
+  }
+  if(page==="cash")renderAgentCashV2();
+  if(page==="report"){renderAgentReportV2();loadAgentRouteV2(false)}
+ }catch(e){toast(e.message||"Ma’lumot yuklanmadi")}
+}
+function renderAgentCashV2(){
+ if(!agentData)return;var w=agentData.expenseWallet||{},sm=agentData.summary||{};
+ $("agent-cash-free").textContent=money(sm.cashAvailableUsd||0)+" USD";$("agent-cash-onhand").textContent=money(sm.cashOnHandUsd||0)+" USD";$("agent-expense-balance").textContent=Number(w.balanceUzs||0).toLocaleString("en-US")+" UZS";$("agent-cash-note").textContent="Kutilayotgan topshirishlar chegirilgan";
+ $("agent-expense-history").innerHTML=(w.history||[]).slice(0,40).map(function(x){var top=x.kind==="topup";return '<div class="agent-list-card"><div class="top"><b>'+escapeHtml(top?"Kassirdan tushdi":(x.category||"Xarajat"))+'</b><strong>'+(top?"+":"−")+(Number(x.amountUzs||0)?Number(x.amountUzs).toLocaleString("en-US")+" UZS":money(x.amountUsd)+" USD")+'</strong></div><small>'+escapeHtml(when(x.ts))+(x.note?' · '+escapeHtml(x.note):'')+'</small></div>'}).join("")||'<div class="empty">Xarajat harakati yo‘q</div>';
+ var pays=(agentData.events||[]).filter(function(e){return e.kind==="payment"});
+ $("agent-payment-history").innerHTML=pays.slice(0,50).map(function(e){return '<div class="agent-list-card"><div class="top"><b>'+escapeHtml(e.shop||"Mijoz")+'</b><strong>+'+money(e.amountUsd)+' USD</strong></div><small>'+escapeHtml(when(e.ts))+'</small></div>'}).join("")||'<div class="empty">To‘lov yo‘q</div>';
+ $("agent-handover-history").innerHTML=(agentData.handovers||[]).slice(0,40).map(function(h){return '<div class="agent-list-card"><div class="top"><b>'+money(h.amountUsd)+' USD</b><strong>'+escapeHtml(h.status==="accepted"?"Qabul qilindi":h.status==="rejected"?"Rad etildi":"Kutilmoqda")+'</strong></div><small>'+escapeHtml(when(h.ts))+'</small></div>'}).join("")||'<div class="empty">Topshirish yo‘q</div>';
+}
+function renderAgentReportV2(){
+ if(!agentData)return;document.querySelectorAll("[data-agent-period]").forEach(function(b){b.classList.toggle("active",b.dataset.agentPeriod===agentPeriod)});
+ var p=(agentData.period||{})[agentPeriod]||{},a=agentData.reportAnalytics||{},cl=a.clients||{},products=(a.products&&a.products[agentPeriod])||agentData.products||[];
+ $("agent-report-delivery").textContent=money(p.deliveryUsd||0)+" USD";$("agent-report-payment").textContent=money(p.paymentsUsd||0)+" USD";$("agent-report-visits").textContent=Number(p.visits||0);$("agent-report-new").textContent=Number(p.newClients||0);$("agent-report-goods").textContent=Number(p.deliveryQty!=null?p.deliveryQty:(p.goods||0));$("agent-report-return").textContent=money(p.returnUsd||0)+" USD";$("agent-report-debt").textContent=money(cl.debtUsd||0)+" USD";$("agent-report-cash").textContent=money((agentData.summary||{}).cashAvailableUsd||0)+" USD";
+ $("agent-report-products").innerHTML=products.slice().sort(function(x,y){return Number(y.deliveryUsd||0)-Number(x.deliveryUsd||0)}).map(function(x){return '<div class="agent-list-card"><div class="top"><b>'+escapeHtml(x.name||("SKU "+x.pack))+'</b><strong>'+Number(x.stock||0)+' dona</strong></div><small>Berilgan: '+Number(x.deliveryQty||0)+' dona · '+money(x.deliveryUsd||0)+' USD · Qaytgan: '+Number(x.returnQty||0)+'</small></div>'}).join("")||'<div class="empty">Mahsulot harakati yo‘q</div>';
+ var st=cl.status||{},total=Number(cl.total!=null?cl.total:(agentData.clientCount||0));
+ $("agent-report-clients").innerHTML='<div class="agent-mini-grid"><div class="agent-mini-stat"><small>Agent mijozlari</small><b>'+total+'</b></div><div class="agent-mini-stat"><small>Qarz</small><b>'+money(cl.debtUsd||0)+' USD</b></div><div class="agent-mini-stat"><small>0–2 kun</small><b>'+Number(st.fresh||0)+'</b></div><div class="agent-mini-stat"><small>5+ kun</small><b>'+Number(st.red||0)+'</b></div></div>';
+}
+function agentWorkTime(sec){sec=Math.max(0,Number(sec||0));var h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);return h+" soat "+m+" daq"}
+async function loadAgentRouteV2(){
+ if(!agentData||state.page!=="report")return;
+ try{
+  var rr=await request("route",{period:agentPeriod});$("agent-route-km").textContent=money(rr.km||0)+" km";$("agent-route-work").textContent=agentWorkTime(rr.workSeconds);$("agent-route-points").textContent=Number(rr.gpsPoints||0);$("agent-route-shifts").textContent=Number(rr.shiftCount||0);
+  var L=await loadLeaflet(),el=$("agent-route-map");if(!el)return;
+  if(!agentRouteMap){agentRouteMap=L.map("agent-route-map",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(agentRouteMap);agentRouteLayer=L.featureGroup().addTo(agentRouteMap)}
+  agentRouteLayer.clearLayers();var segs=(rr.segments&&rr.segments.length?rr.segments:(rr.points&&rr.points.length?[rr.points]:[]));segs.forEach(function(seg){if(seg.length>1)L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#246bfd",weight:4,opacity:.88}).addTo(agentRouteLayer)});
+  setTimeout(function(){agentRouteMap.invalidateSize(false);var b=agentRouteLayer.getBounds();if(b.isValid())agentRouteMap.fitBounds(b.pad(.16),{maxZoom:16,animate:false})},40);
+ }catch(e){toast(e.message||"GPS hisobot ochilmadi")}
+}
+function agentItemRow(stockMap,forReturn){
+ return '<div class="agent-item-row" data-agent-item><label style="margin:0">Mahsulot<select name="pack">'+agentProductsOptions(null,stockMap,forReturn)+'</select></label><label style="margin:0">Dona<input name="qty" type="number" min="1" step="1" value="1"></label><button type="button" data-agent-remove-item>×</button></div>'
+}
+function agentAddItem(container,stockMap,forReturn){var el=$(container);if(!el)return;var n=el.querySelectorAll("[data-agent-item]").length;if(n>=12){toast("12 tagacha mahsulot");return}el.insertAdjacentHTML("beforeend",agentItemRow(stockMap,forReturn))}
+function openAgentOperation(action,clientId){
+ agentSelectedClientId=Number(clientId||0)||null;agentPhotoFileId="";agentPhotoUploading=false;
+ var c=agentSelectedClientId?agentSelectedClientFn(agentSelectedClientId):null,title={client:"Yangi mijoz",client_edit:"Mijozni tahrirlash",visit:"Tashrif",delivery:"Tovar berish",payment:"Pul olish",return:"Tovar qaytarish",handover:"Kassirga topshirish",agent_expense:"Xarajat qilish"}[action]||"Agent amali";
+ var h='<form id="agent-op-form" class="agent-form" data-agent-op="'+action+'">';
+ if(action==="client"){
+  h+='<label>1. Lokatsiya</label><button type="button" class="agent-form-submit secondary" id="agent-get-location">📍 Joriy lokatsiyani olish</button><div class="agent-form-row"><label>Latitude<input id="agent-lat" name="lat" type="number" step="any" required></label><label>Longitude<input id="agent-lon" name="lon" type="number" step="any" required></label></div>'+
+  '<label>2. Do‘kon fotosi</label><input id="agent-photo-input" type="file" accept="image/*" capture="environment"><img id="agent-photo-preview" class="agent-photo-preview"><div id="agent-photo-state" class="agent-photo-state">Foto hali tanlanmagan.</div>'+
+  '<label>3. Telefon(lar)</label><input name="phone" type="tel" placeholder="+998901234567, +998..." required>'+
+  '<div class="agent-form-row"><label>4. Mijoz ismi<input name="person" required></label><label>Do‘kon nomi<input name="shop" required></label></div><label>Manzil / mo‘ljal<input name="address"></label><label>Izoh<textarea name="note"></textarea></label>'+
+  '<label>5. Hozir mahsulot berdingizmi?</label><select id="agent-client-mode" name="productMode"><option value="none">Yo‘q, prospekt</option><option value="delivery">Ha, mahsulot berdim</option></select><div id="agent-prospect-fields"><label>Holat<select name="status"><option value="interested">Taklif berilgan</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option></select></label><label>Keyingi tashrif<input name="followup" type="date"></label></div><div id="agent-client-items" style="display:none">'+agentItemRow(null,false)+'</div><button type="button" class="agent-form-submit secondary" id="agent-add-client-item" style="display:none">＋ Yana mahsulot</button>';
+ }else if(action==="client_edit"){
+  if(!c){toast("Mijoz topilmadi");return}h+='<input type="hidden" name="clientId" value="'+c.id+'"><label>Do‘kon<input name="shop" value="'+escapeHtml(c.name||"")+'" required></label><label>Mijoz ismi<input name="person" value="'+escapeHtml(c.person||"")+'"></label><label>Telefon<input name="phone" value="'+escapeHtml(c.phone||"")+'" required></label><label>Manzil<input name="address" value="'+escapeHtml(c.address||"")+'"></label><label>Izoh<textarea name="note">'+escapeHtml(c.profileComment||"")+'</textarea></label>';
+ }else if(action==="handover"){
+  h+='<label>Summa (USD)<input name="amount" type="number" min="0.01" step="0.01" required></label><div class="agent-form-note">Mavjud: '+money((agentData.summary||{}).cashAvailableUsd||0)+' USD</div>';
+ }else if(action==="agent_expense"){
+  var cats=(agentData.expenseWallet||{}).categories||[],rate=Number(agentData.cashierRateUzsPerUsd||0);h+='<label>Xarajat turi<select name="category">'+cats.map(function(x){return '<option>'+escapeHtml(x)+'</option>'}).join("")+'</select></label><label>Summa (UZS)<input name="amount" type="number" min="1" step="1" required></label><input type="hidden" name="expectedRate" value="'+(rate||"")+'"><label>Izoh<textarea name="note" required></textarea></label><div class="agent-form-note">Balans: '+Number((agentData.expenseWallet||{}).balanceUzs||0).toLocaleString("en-US")+' UZS · Kurs: '+(rate?rate.toLocaleString("en-US"):"yo‘q")+'</div>';
+ }else{
+  if(!c){toast("Mijoz topilmadi");return}h+='<input type="hidden" name="clientId" value="'+c.id+'"><div class="settings-note"><b>'+escapeHtml(c.name)+'</b><br>'+escapeHtml(c.address||"")+' · Qarz '+money(c.debtUsd||0)+' USD</div>';
+  if(action==="visit")h+='<label>Natija<select name="status"><option value="interested">Taklif berildi</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option><option value="active">Tovar olgan</option></select></label><label>Izoh<textarea name="note" required></textarea></label><label>Keyingi tashrif<input name="followup" type="date"></label>';
+  if(action==="payment"){var rate2=Number(agentData.cashierRateUzsPerUsd||0);h+='<label>Valyuta<select name="currency" id="agent-pay-currency"><option value="USD">USD</option><option value="UZS" '+(rate2?'':'disabled')+'>UZS'+(rate2?'':' — kurs yo‘q')+'</option></select></label><label>Summa<input name="amount" id="agent-pay-amount" type="number" min="0.01" step="0.01" required></label><input type="hidden" name="expectedRate" value="'+(rate2||"")+'"><div id="agent-pay-convert" class="agent-form-note">'+(rate2?'1 USD = '+rate2.toLocaleString("en-US")+' UZS':'Kassir kursi yo‘q')+'</div>'}
+  if(action==="delivery"||action==="return")h+='<div id="agent-op-items">'+agentItemRow(c.stock||{},action==="return")+'</div><button type="button" class="agent-form-submit secondary" id="agent-add-op-item">＋ Yana mahsulot</button>';
+ }
+ h+='<button type="submit" class="agent-form-submit">✓ Tekshirish va saqlash</button></form>';openSheet(title,h)
+}
+function agentFormPayload(form){
+ var fd=new FormData(form),action=form.dataset.agentOp,p={};fd.forEach(function(v,k){p[k]=v});
+ if(action==="client"){p.photoFileId=agentPhotoFileId;p.items=[];if(p.productMode==="delivery")form.querySelectorAll("[data-agent-item]").forEach(function(row){var q=Number(row.querySelector('[name="qty"]').value||0),pack=Number(row.querySelector('[name="pack"]').value);if(q>0)p.items.push({pack:pack,qty:q})})}
+ if(action==="delivery"||action==="return"){p.items=[];form.querySelectorAll("[data-agent-item]").forEach(function(row){var q=Number(row.querySelector('[name="qty"]').value||0),pack=Number(row.querySelector('[name="pack"]').value);if(q>0)p.items.push({pack:pack,qty:q})})}
+ return p
+}
+async function submitAgentOperation(form){
+ if(agentOpBusy)return;var action=form.dataset.agentOp,p=agentFormPayload(form);
+ if(action==="client"&&!agentPhotoFileId){toast("Do‘kon fotosini tanlang");return}
+ if(agentPhotoUploading){toast("Foto yuklanmoqda");return}
+ if((action==="delivery"||action==="return"||(action==="client"&&p.productMode==="delivery"))&&!p.items.length){toast("Kamida bitta mahsulot kiriting");return}
+ if(action==="client"&&p.productMode==="none"&&p.status==="waiting"&&!p.followup){toast("Kutilayotgan mijoz uchun sana kiriting");return}
+ if(!confirm("Ma’lumotni real bazaga saqlaysizmi?"))return;
+ agentOpBusy=true;try{var out=await request(action,Object.assign({},p,{nonce:agentUuid()}));toast(out.message||"Saqlandi");closeSheet();agentFull=false;await loadDashboard();if(out.clientId)await showCustomer(out.clientId)}catch(e){toast(e.message||"Saqlanmadi")}finally{agentOpBusy=false}
+}
+async function agentUploadPhoto(file){
+ if(!file)return;agentPhotoUploading=true;var stateEl=$("agent-photo-state");if(stateEl)stateEl.textContent="Foto yuklanmoqda…";
+ try{
+  var dataUrl=await new Promise(function(resolve,reject){var img=new Image(),fr=new FileReader();fr.onload=function(){img.onload=function(){var max=1280,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext("2d").drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL("image/jpeg",.78))};img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)});
+  var out=await request("photo_upload",{imageData:dataUrl});agentPhotoFileId=out.photoFileId||"";if(!agentPhotoFileId)throw Error("Foto ID olinmadi");var pr=$("agent-photo-preview");if(pr){pr.src=dataUrl;pr.style.display="block"}if(stateEl)stateEl.textContent="✓ Foto tayyor";
+ }catch(e){agentPhotoFileId="";if(stateEl)stateEl.textContent=e.message||"Foto yuklanmadi";toast(e.message||"Foto yuklanmadi")}finally{agentPhotoUploading=false}
+}
+async function agentShiftV2(kind){
+ if(kind==="end"&&!confirm("Ish kunini tugatasizmi? Telegram jonli lokatsiyasini ham to‘xtating."))return;
+ if(kind==="start"&&!confirm("Ish davomida admin siz ulagan jonli lokatsiyani ko‘rishi mumkin. Boshlaysizmi?"))return;
+ try{var out=await request(kind==="start"?"shift_start":"shift_end",{nonce:agentUuid()});toast(out.message||"Smena yangilandi");agentFull=false;await loadDashboard()}catch(e){toast(e.message||"Smena o‘zgarmadi")}
+}
 async function showCustomer(id){
  openSheet("Mijoz kartochkasi",'<div class="customer-loading">Mijoz ma’lumotlari yuklanmoqda…</div>');
  try{var d=await request("client_detail",{clientId:id});renderAgentV2Customer(d)}
