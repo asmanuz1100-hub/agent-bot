@@ -123,6 +123,16 @@ def map_link(scope,ttl=MAP_TTL_SECONDS):
     expires=int(time.time())+max(60,min(int(ttl),3600))
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
 
+def stable_client_photo_link(cid,now=None):
+    """Stable signed URL within a 30-minute bucket so browsers can reuse cached photos."""
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    now=int(time.time() if now is None else now)
+    bucket=1800
+    expires=((now//bucket)+2)*bucket
+    scope=f'client-photo/{int(cid)}'
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
 # Bound image memory on the free instance, reduce repeated Telegram getFile calls.
 _PHOTO_CACHE=OrderedDict()
 _PHOTO_CACHE_LOCK=threading.Lock()
@@ -238,7 +248,7 @@ def attach_client_photo_urls(data):
     if not isinstance(data,dict):return data
     def attach(c):
         if isinstance(c,dict) and c.get('hasPhoto') and c.get('id'):
-            c['photoUrl']=map_link(f"client-photo/{int(c['id'])}",ttl=3600)
+            c['photoUrl']=stable_client_photo_link(int(c['id']))
         return c
     clients=data.get('clients')
     if isinstance(clients,list):
@@ -1712,10 +1722,11 @@ def serve_webhook(db,base_url):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
             self.send_response(code)
             self.send_header('Content-Type',ctype)
-            self.send_header('Cache-Control','no-store')
+            extra_headers=extra_headers or {}
+            if 'Cache-Control' not in extra_headers:self.send_header('Cache-Control','no-store')
             self.send_header('Referrer-Policy','no-referrer')
             self.send_header('X-Content-Type-Options','nosniff')
-            for k,v in (extra_headers or {}).items():self.send_header(k,v)
+            for k,v in extra_headers.items():self.send_header(k,v)
             self.send_header('Content-Length',str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -1836,7 +1847,7 @@ def serve_webhook(db,base_url):
                     try:
                         actor=next(iter(ADMINS))
                         client=local.execute('SELECT photo FROM clients WHERE id=?',(cid,)).fetchone()
-                        photo_url=map_link(f'client-photo/{cid}') if client and client['photo'] else None
+                        photo_url=stable_client_photo_link(cid) if client and client['photo'] else None
                         html=reports.client_card_html(local,actor,cid,photo_url=photo_url)
                         local.commit()
                     finally:
@@ -1864,7 +1875,8 @@ def serve_webhook(db,base_url):
                     if not client or not client['photo']:
                         self._reply(404,b'Photo not found');return
                     photo_data=customer_photo_bytes(client['photo'])
-                    self._reply(200,photo_data,photo_content_type(photo_data))
+                    self._reply(200,photo_data,photo_content_type(photo_data),
+                                {'Cache-Control':'private, max-age=1800, stale-while-revalidate=300'})
                 except ValueError as exc:
                     logging.warning('Customer photo unavailable client=%s reason=%s',cid,str(exc))
                     self._reply(404,b'Photo not found')
@@ -1949,7 +1961,7 @@ def serve_webhook(db,base_url):
                         try:subject=int(payload.get('agentId') or 0)
                         except (TypeError,ValueError):subject=0
                         if not any(x['id']==subject for x in admin_agents):
-                            if action in ('dashboard','snapshot'):
+                            if action in ('dashboard','snapshot','quick_snapshot'):
                                 answer_agent(200,{'adminMode':True,'readOnly':False,'agents':admin_agents,
                                     'selectedAgentId':None,'message':'Ishlash uchun agentni tanlang.'});return
                             answer_agent(400,{'error':'Ishlash uchun faol agentni tanlang.'});return
@@ -1958,8 +1970,10 @@ def serve_webhook(db,base_url):
                         data={'ok':True,'photoFileId':upload_agent_camera_photo(actor,image),
                               'message':'Foto tayyor.'}
                         local.commit()
-                    elif action in ('dashboard','snapshot'):
-                        data=agent_api.snapshot(local,subject) if action=='snapshot' else agent_api.dashboard(local,subject)
+                    elif action in ('dashboard','snapshot','quick_snapshot'):
+                        data=(agent_api.snapshot(local,subject) if action=='snapshot' else
+                              agent_api.quick_snapshot(local,subject) if action=='quick_snapshot' else
+                              agent_api.dashboard(local,subject))
                         local.commit()
                     elif action=='client_detail':
                         data=agent_api.client_detail(local,subject,payload.get('clientId'))
