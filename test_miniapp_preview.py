@@ -153,7 +153,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'USD qarz','id="callClient"','id="navigateClient"',
             'Do‘kondagi mahsulot qoldig‘i','class="stock-item"',
             'class="timeline-item"','Tashriflar tarixi','So‘nggi operatsiyalar',
-            'href="tel:'+esc(dialPhone(c))+'"'
+            "href=\"tel:'+esc(dialPhone(c))+'\""
         ):
             self.assertIn(term,self.html)
         self.assertIn('Number(c.debtUsd||0)',self.html)
@@ -161,7 +161,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
 
     def test_call_uses_native_tel_link_and_phone_normalization(self):
         self.assertIn('function dialPhone(c)',self.html)
-        self.assertIn('href="tel:'+esc(dialPhone(c))+'"',self.html)
+        self.assertIn("href=\"tel:'+esc(dialPhone(c))+'\"",self.html)
         self.assertIn('/^998\\d{9}$/.test(digits)',self.html)
         self.assertNotIn('window.location.href="tel:"+digits',self.html)
 
@@ -189,7 +189,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'decoding="async"'
         ):
             self.assertIn(term,self.html)
-        self.assertNotIn('<img src="'+esc(c.photoUrl)+'" alt="" loading="lazy"',self.html)
+        self.assertNotIn("<img src=\"'+esc(c.photoUrl)+'\" alt=\"\" loading=\"lazy\"",self.html)
 
     def test_client_card_layout_does_not_overlap_content(self):
         self.assertNotIn('\\n.customer-hero{',self.html)
