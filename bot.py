@@ -28,6 +28,7 @@ TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.stri
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
 AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260927-android-manager-parity-v5').strip()
+AGENT_V2_TEST_URL=os.getenv('AGENT_V2_TEST_URL','https://asman-agent-v2-manager-base-test.onrender.com/?v=20260927-manager-base-v1').strip()
 CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260927-android-manager-parity-v5').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
@@ -328,11 +329,15 @@ def menu(db,u):
         rows.insert(0,['📱 Раҳбар Mini App'])
         if AGENT_MINIAPP_URL:
             rows.insert(1,['📱 Agent Mini App'])
+        if AGENT_V2_TEST_URL:
+            rows.insert(2,['🧪 Agent V2 TEST'])
     elif r=='agent' and AGENT_MINIAPP_URL:
         # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
+        if AGENT_V2_TEST_URL:
+            rows.insert(1,['🧪 Agent V2 TEST'])
     if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
         rows.insert(0,['📱 Кассир Mini App'])
     return rows
@@ -1156,6 +1161,16 @@ def handle(db,update):
                   else '📱 Agent Mini App · Админ назорат режими. Агентни танлаб, маълумотларни кўринг.'),
             reply_markup={'inline_keyboard':[[{'text':'📱 Agent Mini Appни очиш',
                                               'web_app':{'url':AGENT_MINIAPP_URL}}]]})
+        return
+    if text=='🧪 Agent V2 TEST':
+        if r not in ('agent','admin') or not AGENT_V2_TEST_URL:
+            raise ValueError('Фақат агент ёки админ.')
+        api('sendMessage',chat_id=u,
+            text=('🧪 Agent V2 TEST · Rahbar App Android arxitekturasi asosida yangi test frontend.'
+                  if r=='agent' else
+                  '🧪 Agent V2 TEST · Admin test rejimi. Avval agentni tanlang.'),
+            reply_markup={'inline_keyboard':[[{'text':'🧪 Agent V2 TESTни очиш',
+                                              'web_app':{'url':AGENT_V2_TEST_URL}}]]})
         return
     if text.startswith('/start '):
         open_agent_client_action(db,u,text[7:].strip());return
