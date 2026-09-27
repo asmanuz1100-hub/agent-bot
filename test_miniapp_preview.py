@@ -43,7 +43,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             'L.marker([c.lat,c.lon]',
             'className:"route-point-icon"',
             'L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#2367f5"',
-            'tg.setBackgroundColor("#f4f7fd")'
+            'tg.setBackgroundColor(bg)'
         ):
             self.assertIn(term,self.html)
         self.assertNotIn('renderer:mapCanvas',self.html)
