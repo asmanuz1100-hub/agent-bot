@@ -36,17 +36,34 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
 
-    def test_client_map_has_tile_fallback_status_and_mobile_resize_recovery(self):
+    def test_client_and_route_maps_have_timeout_fallback_tiles(self):
         for term in (
-            'id="mapShell"','id="mapStatus"','function installClientMapTiles',
-            'tile.openstreetmap.fr/hot','basemaps.cartocdn.com/light_all',
+            'id="mapShell"','id="mapStatus"','function installResilientTiles',
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'basemaps.cartocdn.com/light_all',
+            'setTimeout(function(){',
+            '},4000)',
+            'Zaxira xarita yuklanmoqda',
+            'Fon xaritani yuklab bo‘lmadi.',
+            'function installClientMapTiles',
+            'installResilientTiles(L,map',
+            'installResilientTiles(L,routeMap,null,null)',
             'function fitClientMap()','setTimeout(fitClientMap,60)',
-            'setTimeout(fitClientMap,360)','map.invalidateSize({animate:false,pan:false})',
-            'Asosiy xarita serveri javob bermadi. Zaxira xarita yuklanmoqda',
-            'Fon xaritani yuklab bo‘lmadi.'
+            'setTimeout(fitClientMap,360)','map.invalidateSize({animate:false,pan:false})'
         ):
             self.assertIn(term,self.html)
-        self.assertNotIn('L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png"',self.html)
+        self.assertNotIn('tile.openstreetmap.fr/hot',self.html)
+
+    def test_photo_step_supports_live_camera_and_gallery_picker(self):
+        for term in (
+            'id="cameraLive"','id="takePhoto"','id="captureLivePhoto"',
+            'id="galleryInput"','id="galleryPhoto"',
+            '🖼 Galereyadan tanlash',
+            'if(b.id==="galleryPhoto")',
+            'e.target.id==="galleryInput"',
+            'capture="environment"'
+        ):
+            self.assertIn(term,self.html)
 
     def test_admin_full_agent_selector_and_write_mode(self):
         for term in ('id="adminPicker"','id="adminAgent"','adminAgentId',
