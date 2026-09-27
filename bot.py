@@ -1720,16 +1720,21 @@ def serve_webhook(db,base_url):
 
     class Handler(BaseHTTPRequestHandler):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
-            self.send_response(code)
-            self.send_header('Content-Type',ctype)
-            extra_headers=extra_headers or {}
-            if 'Cache-Control' not in extra_headers:self.send_header('Cache-Control','no-store')
-            self.send_header('Referrer-Policy','no-referrer')
-            self.send_header('X-Content-Type-Options','nosniff')
-            for k,v in extra_headers.items():self.send_header(k,v)
-            self.send_header('Content-Length',str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type',ctype)
+                extra_headers=extra_headers or {}
+                if 'Cache-Control' not in extra_headers:self.send_header('Cache-Control','no-store')
+                self.send_header('Referrer-Policy','no-referrer')
+                self.send_header('X-Content-Type-Options','nosniff')
+                for k,v in extra_headers.items():self.send_header(k,v)
+                self.send_header('Content-Length',str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return True
+            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
+                self.close_connection=True
+                return False
         def _cors_headers(self,allowed_origin):
             origin=self.headers.get('Origin','')
             if origin!=allowed_origin:return None
