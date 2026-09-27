@@ -31,21 +31,27 @@ def _cashier_summary(db):
         WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
     funded_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
         WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    funded_today_uzs = int(db.execute("""SELECT COALESCE(SUM(amount_uzs),0) FROM agent_funds
+        WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
     pending = db.execute("""SELECT COUNT(*) AS count,
         COALESCE(SUM(amount_usd),0) AS usd, COALESCE(SUM(amount),0) AS uzs
         FROM handovers WHERE status='pending'""").fetchone()
     wallet_total = int(db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_usd
         WHEN kind='expense' THEN -amount_usd ELSE 0 END),0) FROM agent_funds""").fetchone()[0] or 0)
+    wallet_total_uzs = int(db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_uzs
+        WHEN kind='expense' THEN -amount_uzs ELSE 0 END),0) FROM agent_funds""").fetchone()[0] or 0)
     return {
         'acceptedToday': accepted_today,
         'cashExpenseToday': expense_today,
         'fundedToday': funded_today,
+        'fundedTodayUzs': funded_today_uzs,
         'cashOutToday': expense_today + funded_today,
         'netToday': accepted_today - expense_today - funded_today,
         'pendingCount': int(pending['count'] or 0),
         'pendingUsd': int(pending['usd'] or 0),
         'pendingUzs': int(pending['uzs'] or 0),
         'agentWalletTotal': wallet_total,
+        'agentWalletTotalUzs': wallet_total_uzs,
     }
 
 
@@ -66,12 +72,13 @@ def _cashier_activity(db):
                      'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount_uzs'] or 0),
                      'currency':x['currency'],'category':x['category'],'recipient':x['recipient'],
                      'actor_name':x['actor_name'] or '','note':x['note'] or ''})
-    for x in db.execute("""SELECT f.id,f.kind,f.amount_usd,f.category,f.note,f.ts,
+    for x in db.execute("""SELECT f.id,f.kind,f.amount_usd,f.amount_uzs,f.rate_uzs_per_usd,f.category,f.note,f.ts,
             a.name AS agent_name,u.name AS actor_name FROM agent_funds f
             LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
             ORDER BY f.ts DESC LIMIT 60""").fetchall():
         rows.append({'kind':'agent_'+x['kind'],'id':int(x['id']),'ts':int(x['ts'] or 0),
-                     'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':0,
+                     'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount_uzs'] or 0),
+                     'rate_uzs_per_usd':int(x['rate_uzs_per_usd'] or 0),
                      'category':x['category'] or '','agent_name':x['agent_name'] or '',
                      'actor_name':x['actor_name'] or '','note':x['note'] or ''})
     rows.sort(key=lambda x:(x['ts'],x['id']),reverse=True)
@@ -87,9 +94,11 @@ def dashboard(db, actor):
         WHERE h.status!='pending' ORDER BY h.accepted_ts DESC,h.id DESC LIMIT 100""").fetchall()]
     expenses = [dict(x) for x in db.execute("""SELECT e.*,u.name AS cashier_name FROM cashier_expenses e
         LEFT JOIN users u ON u.id=e.cashier ORDER BY e.ts DESC,e.id DESC LIMIT 100""").fetchall()]
-    agents = [{'id': int(x['id']), 'name': x['name'], 'fund_balance': core.agent_fund_balance_usd(db,int(x['id']))}
+    agents = [{'id': int(x['id']), 'name': x['name'],
+               'fund_balance': core.agent_fund_balance_usd(db,int(x['id'])),
+               'fund_balance_uzs': core.agent_fund_balance_uzs(db,int(x['id']))}
               for x in db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()]
-    agents.sort(key=lambda x:(-x['fund_balance'],x['name'] or ''))
+    agents.sort(key=lambda x:(-x['fund_balance_uzs'],x['name'] or ''))
     agent_funds = [dict(x) for x in db.execute("""SELECT f.*,a.name AS agent_name,u.name AS actor_name
         FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
         ORDER BY f.ts DESC,f.id DESC LIMIT 100""").fetchall()]
@@ -139,15 +148,19 @@ def mutate(db, actor, action, payload):
         notify = {'agent': int(row['agent']), 'text': f"{'✅ ҚАБУЛ ҚИЛИНДИ' if action=='accept' else '❌ РАД ЭТИЛДИ'}\nТопшириш #{hid} · {amount}\nКассир: {require_cashier(db,actor)}"}
     elif action == 'fund':
         agent = int(payload.get('agentId') or 0)
-        amount = core.money(payload.get('amount'))
+        amount_uzs = core.parse_whole_som(payload.get('amount'),'Сумма')
+        expected_rate = core.parse_whole_som(payload.get('expectedRate'),'Курс')
         note = payload.get('note', '')
-        fid = core.fund_agent_expense(db, actor, agent, amount, note, source)
-        balance = core.agent_fund_balance_usd(db, agent)
+        fid, amount, rate = core.fund_agent_expense_uzs(
+            db, actor, agent, amount_uzs, note, source, expected_rate=expected_rate)
+        balance_uzs = core.agent_fund_balance_uzs(db, agent)
         agent_row = db.execute("SELECT name FROM users WHERE id=? AND role='agent'", (agent,)).fetchone()
         notify = {'agent': agent, 'text': f"💳 АГЕНТ ҲИСОБИ ТЎЛДИРИЛДИ #{fid}\n"
                   f"Агент: {agent_row[0] if agent_row else agent}\n"
-                  f"Сумма: {cashier_pending.usd(amount)} USD\n"
-                  f"Янги харажат баланси: {cashier_pending.usd(balance)} USD\n"
+                  f"Сумма: {amount_uzs:,} сўм\n"
+                  f"Курс: 1 USD = {rate:,} сўм\n"
+                  f"Умумий ҳисоб: {cashier_pending.usd(amount)} USD\n"
+                  f"Янги харажат баланси: {balance_uzs:,} сўм\n"
                   f"Кассир: {require_cashier(db,actor)}"}
     elif action == 'expense':
         currency = payload.get('currency')
