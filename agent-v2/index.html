@@ -168,14 +168,14 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
             </div>
             <div class="exec-cash-grid">
                 <div class="exec-cash-main">
-                    <span>Bugun kassir qabul qilgan</span>
+                    <span>Bugun mijozdan olindi</span>
                     <strong id="home-cash-total">—</strong>
-                    <small>Faqat tasdiqlangan pul</small>
+                    <small>Agent qayd etgan to‘lov</small>
                 </div>
                 <div class="exec-cash-pending">
-                    <span>Tasdiq kutilmoqda</span>
+                    <span>Kassaga topshirish mumkin</span>
                     <strong id="home-pending-cash">—</strong>
-                    <small>Kassaga hali kirmagan</small>
+                    <small>Kutilayotgan topshirishlar chegirilgan</small>
                 </div>
             </div>
         </section>
@@ -183,7 +183,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
         <section class="exec-kpi-grid">
             <button type="button" class="exec-kpi-card" data-page="map">
                 <span class="exec-kpi-icon blue">A</span>
-                <div><small>Jami agent</small><strong id="home-agent-count">—</strong><em id="home-active-agents">—</em></div>
+                <div><small>Agent</small><strong id="home-agent-count">—</strong><em id="home-active-agents">—</em></div>
             </button>
             <button type="button" class="exec-kpi-card" data-page="customers">
                 <span class="exec-kpi-icon violet">M</span>
@@ -191,7 +191,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
             </button>
             <button type="button" class="exec-kpi-card" data-page="report">
                 <span class="exec-kpi-icon green">✓</span>
-                <div><small>Bugungi tashrif</small><strong id="home-visit-count">—</strong><em>Agentlar qaydi</em></div>
+                <div><small>Bugungi tashrif</small><strong id="home-visit-count">—</strong><em>Agent qaydi</em></div>
             </button>
             <button type="button" class="exec-kpi-card danger" data-page="customers">
                 <span class="exec-kpi-icon red">!</span>
@@ -216,7 +216,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
         <section class="exec-section">
             <div class="exec-section-title"><div><small>TEZKOR KIRISH</small><h3>Boshqaruv bo‘limlari</h3></div></div>
             <div class="exec-shortcuts">
-                <button type="button" data-page="map"><i>⌖</i><b>Agentlar</b><small>GPS va marshrut</small></button>
+                <button type="button" data-page="map"><i>⌖</i><b>Xarita</b><small>Mijoz nuqtalari</small></button>
                 <button type="button" data-page="customers"><i>▦</i><b>Mijozlar</b><small>Qarz va tashrif</small></button>
                 <button type="button" data-page="cash"><i>$</i><b>Kassa</b><small>Qabul va kutish</small></button>
                 <button type="button" data-page="report"><i>◔</i><b>Hisobot</b><small>Hafta va oy</small></button>
@@ -308,7 +308,7 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
             </button>
             <button data-page="map" id="nav-map" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-user-shield text-lg"></i>
-                <span class="text-[10px] mt-1">Agentlar</span>
+                <span class="text-[10px] mt-1">Xarita</span>
             </button>
             <button data-page="customers" id="nav-customers" class="flex flex-col items-center text-gray-400 hover:text-blue-600 focus:outline-none">
                 <i class="fa-solid fa-users text-lg"></i>
@@ -593,7 +593,7 @@ function renderAgentV2Customer(detail){
   (events.length?events.slice(0,15).map(function(e){return '<div class="client-event-row"><span>'+escapeHtml(clientKindLabel(e.kind))+' · '+escapeHtml(when(e.ts))+'</span><b>'+escapeHtml(clientMoneyLine(e))+'</b></div>'}).join(""):'<div class="customer-empty-small">Operatsiya yo‘q</div>')+
   '</section><section class="customer-control-section"><h4>📝 Tashriflar</h4>'+
   (visits.length?visits.slice(0,12).map(function(v){return '<div class="client-event-row"><span>'+escapeHtml(v.statusLabel||v.status||"Tashrif")+' · '+escapeHtml(when(v.ts))+'</span><b>'+escapeHtml(v.note||"")+'</b></div>'}).join(""):'<div class="customer-empty-small">Tashrif qaydi yo‘q</div>')+
-  '</section><div class="agent-sheet-actions"><button class="primary" data-agent-action="delivery" data-agent-client="'+c.id+'">📦 Tovar berish</button><button data-agent-action="payment" data-agent-client="'+c.id+'">💰 Pul olish</button><button data-agent-action="return" data-agent-client="'+c.id+'">↩ Qaytarish</button><button data-agent-action="visit" data-agent-client="'+c.id+'">📝 Tashrif</button><button class="wide" data-agent-action="client_edit" data-agent-client="'+c.id+'">✏️ Ma’lumotlarni tahrirlash</button></div></div>';
+  '</section><div class="agent-sheet-actions"><button class="primary" data-agent-action="delivery" data-agent-client="'+c.id+'">📦 Tovar berish</button><button data-agent-action="payment" data-agent-client="'+c.id+'">💰 Pul olish</button><button data-agent-action="return" data-agent-client="'+c.id+'">↩ Qaytarish</button><button data-agent-action="visit" data-agent-client="'+c.id+'">📝 Tashrif</button><button data-agent-call="'+c.id+'">📞 Qo‘ng‘iroq</button><button data-agent-nav="'+c.id+'">📍 Navigator</button><button class="wide" data-agent-action="client_edit" data-agent-client="'+c.id+'">✏️ Ma’lumotlarni tahrirlash</button></div></div>';
  openSheet("Mijoz kartochkasi",body)
 }
 
@@ -1005,7 +1005,7 @@ function renderAgentControl(a){
   '</div>':'<div class="settings-note">Bu agent akkaunti bloklangan. Tarix va hisob ma’lumotlari saqlangan.</div>';
  var body='<div class="agent-control">'+
  '<section class="agent-control-hero"><span class="agent-control-avatar">'+escapeHtml(initials(a.name))+'</span><div><small>AGENT #'+a.id+'</small><h3>'+escapeHtml(a.name)+'</h3><p>'+escapeHtml(live)+'</p></div><span class="agent-active-badge '+(a.active?"active":"blocked")+'">'+(a.active?"FAOL":"BLOK")+'</span></section>'+
- '<section class="agent-control-kpis"><div><span>Mijozlar</span><b>'+a.clients+'</b></div><div><span>Qo‘ldagi pul</span><b>'+money(a.cashUsd)+' $</b></div><div><span>Tasdiq kutilmoqda</span><b>'+money(a.pendingHandoverUsd)+' $</b></div><div><span>Oxirgi GPS</span><b>'+(a.lastGpsTs?escapeHtml(when(a.lastGpsTs)):"Yo‘q")+'</b></div></section>'+
+ '<section class="agent-control-kpis"><div><span>Mijozlar</span><b>'+a.clients+'</b></div><div><span>Qo‘ldagi pul</span><b>'+money(a.cashUsd)+' $</b></div><div><span>Kassaga topshirish mumkin</span><b>'+money(a.pendingHandoverUsd)+' $</b></div><div><span>Oxirgi GPS</span><b>'+(a.lastGpsTs?escapeHtml(when(a.lastGpsTs)):"Yo‘q")+'</b></div></section>'+
  '<div class="agent-control-actions"><button type="button" class="primary" data-agent-route="'+a.id+'">📍 Marshrut</button><button type="button" data-agent-clients="'+a.id+'">👥 Mijozlari</button></div>'+
  '<section class="agent-control-section"><h4>📊 Natijalar</h4><div class="agent-period-grid">'+agentPeriodCard("Bugun",a.periods.today,"today",a.id)+agentPeriodCard("7 kun",a.periods.week,"week",a.id)+agentPeriodCard("30 kun",a.periods.month,"month",a.id)+'</div></section>'+
  '<section class="agent-control-section"><h4>📦 Agentdagi tovar</h4>'+(stock||'<div class="customer-empty-small">Tovar yo‘q</div>')+'</section>'+
@@ -1187,6 +1187,8 @@ document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.agentShift){agentShiftV2(b.dataset.agentShift);return}
  if(b.dataset.agentAction){openAgentOperation(b.dataset.agentAction,Number(b.dataset.agentClient||0));return}
+ if(b.dataset.agentCall){var c=agentSelectedClientFn(Number(b.dataset.agentCall));if(c&&c.phone){var phone=String(c.phone).split("·")[0].trim();window.location.href="tel:"+phone}else toast("Telefon yo‘q");return}
+ if(b.dataset.agentNav){var c2=agentSelectedClientFn(Number(b.dataset.agentNav));if(c2&&Number.isFinite(c2.lat)&&Number.isFinite(c2.lon)){var url="https://www.google.com/maps?q="+encodeURIComponent(c2.lat+","+c2.lon);if(tg&&tg.openLink)tg.openLink(url);else window.open(url,"_blank","noopener")}else toast("Mijoz koordinatasi yo‘q");return}
  if(b.dataset.agentPeriod){agentPeriod=b.dataset.agentPeriod;renderAgentReportV2();loadAgentRouteV2();return}
  if(b.id==="agent-route-refresh"){loadAgentRouteV2();return}
  if(b.id==="agent-get-location"){
