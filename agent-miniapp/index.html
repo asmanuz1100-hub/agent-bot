@@ -11,6 +11,17 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
 .app>header .logo,.app>header .greet{color:#fff!important}.logo{font-size:22px;letter-spacing:.4px;font-weight:900}.tag{font-size:10px;color:#c4d5f6!important;letter-spacing:1px;font-weight:700}
 .greet{font-size:20px;font-weight:800;margin-top:26px}.sub{font-size:12px;color:#b6c8e6!important;margin-top:5px}
 @media(max-width:600px){.app{max-width:none!important;width:100%!important;margin:0!important}.app>header{width:100%!important}nav{max-width:none!important;width:100%!important}}
+html.tg-android{color-scheme:only light!important;background:#edf2fb!important}
+html.tg-android body,html.tg-android .app{background:#f4f7fd!important;color:#101e39!important}
+html.tg-android .app>header{background:#f4f7fd!important;background-color:#f4f7fd!important;background-image:none!important;color:#101e39!important;border-top-color:#2367f5!important}
+html.tg-android .app>header .logo,html.tg-android .app>header .greet{color:#101e39!important;-webkit-text-fill-color:#101e39!important;text-shadow:none!important}
+html.tg-android .app>header .tag,html.tg-android .app>header .sub{color:#667a98!important;-webkit-text-fill-color:#667a98!important}
+html.tg-android input,html.tg-android textarea,html.tg-android select{color:#101e39!important;-webkit-text-fill-color:#101e39!important;text-shadow:0 0 0 #101e39!important;background:#fff!important;opacity:1!important}
+html.tg-android .wizard-input{color:#101e39!important;-webkit-text-fill-color:#101e39!important;text-shadow:0 0 0 #101e39!important;background:#fff!important;caret-color:#2367f5!important}
+html.tg-android .leaflet-container{background:#dfe7ef!important}
+html.tg-android .leaflet-tile-pane,html.tg-android .leaflet-map-pane,html.tg-android .leaflet-overlay-pane,html.tg-android .leaflet-marker-pane{opacity:1!important;filter:none!important;mix-blend-mode:normal!important}
+html.tg-android img.leaflet-tile{opacity:1!important;visibility:visible!important;filter:none!important;mix-blend-mode:normal!important;max-width:none!important;max-height:none!important;background:transparent!important}
+html.tg-android .leaflet-marker-icon,html.tg-android .leaflet-marker-shadow{filter:none!important;opacity:1!important}
 main{padding:0 16px 18px}section.view{display:none}section.view.active{display:block}.screenhead{font-weight:850;font-size:20px;margin:20px 0 12px}
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;margin:0 0 11px;box-shadow:0 5px 20px #101e3908}
 .flex{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.muted{color:var(--muted);font-size:11px}.tiny{font-size:10px;color:var(--muted)}.strong{font-weight:800}.title{font-weight:800;font-size:17px;margin:21px 0 11px}
@@ -834,7 +845,14 @@ async function showMyRoute(force){
   notify(e.message||"Marshrut ochilmadi");
  }finally{routeBusy=false}
 }
-if(tg){try{tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor("#101e39")}catch(e){}}
+if(tg){
+ try{
+  if(String(tg.platform||"").toLowerCase()==="android")document.documentElement.classList.add("tg-android");
+  tg.ready();tg.expand();
+  if(tg.setHeaderColor)tg.setHeaderColor(String(tg.platform||"").toLowerCase()==="android"?"#f4f7fd":"#101e39");
+  if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd");
+ }catch(e){}
+}
 refresh();
 setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form")refresh()},60000);
 })();
