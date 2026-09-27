@@ -139,27 +139,45 @@ def _visit_age(last,followup,now):
     return ("red" if days>=5 else "yellow" if days>=3 else "fresh"),int(days)
 
 
-def _client_snapshot(db,now):
-    rows=db.execute("""SELECT c.*,u.name AS agent_name FROM clients c
-        LEFT JOIN users u ON u.id=c.agent ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
-    latest=db.execute("""SELECT v.client,v.status,v.followup,v.ts,v.note,v.actor,u.name AS actor_name
-        FROM client_visits v LEFT JOIN users u ON u.id=v.actor
-        WHERE v.id=(SELECT MAX(v2.id) FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
+def _client_snapshot(db,now,client_id=None):
+    if client_id is None:
+        rows=db.execute("""SELECT c.*,u.name AS agent_name FROM clients c
+            LEFT JOIN users u ON u.id=c.agent ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
+        latest=db.execute("""SELECT v.client,v.status,v.followup,v.ts,v.note,v.actor,u.name AS actor_name
+            FROM client_visits v LEFT JOIN users u ON u.id=v.actor
+            WHERE v.id=(SELECT MAX(v2.id) FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
+        contacts_rows=db.execute("""SELECT client,MAX(ts) AS ts FROM events
+            WHERE client IS NOT NULL AND kind IN ('visit','delivery','payment','return')
+            GROUP BY client""").fetchall()
+        balances=db.execute("""SELECT client,
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
+                              WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0) AS debt
+            FROM events WHERE client IS NOT NULL GROUP BY client""").fetchall()
+        stock_rows=db.execute("""SELECT client,pack,
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
+                              WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
+            FROM events WHERE client IS NOT NULL AND pack>0 GROUP BY client,pack""").fetchall()
+    else:
+        cid=int(client_id)
+        rows=db.execute("""SELECT c.*,u.name AS agent_name FROM clients c
+            LEFT JOIN users u ON u.id=c.agent WHERE c.id=? LIMIT 1""",(cid,)).fetchall()
+        latest=db.execute("""SELECT v.client,v.status,v.followup,v.ts,v.note,v.actor,u.name AS actor_name
+            FROM client_visits v LEFT JOIN users u ON u.id=v.actor
+            WHERE v.client=? ORDER BY v.id DESC LIMIT 1""",(cid,)).fetchall()
+        contacts_rows=db.execute("""SELECT client,MAX(ts) AS ts FROM events
+            WHERE client=? AND kind IN ('visit','delivery','payment','return') GROUP BY client""",(cid,)).fetchall()
+        balances=db.execute("""SELECT client,
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
+                              WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0) AS debt
+            FROM events WHERE client=? GROUP BY client""",(cid,)).fetchall()
+        stock_rows=db.execute("""SELECT client,pack,
+            COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
+                              WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
+            FROM events WHERE client=? AND pack>0 GROUP BY client,pack""",(cid,)).fetchall()
+
     latest_by={int(v['client']):v for v in latest}
-    contacts=db.execute("""SELECT client,MAX(ts) AS ts FROM events
-        WHERE client IS NOT NULL AND kind IN ('visit','delivery','payment','return')
-        GROUP BY client""").fetchall()
-    contacts={int(x['client']):int(x['ts']) for x in contacts if x['ts'] is not None}
-    balances=db.execute("""SELECT client,
-        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
-                          WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0) AS debt
-        FROM events WHERE client IS NOT NULL GROUP BY client""").fetchall()
+    contacts={int(x['client']):int(x['ts']) for x in contacts_rows if x['ts'] is not None}
     debt={int(x['client']):int(x['debt'] or 0) for x in balances}
-    stock_rows=db.execute("""SELECT client,pack,
-        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
-                          WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
-        FROM events WHERE client IS NOT NULL AND pack>0
-        GROUP BY client,pack""").fetchall()
     stocks={}
     for x in stock_rows:
         stocks.setdefault(int(x['client']),{})[int(x['pack'])]=int(x['qty'] or 0)
@@ -186,7 +204,6 @@ def _client_snapshot(db,now):
             "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
         })
     return result
-
 
 def _products(db,agent):
     out=[]
@@ -490,7 +507,7 @@ def snapshot(db,agent,now=None):
 def client_detail(db,agent,cid,now=None):
     _require_agent(db,agent);_feature(db,agent,'clients')
     c=_client(db,cid);now=int(time.time() if now is None else now)
-    snapshots={x['id']:x for x in _client_snapshot(db,now)}
+    snapshots={x['id']:x for x in _client_snapshot(db,now,c['id'])}
     base=snapshots.get(int(c['id']))
     visits=db.execute("""SELECT v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name
         FROM client_visits v LEFT JOIN users u ON u.id=v.actor
