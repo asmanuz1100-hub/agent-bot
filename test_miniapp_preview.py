@@ -34,7 +34,8 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertNotIn('cdn.tailwindcss.com',self.html)
         self.assertNotIn('api/mcp/asset',self.html)
-        self.assertNotRegex(self.html,r'<script\\s+src="https://unpkg\\.com/leaflet')
+        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',self.html)
+        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',self.html)
 
     def test_maps_use_markers_without_global_pane_overrides(self):
         for term in (
@@ -230,14 +231,15 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('IntersectionObserver',self.html)
         self.assertNotIn('data-photo-src=',self.html)
 
-    def test_palette_and_map_assets_are_deterministic(self):
+    def test_palette_and_map_assets_match_manager_android_shell(self):
         self.assertNotIn('<meta name="color-scheme"', self.html)
+        self.assertNotIn('<meta name="theme-color"', self.html)
         self.assertNotIn('html{color-scheme:', self.html)
         self.assertNotIn('color-scheme:only', self.html)
         self.assertNotIn('html.tg-android', self.html)
-        for asset in ('leaflet.js', 'leaflet.css', 'LICENSE'):
-            self.assertTrue((HTML.parent/'vendor'/'leaflet'/asset).is_file())
-        self.assertNotIn('https://unpkg.com', self.html)
+        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', self.html)
+        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', self.html)
+        self.assertIn('#map{height:calc(100dvh - 265px);min-height:330px;max-height:520px', self.html)
 
     def test_agent_home_shows_cashier_debt_collection_tasks(self):
         for term in (
