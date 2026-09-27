@@ -210,6 +210,30 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('if(b.dataset.routePeriod)',self.html)
         self.assertIn('routeLoadedKey=""',self.html)
 
+    def test_client_card_can_open_profile_edit_without_financial_fields(self):
+        for term in (
+            'data-action="client_edit"','Mijoz ma’lumotlarini tahrirlash',
+            'name="clientId"','id="editShop"','id="editPerson"',
+            'id="editPhone"','id="editAddress"','id="editNote"',
+            'editClient.profileComment','Savdo, to‘lov, qarz va mahsulot tarixi o‘zgarmaydi',
+            'formAction==="client_edit"'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('await loadClientDetail(selected)',self.html)
+
+    def test_payment_supports_usd_or_cashier_rate_uzs_conversion(self):
+        for term in (
+            'id="paymentCurrency"','value="USD"','value="UZS"',
+            'cashierRateUzsPerUsd','id="paymentExpectedRate"',
+            'id="paymentConversion"','function updatePaymentConversion()',
+            'Kassir belgilagan kurs','Kassir kursi bo‘yicha USD ekvivalenti',
+            'Summa (UZS)','Summa (USD)'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('som/rate',self.html)
+        self.assertIn('payload.currency==="UZS"',self.html)
+        self.assertIn('updatePaymentConversion();return',self.html)
+
     def test_fast_delivery_cart_has_steppers_totals_and_negative_stock_warning(self):
         for term in (
             'class="delivery-cart"','class="delivery-row"',
