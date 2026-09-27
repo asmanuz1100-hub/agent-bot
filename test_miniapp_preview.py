@@ -207,6 +207,19 @@ class LiveAgentMiniAppTests(unittest.TestCase):
             self.assertIn(term,self.html)
         self.assertIn('TOP 3 · berilgan · sotilgan · qaytgan',self.html)
 
+    def test_agent_stock_defaults_to_three_and_can_expand_all(self):
+        for term in (
+            'id="reportStockToggle"','reportStockExpanded=false',
+            'sortedStock.slice(0,3)',
+            'reportStockExpanded?sortedStock:sortedStock.slice(0,3)',
+            'sortedStock.length>3?"flex":"none"',
+            'reportStockExpanded?"Yopish":"Barchasi · "+sortedStock.length+" ta"',
+            'b.id==="reportStockToggle"',
+            'reportStockExpanded=!reportStockExpanded',
+            'reportProductsExpanded=false;reportStockExpanded=false'
+        ):
+            self.assertIn(term,self.html)
+
     def test_agent_report_keeps_stock_and_route_sections_after_analytics_upgrade(self):
         for term in (
             'id="reportStockTotal"','id="reportNegativeCount"',
