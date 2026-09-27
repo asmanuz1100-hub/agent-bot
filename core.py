@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS role_audit(id INTEGER PRIMARY KEY, actor INTEGER NOT 
 CREATE TABLE IF NOT EXISTS client_edits(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, actor INTEGER NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS client_visits(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, actor INTEGER NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL, followup TEXT, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_client_visits_client_id ON client_visits(client,id);
+CREATE TABLE IF NOT EXISTS collection_tasks(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, agent INTEGER NOT NULL, cashier INTEGER NOT NULL, debt_usd INTEGER NOT NULL CHECK(debt_usd>0), note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','cancelled')), created_ts INTEGER NOT NULL, completed_ts INTEGER);
+CREATE INDEX IF NOT EXISTS idx_collection_tasks_agent_status ON collection_tasks(agent,status,created_ts);
+CREATE INDEX IF NOT EXISTS idx_collection_tasks_client_status ON collection_tasks(client,status,created_ts);
 CREATE TABLE IF NOT EXISTS delivery_edits(id INTEGER PRIMARY KEY, delivery_event INTEGER NOT NULL, client INTEGER NOT NULL, actor INTEGER NOT NULL, old_pack INTEGER NOT NULL, new_pack INTEGER NOT NULL, old_qty INTEGER NOT NULL, new_qty INTEGER NOT NULL, old_amount_usd INTEGER NOT NULL, new_amount_usd INTEGER NOT NULL, ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
@@ -118,6 +121,9 @@ CREATE TABLE IF NOT EXISTS role_audit(id BIGSERIAL PRIMARY KEY, actor BIGINT NOT
 CREATE TABLE IF NOT EXISTS client_edits(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, actor BIGINT NOT NULL, field TEXT NOT NULL, old_value TEXT, new_value TEXT, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS client_visits(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, actor BIGINT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL, followup TEXT, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_client_visits_client_id ON client_visits(client,id);
+CREATE TABLE IF NOT EXISTS collection_tasks(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, agent BIGINT NOT NULL, cashier BIGINT NOT NULL, debt_usd BIGINT NOT NULL CHECK(debt_usd>0), note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','cancelled')), created_ts BIGINT NOT NULL, completed_ts BIGINT);
+CREATE INDEX IF NOT EXISTS idx_collection_tasks_agent_status ON collection_tasks(agent,status,created_ts);
+CREATE INDEX IF NOT EXISTS idx_collection_tasks_client_status ON collection_tasks(client,status,created_ts);
 CREATE TABLE IF NOT EXISTS delivery_edits(id BIGSERIAL PRIMARY KEY, delivery_event BIGINT NOT NULL, client BIGINT NOT NULL, actor BIGINT NOT NULL, old_pack INTEGER NOT NULL, new_pack INTEGER NOT NULL, old_qty BIGINT NOT NULL, new_qty BIGINT NOT NULL, old_amount_usd BIGINT NOT NULL, new_amount_usd BIGINT NOT NULL, ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS processed(id BIGINT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);

@@ -51,6 +51,23 @@ class CashierControlCenterTests(unittest.TestCase):
         self.assertEqual(vali['fund_balance'],0)
         self.assertEqual(data['agents'][0]['id'],2)
 
+    def test_cashier_html_has_android_safe_contrast_and_debtors_module(self):
+        html=open('cashier-miniapp.html',encoding='utf-8').read()
+        for term in (
+            '<meta name="color-scheme" content="light">',
+            'background:#f1f5f2!important',
+            '.balance{background:#174e3b!important',
+            '.card{background:#fff!important;color:#17352c!important',
+            'data-tab="debtors"',
+            'id="debtCount"','id="debtTotal"','id="debtAssigned"',
+            'id="debtSearch"','id="debtList"',
+            'function renderDebtors()',
+            'data-assign-debt',
+            "action:'assign_debt'",
+            'Агентга қарзни олишни топшириш'
+        ):
+            self.assertIn(term,html)
+
     def test_cashier_html_has_overview_metrics_and_activity(self):
         html=open('cashier-miniapp.html',encoding='utf-8').read()
         self.assertIn('Касса бошқарув панели',html)

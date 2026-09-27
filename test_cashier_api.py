@@ -93,6 +93,34 @@ class CashierMiniAppTests(unittest.TestCase):
         row=self.db.execute('SELECT * FROM cashier_expenses').fetchone()
         self.assertEqual((row['amount_usd'],row['amount_uzs'],row['rate_uzs_per_usd']),(1000,125000,12500))
 
+    def test_debtors_report_and_assignment_to_agent(self):
+        self.db.execute("INSERT INTO clients(id,agent,name,shop_name,phone,address) VALUES(2,2,'Vali','Baraka','+998901112233','Bozor')")
+        self.db.execute("UPDATE products SET price=500 WHERE pack=1")
+        core.record(self.db,2,2,2,'delivery',1,3,0,'',5101,currency='USD')
+        debt=core.client_debt_usd(self.db,2)
+        self.assertGreater(debt,0)
+        d=api.dashboard(self.db,3)
+        row=next(x for x in d['debtors'] if x['id']==2)
+        self.assertEqual(row['debtUsd'],debt)
+        self.assertEqual(row['agentId'],2)
+        self.assertGreaterEqual(d['debtSummary']['totalUsd'],debt)
+        out=self.mutate('assign_debt',requestId='assign-debt-0001',clientId=2,agentId=2,note='Bugun undirilsin')
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['_notify']['agent'],2)
+        self.assertIn('ҚАРЗ УНДИРИШ ТОПШИРИҒИ',out['_notify']['text'])
+        task=self.db.execute("SELECT * FROM collection_tasks WHERE client=2 AND status='open'").fetchone()
+        self.assertIsNotNone(task)
+        self.assertEqual(task['agent'],2)
+        d=api.dashboard(self.db,3)
+        row=next(x for x in d['debtors'] if x['id']==2)
+        self.assertEqual(row['task']['id'],task['id'])
+        self.assertEqual(d['debtSummary']['assignedCount'],1)
+
+    def test_debt_assignment_rejects_debt_free_client(self):
+        self.db.execute("INSERT INTO clients(id,agent,name) VALUES(2,2,'No Debt')")
+        with self.assertRaisesRegex(ValueError,'қарз йўқ'):
+            self.mutate('assign_debt',requestId='assign-debt-0002',clientId=2,agentId=2,note='')
+
     def test_http_authentication_and_commit_before_notification(self):
         import io
         from unittest.mock import MagicMock
