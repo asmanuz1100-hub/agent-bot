@@ -151,13 +151,38 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         for term in (
             'class="report-kpis"','id="reportStockTotal"','id="reportNegativeCount"',
             'class="report-stock-list"','class="report-stock-item"',
-            'Berilgan tovar','Xarajat balansi','Jami qoldiq','Minus qoldiq',
+            'Berilgan tovar','Agent xarajati','Jami qoldiq','Minus qoldiq',
             'products.reduce(function(sum,x)','negative=products.filter',
             'an-bn||String(a.name).localeCompare'
         ):
             self.assertIn(term,self.html)
         self.assertIn('min-height:82px',self.html)
         self.assertIn('qty<0?"red":qty>0?"green":""',self.html)
+
+    def test_premium_agent_report_has_full_finance_product_client_and_trend_analytics(self):
+        for term in (
+            'class="report-hero"','id="reportDeliveryUsd"','id="reportHeroPaid"',
+            'id="reportHeroDebt"','id="reportHeroReturn"','id="reportFlow"',
+            'data-report-trend="deliveryUsd"','data-report-trend="paymentsUsd"',
+            'data-report-trend="visits"','id="reportTrend"','id="reportProducts"',
+            'id="reportClientTotal"','id="reportClientDebt"','id="reportClientBar"',
+            'Mahsulotlar kesimi','Mijozlar holati','Pul harakati','7 kunlik dinamika',
+            'analytics.products&&analytics.products[period]','p.handoverAcceptedUsd',
+            'p.expenseUsd','p.deliveryUsd','p.returnUsd','p.soldQty'
+        ):
+            self.assertIn(term,self.html)
+        self.assertIn('Number(c.agentId)===Number(data.me&&data.me.id)',self.html)
+        self.assertIn('reportTrend="deliveryUsd"',self.html)
+        self.assertIn('if(b.dataset.reportTrend)',self.html)
+
+    def test_agent_report_keeps_stock_and_route_sections_after_analytics_upgrade(self):
+        for term in (
+            'id="reportStockTotal"','id="reportNegativeCount"',
+            'id="productStock"','Agent qoldig‘i',
+            'id="routeSummary"','id="myRoute"','id="routeMap"',
+            'Oxirgi GPS marshrut'
+        ):
+            self.assertIn(term,self.html)
 
     def test_fast_delivery_cart_has_steppers_totals_and_negative_stock_warning(self):
         for term in (
