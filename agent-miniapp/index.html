@@ -266,7 +266,7 @@ function operationStock(pack){
  return Number(p&&p.stock||0);
 }
 function packLine(i){
- var opts=(data.products||[]).map(function(p){var stock=formAction==="return"?Number((operationClient()&&operationClient().stock&&operationClient().stock[String(p.pack)])||0):Number(p.stock||0);return '<option value="'+p.pack+'">'+esc(p.name)+' · '+fmt(p.priceUsd)+' USD · qoldiq '+stock+'</option>'}).join("");
+ var opts=(data.products||[]).map(function(p){return '<option value="'+p.pack+'">'+esc(p.name)+' · '+fmt(p.priceUsd)+' USD</option>'}).join("");
  return '<div class="delivery-row" data-delivery-row="'+i+'"><div class="delivery-row-top"><select name="pack'+i+'" aria-label="Mahsulot">'+opts+'</select>'+(i?'<button type="button" class="delivery-remove" data-remove-delivery="'+i+'">×</button>':'')+'</div><div class="delivery-row-meta"><small data-stock-label="'+i+'">Qoldiq: —</small><small data-price-label="'+i+'">Narx: —</small></div><div class="qty-stepper"><button type="button" class="secondary" data-qty-step="-1" data-qty-target="qty'+i+'">−</button><input id="qty'+i+'" name="qty'+i+'" type="number" min="1" step="1" inputmode="numeric" value="1" required><button type="button" class="secondary" data-qty-step="1" data-qty-target="qty'+i+'">＋</button></div><div class="delivery-line-total">Qator summasi: <b data-line-total="'+i+'">—</b></div></div>';
 }
 function updateDeliveryCart(){
