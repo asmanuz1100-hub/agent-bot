@@ -62,7 +62,8 @@ nav{background:#fff!important;color:#101e39!important}
 #gate{background:#f4f7fd!important}
 #mapShell{overflow:hidden!important;contain:layout paint}#map{width:100%!important;position:relative!important;z-index:0!important;transform:none!important}
 #page-map:not(.active) #mapShell{visibility:hidden!important;pointer-events:none!important}
-.camera-box,.camera-live-wrap,.camera-live,.camera-preview{position:relative;z-index:2}
+body.android-native-camera #page-map{display:none!important;visibility:hidden!important}
+.camera-box,.camera-live-wrap,.camera-live,.camera-preview{position:relative;z-index:2;isolation:isolate}
 @media(prefers-color-scheme:dark){
  html,body,.app{background:#f4f7fd!important;color:#101e39!important}
  .app>header{background:#101e39!important;color:#fff!important}
@@ -109,6 +110,9 @@ var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
 var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
 var $=function(id){return document.getElementById(id)};
+function useNativeAndroidCamera(){
+ return !!((tg&&tg.platform==="android")||/Android/i.test(navigator.userAgent||""));
+}
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function fmtSom(v){return Number(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}
@@ -576,6 +580,13 @@ async function startLiveCamera(){
  if(cameraUploading)return;
  destroyClientMap();
  var statusEl=$("cameraStatus"),fallback=$("fallbackCamera"),wrap=$("cameraLiveWrap"),video=$("cameraLive"),open=$("takePhoto");
+ if(useNativeAndroidCamera()){
+  stopLiveCamera();
+  var input=$("cameraInput");
+  if(statusEl)statusEl.textContent="Android uchun telefon kamerasi ochilmoqda…";
+  if(input){input.value="";input.click();return}
+  notify("Telefon kamerasi ochilmadi. Galereyadan foydalaning.");return
+ }
  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
   if(fallback)fallback.style.display="block";
   if(statusEl)statusEl.textContent="Jonli kamera bu WebView’da mavjud emas. Zaxira tugmadan foydalaning.";
@@ -664,9 +675,13 @@ function openForm(action){
  var h="";
  if(action==="client"){
   clientWizardStep=1;clientProductMode="";
+  var nativeAndroid=useNativeAndroidCamera();
+  var cameraLead=nativeAndroid?"Android Telegram uchun telefonning o‘z kamerasi ochiladi. Bu rejim xarita va kamera GPU qatlamlari to‘qnashuvini chetlab o‘tadi.":"Orqa kamerani Mini App ichida ochib, do‘kon yoki vitrinasini real vaqtda suratga oling.";
+  var cameraLiveHtml=nativeAndroid?"":'<div id="cameraLiveWrap" class="camera-live-wrap"><video id="cameraLive" class="camera-live" autoplay muted playsinline></video><div class="camera-live-actions"><button class="primary" type="button" id="captureLivePhoto">● Suratga olish</button><button class="secondary" type="button" id="closeLiveCamera">✕ Kamerani yopish</button></div></div>';
+  var cameraBadge=nativeAndroid?"ANDROID CAMERA":"LIVE CAMERA";
   h='<div class="client-wizard-progress"><span data-step="1">📍<br>Joy</span><span data-step="2">📷<br>Foto</span><span data-step="3">📞<br>Telefon</span><span data-step="4">🏪<br>Mijoz</span><span data-step="5">📦<br>Mahsulot</span></div>'+
   '<div class="wizard-step" data-step="1"><div class="card wizard-card"><span class="wizard-number">1</span><h3>Do‘kon lokatsiyasi</h3><p class="lead">Bitta bosish bilan hozirgi joyni oling. Bu nuqta xaritada mijoz manzili bo‘ladi.</p><button class="primary wizard-big" type="button" id="getLocation">📍 Joriy lokatsiyani olish</button><div id="locationStatus" class="wizard-location-state">Lokatsiya hali olinmagan.</div><div style="margin-top:10px">'+field("lat","Latitude","number","40.5400",true)+field("lon","Longitude","number","70.9400",true)+'</div></div></div>'+
-  '<div class="wizard-step" data-step="2"><div class="card wizard-card"><span class="wizard-number">2</span><h3>Do‘kon fotosi</h3><p class="lead">Orqa kamerani Mini App ichida ochib, do‘kon yoki vitrinasini real vaqtda suratga oling.</p><div class="camera-box"><input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"><input id="galleryInput" type="file" accept="image/*" style="display:none"><input id="photoFileId" name="photoFileId" type="hidden" value=""><div id="cameraLiveWrap" class="camera-live-wrap"><video id="cameraLive" class="camera-live" autoplay muted playsinline></video><div class="camera-live-actions"><button class="primary" type="button" id="captureLivePhoto">● Suratga olish</button><button class="secondary" type="button" id="closeLiveCamera">✕ Kamerani yopish</button></div></div><img id="cameraPreview" class="camera-preview" alt="Olingan do‘kon fotosi"><button class="primary wizard-big" type="button" id="takePhoto">📷 Kamerani ochish</button><button class="secondary camera-gallery" type="button" id="galleryPhoto">🖼 Galereyadan tanlash</button><button class="secondary camera-fallback" type="button" id="fallbackCamera">Telefon kamerasi · zaxira</button><div class="camera-state"><small id="cameraStatus">Kamera yoki galereyadan foto tanlang.</small><span class="pill">LIVE CAMERA</span></div></div></div></div>'+
+  '<div class="wizard-step" data-step="2"><div class="card wizard-card"><span class="wizard-number">2</span><h3>Do‘kon fotosi</h3><p class="lead">'+cameraLead+'</p><div class="camera-box"><input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"><input id="galleryInput" type="file" accept="image/*" style="display:none"><input id="photoFileId" name="photoFileId" type="hidden" value="">'+cameraLiveHtml+'<img id="cameraPreview" class="camera-preview" alt="Olingan do‘kon fotosi"><button class="primary wizard-big" type="button" id="takePhoto">📷 Kamerani ochish</button><button class="secondary camera-gallery" type="button" id="galleryPhoto">🖼 Galereyadan tanlash</button><button class="secondary camera-fallback" type="button" id="fallbackCamera">Telefon kamerasi · zaxira</button><div class="camera-state"><small id="cameraStatus">Kamera yoki galereyadan foto tanlang.</small><span class="pill">'+cameraBadge+'</span></div></div></div></div>'+
   '<div class="wizard-step" data-step="3"><div class="card wizard-card"><span class="wizard-number">3</span><h3>Telefon raqami</h3><p class="lead">Asosiy raqamni kiriting. Kerak bo‘lsa 2–3 ta raqamni vergul bilan yozish mumkin.</p><label for="phone">Telefon</label><input class="wizard-input" id="phone" name="phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" required autocomplete="tel"></div></div>'+
   '<div class="wizard-step" data-step="4"><div class="card wizard-card"><span class="wizard-number">4</span><h3>Mijoz va do‘kon</h3><p class="lead">Faqat asosiy ma’lumotlarni kiriting. Manzil va izoh ixtiyoriy.</p><label for="person">Mijoz ismi</label><input class="wizard-input" id="person" name="person" type="text" placeholder="Ism familiya" required autocomplete="name"><label for="shop">Do‘kon nomi</label><input class="wizard-input" id="shop" name="shop" type="text" placeholder="Masalan, Baraka do‘koni" required autocomplete="organization">'+field("address","Mo‘ljal / manzil (ixtiyoriy)","text","Masalan, bozor ro‘parasida",false)+field("note","Izoh (ixtiyoriy)","text","Mijoz ehtiyoji yoki kelishuv",false)+'</div></div>'+
   '<div class="wizard-step" data-step="5"><div class="card wizard-card"><span class="wizard-number">5</span><h3>Mahsulot</h3><p class="lead">Mijozga hozir mahsulot berdingizmi?</p><div class="grid2"><button type="button" class="secondary wizard-choice" data-client-product-mode="delivery"><b>📦 Mahsulot berdim</b><small>Ombordan chiqadi va mijoz qarzi yoziladi</small></button><button type="button" class="secondary wizard-choice" data-client-product-mode="none"><b>⏭ Hozircha bermadim</b><small>Mijoz xaritada prospekt sifatida saqlanadi</small></button></div><div id="clientProductItems" class="wizard-product-box"><div id="clientItems">'+clientPackLine(0)+'</div><button type="button" class="secondary" id="clientAddItem">＋ Yana mahsulot</button></div><div id="clientProspectOptions" class="wizard-product-box"><label>Holati</label><select name="status" id="status"><option value="interested">Taklif berilgan</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option></select>'+field("followup","Keyingi tashrif sanasi","date","",false)+'</div></div></div>'+
