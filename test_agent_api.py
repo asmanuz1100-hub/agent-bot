@@ -119,6 +119,27 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(snap['reportAnalytics'],{})
         self.assertIn('cashAvailableUsd',snap['summary'])
 
+    def test_collection_tasks_appear_for_agent_and_close_when_debt_paid(self):
+        self.add_client('collection_task_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        core.record(self.db,2,2,cid,'delivery',1,2,0,'',9701,currency='USD')
+        debt=core.client_debt_usd(self.db,cid)
+        self.db.execute("""INSERT INTO collection_tasks(client,agent,cashier,debt_usd,note,status,created_ts)
+            VALUES(?,?,?,?,?,'open',?)""",(cid,2,3,debt,'Bugun undirilsin',self.now-10))
+        snap=agent_api.quick_snapshot(self.db,2,self.now)
+        self.assertEqual(len(snap['collectionTasks']),1)
+        task=snap['collectionTasks'][0]
+        self.assertEqual(task['clientId'],cid)
+        self.assertEqual(task['currentDebtUsd'],debt/100)
+        self.assertIn('Bugun undirilsin',task['note'])
+        self.live_shift()
+        agent_api.mutate(self.db,2,'payment',{'clientId':cid,'currency':'USD','amount':str(debt/100)},
+                         'collection_pay_123',self.now)
+        row=self.db.execute("SELECT status,completed_ts FROM collection_tasks WHERE client=?",(cid,)).fetchone()
+        self.assertEqual(row['status'],'done')
+        self.assertTrue(row['completed_ts'])
+        self.assertEqual(agent_api.quick_snapshot(self.db,2,self.now)['collectionTasks'],[])
+
     def test_add_client_is_real_gps_required_and_idempotent(self):
         first=self.add_client()
         self.db.commit()
