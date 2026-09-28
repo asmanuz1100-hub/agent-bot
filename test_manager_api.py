@@ -301,6 +301,40 @@ class ManagerApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             manager_api.client_edit_preview(self.db,402,{'name':'Old'})
 
+
+    def test_client_delete_archives_profile_and_preserves_history(self):
+        self.db.execute("""INSERT INTO clients(id,agent,name,shop_name,phone,address,region,comment,created_ts,map_only)
+                         VALUES(450,2,'Delete Person','Delete Shop','+998904500000','Qo‘qon','Furqat','note',?,0)""",
+                        (self.today,))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,amount_usd,ts)
+                         VALUES(2,2,450,'delivery',5000,?)""",(self.today+10,))
+        self.db.execute("""INSERT INTO client_visits(client,actor,status,note,ts)
+                         VALUES(450,2,'active','visit',?)""",(self.today+20,))
+        self.db.execute("""INSERT INTO collection_tasks(client,agent,cashier,debt_usd,note,status,created_ts)
+                         VALUES(450,2,3,5000,'collect','open',?)""",(self.today+30,))
+        preview=manager_api.client_delete_preview(self.db,450)
+        self.assertEqual(preview['name'],'Delete Shop')
+        self.assertEqual(preview['debtUsd'],50)
+        self.assertEqual(preview['eventCount'],1)
+        self.assertEqual(preview['visitCount'],1)
+        self.assertEqual(preview['openTasks'],1)
+        out=manager_api.client_delete_commit(self.db,1,450,self.now)
+        self.assertTrue(out['ok'])
+        self.assertIsNone(self.db.execute("SELECT 1 FROM clients WHERE id=450").fetchone())
+        archived=self.db.execute("SELECT * FROM deleted_clients WHERE id=450").fetchone()
+        self.assertIsNotNone(archived)
+        self.assertEqual(archived['shop_name'],'Delete Shop')
+        self.assertEqual(archived['deleted_by'],1)
+        self.assertEqual(archived['debt_usd'],5000)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE client=450").fetchone()[0],1)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM client_visits WHERE client=450").fetchone()[0],1)
+        self.assertEqual(self.db.execute("SELECT status FROM collection_tasks WHERE client=450").fetchone()[0],'cancelled')
+        audit=self.db.execute("SELECT field,new_value FROM client_edits WHERE client=450 ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertEqual(audit['field'],'__deleted__')
+        self.assertEqual(audit['new_value'],'Arxivga o‘chirildi')
+        with self.assertRaisesRegex(ValueError,'topilmadi'):
+            manager_api.client_delete_preview(self.db,450)
+
     def test_agent_detail_combines_gps_stock_cash_permissions_and_periods(self):
         self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
                          VALUES(501,2,'Agent buyer','+998905010000',?,0)""",(self.today+100,))
