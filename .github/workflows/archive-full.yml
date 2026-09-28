@@ -1,0 +1,52 @@
+name: Build full ASMAN backup ZIP
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch source branches and assemble backup
+        run: |
+          git fetch origin main manager-miniapp-test agent-miniapp-test
+          mkdir -p ASMAN-agent-bot-full-backup/backend-main
+          mkdir -p ASMAN-agent-bot-full-backup/rahbar-miniapp
+          mkdir -p ASMAN-agent-bot-full-backup/agent-miniapp
+
+          git archive origin/main | tar -x -C ASMAN-agent-bot-full-backup/backend-main
+          git archive origin/manager-miniapp-test manager-miniapp | tar -x -C ASMAN-agent-bot-full-backup/rahbar-miniapp
+          git archive origin/agent-miniapp-test agent-miniapp | tar -x -C ASMAN-agent-bot-full-backup/agent-miniapp
+
+          rm -f ASMAN-agent-bot-full-backup/backend-main/.github/workflows/archive-full.yml
+
+          {
+            echo "ASMAN Agent Bot full source backup"
+            echo "Created (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Main backend: $(git rev-parse origin/main)"
+            echo "Rahbar Mini App: $(git rev-parse origin/manager-miniapp-test)"
+            echo "Agent Mini App: $(git rev-parse origin/agent-miniapp-test)"
+            echo
+            echo "Includes backend, cashier, tests, Docker/VPS migration files,"
+            echo "current Rahbar Mini App and current Agent Mini App."
+            echo "Secrets are intentionally not included. Use .env.example."
+          } > ASMAN-agent-bot-full-backup/BACKUP_INFO.txt
+
+      - name: Upload complete backup ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASMAN-agent-bot-full-backup
+          path: ASMAN-agent-bot-full-backup/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
