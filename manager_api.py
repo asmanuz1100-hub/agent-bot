@@ -633,6 +633,64 @@ def client_edit_preview(db, client_id, values):
             "values":clean}
 
 
+def client_delete_preview(db, client_id):
+    """Describe an admin-only client archive/delete without mutating data."""
+    try:
+        client_id=int(client_id)
+    except (TypeError,ValueError):
+        raise ValueError("Mijoz ID noto‘g‘ri.")
+    c=db.execute("SELECT * FROM clients WHERE id=?",(client_id,)).fetchone()
+    if not c:
+        raise ValueError("Mijoz topilmadi.")
+    debt=int(core.client_debt_usd(db,client_id) or 0)
+    event_count=int(db.execute("SELECT COUNT(*) FROM events WHERE client=?",(client_id,)).fetchone()[0] or 0)
+    visit_count=int(db.execute("SELECT COUNT(*) FROM client_visits WHERE client=?",(client_id,)).fetchone()[0] or 0)
+    open_tasks=int(db.execute("SELECT COUNT(*) FROM collection_tasks WHERE client=? AND status='open'",(client_id,)).fetchone()[0] or 0)
+    title=c["shop_name"] or c["name"] or f"Mijoz #{client_id}"
+    return {
+        "clientId":client_id,"name":title,"phone":c["phone"] or "",
+        "agentId":int(c["agent"]),"debtUsd":round(debt/100,2),
+        "eventCount":event_count,"visitCount":visit_count,"openTasks":open_tasks,
+        "warning":"Mijoz aktiv ro‘yxat va xaritadan o‘chadi. Profil arxivda, savdo/to‘lov/tashrif tarixi bazada saqlanadi."
+    }
+
+
+def client_delete_commit(db, actor, client_id, now=None):
+    """Archive the client profile then remove it from active clients.
+
+    Ledger events, visits and edit history intentionally remain untouched.
+    This is admin-only at the HTTP/API boundary.
+    """
+    preview=client_delete_preview(db,client_id)
+    client_id=preview["clientId"]
+    actor=int(actor)
+    now=int(time.time() if now is None else now)
+    c=db.execute("SELECT * FROM clients WHERE id=?",(client_id,)).fetchone()
+    db.execute("""INSERT INTO deleted_clients(
+        id,agent,name,phone,address,region,lat,lon,photo,shop_name,comment,payment_due,
+        created_ts,map_only,deleted_by,deleted_ts,debt_usd,event_count,visit_count)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET
+          agent=excluded.agent,name=excluded.name,phone=excluded.phone,address=excluded.address,
+          region=excluded.region,lat=excluded.lat,lon=excluded.lon,photo=excluded.photo,
+          shop_name=excluded.shop_name,comment=excluded.comment,payment_due=excluded.payment_due,
+          created_ts=excluded.created_ts,map_only=excluded.map_only,deleted_by=excluded.deleted_by,
+          deleted_ts=excluded.deleted_ts,debt_usd=excluded.debt_usd,
+          event_count=excluded.event_count,visit_count=excluded.visit_count""",
+        (client_id,int(c["agent"]),c["name"],c["phone"],c["address"],c["region"] or "",
+         c["lat"],c["lon"],c["photo"],c["shop_name"],c["comment"] or "",c["payment_due"],
+         c["created_ts"],int(c["map_only"] or 0),actor,now,
+         int(round(preview["debtUsd"]*100)),preview["eventCount"],preview["visitCount"]))
+    db.execute("""INSERT INTO client_edits(client,actor,field,old_value,new_value,ts)
+                  VALUES(?,?,?,?,?,?)""",
+               (client_id,actor,"__deleted__",preview["name"],"Arxivga o‘chirildi",now))
+    db.execute("""UPDATE collection_tasks SET status='cancelled',completed_ts=?
+                  WHERE client=? AND status='open'""",(now,client_id))
+    db.execute("DELETE FROM clients WHERE id=?",(client_id,))
+    return {"ok":True,**preview,"deletedTs":now,
+            "message":"Mijoz aktiv ro‘yxatdan o‘chirildi. Tarix va arxiv saqlandi."}
+
+
 
 AGENT_FEATURE_LABELS={
     'client':'Mijoz qo‘shish','clients':'Mijozlar','delivery':'Tovar berish',
