@@ -332,10 +332,10 @@ def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
     rows=[keys[i:i+2] for i in range(0,len(keys),2)]
     r=role(db,u)
-    if r=='admin' and MANAGER_MINIAPP_URL:
-        # Telegram reply-keyboard Web Apps can omit signed initData. Only
-        # inline-keyboard web_app launches may access the real admin dashboard.
-        rows.insert(0,['📱 Раҳбар Mini App'])
+    if r=='admin':
+        # Keep admin launchers independent: removing Rahbar tests must not hide Agent apps.
+        if MANAGER_MINIAPP_URL:
+            rows.insert(0,['📱 Раҳбар Mini App'])
         if MANAGER_PREMIUM_TEST_URL:
             rows.insert(1,['🧪 Rahbar Premium TEST'])
         if AGENT_MINIAPP_URL:
