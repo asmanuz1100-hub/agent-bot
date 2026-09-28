@@ -754,6 +754,15 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         if len(note)>1000:raise ValueError("Izoh juda uzun.")
         values={"shop_name":shop,"name":person,"phone":" · ".join(phones),
                 "address":address,"comment":note}
+        if "lat" in payload or "lon" in payload:
+            lat,lon=_coord(payload.get("lat"),payload.get("lon"))
+            if lat is None:raise ValueError("Mijoz lokatsiyasining ikkala koordinatasini kiriting.")
+            values.update(lat=lat,lon=lon)
+        photo_file=str(payload.get("photoFileId") or "").strip()
+        if photo_file:
+            if not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",photo_file):
+                raise ValueError("Mijoz fotosi identifikatori noto‘g‘ri.")
+            values["photo"]=photo_file
         core.edit_client(db,agent,cid,values)
         return {"ok":True,"clientId":cid,
                 "message":"Mijoz ma’lumotlari yangilandi. Savdo va qarz tarixi o‘zgarmadi."}
