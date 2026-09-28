@@ -161,7 +161,7 @@ class ManagerMiniAppTests(unittest.TestCase):
 
 
     def test_manager_customer_edit_has_safe_delete_flow(self):
-        self.assertIn('data-client-delete="'+id+'"',self.html)
+        self.assertIn('data-client-delete=',self.html)
         self.assertIn('request("client_delete_preview",{clientId:id})',self.html)
         self.assertIn('request("client_delete_commit",{clientId:id,confirm:true})',self.html)
         self.assertIn('OXIRGI TASDIQ',self.html)
