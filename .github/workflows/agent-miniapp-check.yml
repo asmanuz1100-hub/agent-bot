@@ -1,0 +1,27 @@
+name: Agent Mini App JS Check
+on:
+  push:
+    branches: [agent-miniapp-test]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract inline app script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text=Path("agent-miniapp/index.html").read_text(encoding="utf-8")
+          scripts=re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", text, flags=re.S|re.I)
+          inline=[s for s in scripts if s.strip()]
+          if not inline:
+              raise SystemExit("No inline script found")
+          Path("/tmp/agent-inline.js").write_text(inline[-1], encoding="utf-8")
+          PY
+      - name: Check JavaScript syntax
+        run: |
+          node --check /tmp/agent-inline.js
+          node --check agent-miniapp/offline.js
+          node --check agent-miniapp/sw.js
