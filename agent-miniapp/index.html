@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4f7fd">
 <title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+:root{color-scheme:light}
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
 *{box-sizing:border-box}html{background:var(--tg-bg)}html,body{margin:0;background:var(--tg-bg);color:var(--tg-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:14px;-webkit-tap-highlight-color:transparent}body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}
@@ -375,17 +376,22 @@ function renderReports(){
 // Both assets must finish before Leaflet measures and positions map panes.
 // Serve the pinned distribution locally: a CDN CSS failure must not become a broken map.
 function loadLeaflet(){
- if(window.L)return Promise.resolve(window.L);
+ if(window.L&&document.querySelector('link[data-leaflet-ready="true"]'))return Promise.resolve(window.L);
  if(mapPromise)return mapPromise;
  mapPromise=new Promise(function(resolve,reject){
+  var cssReady=false,jsReady=!!window.L;
+  function done(){if(cssReady&&jsReady)resolve(window.L)}
   var css=document.createElement("link");
   css.rel="stylesheet";
   css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  css.onload=function(){css.dataset.leafletReady="true";cssReady=true;done()};
+  css.onerror=function(){css.remove();reject(Error("Xarita uslublari yuklanmadi."))};
   document.head.appendChild(css);
+  if(jsReady)return;
   var js=document.createElement("script");
   js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
   js.async=true;
-  js.onload=function(){window.L?resolve(window.L):reject(Error("Xarita kutubxonasi mavjud emas."))};
+  js.onload=function(){if(!window.L){reject(Error("Xarita kutubxonasi mavjud emas."));return}jsReady=true;done()};
   js.onerror=function(){reject(Error("Xarita yuklanmadi."))};
   document.body.appendChild(js);
  }).catch(function(e){mapPromise=null;throw e});
@@ -442,7 +448,7 @@ async function renderMap(){
  try{
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
-   map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.54,70.94],9);
+   map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:false}).setView([40.54,70.94],9);
    installClientMapTiles(L);
    mapPins=L.featureGroup().addTo(map)
   }
@@ -897,7 +903,7 @@ async function showMyRoute(force){
   }
   var L=await loadLeaflet();
   if(!routeMap){
-   routeMap=L.map("routeMap",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([r.points[0].lat,r.points[0].lon],12);
+   routeMap=L.map("routeMap",{zoomControl:true,attributionControl:true,preferCanvas:false}).setView([r.points[0].lat,r.points[0].lon],12);
    installManagerParityTiles(L,routeMap);
    routeLine=L.featureGroup().addTo(routeMap);
   }
