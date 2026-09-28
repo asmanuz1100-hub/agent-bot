@@ -880,7 +880,9 @@ function openForm(action){
     '<div class="title">📷 Mijoz rasmi</div><div class="camera-box"><input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"><input id="galleryInput" type="file" accept="image/*" style="display:none"><input id="photoFileId" name="photoFileId" type="hidden" value="">'+cameraLiveHtml+
     '<img id="cameraPreview" class="camera-preview'+((detailData&&detailData.photoUrl)||editClient.photoUrl?' show':'')+'"'+((detailData&&detailData.photoUrl)||editClient.photoUrl?' src="'+esc((detailData&&detailData.photoUrl)||editClient.photoUrl)+'"':'')+' alt="Mijoz rasmi">'+
     '<button class="primary wizard-big" type="button" id="takePhoto">📷 Kamerani ochish</button><button class="secondary camera-gallery" type="button" id="galleryPhoto">🖼 Galereyadan tanlash</button><button class="secondary camera-fallback" type="button" id="fallbackCamera">Telefon kamerasi · zaxira</button><div class="camera-state"><small id="cameraStatus">Yangi rasm tanlamasangiz avvalgisi saqlanadi.</small><span class="pill">LIVE CAMERA</span></div></div>'+
-    '<p class="edit-note">Savdo, to‘lov, qarz va mahsulot tarixi o‘zgarmaydi. Faqat mijoz profil ma’lumotlari yangilanadi.</p></div>';
+    '<p class="edit-note">Savdo, to‘lov, qarz va mahsulot tarixi o‘zgarmaydi. Faqat mijoz profil ma’lumotlari yangilanadi.</p>'+
+    (data.adminMode?'<button type="button" id="adminDeleteClient" class="secondary" style="width:100%;margin-top:14px;background:#fff0f2;color:#bd2f46;border-color:#ffc8d1">🗑 Mijozni o‘chirish · faqat admin</button>':'')+
+    '</div>';
  }else{
   if(action!=="handover"&&action!=="agent_expense")h=clientSelect();
   if(action==="visit")h+='<label>Natija</label><select name="status"><option value="interested">Taklif berildi</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option><option value="active">Tovar olgan</option></select>'+field("note","Suhbat izohi","text","Nima kelishildi?",true)+field("followup","Keyingi tashrif sanasi","date","",false);
@@ -983,10 +985,24 @@ async function saveForm(e){
  finally{busy=false;$("submitForm").disabled=false}
 }
 async function refreshAfterWrite(){data=await request("quick_snapshot");fullDataLoaded=false;applySnapshotUi()}
+async function deleteAdminClient(id){
+ if(!(data&&data.adminMode)){notify("Mijozni faqat admin o‘chira oladi.");return}
+ if(navigator.onLine===false){notify("Mijozni o‘chirish uchun internet kerak.");return}
+ try{
+  var p=await request("client_delete_preview",{clientId:id});
+  var info=p.name+"\nQarz: "+fmt(p.debtUsd||0)+" USD\nTarix: "+Number(p.eventCount||0)+" operatsiya, "+Number(p.visitCount||0)+" tashrif.";
+  if(!window.confirm("Mijozni aktiv ro‘yxatdan o‘chirasizmi?\n\n"+info+"\n\n"+p.warning))return;
+  if(!window.confirm("OXIRGI TASDIQ\n\n"+p.name+" mijozini o‘chirishni tasdiqlaysizmi?"))return;
+  await request("client_delete_commit",{clientId:id,confirm:true});
+  selected=null;detailData=null;await refreshAfterWrite();go("clients");
+  notify("Mijoz o‘chirildi · tarix arxivda saqlandi");
+ }catch(err){notify(err.message||"Mijozni o‘chirib bo‘lmadi.")}
+}
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){go(b.dataset.page);return}
  if(b.id==="detailBack"){go(detailBackPage||"clients");return}
+ if(b.id==="adminDeleteClient"){deleteAdminClient(selected);return}
  if(b.dataset.client){var sourcePage=current;selected=Number(b.dataset.client);if(sourcePage!=="detail")detailBackPage=sourcePage;go("detail");loadClientDetail(selected);return}
  if(b.dataset.action){openForm(b.dataset.action);return}
  if(b.dataset.filter){if(b.dataset.target==="mapFilters"){mapFilter=b.dataset.filter;renderMap()}else{filter=b.dataset.filter;renderClients()}return}
