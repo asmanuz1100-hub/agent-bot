@@ -663,6 +663,108 @@ body:before{
   box-shadow:0 6px 18px rgba(74,54,190,.28);pointer-events:none
 }
 
+
+/* =========================================================
+   Telegram-native runtime + adaptive premium motion
+   ========================================================= */
+:root{
+  --app-vh:100vh;
+  --app-safe-top:max(var(--tg-content-safe-area-inset-top,0px),env(safe-area-inset-top,0px));
+  --app-safe-bottom:max(var(--tg-content-safe-area-inset-bottom,0px),env(safe-area-inset-bottom,0px));
+  --app-safe-left:max(var(--tg-content-safe-area-inset-left,0px),env(safe-area-inset-left,0px));
+  --app-safe-right:max(var(--tg-content-safe-area-inset-right,0px),env(safe-area-inset-right,0px));
+}
+html,body{min-height:var(--app-vh);overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+body{
+  padding-left:var(--app-safe-left)!important;
+  padding-right:var(--app-safe-right)!important;
+  padding-bottom:calc(116px + var(--app-safe-bottom))!important
+}
+header{padding-top:calc(17px + var(--app-safe-top))!important}
+nav{bottom:calc(8px + var(--app-safe-bottom))!important}
+#map{height:calc(var(--app-vh) - 255px - var(--app-safe-top) - var(--app-safe-bottom))!important}
+
+@keyframes ptPageIn{from{opacity:0;transform:translate3d(0,10px,0) scale(.995)}to{opacity:1;transform:none}}
+@keyframes ptCardIn{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:none}}
+@keyframes ptLivePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.78);opacity:.58}}
+@keyframes ptHeroFloat{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-8px,6px,0)}}
+@keyframes ptBarRise{from{transform:scaleY(.06);opacity:.35}to{transform:scaleY(1);opacity:1}}
+@keyframes ptSheetUp{from{opacity:0;transform:translate3d(0,28px,0)}to{opacity:1;transform:none}}
+@keyframes ptFresh{0%{filter:saturate(.96)}45%{filter:saturate(1.08)}100%{filter:none}}
+
+.page-content.active{animation:ptPageIn .34s cubic-bezier(.22,.72,.2,1) both;will-change:transform,opacity}
+.exec-kpi-card,.exec-attention,.exec-shortcuts button,.customer-card,.txn,#agent-list .agent-card,.report-kpi,.analysis-insight{
+  animation:ptCardIn .38s cubic-bezier(.22,.72,.2,1) both;will-change:transform,opacity
+}
+.exec-kpi-card:nth-child(2),.customer-card:nth-child(2),.txn:nth-child(2){animation-delay:.035s}
+.exec-kpi-card:nth-child(3),.customer-card:nth-child(3),.txn:nth-child(3){animation-delay:.07s}
+.exec-kpi-card:nth-child(4),.customer-card:nth-child(4),.txn:nth-child(4){animation-delay:.105s}
+.exec-live i{animation:ptLivePulse 1.65s ease-in-out infinite}
+.exec-hero:before,.cash-exec-hero:after{animation:ptHeroFloat 9s ease-in-out infinite}
+.bar i{transform-origin:bottom;animation:ptBarRise .65s cubic-bezier(.2,.72,.22,1) both}
+.product-pie{animation:ptCardIn .46s cubic-bezier(.2,.72,.22,1) both}
+.map-card{animation:ptCardIn .28s cubic-bezier(.2,.72,.22,1) both}
+.sheet-bg.open .sheet{animation:ptSheetUp .26s cubic-bezier(.2,.76,.22,1) both}
+body.data-fresh .page-content.active{animation:ptFresh .6s ease both}
+
+button,.chip,.customer-card,.txn,#agent-list .agent-card{
+  transition:transform .14s ease,background-color .18s ease,border-color .18s ease,color .18s ease,opacity .18s ease!important
+}
+button:active,.chip:active,.customer-card:active,#agent-list .agent-card:active{transform:scale(.976)!important}
+
+body.tg-dark{
+  --pt-bg:#071426;--pt-card:#0d2039;--pt-line:#1b3556;--pt-text:#eef5ff;--pt-muted:#91a7c4;
+  background:linear-gradient(180deg,#061427,#081a30 45%,#071426 100%)!important
+}
+body.tg-dark .exec-kpi-card,
+body.tg-dark .exec-attention,
+body.tg-dark .exec-shortcuts button,
+body.tg-dark .customer-card,
+body.tg-dark .customer-advanced-filter,
+body.tg-dark .cash-kpi,
+body.tg-dark .txn,
+body.tg-dark #agent-list .agent-card,
+body.tg-dark .analysis-insight,
+body.tg-dark .analysis-status-card,
+body.tg-dark .analysis-map-card,
+body.tg-dark .report-kpi,
+body.tg-dark .report-finance-strip,
+body.tg-dark .report-product-section,
+body.tg-dark .exec-chart-card,
+body.tg-dark .report-agent-section,
+body.tg-dark .sheet{
+  background:#0d2039!important;border-color:#1b3556!important;color:#eef5ff!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.18)!important
+}
+body.tg-dark .exec-kpi-card strong,
+body.tg-dark .exec-section-title h3,
+body.tg-dark .customer-copy b,
+body.tg-dark .txn-main b,
+body.tg-dark .agent-card b,
+body.tg-dark .detail-row b,
+body.tg-dark .sheet-head h3{color:#eef5ff!important}
+body.tg-dark .exec-kpi-card small,
+body.tg-dark .exec-kpi-card em,
+body.tg-dark .customer-copy small,
+body.tg-dark .txn-main small,
+body.tg-dark .agent-card small,
+body.tg-dark .detail-row span{color:#91a7c4!important}
+body.tg-dark #customer-search,
+body.tg-dark .customer-filter-grid select{background:#0b1c32!important;color:#eef5ff!important;border-color:#1b3556!important}
+body.tg-dark nav{background:linear-gradient(135deg,rgba(2,13,29,.98),rgba(5,30,64,.98))!important}
+
+:focus-visible{outline:2px solid #5da2ff!important;outline-offset:2px!important}
+body.low-motion *,body.low-motion *:before,body.low-motion *:after{
+  animation-duration:.001ms!important;animation-iteration-count:1!important;
+  transition-duration:.001ms!important;scroll-behavior:auto!important
+}
+body.low-motion header,body.low-motion nav,body.low-motion .exec-cash-main,body.low-motion .exec-cash-pending{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+
 </style>
 </head>
 <body class="pb-24">
@@ -1034,11 +1136,31 @@ function showManagerSettings(){
  $("settings-map-clients").checked=!!prefs.showMapClients;
 }
 
+function haptic(kind,type){
+ if(!tg||!tg.HapticFeedback)return;
+ try{
+  if(kind==="selection")tg.HapticFeedback.selectionChanged();
+  else if(kind==="notification")tg.HapticFeedback.notificationOccurred(type||"success");
+  else tg.HapticFeedback.impactOccurred(type||"light")
+ }catch(e){}
+}
 function toast(msg){var el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(toast.timer);toast.timer=setTimeout(function(){el.style.display="none"},2500)}
 function gate(title,msg){$("auth-title").textContent=title;$("auth-message").textContent=msg;$("auth-gate").classList.remove("hidden");state.ready=false}
 function clearPeriodMap(){if(periodMap){periodMap.remove();periodMap=null}}
-function openSheet(title,body){clearPeriodMap();periodDetailToken++;$("sheet-title").textContent=title;$("sheet-body").innerHTML=body;$("sheet-bg").classList.add("open")}
-function closeSheet(){periodDetailToken++;clearPeriodMap();$("sheet-bg").classList.remove("open")}
+function syncTelegramBack(){
+ if(!tg||!tg.BackButton)return;
+ try{if($("sheet-bg").classList.contains("open")||state.page!=="home")tg.BackButton.show();else tg.BackButton.hide()}catch(e){}
+}
+function openSheet(title,body){
+ clearPeriodMap();periodDetailToken++;$("sheet-title").textContent=title;$("sheet-body").innerHTML=body;
+ $("sheet-bg").classList.add("open");haptic("impact","soft");syncTelegramBack()
+}
+function closeSheet(){periodDetailToken++;clearPeriodMap();$("sheet-bg").classList.remove("open");syncTelegramBack()}
+function handleTelegramBack(){
+ if($("sheet-bg").classList.contains("open")){closeSheet();return}
+ if(state.page!=="home"){switchPage("home");return}
+ try{if(tg&&tg.BackButton)tg.BackButton.hide()}catch(e){}
+}
 async function request(action,arg){
  if(!tg||!tg.initData){throw Error("Haqiqiy ma’lumotlarni ko‘rish uchun Telegram botga /start yuboring, «📱 Rahbar Mini App»ni bosing va chatdagi «Rahbar panelini ochish» tugmasidan kiring. Oddiy brauzer havolasi orqali kirish yopiq.")}
  var controller=new AbortController();var timeout=setTimeout(function(){controller.abort()},60000);
@@ -1087,14 +1209,27 @@ async function loadDashboard(){
   if(data.clientsTruncated)toast("Mijozlar ko‘p: ro‘yxatda dastlabki 5000 ta ko‘rsatilgan.");
   renderCustomers();renderCash();renderReport();renderAgentList();
   if(state.page==="map")initMap();
- }catch(e){gate("Kirish yoki ma’lumot xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
+  document.body.classList.remove("data-fresh");void document.body.offsetWidth;document.body.classList.add("data-fresh");
+  clearTimeout(loadDashboard.freshTimer);loadDashboard.freshTimer=setTimeout(function(){document.body.classList.remove("data-fresh")},650);
+  haptic("notification","success");syncTelegramBack();
+ }catch(e){haptic("notification","error");gate("Kirish yoki ma’lumot xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
  finally{refreshing=false;$("refresh-data").disabled=false}
 }
 function switchPage(id){
- if(!state.ready)return;
- state.page=id;document.querySelectorAll(".page-content").forEach(function(p){p.classList.toggle("active",p.id==="page-"+id)});
- document.querySelectorAll("nav button[data-page]").forEach(function(b){var active=b.dataset.page===id;b.classList.toggle("active",active);b.classList.toggle("text-blue-600",active);b.classList.toggle("text-gray-400",!active)});
- $("header-title").textContent=titles[id]||"ASMAN";window.scrollTo(0,0);
+ if(!state.ready||!titles[id])return;
+ state.page=id;
+ document.querySelectorAll(".page-content").forEach(function(p){
+  var active=p.id==="page-"+id;p.classList.toggle("active",active);
+  if(active){p.style.animation="none";void p.offsetWidth;p.style.animation=""}
+ });
+ document.querySelectorAll("nav button[data-page]").forEach(function(b){
+  var active=b.dataset.page===id;b.classList.toggle("active",active);
+  b.classList.toggle("text-blue-600",active);b.classList.toggle("text-gray-400",!active)
+ });
+ $("header-title").textContent=titles[id]||"ASMAN";
+ try{if(tg&&tg.hideKeyboard&&tg.isVersionAtLeast&&tg.isVersionAtLeast("9.1"))tg.hideKeyboard()}catch(e){}
+ window.scrollTo({top:0,left:0,behavior:document.body.classList.contains("low-motion")?"auto":"smooth"});
+ haptic("selection");syncTelegramBack();
  if(id==="map")initMap();if(id==="customers")renderCustomers();if(id==="cash")renderCash();if(id==="report")renderReport();
 }
 window.switchPage=switchPage;
