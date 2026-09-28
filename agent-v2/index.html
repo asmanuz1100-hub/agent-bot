@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
     <title>ASMAN · Agent V2 TEST — Manager Base</title>
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+:root{color-scheme:light}
 :root{--tg-bg:var(--tg-theme-bg-color,#f6f8fb);--tg-text:var(--tg-theme-text-color,#111827);--blue:#2563eb;--muted:#9ca3af;--line:#e5e7eb}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--tg-bg);color:var(--tg-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
 body{padding-bottom:88px}button,input{font:inherit}button{cursor:pointer}.page-content{display:none}.page-content.active{display:block}#map{height:calc(100dvh - 150px);min-height:430px;width:100%;z-index:10;background:linear-gradient(135deg,#edf2f7,#dde7ef)}
@@ -518,10 +520,15 @@ function renderMapCard(){
  '<button class="mini-btn primary" data-agent-route="'+a.id+'">Marshrut</button></div>';
 }
 function loadLeaflet(){
- if(window.L)return Promise.resolve(window.L);if(leafletPromise)return leafletPromise;
+ if(window.L&&document.querySelector('link[data-leaflet-ready="true"]'))return Promise.resolve(window.L);if(leafletPromise)return leafletPromise;
  leafletPromise=new Promise(function(resolve,reject){
-  var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
-  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.async=true;js.onload=function(){window.L?resolve(window.L):reject(Error("Map kutubxonasi mavjud emas."))};js.onerror=function(){reject(Error("Map yuklanmadi."))};document.body.appendChild(js)
+  var cssReady=false,jsReady=!!window.L;
+  function done(){if(cssReady&&jsReady)resolve(window.L)}
+  var css=document.createElement("link");css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  css.onload=function(){css.dataset.leafletReady="true";cssReady=true;done()};
+  css.onerror=function(){css.remove();reject(Error("Map uslublari yuklanmadi."))};document.head.appendChild(css);
+  if(jsReady)return;
+  var js=document.createElement("script");js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";js.async=true;js.onload=function(){if(!window.L){reject(Error("Map kutubxonasi mavjud emas."));return}jsReady=true;done()};js.onerror=function(){reject(Error("Map yuklanmadi."))};document.body.appendChild(js)
  }).catch(function(e){leafletPromise=null;throw e});return leafletPromise;
 }
 function initMap(){
@@ -530,7 +537,7 @@ function initMap(){
  var loading=$("map-loading");loading.style.display="block";loading.textContent="Xarita yuklanmoqda…";
  loadLeaflet().then(function(L){
   if(state.page!=="map")return;
-  if(!map){map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);
+  if(!map){map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:false}).setView([40.55,70.94],9);
    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
   map.invalidateSize(false);markers.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
 
@@ -701,7 +708,7 @@ async function loadAgentRouteV2(){
  try{
   var rr=await request("route",{period:agentPeriod});$("agent-route-km").textContent=money(rr.km||0)+" km";$("agent-route-work").textContent=agentWorkTime(rr.workSeconds);$("agent-route-points").textContent=Number(rr.gpsPoints||0);$("agent-route-shifts").textContent=Number(rr.shiftCount||0);
   var L=await loadLeaflet(),el=$("agent-route-map");if(!el)return;
-  if(!agentRouteMap){agentRouteMap=L.map("agent-route-map",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(agentRouteMap);agentRouteLayer=L.featureGroup().addTo(agentRouteMap)}
+  if(!agentRouteMap){agentRouteMap=L.map("agent-route-map",{zoomControl:true,attributionControl:true,preferCanvas:false}).setView([40.55,70.94],9);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(agentRouteMap);agentRouteLayer=L.featureGroup().addTo(agentRouteMap)}
   agentRouteLayer.clearLayers();var segs=(rr.segments&&rr.segments.length?rr.segments:(rr.points&&rr.points.length?[rr.points]:[]));segs.forEach(function(seg){if(seg.length>1)L.polyline(seg.map(function(p){return[p.lat,p.lon]}),{color:"#246bfd",weight:4,opacity:.88}).addTo(agentRouteLayer)});
   setTimeout(function(){agentRouteMap.invalidateSize(false);var b=agentRouteLayer.getBounds();if(b.isValid())agentRouteMap.fitBounds(b.pad(.16),{maxZoom:16,animate:false})},40);
  }catch(e){toast(e.message||"GPS hisobot ochilmadi")}
@@ -930,7 +937,7 @@ function renderAnalysisMap(){
  loadLeaflet().then(function(L){
    if(state.page!=="report"||!$("analysis-map"))return;
    if(!analysisMap){
-     analysisMap=L.map("analysis-map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);
+     analysisMap=L.map("analysis-map",{zoomControl:false,attributionControl:true,preferCanvas:false}).setView([40.55,70.94],9);
      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(analysisMap);
    }
    if(analysisLayer)analysisLayer.clearLayers();else analysisLayer=L.layerGroup().addTo(analysisMap);
@@ -1127,7 +1134,7 @@ function renderPeriodMap(data,token){
  loadLeaflet().then(function(L){
   if(token!==periodDetailToken||!$("period-detail-map")||!$("sheet-bg").classList.contains("open"))return;
   var base=[40.55,70.94];
-  periodMap=L.map("period-detail-map",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView(base,10);
+  periodMap=L.map("period-detail-map",{zoomControl:true,attributionControl:true,preferCanvas:false}).setView(base,10);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(periodMap);
   var bounds=[],segments=(data.route&&data.route.segments)||[];
   segments.forEach(function(segment){
