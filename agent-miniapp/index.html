@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4f7fd">
-<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="./offline.js"></script>
 <style>
 :root{color-scheme:light}
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
@@ -81,10 +81,15 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 .client-map-popup small{display:block;font-size:10px;line-height:1.45;color:#6f819c;margin-top:2px}
 .client-map-popup .popup-debt{font-size:11px;font-weight:850;color:#c8334d;margin-top:7px}
 .client-map-popup button{width:100%;margin-top:9px;border:0;border-radius:10px;background:#2367f5;color:#fff;padding:9px 10px;font-size:10px;font-weight:850}
+.offlinebar{display:none;margin:8px 12px 0;border-radius:13px;padding:9px 10px;align-items:center;gap:8px;font-size:10px;font-weight:800;background:#fff7df;border:1px solid #f2d68d;color:#7c5a00}
+.offlinebar.show{display:flex}.offlinebar.offline{background:#fff0f2;border-color:#ffcdd5;color:#a8243b}.offlinebar.syncing{background:#eef4ff;border-color:#cfe0ff;color:#174fbd}.offlinebar.failed{background:#fff4e8;border-color:#ffd2a8;color:#9a4c00}
+.offlinebar span{flex:1;min-width:0}.offlinebar button{width:auto;min-width:76px;padding:7px 10px;border:0;border-radius:9px;background:#fff;color:inherit;font-size:9px;font-weight:900;box-shadow:0 2px 10px #101e3912}
+.offline-pending{outline:2px dashed #e8a72d;outline-offset:2px}
 </style></head>
 <body>
 <div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ochish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
 <div class="app"><header><div class="top"><span class="logo">ASMAN</span><span class="tag">AGENT PANELI · REAL</span></div><div class="greet" id="greet">Assalomu alaykum!</div><div class="sub" id="headerDesc">Bot ma’lumotlari yuklanmoqda…</div></header>
+<div id="offlineBar" class="offlinebar" role="status"><span id="offlineText">Offline holati tekshirilmoqda…</span><button id="offlineSync" type="button">Sync</button></div>
 <div class="adminbar" id="adminBar"><b>ADMIN · TO‘LIQ REJIM</b><select id="adminAgent"></select></div>
 <main>
 <section class="view active" id="page-home">
@@ -119,7 +124,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",detailBackPage="clients",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null,regionFilter="all",regionSelectOptionsKey="";
+var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",detailBackPage="clients",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,pendingPhotoData=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null,regionFilter="all",regionSelectOptionsKey="";
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -129,22 +134,79 @@ function notify(msg){$("notice").textContent=msg;$("notice").style.display="bloc
 function fail(msg){$("gateMessage").textContent=msg;$("gate").classList.remove("hidden")}
 function safeId(v){return Number.isInteger(Number(v))?Number(v):null}
 function client(){return data&&data.clients.find(function(c){return c.id===selected})}
+function isNetworkError(err){return !!(err&&(err.network===true||err.name==="AbortError"||(!err.httpStatus&&navigator.onLine===false)))}
+function offlineAgentId(){return Number((data&&data.me&&data.me.id)||0)}
+function offlineTempId(){return -(Date.now()*1000+Math.floor(Math.random()*900+100))}
+function offlineStatusLabel(value){
+ var labels={active:"Tovar olgan",interested:"Taklif berilgan",waiting:"Kutilmoqda",declined:"Hozircha olmaydi"};
+ return labels[value]||value||"Offline";
+}
+function renderOfflineStatus(state){
+ var bar=$("offlineBar"),text=$("offlineText"),button=$("offlineSync");if(!bar||!text)return;
+ state=state||{online:navigator.onLine!==false,pending:0,failed:0,syncing:false};
+ bar.className="offlinebar";
+ if(state.syncing){bar.classList.add("show","syncing");text.textContent="🔄 Offline ma'lumotlar serverga yuborilmoqda…";if(button)button.style.display="none";return}
+ if(state.failed){bar.classList.add("show","failed");text.textContent="⚠️ "+state.failed+" ta amal tekshiruv talab qiladi"+(state.lastError?": "+state.lastError:"");if(button){button.style.display="block";button.textContent="Qayta sync"}return}
+ if(!state.online){bar.classList.add("show","offline");text.textContent="🔴 OFFLINE · "+state.pending+" ta amal telefonda saqlangan";if(button){button.style.display="block";button.textContent="Navbat"}return}
+ if(state.pending){bar.classList.add("show");text.textContent="⏳ "+state.pending+" ta amal serverga yuborilmagan";if(button){button.style.display="block";button.textContent="Sync"}return}
+ bar.classList.remove("show");if(button)button.style.display="none";
+}
+function optimisticOffline(action,payload,tempId,photoData){
+ if(!data)return;
+ var ts=Number(payload.offlineTs||Math.floor(Date.now()/1000)),items=payload.items||[],products=data.products||[];
+ function price(pack){var p=products.find(function(x){return Number(x.pack)===Number(pack)});return Number(p&&p.priceUsd||0)}
+ function target(){return (data.clients||[]).find(function(c){return Number(c.id)===Number(payload.clientId)})}
+ if(action==="client"){
+  var stock={},debt=0,totalQty=0;
+  products.forEach(function(p){stock[String(p.pack)]=0});
+  items.forEach(function(it){var q=Number(it.qty||0);stock[String(it.pack)]=(stock[String(it.pack)]||0)+q;debt+=price(it.pack)*q;totalQty+=q});
+  var c={id:tempId,name:payload.shop||payload.shopName||"Yangi mijoz",person:payload.person||payload.name||"",phone:payload.phone||"",address:payload.address||("GPS: "+payload.lat+", "+payload.lon),region:payload.region||"",lat:Number(payload.lat),lon:Number(payload.lon),agent:(data.me&&data.me.name)||"Agent",agentId:offlineAgentId(),status:items.length?"Tovar olgan":offlineStatusLabel(payload.status),age:"fresh",days:0,lastTs:ts,followup:payload.followup||null,comment:payload.note||"",profileComment:payload.note||"",createdTs:ts,hasPhoto:!!photoData,photoUrl:photoData||"",debtUsd:debt,stock:stock,_offlinePending:true};
+  data.clients=data.clients||[];data.clients.unshift(c);
+  if(data.summary){data.summary.newClientsToday=Number(data.summary.newClientsToday||0)+1;data.summary.goodsToday=Number(data.summary.goodsToday||0)+totalQty}
+  selected=tempId;return;
+ }
+ var c=target();
+ if(action==="client_edit"&&c){c.name=payload.shop||c.name;c.person=payload.person||c.person;c.phone=payload.phone||c.phone;c.address=payload.address||c.address;c.region=payload.region||c.region;if(payload.lat)c.lat=Number(payload.lat);if(payload.lon)c.lon=Number(payload.lon);if(photoData)c.photoUrl=photoData;c._offlinePending=true;return}
+ if(action==="visit"&&c){c.status=offlineStatusLabel(payload.status);c.comment=payload.note||"";c.lastTs=ts;c.followup=payload.followup||null;c.age="fresh";c.days=0;c._offlinePending=true;return}
+ if((action==="delivery"||action==="return")&&c){
+  var sign=action==="delivery"?1:-1,total=0,totalQty=0;c.stock=c.stock||{};
+  items.forEach(function(it){var q=Number(it.qty||0);c.stock[String(it.pack)]=Number(c.stock[String(it.pack)]||0)+sign*q;total+=price(it.pack)*q;totalQty+=q;var p=products.find(function(x){return Number(x.pack)===Number(it.pack)});if(p)p.stock=Number(p.stock||0)-sign*q});
+  c.debtUsd=Number(c.debtUsd||0)+sign*total;c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
+  if(action==="delivery"&&data.summary)data.summary.goodsToday=Number(data.summary.goodsToday||0)+totalQty;
+  return;
+ }
+ if(action==="payment"&&c){
+  var amount=Number(payload.amount||0),usd=payload.currency==="UZS"?(Number(data.cashierRateUzsPerUsd||0)?amount/Number(data.cashierRateUzsPerUsd):0):amount;
+  c.debtUsd=Number(c.debtUsd||0)-usd;c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
+  if(data.summary)data.summary.paymentTodayUsd=Number(data.summary.paymentTodayUsd||0)+usd;return;
+ }
+ if(action==="handover"&&data.summary)data.summary.cashAvailableUsd=Math.max(0,Number(data.summary.cashAvailableUsd||0)-Number(payload.amount||0));
+ if(action==="agent_expense"&&data.expenseWallet)data.expenseWallet.balanceUzs=Number(data.expenseWallet.balanceUzs||0)-Number(payload.amount||0);
+}
+async function remapOfflineClient(tempId,realId){
+ if(data&&data.clients){var c=data.clients.find(function(x){return Number(x.id)===Number(tempId)});if(c){c.id=Number(realId);c._offlinePending=false}if(Number(selected)===Number(tempId))selected=Number(realId);try{await ASMANOffline.saveSnapshot(data)}catch(_e){}}
+}
 async function request(action,extra){
- if(!tg||!tg.initData)throw Error("Botga /start yuboring → «📱 Agent Mini App» → chatdagi «Agent Mini App ochish» tugmasini bosing. Oddiy brauzer havolasi ishlamaydi.");
+ if(!tg||!tg.initData){var auth=Error("Telegram sessiyasi hozir mavjud emas.");auth.authUnavailable=true;throw auth}
  var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},60000);
  try{
   var base={initData:tg.initData,action:action};if(adminAgentId)base.agentId=adminAgentId;
   var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,body:JSON.stringify(Object.assign(base,extra||{}))});
-  var body=await r.json();if(!r.ok)throw Error(body.error||"Server xatosi ("+r.status+")");return body
- }catch(e){if(e.name==="AbortError")throw Error("Server javob bermadi. Qayta urinib ko‘ring.");throw e}
- finally{clearTimeout(timer)}
+  var body={};try{body=await r.json()}catch(_json){}
+  if(!r.ok){var serverError=Error(body.error||"Server xatosi ("+r.status+")");serverError.httpStatus=r.status;serverError.server=true;throw serverError}
+  return body
+ }catch(e){
+  if(e.name==="AbortError"){var timeout=Error("Server javob bermadi. Amal offline navbatga saqlanishi mumkin.");timeout.network=true;throw timeout}
+  if(e instanceof TypeError){var network=Error("Internet aloqasi yo‘q yoki serverga ulanib bo‘lmadi.");network.network=true;throw network}
+  throw e
+ }finally{clearTimeout(timer)}
 }
 function applySnapshotUi(){
  if(!data||!data.me)return;
  $("gate").classList.add("hidden");
  if(data.adminMode){document.body.classList.add("admin-full");$("adminBar").classList.add("show");var opts=(data.agents||[]).map(function(a){return '<option value="'+a.id+'" '+(a.id===data.selectedAgentId?'selected':'')+'>'+esc(a.name)+'</option>'}).join("");$("adminAgent").innerHTML=opts}
  $("greet").textContent="Assalomu alaykum, "+data.me.name+"!";
- $("headerDesc").textContent="Real ma’lumotlar · yangilandi "+date(data.generatedTs);
+ $("headerDesc").textContent=data._offlineCached?("OFFLINE nusxa · "+date(Math.floor(Number(data._offlineSavedAt||Date.now())/1000))):("Real ma’lumotlar · yangilandi "+date(data.generatedTs));
  $("kVisits").textContent=data.summary.visitsToday;
  $("kNew").textContent=data.summary.newClientsToday;
  $("kPaid").textContent=fmt(data.summary.paymentTodayUsd);
@@ -164,8 +226,19 @@ function applySnapshotUi(){
 async function refresh(){
  if(busy)return;busy=true;try{
   var heavy=current==="cash"||current==="reports";
-  data=await request(heavy?"snapshot":"quick_snapshot");
-  fullDataLoaded=heavy;
+  try{
+   data=await request(heavy?"snapshot":"quick_snapshot");
+   data._offlineCached=false;fullDataLoaded=heavy;
+   if(window.ASMANOffline)ASMANOffline.saveSnapshot(data).catch(function(){});
+  }catch(fetchError){
+   var cached=null;
+   if(window.ASMANOffline&&(isNetworkError(fetchError)||fetchError.authUnavailable||navigator.onLine===false)){
+    try{cached=await ASMANOffline.loadSnapshot()}catch(_e){}
+   }
+   if(!cached)throw fetchError;
+   data=cached;fullDataLoaded=false;
+   notify("Offline rejim: oxirgi saqlangan ma’lumotlar ochildi.");
+  }
   if(data.adminMode&&!data.me){
    var options=(data.agents||[]).map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+'</option>'}).join("");
    $("gateAgent").innerHTML=options;$("adminPicker").classList.add("show");$("retry").style.display="none";
@@ -419,13 +492,13 @@ function loadLeaflet(){
   function done(){if(cssReady&&jsReady)resolve(window.L)}
   var css=document.createElement("link");
   css.rel="stylesheet";
-  css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  css.href="./vendor/leaflet/leaflet.css";
   css.onload=function(){css.dataset.leafletReady="true";cssReady=true;done()};
   css.onerror=function(){css.remove();reject(Error("Xarita uslublari yuklanmadi."))};
   document.head.appendChild(css);
   if(jsReady)return;
   var js=document.createElement("script");
-  js.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  js.src="./vendor/leaflet/leaflet.js";
   js.async=true;
   js.onload=function(){if(!window.L){reject(Error("Xarita kutubxonasi mavjud emas."));return}jsReady=true;done()};
   js.onerror=function(){reject(Error("Xarita yuklanmadi."))};
@@ -563,7 +636,7 @@ function clientWizardValidate(step){
  }
  if(step===2){
   if(cameraUploading){notify("Foto hali yuklanmoqda.");return false}
-  if(!$("photoFileId")||!$("photoFileId").value){notify("Avval do‘konning real fotosini oling.");return false}
+  if((!$("photoFileId")||!$("photoFileId").value)&&!pendingPhotoData){notify("Avval do‘konning real fotosini oling.");return false}
  }
  if(step===3){
   var phone=($("phone")||{}).value||"";if(phone.replace(/\D/g,"").length<9){notify("Telefon raqamini kiriting.");return false}
@@ -693,27 +766,42 @@ async function uploadPhotoWithRetry(imageData,statusEl){
  throw lastError||Error("Foto yuklanmadi.");
 }
 async function saveCameraImage(imageData){
- if(cameraUploading)return;cameraUploading=true;
+ if(cameraUploading)return;cameraUploading=true;pendingPhotoData=imageData;
  var button=$("captureLivePhoto")||$("takePhoto"),statusEl=$("cameraStatus"),preview=$("cameraPreview"),hidden=$("photoFileId");
- if(button){button.disabled=true;button.textContent="⏳ Yuklanmoqda..."}
- if(statusEl){statusEl.textContent="Foto tayyorlandi · yuklanmoqda...";statusEl.className=""}
+ if(button){button.disabled=true;button.textContent="⏳ Tayyorlanmoqda..."}
+ if(statusEl){statusEl.textContent="Foto tayyorlandi...";statusEl.className=""}
  if(hidden)hidden.value="";
  try{
   if(preview){preview.src=imageData;preview.classList.add("show")}
-  var out=await uploadPhotoWithRetry(imageData,statusEl);
-  hidden.value=out.photoFileId;
-  stopLiveCamera();
-  if(statusEl){statusEl.textContent="✓ Foto yuklandi · mijoz kartasiga saqlanadi";statusEl.className="camera-ok"}
-  notify("Foto yuklandi ✅");
+  if(navigator.onLine===false||!tg||!tg.initData){
+   if(hidden)hidden.value="offline_local_photo";
+   stopLiveCamera();
+   if(statusEl){statusEl.textContent="✓ Foto telefonda saqlandi · internet kelganda avtomatik yuklanadi";statusEl.className="camera-ok"}
+   notify("Foto offline saqlandi ✅");return;
+  }
+  try{
+   var out=await uploadPhotoWithRetry(imageData,statusEl);
+   hidden.value=out.photoFileId;pendingPhotoData=null;
+   stopLiveCamera();
+   if(statusEl){statusEl.textContent="✓ Foto yuklandi · mijoz kartasiga saqlanadi";statusEl.className="camera-ok"}
+   notify("Foto yuklandi ✅");
+  }catch(err){
+   if(!isNetworkError(err))throw err;
+   if(hidden)hidden.value="offline_local_photo";
+   stopLiveCamera();
+   if(statusEl){statusEl.textContent="✓ Aloqa uzildi · foto telefonda saqlandi va sync navbatiga tayyor";statusEl.className="camera-ok"}
+   notify("Internet uzildi. Foto offline saqlandi.");
+  }
   reviewing=false;nonce=null;$("review").style.display="none";if(formAction==="client")renderClientWizardStep();else $("submitForm").textContent="Davom etish · Tekshirish";
  }catch(err){
+  pendingPhotoData=null;
   if(preview){preview.removeAttribute("src");preview.classList.remove("show")}
   if(statusEl){statusEl.textContent=(err.message||"Foto yuklanmadi.")+" Qayta urinib ko‘ring.";statusEl.className=""}
   notify(err.message||"Foto yuklanmadi. Qayta urinib ko‘ring.");
  }finally{
   cameraUploading=false;
   var capture=$("captureLivePhoto");if(capture){capture.disabled=false;capture.textContent="● Suratga olish"}
-  var open=$("takePhoto");if(open){open.disabled=false;open.textContent=hidden&&hidden.value?"📷 Qayta kamera ochish":"📷 Kamerani ochish"}
+  var open=$("takePhoto");if(open){open.disabled=false;open.textContent=(hidden&&hidden.value)||pendingPhotoData?"📷 Qayta kamera ochish":"📷 Kamerani ochish"}
  }
 }
 async function captureLivePhoto(){
@@ -748,7 +836,9 @@ function updatePaymentConversion(){
  reviewing=false;nonce=null;$("review").style.display="none";$("submitForm").textContent="Davom etish · Tekshirish";
 }
 function openForm(action){
- if(!data)return;formAction=action;backPage=current;nonce=null;reviewing=false;
+ if(!data)return;
+ if(selected!=null&&Number(selected)<0&&action!=="client"){notify("Bu yangi mijoz hali serverga sinxronlanmagan. Internet kelgach amalni davom ettiring.");return}
+ formAction=action;backPage=current;nonce=null;reviewing=false;pendingPhotoData=null;
  var names={client:"Yangi mijoz",client_edit:"Mijoz ma’lumotlarini tahrirlash",visit:"Tashrif qo‘shish",delivery:"Tovar berish",payment:"Mijozdan pul olish",return:"Tovar qaytarish",handover:"Kassirga topshirish",agent_expense:"Xarajat qilish"};
  if(!names[action])return;$("formTitle").textContent=names[action];
  var h="";
@@ -828,7 +918,7 @@ async function saveForm(e){
  e.preventDefault();if(busy)return;
  if(formAction==="client"&&clientWizardStep<5){advanceClientWizard();return}
  var payload=formPayload();
- if((formAction==="client"||formAction==="client_edit")&&cameraUploading){notify("Foto hali yuklanmoqda. Bir necha soniya kuting.");return}
+ if((formAction==="client"||formAction==="client_edit")&&cameraUploading){notify("Foto hali tayyorlanmoqda.");return}
  if(formAction==="client"){
   for(var step=1;step<=5;step++){if(!clientWizardValidate(step)){clientWizardStep=step;renderClientWizardStep();return}}
  }
@@ -841,21 +931,43 @@ async function saveForm(e){
    else detail=fmt(payload.amount)+" USD";
   }else if(formAction==="handover")detail=fmt(payload.amount)+" USD";
   else if(formAction==="agent_expense"){var expenseRate=Number(data.cashierRateUzsPerUsd||0),expenseSom=Number(payload.amount||0);detail=payload.category+" · "+fmtSom(expenseSom)+" UZS"+(expenseRate?" → "+fmt(expenseSom/expenseRate)+" USD · kurs "+fmtSom(expenseRate):"")+" · "+payload.note;}
-  else if(formAction==="client_edit")detail=(payload.shop||"")+" · "+(payload.person||"")+" · "+(payload.phone||"")+" · GPS: "+(payload.lat||"")+", "+(payload.lon||"")+(payload.photoFileId?" · Yangi foto ✅":" · Avvalgi foto saqlanadi");
+  else if(formAction==="client_edit")detail=(payload.shop||"")+" · "+(payload.person||"")+" · "+(payload.phone||"")+" · GPS: "+(payload.lat||"")+", "+(payload.lon||"")+(payload.photoFileId||pendingPhotoData?" · Yangi foto ✅":" · Avvalgi foto saqlanadi");
   else detail=payload.status;
   $("review").textContent="Tasdiqlashdan oldin tekshiring: "+detail+(payload.items&&formAction==="delivery"?" · Taxminiy hisob: "+fmt(total)+" USD":"");
   $("review").style.display="block";$("submitForm").textContent="✓ Tasdiqlash va saqlash";reviewing=true;nonce=crypto.randomUUID().replace(/-/g,"");return;
  }
- if(!window.confirm("Ma’lumotni real bot bazasiga saqlaysizmi?"))return;
+ if(!window.confirm("Ma’lumotni saqlaysizmi? Internet bo‘lmasa telefonda navbatga olinadi."))return;
  busy=true;$("submitForm").disabled=true;
  try{
-  var out=await request(formAction,Object.assign({},payload,{nonce:nonce}));
+  payload.offlineTs=Math.floor(Date.now()/1000);
+  var out=null,tempId=null,queued=false;
+  var mustQueue=navigator.onLine===false||!tg||!tg.initData||!!pendingPhotoData;
+  if(mustQueue){
+   if(!window.ASMANOffline)throw Error("Offline modul yuklanmagan.");
+   tempId=formAction==="client"?offlineTempId():null;
+   if(pendingPhotoData)delete payload.photoFileId;
+   await ASMANOffline.enqueue({action:formAction,payload:payload,nonce:nonce,photoData:pendingPhotoData,tempClientId:tempId,agentId:offlineAgentId()});
+   optimisticOffline(formAction,payload,tempId,pendingPhotoData);
+   await ASMANOffline.saveSnapshot(data);
+   out={queued:true,clientId:tempId,message:"Offline saqlandi. Internet kelganda avtomatik sinxronlanadi."};queued=true;
+  }else{
+   try{out=await request(formAction,Object.assign({},payload,{nonce:nonce}))}
+   catch(err){
+    if(!isNetworkError(err))throw err;
+    if(!window.ASMANOffline)throw err;
+    tempId=formAction==="client"?offlineTempId():null;
+    await ASMANOffline.enqueue({action:formAction,payload:payload,nonce:nonce,photoData:null,tempClientId:tempId,agentId:offlineAgentId()});
+    optimisticOffline(formAction,payload,tempId,null);
+    await ASMANOffline.saveSnapshot(data);
+    out={queued:true,clientId:tempId,message:"Aloqa uzildi. Amal offline navbatga saqlandi."};queued=true;
+   }
+  }
   notify(out.duplicate?"Bu amal avval saqlangan.":out.message||"Muvaffaqiyatli saqlandi.");
-  var goBack=backPage;selected=out.clientId||selected;
-  await refreshAfterWrite();
+  var goBack=backPage;selected=out.clientId||selected;pendingPhotoData=null;
+  if(!queued)await refreshAfterWrite();else{applySnapshotUi();if(window.ASMANOffline&&navigator.onLine!==false&&tg&&tg.initData)setTimeout(function(){ASMANOffline.sync()},100)}
   var target=out.clientId?"detail":goBack==="detail"?"detail":formAction==="handover"?"cash":goBack;
   go(target);
-  if(target==="detail"&&selected){detailData=null;await loadClientDetail(selected)}
+  if(target==="detail"&&selected&&Number(selected)>0&&!queued){detailData=null;await loadClientDetail(selected)}
  }catch(err){notify(err.message||"Amal saqlanmadi. Tekshirib qayta urinib ko‘ring.");}
  finally{busy=false;$("submitForm").disabled=false}
 }
@@ -895,6 +1007,7 @@ document.addEventListener("click",function(e){
  }
  if(b.id==="navigateClient"){var c=client();if(c&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)){var url="https://www.google.com/maps?q="+encodeURIComponent(c.lat+","+c.lon);if(tg&&tg.openLink)tg.openLink(url);else window.open(url,"_blank","noopener")};return}
  if(b.id==="myRoute"){routeLoadedKey="";showMyRoute(true);return}
+ if(b.id==="offlineSync"){if(window.ASMANOffline){ASMANOffline.clearFailed().then(function(){return ASMANOffline.sync()})}return}
 });
 /* Retry a transient photo failure once; an unavailable file gets a bounded placeholder. */
 document.addEventListener("error",function(e){
@@ -1016,9 +1129,21 @@ if(tg){
   if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd");
  }catch(e){}
 }
+if(window.ASMANOffline){
+ ASMANOffline.configure({
+  request:request,
+  currentAgent:offlineAgentId,
+  canSync:function(){return !!(tg&&tg.initData)&&!(data&&data.adminMode)},
+  isNetworkError:isNetworkError,
+  onStatus:renderOfflineStatus,
+  onRemap:remapOfflineClient,
+  onSynced:async function(){if(navigator.onLine!==false&&!busy){await refresh();notify("Offline ma’lumotlar serverga sinxronlandi ✅")}}
+ });
+}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})}
 document.addEventListener("focusin",function(e){if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))document.body.classList.add("editing")});
 document.addEventListener("focusout",function(){setTimeout(function(){if(!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))document.body.classList.remove("editing")},0)});
-refresh();
-setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form")refresh()},60000);
+refresh().then(function(){if(window.ASMANOffline&&navigator.onLine!==false)ASMANOffline.sync()});
+setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
 })();
 </script></body></html>
