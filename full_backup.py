@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 
 TABLES = (
-    "users", "clients", "sessions", "shifts", "points", "events", "handovers",
+    "users", "clients", "deleted_clients", "sessions", "shifts", "points", "events", "handovers",
     "cashier_expenses", "cashier_incomes", "cashier_fx_rates", "agent_funds",
     "return_allocations", "failed_updates", "role_audit", "client_edits",
     "client_visits", "collection_tasks", "delivery_edits", "processed", "meta",
