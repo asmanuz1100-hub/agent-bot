@@ -4,6 +4,7 @@ const CACHE_NAME="asman-agent-shell-20260928-v1";
 const SHELL=[
   "./",
   "./index.html",
+  "./offline.js",
   "./vendor/leaflet/leaflet.css",
   "./vendor/leaflet/leaflet.js"
 ];
