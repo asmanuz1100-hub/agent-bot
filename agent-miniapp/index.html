@@ -90,14 +90,14 @@ body.android-native-camera #page-map{display:none!important;visibility:hidden!im
   <button type="button" id="homeNextClient" class="home-next" style="display:none">Keyingi muhim mijozni ochish →</button>
  </div>
  <div class="title">Ish kunini boshqarish</div>
- <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">Lokatsiya faqat Telegram orqali sizning roziligingiz bilan ulashiladi.</p><div class="grid2"><button type="button" class="primary" id="startShift">▶ Ishni boshlash</button><button type="button" class="secondary" id="endShift">■ Ishni tugatish</button></div><p class="tiny">Ish tugaganda Telegram chatida jonli lokatsiya ulashishni ham o‘zingiz to‘xtating.</p></div>
+ <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">Ishni botdan boshlang va jonli lokatsiyani Telegram chatida ulashing.</p><p class="tiny">Ishni tugatishni ham botdan bajaring. Bot koordinata qabul qilishni to‘xtatadi; Telegramdagi jonli lokatsiyani o‘zingiz to‘xtating.</p></div>
  <div class="title">Tezkor amallar</div><div class="quick-grid"><button type="button" class="primary quick-tile" data-action="client"><b>＋ Yangi mijoz</b><small>Lokatsiya → foto → telefon → mahsulot</small></button><button type="button" class="secondary quick-tile" data-page="clients"><b>▦ Mijozlar</b><small>Qarz va tashriflar</small></button><button type="button" class="secondary quick-tile" data-page="map"><b>⌖ Xarita</b><small>Yaqin va kechikkan nuqtalar</small></button><button type="button" class="secondary quick-tile" data-page="cash"><b>💼 Pul</b><small>Kassa va xarajat</small></button></div>
  <div id="collectionTaskSection" style="display:none"><div class="title">📌 Kassir topshiriqlari</div><div id="collectionTaskList" class="collection-tasks"></div></div>
  <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">UZS</span></div></div>
  <div class="title">Qayta tashrif kerak</div><div id="homePlan"></div>
 </section>
-<section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><div class="tools" id="mapFilters"></div><div id="mapShell"><div id="map"></div><div id="mapStatus" class="map-status" role="status"></div></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
-<section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
+<section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><label for="mapRegion">Hudud</label><select id="mapRegion" aria-label="Xaritadagi mijozlarni hudud bo‘yicha filtrlash"></select><div class="tools" id="mapFilters"></div><div id="mapShell"><div id="map"></div><div id="mapStatus" class="map-status" role="status"></div></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
+<section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><label for="clientRegion">Hudud</label><select id="clientRegion" aria-label="Mijozlarni hudud bo‘yicha filtrlash"></select><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
 <section class="view" id="page-detail"><div class="flex between"><h2 class="screenhead" id="detailName">Mijoz</h2><button class="secondary" data-page="clients">‹ Orqaga</button></div><div id="detailBody"></div><div class="grid2 client-actions"><button class="primary" data-action="delivery">▣ Tovar berish</button><button class="secondary" data-action="visit">＋ Tashrif</button><button class="secondary" data-action="payment">↓ Pul olish</button><button class="secondary" data-action="return">↩ Tovar qaytarish</button><button class="secondary wide" data-action="client_edit">✎ Ma’lumotlarni tahrirlash</button></div></section>
 <section class="view" id="page-cash"><h2 class="screenhead">Pul va xarajat</h2><div class="card balance"><div class="muted">Mijozlardan yig‘ilgan · kassirga topshirish mumkin</div><div class="num" id="cashFree">—</div><div class="muted" id="cashHold"></div></div><div class="card expense-balance"><div class="muted">Xarajat hisobim</div><div class="num" id="expenseBalance">—</div><div class="muted">Bu pul kassir tomonidan xizmat xarajatlari uchun ajratilgan.</div></div><div class="grid2"><button class="primary" data-action="handover">↗ Kassirga topshirish</button><button class="secondary" data-action="agent_expense">🧾 Xarajat qilish</button></div><div class="title">Xarajat hisobi tarixi</div><div id="expenseList"></div><div class="title">So‘nggi mijoz to‘lovlari</div><div id="cashList"></div><div class="title">Kassirga topshirishlar</div><div id="handoverList"></div></section>
 <section class="view" id="page-reports"><h2 class="screenhead">Agent hisoboti</h2><div class="tools" id="reportFilters"><button class="chip active" data-period="day">Bugun</button><button class="chip" data-period="week">Hafta</button><button class="chip" data-period="month">Oy</button></div><div class="report-hero"><div class="report-hero-top"><div><span class="report-hero-label" id="reportPeriodLabel">Bugun</span><strong class="report-hero-value" id="reportDeliveryUsd">0.00 USD</strong><small>Berilgan tovar qiymati</small></div><span class="pill" id="reportHeroBadge">REAL</span></div><div class="report-hero-mini"><div><small>Mijozdan olindi</small><b id="reportHeroPaid">0.00 USD</b></div><div><small>Joriy qarz</small><b id="reportHeroDebt">0.00 USD</b></div><div><small>Qaytgan</small><b id="reportHeroReturn">0.00 USD</b></div></div></div><div class="report-kpis" id="reportCards"></div><div class="report-section-head"><b>Pul harakati</b><small>tanlangan davr</small></div><div class="report-flow" id="reportFlow"></div><div class="report-section-head"><b>7 kunlik dinamika</b><small id="reportTrendCaption">Berilgan tovar qiymati</small></div><div class="report-trend-tabs"><button class="active" data-report-trend="deliveryUsd">Realizatsiya $</button><button data-report-trend="paymentsUsd">Olingan pul $</button><button data-report-trend="visits">Tashrif</button></div><div class="report-trend" id="reportTrend"></div><div class="report-section-head"><b>Mahsulotlar kesimi</b><small>TOP 3 · berilgan · sotilgan · qaytgan</small></div><div id="reportProducts" class="report-products"></div><button type="button" id="reportProductsToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>Mijozlar holati</b><small>faqat shu agentniki</small></div><div class="report-client-card"><div class="report-client-top"><div class="report-client-stat"><small>Agent mijozlari</small><b id="reportClientTotal">0</b></div><div class="report-client-stat debt"><small>Joriy qarzdorlik</small><b id="reportClientDebt">0.00 USD</b></div></div><div id="reportClientBar" class="report-client-bar"></div><div id="reportClientLegend" class="report-client-legend"></div></div><div class="report-section-head"><b>Agent qoldig‘i</b><small>ombordagi real qoldiq</small></div><div class="report-summary"><div class="card"><small>Jami qoldiq</small><b id="reportStockTotal">—</b></div><div class="card"><small>Minus qoldiq</small><b id="reportNegativeCount">—</b></div></div><div id="productStock" class="report-stock-list"></div><button type="button" id="reportStockToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>GPS va ish vaqti</b><small>1 kun · 7 kun · 30 kun</small></div><div class="gps-period-tabs"><button class="active" data-route-period="day">1 kun</button><button data-route-period="week">7 kun</button><button data-route-period="month">1 oy</button></div><div class="gps-report-card"><div class="gps-report-title"><div><b id="routePeriodTitle">1 kunlik GPS hisobot</b><small id="routeSummary">Real GPS ma’lumoti yuklanmoqda</small></div><span class="pill" id="routeGpsStatus">GPS</span></div><div class="gps-report-grid"><div class="gps-stat"><small>Yurgan masofa</small><strong id="routeKm">— km</strong></div><div class="gps-stat"><small>Ish vaqti</small><strong id="routeHours">—</strong></div><div class="gps-stat"><small>GPS nuqtalar</small><strong id="routePoints">—</strong></div><div class="gps-stat"><small>Smenalar</small><strong id="routeShifts">—</strong></div></div></div><div class="gps-meta"><div><small>Birinchi GPS</small><b id="routeFirst">—</b></div><div><small>Oxirgi GPS</small><b id="routeLast">—</b></div><div><small>To‘xtashlar</small><b id="routeStops">—</b></div><div><small>GPS uzilishlar</small><b id="routeGaps">—</b></div></div><div class="gps-map-wrap"><div id="routeMap" class="gps-map"></div><div id="routeMapEmpty" class="gps-map-empty">GPS marshrut yuklanmoqda…</div></div><div class="gps-actions"><small>Masofa faqat saqlangan real GPS nuqtalaridan hisoblanadi.</small><button class="secondary" id="myRoute">↻ Yangilash</button></div></section>
@@ -109,7 +109,7 @@ body.android-native-camera #page-map{display:none!important;visibility:hidden!im
 "use strict";
 var API="https://asman-agent-test.onrender.com/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
-var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null;
+var data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null,regionFilter="all";
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
 function fmt(v){return Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -142,8 +142,7 @@ function applySnapshotUi(){
  $("homeExpenseBalance").textContent=fmtSom((data.expenseWallet||{}).balanceUzs||0)+" UZS";
  $("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";
  $("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");
- $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Ish boshlandi. Telegram chatida jonli lokatsiyani qo‘lda ulang."):"Ishni boshlashdan oldin jonli GPS talab qilinmaydi.";
- $("startShift").disabled=data.me.shiftOpen;$("endShift").disabled=!data.me.shiftOpen;
+ $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Bot chatida jonli lokatsiyani ulashing."):"Ishni Telegram botidagi «▶ Ishni boshlash» tugmasi bilan boshlang.";
  renderHome();
  if(current==="clients")renderClients();
  if(current==="detail")renderDetail();
@@ -211,9 +210,21 @@ function filterButtons(target,which){
  var options=[["all","Barchasi"],["fresh","🟢 0–2 kun"],["yellow","🟡 3–4 kun"],["red","🔴 5+ kun"],["scheduled","🔵 Rejada"]];
  $(target).innerHTML=options.map(function(o){return '<button class="chip '+(o[0]===which?"active":"")+'" data-filter="'+o[0]+'" data-target="'+target+'">'+o[1]+'</button>'}).join("");
 }
+function regionKey(value){return String(value||"").trim().toLocaleLowerCase().replace(/[‘’ʻ`´]/g,"'").replace(/\s+/g," ")}
+function regionOptions(){
+ var names=["Bag‘dod","Yapan"];
+ (data&&data.clients||[]).forEach(function(c){if(c.region&&c.region.trim())names.push(c.region.trim())});
+ var seen=new Set();return names.filter(function(name){var key=regionKey(name);if(!key||seen.has(key))return false;seen.add(key);return true}).sort(function(a,b){return a.localeCompare(b,"uz")});
+}
+function regionSuggestions(){return '<datalist id="regionSuggestions">'+regionOptions().map(function(name){return '<option value="'+esc(name)+'">'}).join("")+'</datalist>'}
+function renderRegionSelects(){
+ var options='<option value="all">Barcha hududlar</option>'+regionOptions().map(function(name){var key=regionKey(name);return '<option value="'+esc(key)+'">'+esc(name)+'</option>'}).join("")+'<option value="unassigned">Hudud belgilanmagan</option>';
+ ["mapRegion","clientRegion"].forEach(function(id){var el=$(id);el.innerHTML=options;el.value=regionFilter;if(el.selectedIndex<0)el.value="all"});
+}
+function regionMatches(c){return regionFilter==="all"||(regionFilter==="unassigned"?!regionKey(c.region):regionKey(c.region)===regionFilter)}
 function renderClients(){
- if(!data)return;filterButtons("clientFilters",filter);
- var q=$("search").value.trim().toLowerCase(),list=data.clients.filter(function(c){return(filter==="all"||c.age===filter)&&(!q||(c.name+" "+c.person+" "+c.address+" "+c.phone).toLowerCase().includes(q))});
+ if(!data)return;filterButtons("clientFilters",filter);renderRegionSelects();
+ var q=$("search").value.trim().toLowerCase(),list=data.clients.filter(function(c){return(filter==="all"||c.age===filter)&&regionMatches(c)&&(!q||(c.name+" "+c.person+" "+c.address+" "+c.phone).toLowerCase().includes(q))});
  $("clientCount").textContent=list.length+" mijoz";
  $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8,i<8)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
 }
@@ -237,7 +248,7 @@ function renderDetail(){
    '<div class="profile-stat"><small>Tashrif holati</small><b>'+esc(statusText(c))+'</b></div>'+
   '</div>'+
   '<div class="contact-actions">'+(dialPhone(c)?'<a class="primary" id="callClient" href="tel:'+esc(dialPhone(c))+'">☎ Qo‘ng‘iroq</a>':'<button type="button" class="secondary" disabled>☎ Telefon yo‘q</button>')+(Number.isFinite(c.lat)&&Number.isFinite(c.lon)?'<button type="button" class="secondary" id="navigateClient">➤ Navigator</button>':'<button type="button" class="secondary" disabled>➤ GPS yo‘q</button>')+'</div>'+
-  '<div class="card detail-info">'+detailLine("Telefonlar",c.phone)+detailLine("Manzil",c.address)+detailLine("Mas’ul agent",c.agent)+detailLine("Qo‘shilgan sana",date(c.createdTs))+detailLine("Izoh",c.note||c.comment||"Izoh yo‘q")+'</div>';
+  '<div class="card detail-info">'+detailLine("Telefonlar",c.phone)+detailLine("Manzil",c.address)+detailLine("Hudud",c.region||"Belgilanmagan")+detailLine("Mas’ul agent",c.agent)+detailLine("Qo‘shilgan sana",date(c.createdTs))+detailLine("Izoh",c.note||c.comment||"Izoh yo‘q")+'</div>';
  var stockRows=(data.products||[]).filter(function(p){return Number(c.stock&&c.stock[String(p.pack)]||0)!==0}).map(function(p){
    var qty=Number(c.stock[String(p.pack)]||0);return '<div class="stock-item"><b>'+esc(p.name)+'</b><span>'+qty+' dona</span></div>';
  });
@@ -438,8 +449,8 @@ function fitClientMap(){
  if(layers.length){var bounds=mapPins.getBounds();if(bounds&&bounds.isValid())map.fitBounds(bounds.pad(.18),{maxZoom:15,animate:false})}
 }
 async function renderMap(){
- if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);
- var list=data.clients.filter(function(c){return(mapFilter==="all"||c.age===mapFilter)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
+ if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);renderRegionSelects();
+ var list=data.clients.filter(function(c){return(mapFilter==="all"||c.age===mapFilter)&&regionMatches(c)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
  $("mapNote").textContent=list.length+" ta mijozning real koordinatasi. Nuqtani bosib kartochkasini oching.";
  $("mapList").innerHTML=list.slice(0,50).map(function(c){return shopRow(c,false,false)}).join("");
  try{
@@ -525,6 +536,7 @@ function clientWizardValidate(step){
  if(step===4){
   if(!(($("person")||{}).value||"").trim()){notify("Mijoz ismini kiriting.");return false}
   if(!(($("shop")||{}).value||"").trim()){notify("Do‘kon nomini kiriting.");return false}
+  if(!(($("region")||{}).value||"").trim()){notify("Hududni kiriting.");return false}
  }
  if(step===5){
   if(!clientProductMode){notify("Mahsulot berildimi yoki yo‘qmi — bittasini tanlang.");return false}
@@ -678,7 +690,7 @@ function openForm(action){
   '<div class="wizard-step" data-step="1"><div class="card wizard-card"><span class="wizard-number">1</span><h3>Do‘kon lokatsiyasi</h3><p class="lead">Bitta bosish bilan hozirgi joyni oling. Bu nuqta xaritada mijoz manzili bo‘ladi.</p><button class="primary wizard-big" type="button" id="getLocation">📍 Joriy lokatsiyani olish</button><div id="locationStatus" class="wizard-location-state">Lokatsiya hali olinmagan.</div><div style="margin-top:10px">'+field("lat","Latitude","number","40.5400",true)+field("lon","Longitude","number","70.9400",true)+'</div></div></div>'+
   '<div class="wizard-step" data-step="2"><div class="card wizard-card"><span class="wizard-number">2</span><h3>Do‘kon fotosi</h3><p class="lead">'+cameraLead+'</p><div class="camera-box"><input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"><input id="galleryInput" type="file" accept="image/*" style="display:none"><input id="photoFileId" name="photoFileId" type="hidden" value="">'+cameraLiveHtml+'<img id="cameraPreview" class="camera-preview" alt="Olingan do‘kon fotosi"><button class="primary wizard-big" type="button" id="takePhoto">📷 Kamerani ochish</button><button class="secondary camera-gallery" type="button" id="galleryPhoto">🖼 Galereyadan tanlash</button><button class="secondary camera-fallback" type="button" id="fallbackCamera">Telefon kamerasi · zaxira</button><div class="camera-state"><small id="cameraStatus">Kamera yoki galereyadan foto tanlang.</small><span class="pill">'+cameraBadge+'</span></div></div></div></div>'+
   '<div class="wizard-step" data-step="3"><div class="card wizard-card"><span class="wizard-number">3</span><h3>Telefon raqami</h3><p class="lead">Asosiy raqamni kiriting. Kerak bo‘lsa 2–3 ta raqamni vergul bilan yozish mumkin.</p><label for="phone">Telefon</label><input class="wizard-input" id="phone" name="phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" required autocomplete="tel"></div></div>'+
-  '<div class="wizard-step" data-step="4"><div class="card wizard-card"><span class="wizard-number">4</span><h3>Mijoz va do‘kon</h3><p class="lead">Faqat asosiy ma’lumotlarni kiriting. Manzil va izoh ixtiyoriy.</p><label for="person">Mijoz ismi</label><input class="wizard-input" id="person" name="person" type="text" placeholder="Ism familiya" required autocomplete="name"><label for="shop">Do‘kon nomi</label><input class="wizard-input" id="shop" name="shop" type="text" placeholder="Masalan, Baraka do‘koni" required autocomplete="organization">'+field("address","Mo‘ljal / manzil (ixtiyoriy)","text","Masalan, bozor ro‘parasida",false)+field("note","Izoh (ixtiyoriy)","text","Mijoz ehtiyoji yoki kelishuv",false)+'</div></div>'+
+  '<div class="wizard-step" data-step="4"><div class="card wizard-card"><span class="wizard-number">4</span><h3>Mijoz va do‘kon</h3><p class="lead">Faqat asosiy ma’lumotlarni kiriting. Manzil va izoh ixtiyoriy.</p><label for="person">Mijoz ismi</label><input class="wizard-input" id="person" name="person" type="text" placeholder="Ism familiya" required autocomplete="name"><label for="shop">Do‘kon nomi</label><input class="wizard-input" id="shop" name="shop" type="text" placeholder="Masalan, Baraka do‘koni" required autocomplete="organization">'+field("region","Hudud (masalan, Bag‘dod yoki Yapan)","text","Hududni kiriting",true).replace('autocomplete="off"','autocomplete="off" list="regionSuggestions" maxlength="80"')+regionSuggestions()+field("address","Mo‘ljal / manzil (ixtiyoriy)","text","Masalan, bozor ro‘parasida",false)+field("note","Izoh (ixtiyoriy)","text","Mijoz ehtiyoji yoki kelishuv",false)+'</div></div>'+
   '<div class="wizard-step" data-step="5"><div class="card wizard-card"><span class="wizard-number">5</span><h3>Mahsulot</h3><p class="lead">Mijozga hozir mahsulot berdingizmi?</p><div class="grid2"><button type="button" class="secondary wizard-choice" data-client-product-mode="delivery"><b>📦 Mahsulot berdim</b><small>Ombordan chiqadi va mijoz qarzi yoziladi</small></button><button type="button" class="secondary wizard-choice" data-client-product-mode="none"><b>⏭ Hozircha bermadim</b><small>Mijoz xaritada prospekt sifatida saqlanadi</small></button></div><div id="clientProductItems" class="wizard-product-box"><div id="clientItems">'+clientPackLine(0)+'</div><button type="button" class="secondary" id="clientAddItem">＋ Yana mahsulot</button></div><div id="clientProspectOptions" class="wizard-product-box"><label>Holati</label><select name="status" id="status"><option value="interested">Taklif berilgan</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option></select>'+field("followup","Keyingi tashrif sanasi","date","",false)+'</div></div></div>'+
   '<div class="wizard-nav"><button type="button" class="secondary" id="wizardBack" style="display:none">← Oldingi bosqich</button></div>';
  }else if(action==="client_edit"){
@@ -687,6 +699,7 @@ function openForm(action){
     '<label for="editShop">Do‘kon nomi</label><input id="editShop" name="shop" type="text" value="'+esc(editClient.name||"")+'" required>'+
     '<label for="editPerson">Mijoz ismi</label><input id="editPerson" name="person" type="text" value="'+esc(editClient.person||"")+'">'+
     '<label for="editPhone">Telefonlar</label><input id="editPhone" name="phone" type="tel" value="'+esc(editClient.phone||"")+'" required>'+
+    '<label for="editRegion">Hudud</label><input id="editRegion" name="region" type="text" list="regionSuggestions" maxlength="80" value="'+esc(editClient.region||"")+'">'+regionSuggestions()+
     '<label for="editAddress">Manzil / mo‘ljal</label><input id="editAddress" name="address" type="text" value="'+esc(editClient.address||"")+'">'+
     '<label for="editNote">Profil izohi</label><input id="editNote" name="note" type="text" value="'+esc(editClient.profileComment||"")+'">'+
     '<div class="title">📍 Mijoz joylashuvi</div><button class="secondary" type="button" id="editGetLocation">📍 Joriy lokatsiyani olish</button><div id="editLocationStatus" class="wizard-location-state">Koordinatalarni qo‘lda ham o‘zgartirish mumkin.</div>'+
@@ -776,14 +789,6 @@ async function saveForm(e){
  finally{busy=false;$("submitForm").disabled=false}
 }
 async function refreshAfterWrite(){data=await request("quick_snapshot");fullDataLoaded=false;applySnapshotUi()}
-async function shift(kind){
- if(busy)return;if(kind==="shift_end"&&!window.confirm("Ish kunini tugatasizmi? Telegram jonli lokatsiya ulashishni ham o‘zingiz to‘xtating."))return;
- if(kind==="shift_start"&&!window.confirm("Ish davomida admin siz Telegram chatidan ulagan jonli lokatsiyani ko‘rishi mumkin. Ishni boshlaysizmi?"))return;
- busy=true;try{
-  var response=await request(kind,{nonce:crypto.randomUUID().replace(/-/g,"")});
-  notify(response.message);await refreshAfterWrite();
- }catch(e){notify(e.message||"Smena o‘zgarmadi.")}finally{busy=false}
-}
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){go(b.dataset.page);return}
@@ -795,8 +800,6 @@ document.addEventListener("click",function(e){
  if(b.id==="reportProductsToggle"){reportProductsExpanded=!reportProductsExpanded;renderReports();return}
  if(b.id==="reportStockToggle"){reportStockExpanded=!reportStockExpanded;renderReports();return}
  if(b.dataset.routePeriod){routePeriod=b.dataset.routePeriod;routeLoadedKey="";showMyRoute(true);return}
- if(b.id==="startShift"){shift("shift_start");return}
- if(b.id==="endShift"){shift("shift_end");return}
  if(b.id==="cancelForm"){stopLiveCamera();go(backPage);return}
  if(b.id==="submitForm"&&formAction==="client"&&b.type==="button"){advanceClientWizard();return}
  if(b.id==="wizardBack"){if(clientWizardStep>1){if(clientWizardStep===2)stopLiveCamera();clientWizardStep--;reviewing=false;nonce=null;$("review").style.display="none";renderClientWizardStep();window.scrollTo(0,0)}return}
@@ -856,6 +859,7 @@ document.addEventListener("error",function(e){
  }
 },true);
 $("search").addEventListener("input",renderClients);
+["mapRegion","clientRegion"].forEach(function(id){$(id).addEventListener("change",function(){regionFilter=this.value;renderRegionSelects();renderClients();if(current==="map")renderMap()})});
 $("operationForm").addEventListener("submit",saveForm);
 $("operationForm").addEventListener("change",function(e){if(e.target&&(e.target.id==="cameraInput"||e.target.id==="galleryInput")&&e.target.files&&e.target.files[0])uploadCameraFile(e.target.files[0]);if(formAction==="delivery"||formAction==="return")updateDeliveryCart();if(formAction==="payment")updatePaymentConversion()});
 $("operationForm").addEventListener("input",function(e){if(formAction==="delivery"||formAction==="return"){updateDeliveryCart();return}if(formAction==="payment"){updatePaymentConversion();return}if(reviewing){reviewing=false;nonce=null;$("review").style.display="none";if(formAction==="client")renderClientWizardStep();else $("submitForm").textContent="Davom etish · Tekshirish"}});
