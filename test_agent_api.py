@@ -263,6 +263,28 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(core.client_debt_usd(self.db,cid),before_debt)
         self.assertGreaterEqual(self.db.execute("SELECT COUNT(*) FROM client_edits WHERE client=?",(cid,)).fetchone()[0],5)
 
+    def test_client_edit_updates_photo_and_gps_without_changing_ledger(self):
+        self.add_client('edit_photo_gps_123')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        photo_id='AgACAgQAAxkBAA1234567890'
+        before_events=self.db.execute('SELECT COUNT(*) FROM events WHERE client=?',(cid,)).fetchone()[0]
+        payload={'clientId':cid,'shop':'Baraka','person':'Ali','phone':'+998901112233',
+                 'address':'Yangi mo‘ljal','note':'Yangilandi','lat':40.55123,'lon':70.94123,
+                 'photoFileId':photo_id}
+        result=agent_api.mutate(self.db,2,'client_edit',payload,'edit_photo_gps_update_123',self.now)
+        self.assertTrue(result['ok'])
+        row=self.db.execute('SELECT lat,lon,photo FROM clients WHERE id=?',(cid,)).fetchone()
+        self.assertAlmostEqual(row['lat'],40.55123)
+        self.assertAlmostEqual(row['lon'],70.94123)
+        self.assertEqual(row['photo'],photo_id)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM events WHERE client=?',(cid,)).fetchone()[0],before_events)
+        self.assertTrue({'lat','lon','photo'} <= {r[0] for r in self.db.execute(
+            'SELECT field FROM client_edits WHERE client=?',(cid,)).fetchall()})
+        with self.assertRaisesRegex(ValueError,'fotosi identifikatori'):
+            agent_api.mutate(self.db,2,'client_edit',dict(payload,photoFileId='bad'),
+                             'edit_bad_photo_123',self.now)
+        self.assertEqual(self.db.execute('SELECT photo FROM clients WHERE id=?',(cid,)).fetchone()[0],photo_id)
+
     def test_uzs_payment_uses_only_cashier_rate_and_books_usd_equivalent(self):
         self.add_client('uzs_payment_client_123')
         cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
