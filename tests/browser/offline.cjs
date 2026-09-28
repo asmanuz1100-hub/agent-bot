@@ -92,9 +92,14 @@ const snapshot={
  assert.ok(queued[0].photoData&&queued[0].photoData.startsWith('data:image/'));
  assert.ok(Number(queued[0].payload.offlineTs)>0);
 
+ const clientResponse=page.waitForResponse(response=>{
+   if(!response.url().includes('/api/'))return false;
+   try{return JSON.parse(response.request().postData()||'{}').action==='client'}catch(_e){return false}
+ },{timeout:15000});
  await context.setOffline(false);
  await page.waitForFunction(()=>navigator.onLine===true);
- await page.waitForFunction(async()=>{const s=await window.ASMANOffline.status();return s.pending===0},{timeout:15000});
+ await clientResponse;
+ await page.waitForFunction(async()=>{const s=await window.ASMANOffline.status();return s.pending===0&&!s.syncing},{timeout:15000});
  assert.equal(uploads.length,1,'photo uploads once after reconnect');
  const browserFetchCalls=await page.evaluate(()=>window.fetchCalls.slice());
  assert.equal(writes.length,1,'client writes once after reconnect; actions='+JSON.stringify(actions)+' fetchCalls='+JSON.stringify(browserFetchCalls));
