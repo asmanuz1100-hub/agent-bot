@@ -17,6 +17,7 @@ import manager_api
 TZ=ZoneInfo("Asia/Tashkent")
 MAX_CLIENTS=5000
 MAX_WRITE_ITEMS=12
+OFFLINE_MAX_AGE=7*86400
 
 STATUS_LABELS={
     "active":"Товар олган",
@@ -80,17 +81,34 @@ def _client(db,cid):
 
 
 def _live_ready(db,agent,max_age=300,now=None):
-    now=int(time.time() if now is None else now)
-    shift=db.execute('SELECT * FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(agent,)).fetchone()
+    at_ts=int(time.time() if now is None else now)
+    shift=db.execute('''SELECT * FROM shifts
+        WHERE agent=? AND start<=? AND ("end" IS NULL OR "end">=?)
+        ORDER BY start DESC,id DESC LIMIT 1''',(agent,at_ts,at_ts)).fetchone()
     if not shift:return False,'Avval «Ishni boshlash»ni bosing.'
     if shift['live_id'] is None:
         return False,'Ish boshlangan, lekin Telegram jonli lokatsiyasi hali ulanmagan.'
-    p=db.execute('SELECT ts FROM points WHERE shift=? ORDER BY ts DESC,id DESC LIMIT 1',(shift['id'],)).fetchone()
+    p=db.execute('''SELECT ts FROM points WHERE shift=? AND ts<=?
+        ORDER BY ts DESC,id DESC LIMIT 1''',(shift['id'],at_ts)).fetchone()
     if not p:return False,'Jonli lokatsiya ulangan, lekin GPS koordinatasi hali kelmagan.'
-    age=max(0,now-int(p[0]))
+    age=max(0,at_ts-int(p[0]))
     if age>max_age:
         return False,f'Jonli lokatsiya {age//60} daqiqadan beri yangilanmagan. Telegram live-location, GPS va internetni tekshiring.'
     return True,''
+
+
+def _operation_ts(payload,server_now):
+    raw=payload.get("offlineTs")
+    if raw in (None,""):
+        return int(server_now)
+    try:ts=int(raw)
+    except (TypeError,ValueError):
+        raise ValueError("Offline vaqt noto‘g‘ri.")
+    if ts>int(server_now)+60:
+        raise ValueError("Offline vaqt kelajakda bo‘lishi mumkin emas.")
+    if ts<int(server_now)-OFFLINE_MAX_AGE:
+        raise ValueError("Offline amal 7 kundan eski. Rahbar orqali tekshiring.")
+    return ts
 
 
 def _parse_phones(value):
@@ -635,6 +653,7 @@ def route(db,agent,period=None,now=None):
 
 def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
     now=int(time.time() if now is None else now)
+    op_ts=_operation_ts(payload,now)
     _require_agent(db,agent)
     feature=FEATURE_ACTION.get(action)
     if feature and not admin_override:_feature(db,agent,feature)
@@ -698,24 +717,24 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         cur=db.execute("""INSERT INTO clients(agent,name,phone,address,region,lat,lon,photo,shop_name,
             comment,payment_due,created_ts,map_only)
             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1) RETURNING id""",
-            (agent,name," · ".join(phones),address,region,lat,lon,photo_file or None,shop,note,None,now))
+            (agent,name," · ".join(phones),address,region,lat,lon,photo_file or None,shop,note,None,op_ts))
         cid=int(cur.fetchone()[0])
         if clean:
             for idx,(pack,qty) in enumerate(clean):
                 core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Yangi mijoz · Mini App',
-                            _source(agent,request_id,idx+1),currency='USD')
+                            _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
             visit_note="Tovar berildi: "+", ".join(
                 f"{core.product_name(pack)} {qty} dona" for pack,qty in clean)
             if note and note!="Tovar berildi":visit_note+=" · "+note
-            cs.add_visit(db,agent,cid,'active',visit_note,None)
+            cs.add_visit(db,agent,cid,'active',visit_note,None,ts=op_ts)
             return {"ok":True,"clientId":cid,"deliveredItems":len(clean),
                     "message":"Mijoz va mahsulotlar real bazaga saqlandi."}
-        cs.add_visit(db,agent,cid,status,note,followup)
+        cs.add_visit(db,agent,cid,status,note,followup,ts=op_ts)
         return {"ok":True,"clientId":cid,"deliveredItems":0,
                 "message":"Mijoz mahsulotsiz prospekt sifatida saqlandi."}
     if action=="handover":
         amount=core.money(payload.get("amount"))
-        core.handover(db,agent,amount,source,currency='USD')
+        core.handover(db,agent,amount,source,currency='USD',ts=op_ts)
         row=db.execute("SELECT id FROM handovers WHERE agent=? AND source=?",(agent,source)).fetchone()
         hid=int(row[0]) if row else None
         return {"ok":True,"handoverId":hid,"message":"Kassaga topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
@@ -729,7 +748,7 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         expected_rate=(core.parse_whole_som(expected_rate,"Kurs") if expected_rate not in (None,"") else None)
         expense_source=abs(source)
         expense_id,amount_usd,rate=core.add_agent_expense_uzs(
-            db,agent,amount_uzs,category,note,expense_source,expected_rate=expected_rate)
+            db,agent,amount_uzs,category,note,expense_source,expected_rate=expected_rate,ts=op_ts)
         balance_uzs=core.agent_fund_balance_uzs(db,agent)
         return {"ok":True,"expenseId":expense_id,"balanceUzs":balance_uzs,
                 "convertedUsd":_usd(amount_usd),"rateUzsPerUsd":rate,
@@ -774,7 +793,7 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         status=str(payload.get("status") or "")
         note=str(payload.get("note") or "").strip()
         followup=payload.get("followup") or None
-        cs.add_visit(db,agent,cid,status,note,followup)
+        cs.add_visit(db,agent,cid,status,note,followup,ts=op_ts)
         return {"ok":True,"message":"Tashrif saqlandi."}
     if action=="delivery":
         items=payload.get("items")
@@ -790,13 +809,13 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
             required[pack]=required.get(pack,0)+qty;clean.append((pack,qty))
         for idx,(pack,qty) in enumerate(clean):
             core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Mini App',
-                        _source(agent,request_id,idx+1),currency='USD')
+                        _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
         cs.add_visit(db,agent,cid,'active','Tovar berildi: '+', '.join(
-            f"{core.product_name(pack)} {qty} dona" for pack,qty in clean))
+            f"{core.product_name(pack)} {qty} dona" for pack,qty in clean),ts=op_ts)
         return {"ok":True,"message":"Tovar topshirildi va mijoz qarzi yangilandi."}
     if action=="payment":
         if not admin_override:
-            ok,msg=_live_ready(db,agent,now=now)
+            ok,msg=_live_ready(db,agent,now=op_ts)
             if not ok:raise ValueError(msg)
         currency=str(payload.get("currency") or "USD").upper()
         if currency=="USD":
@@ -821,16 +840,16 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                     "amountUzs":som,"rate":rate}
         else:
             raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
-        core.record(db,agent,agent,cid,'payment',0,0,amount,note,source,currency='USD')
+        core.record(db,agent,agent,cid,'payment',0,0,amount,note,source,currency='USD',ts=op_ts)
         if core.client_debt_usd(db,cid)<=0:
             db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
-                       (int(time.time()),cid))
+                       (op_ts,cid))
         return {"ok":True,"message":message,"convertedUsd":_usd(amount),
                 "rateUzsPerUsd":rate if currency=="UZS" else core.cashier_rate(db),
                 "_notify":notify}
     if action=="return":
         if not admin_override:
-            ok,msg=_live_ready(db,agent,now=now)
+            ok,msg=_live_ready(db,agent,now=op_ts)
             if not ok:raise ValueError(msg)
         items=payload.get("items")
         if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:
@@ -848,11 +867,11 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                 raise ValueError(f"{core.product_name(pack)} mijozda yetarli emas.")
         for idx,(pack,qty) in enumerate(clean):
             core.record(db,agent,agent,cid,'return',pack,qty,0,'Mini App',
-                        _source(agent,request_id,idx+1),currency='USD')
+                        _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
         cs.add_visit(db,agent,cid,'active','Tovar qaytarildi: '+', '.join(
-            f"{core.product_name(pack)} {qty} dona" for pack,qty in clean))
+            f"{core.product_name(pack)} {qty} dona" for pack,qty in clean),ts=op_ts)
         if core.client_debt_usd(db,cid)<=0:
             db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
-                       (int(time.time()),cid))
+                       (op_ts,cid))
         return {"ok":True,"message":"Tovar qaytarildi va qarz yangilandi."}
     raise ValueError("Amal noto‘g‘ri.")
