@@ -210,7 +210,7 @@ function filterButtons(target,which){
  var options=[["all","Barchasi"],["fresh","🟢 0–2 kun"],["yellow","🟡 3–4 kun"],["red","🔴 5+ kun"],["scheduled","🔵 Rejada"]];
  $(target).innerHTML=options.map(function(o){return '<button class="chip '+(o[0]===which?"active":"")+'" data-filter="'+o[0]+'" data-target="'+target+'">'+o[1]+'</button>'}).join("");
 }
-function regionKey(value){return String(value||"").trim().toLocaleLowerCase().replace(/[‘’ʻ`´]/g,"'").replace(/\s+/g," ")}
+function regionKey(value){return String(value||"").trim().toLocaleLowerCase().replace(/[‘’ʻ`´']/g,"").replace(/\s+/g," ")}
 function regionOptions(){
  var names=["Bag‘dod","Yapan"];
  (data&&data.clients||[]).forEach(function(c){if(c.region&&c.region.trim())names.push(c.region.trim())});
