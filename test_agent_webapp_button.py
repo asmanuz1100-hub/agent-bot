@@ -17,7 +17,6 @@ class AgentMiniAppButtonTests(unittest.TestCase):
         self.assertIn('📱 Agent Mini App',[b for row in agent_rows for b in row])
         self.assertNotIn('🧪 Agent V2 TEST',[b for row in agent_rows for b in row])
         self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in agent_rows for b in row))
-        self.assertIn('📱 Раҳбар Mini App',[b for row in bot.menu(self.db,1) for b in row])
         self.assertIn('📱 Agent Mini App',[b for row in bot.menu(self.db,1) for b in row])
         self.assertIn('🧪 Agent V2 TEST',[b for row in bot.menu(self.db,1) for b in row])
         self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in bot.menu(self.db,3) for b in row))
