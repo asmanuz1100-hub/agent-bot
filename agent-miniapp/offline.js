@@ -79,13 +79,18 @@ async function emitStatus(){
   if(cfg.onStatus)try{cfg.onStatus(state)}catch(_e){}
   return state;
 }
-async function saveSnapshot(snapshot){
+async function saveSnapshot(snapshot,actorId){
   if(!snapshot)return;
-  await storePut("kv",{key:"snapshot:last",savedAt:Date.now(),value:clone(snapshot)});
+  var savedAt=Date.now(),value=clone(snapshot),actor=Number(actorId||0);
+  await storePut("kv",{key:"snapshot:last",savedAt:savedAt,actorId:actor,value:value});
+  if(actor>0)await storePut("kv",{key:"snapshot:actor:"+actor,savedAt:savedAt,actorId:actor,value:value});
 }
-async function loadSnapshot(){
-  var row=await storeGet("kv","snapshot:last");
+async function loadSnapshot(actorId){
+  var actor=Number(actorId||0),row=null;
+  if(actor>0)row=await storeGet("kv","snapshot:actor:"+actor);
+  else row=await storeGet("kv","snapshot:last");
   if(!row||!row.value)return null;
+  if(actor>0&&Number(row.actorId||0)!==actor)return null;
   var value=clone(row.value);
   value._offlineCached=true;
   value._offlineSavedAt=row.savedAt;
@@ -133,10 +138,12 @@ function sameAgent(row){
 async function sync(){
   if(syncing||navigator.onLine===false)return false;
   if(!cfg.request||!cfg.canSync||!cfg.canSync())return false;
+  var hadRows=false;
   syncing=true;await emitStatus();
   try{
     var rows=await storeAll("queue");
     rows.sort(function(a,b){return Number(a.createdAt)-Number(b.createdAt)});
+    hadRows=rows.some(sameAgent);
     for(var i=0;i<rows.length;i++){
       var row=rows[i];
       if(!sameAgent(row))continue;
@@ -170,7 +177,7 @@ async function sync(){
   }finally{
     syncing=false;
     var state=await emitStatus();
-    if(state.pending===0&&cfg.onSynced)try{await cfg.onSynced()}catch(_e){}
+    if(hadRows&&state.pending===0&&cfg.onSynced)try{await cfg.onSynced()}catch(_e){}
   }
   return true;
 }
