@@ -690,7 +690,7 @@ nav{bottom:calc(8px + var(--app-safe-bottom))!important}
 @keyframes ptHeroFloat{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-8px,6px,0)}}
 @keyframes ptBarRise{from{transform:scaleY(.06);opacity:.35}to{transform:scaleY(1);opacity:1}}
 @keyframes ptSheetUp{from{opacity:0;transform:translate3d(0,28px,0)}to{opacity:1;transform:none}}
-@keyframes ptFresh{0%{filter:saturate(.96)}45%{filter:saturate(1.08)}100%{filter:none}}
+@keyframes ptFresh{0%{opacity:.965}100%{opacity:1}}
 
 .page-content.active{animation:ptPageIn .34s cubic-bezier(.22,.72,.2,1) both;will-change:transform,opacity}
 .exec-kpi-card,.exec-attention,.exec-shortcuts button,.customer-card,.txn,#agent-list .agent-card,.report-kpi,.analysis-insight{
@@ -751,7 +751,14 @@ body.tg-dark .agent-card small,
 body.tg-dark .detail-row span{color:#91a7c4!important}
 body.tg-dark #customer-search,
 body.tg-dark .customer-filter-grid select{background:#0b1c32!important;color:#eef5ff!important;border-color:#1b3556!important}
+body.tg-dark #page-customers,
+body.tg-dark #page-cash,
+body.tg-dark #page-report,
+body.tg-dark #page-map{
+  background:linear-gradient(180deg,#06182f 0,#0a2c60 205px,#071426 205px,#071426 100%)!important
+}
 body.tg-dark nav{background:linear-gradient(135deg,rgba(2,13,29,.98),rgba(5,30,64,.98))!important}
+body.app-inactive *,body.app-inactive *:before,body.app-inactive *:after{animation-play-state:paused!important}
 
 :focus-visible{outline:2px solid #5da2ff!important;outline-offset:2px!important}
 body.low-motion *,body.low-motion *:before,body.low-motion *:after{
@@ -1217,6 +1224,7 @@ async function loadDashboard(){
 }
 function switchPage(id){
  if(!state.ready||!titles[id])return;
+ if(state.page===id&&document.querySelector("#page-"+id+".active"))return;
  state.page=id;
  document.querySelectorAll(".page-content").forEach(function(p){
   var active=p.id==="page-"+id;p.classList.toggle("active",active);
@@ -1853,8 +1861,8 @@ document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){switchPage(b.dataset.page);return}
  if(!state.ready)return;
- if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;haptic("selection");document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
- if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;haptic("selection");document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
+ if(b.dataset.agentFilter){if(state.agentFilter!==b.dataset.agentFilter)haptic("selection");state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
+ if(b.dataset.customerFilter){if(state.customerFilter!==b.dataset.customerFilter)haptic("selection");state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
  if(b.id==="customer-filter-reset"){state.customerFilter="all";state.customerAgent="all";state.customerDebt="all";state.customerStatus="all";state.customerSort="newest";$("customer-agent-filter").value="all";$("customer-debt-filter").value="all";$("customer-status-filter").value="all";$("customer-sort").value="newest";document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter==="all")});renderCustomers();return}
  if(b.id==="manager-settings"){showManagerSettings();return}
  if(b.id==="settings-save"){prefs.refreshSeconds=Number($("settings-refresh").value);prefs.startPage=$("settings-start").value;prefs.showMapClients=$("settings-map-clients").checked;savePrefs();closeSheet();if(state.page==="map")initMap();if(state.page==="report")renderAnalysisMap();toast("Rahbar sozlamalari saqlandi");return}
@@ -1863,10 +1871,10 @@ document.addEventListener("click",function(e){
  if(b.id==="client-edit-confirm"){commitCustomerEdit();return}
  if(b.dataset.clientExport){exportClient(Number(b.dataset.clientExport),b.dataset.format);return}
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
- if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;haptic("selection");document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
- if(b.dataset.reportTab){state.reportTab=b.dataset.reportTab;haptic("selection");document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
- if(b.dataset.reportMetric){state.reportMetric=b.dataset.reportMetric;haptic("selection");document.querySelectorAll("[data-report-metric]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
- if(b.dataset.productMetric){state.reportProductMetric=b.dataset.productMetric;haptic("selection");document.querySelectorAll("[data-product-metric]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.cashTab){if(state.cashTab!==b.dataset.cashTab)haptic("selection");state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
+ if(b.dataset.reportTab){if(state.reportTab!==b.dataset.reportTab)haptic("selection");state.reportTab=b.dataset.reportTab;document.querySelectorAll("[data-report-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.reportMetric){if(state.reportMetric!==b.dataset.reportMetric)haptic("selection");state.reportMetric=b.dataset.reportMetric;document.querySelectorAll("[data-report-metric]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
+ if(b.dataset.productMetric){if(state.reportProductMetric!==b.dataset.productMetric)haptic("selection");state.reportProductMetric=b.dataset.productMetric;document.querySelectorAll("[data-product-metric]").forEach(function(x){x.classList.toggle("active",x===b)});renderReport();return}
  if(b.dataset.reportAgent){showReportAgent(Number(b.dataset.reportAgent));return}
  if(b.dataset.reportProduct){showReportProduct(Number(b.dataset.reportProduct));return}
  if(b.id==="agent-management-open"){showAgentManagement();return}
@@ -1946,6 +1954,11 @@ function syncTelegramViewport(){
 function applyTelegramTheme(){
  var dark=!!(tg&&tg.colorScheme==="dark");
  document.body.classList.toggle("tg-dark",dark);
+ document.documentElement.style.colorScheme=dark?"dark":"light";
+ var p=tg&&tg.themeParams?tg.themeParams:{};
+ document.documentElement.style.setProperty("--tg-native-bg",p.bg_color||(dark?"#071426":"#f4f8ff"));
+ document.documentElement.style.setProperty("--tg-native-text",p.text_color||(dark?"#eef5ff":"#0c2450"));
+ document.documentElement.style.setProperty("--tg-native-hint",p.hint_color||(dark?"#91a7c4":"#6982aa"));
  var bg=dark?"#071426":"#f4f8ff";
  try{
   if(tg&&tg.setHeaderColor)tg.setHeaderColor("#06162f");
