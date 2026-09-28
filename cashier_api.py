@@ -36,6 +36,7 @@ def _cashier_summary(db):
            OR LOWER(source_name) LIKE '%банк%'""").fetchone()
     bank_usd = int(bank['usd'] or 0)
     bank_uzs = int(bank['uzs'] or 0)
+    bank_uzs_equivalent = int(round((bank_usd / 100) * rate)) if rate else bank_uzs
     accepted_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND accepted_ts>=? AND accepted_ts<?""",(start,end)).fetchone()[0] or 0)
     expense_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
@@ -67,6 +68,7 @@ def _cashier_summary(db):
         'cashBalanceUzs': cash_balance_uzs,
         'bankTotalUsd': bank_usd,
         'bankTotalUzs': bank_uzs,
+        'bankTotalUzsEquivalent': bank_uzs_equivalent,
         'grandTotalUsd': cash_balance_usd + bank_usd,
     }
 
