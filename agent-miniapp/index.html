@@ -105,6 +105,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
  <div id="collectionTaskSection" style="display:none"><div class="title">📌 Kassir topshiriqlari</div><div id="collectionTaskList" class="collection-tasks"></div></div>
  <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">UZS</span></div></div>
  <div class="title">Qayta tashrif kerak</div><div id="homePlan"></div>
+ <p class="tiny"><a id="renderProbeLink" href="./render-probe.html">Ekranni tekshirish</a></p>
 </section>
 <section class="view" id="page-map"><h2 class="screenhead">Mijozlar xaritasi</h2><label for="mapRegion">Hudud</label><select id="mapRegion" aria-label="Xaritadagi mijozlarni hudud bo‘yicha filtrlash"></select><div class="tools" id="mapFilters"></div><div id="mapShell"><div id="map"></div><div id="mapStatus" class="map-status" role="status"></div></div><div class="mapinfo" id="mapNote">GPS manzili bor mijozlar xaritada ko‘rinadi.</div><div id="mapList"></div></section>
 <section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><label for="clientRegion">Hudud</label><select id="clientRegion" aria-label="Mijozlarni hudud bo‘yicha filtrlash"></select><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
@@ -1018,6 +1019,7 @@ if(tg){
 }
 document.addEventListener("focusin",function(e){if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))document.body.classList.add("editing")});
 document.addEventListener("focusout",function(){setTimeout(function(){if(!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))document.body.classList.remove("editing")},0)});
+$("renderProbeLink").href="./render-probe.html"+location.hash;
 refresh();
 setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form")refresh()},60000);
 })();

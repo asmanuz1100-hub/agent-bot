@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ASMAN · Ekran testi</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style id="agentStyles"></style><link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+<style>
+.probe-controls{padding:16px;background:#fff;color:#101e39;font:14px Arial,sans-serif;border-bottom:2px solid #2367f5}.probe-controls p{line-height:1.5}.probe-controls select{margin:8px 0}.probe-controls button,.probe-controls a{display:inline-block;padding:10px;margin:4px;border:1px solid #2367f5;border-radius:8px;background:#fff;color:#174fbd}.probe-controls pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px monospace}.probe-controls summary{padding:10px 0}.probe-controls .probe-label{font-weight:bold}.probe-readout{padding:10px;background:#fff;color:#101e39;line-height:1.5}.probe-readout b{display:block}.probe-return{display:block;margin:16px}.probe-controls [hidden]{display:none!important}
+</style><style id="variantStyles"></style></head><body>
+<div class="probe-controls">
+ <b>ASMAN · Ekran testi R1</b>
+ <p>Bu yerda faqat sinov ma’lumotlari bor. Hech narsa bazaga saqlanmaydi. Avval A holatida raqam va ism yozing, pastdagi xaritani ko‘ring. Keyin bittadan boshqa holatni tanlang.</p>
+ <label for="variant" class="probe-label">Solishtirish holati</label>
+ <select id="variant">
+  <option value="baseline">A · Hozirgi ko‘rinish</option>
+  <option value="root">B · Sahifa foni</option>
+  <option value="flat">C · Oddiy markerlar</option>
+  <option value="input">D · Oddiy yozuv maydoni</option>
+  <option value="blend">E · Xarita rasmlari</option>
+  <option value="layer">F · Alohida ekran qatlami</option>
+ </select>
+ <p id="variantNote">A · Agent’dagi mavjud CSS bilan boshlang.</p>
+ <p>Qaysi harfda yozuv va oq bloklar o‘zgarganini ayting. Sinovga haqiqiy telefon yoki mijoz ismini kiritmang.</p>
+ <details><summary>Qurilma ma’lumoti</summary><pre id="device"></pre><button id="copy" type="button">Nusxalash</button><span id="copyStatus"></span></details>
+ <a id="back" href="./">Agentga qaytish</a>
+ <p id="loadStatus" role="status">Test yuklanmoqda…</p>
+</div>
+<div class="app"><header><b>Sinov ma’lumotlari</b></header><main>
+ <h2 class="screenhead">Telefon va ism</h2>
+ <div class="card wizard-card"><h3>Matn ko‘rinishini tekshirish</h3><label for="phone">Telefon</label><input id="phone" type="tel" autocomplete="off" value="123456789" placeholder="123456789"><label for="person">Ism</label><input id="person" type="text" autocomplete="off" value="Ali Test"><label for="shop">Do‘kon</label><input id="shop" type="text" autocomplete="off" value="Sinov do‘koni"></div>
+ <div class="probe-readout"><b id="counts">Maydon qiymatlari tekshirilmoqda.</b>Maydonda matn ko‘rinmasa ham, yuqoridagi belgilar soni o‘zgarsa yozuv qabul qilinyapti.</div>
+ <h2 class="screenhead">Sinov xaritasi · 91 belgi</h2><div id="mapShell"><div id="map"></div></div>
+ <p class="mapinfo">Belgilar sun’iy joylashtirilgan. Haqiqiy mijoz koordinatalari ishlatilmaydi.</p>
+ <a class="probe-return" href="#variant">↑ Boshqa holatni tanlash</a>
+</main></div>
+<script src="./vendor/leaflet/leaflet.js"></script>
+<script>
+(async function(){
+ 'use strict';
+ const $=id=>document.getElementById(id),tg=window.Telegram&&window.Telegram.WebApp;
+ const options={
+  baseline:{css:'',note:'A · Agent’dagi mavjud CSS bilan boshlang.'},
+  root:{css:'html,body,.app{background:transparent!important}html{background:#f4f7fd!important}',note:'B · Ichki fon qatlamlari olib tashlandi.'},
+  flat:{css:'.client-map-pin,.client-map-pin span{transform:none!important;box-shadow:none!important}.client-map-pin{border-radius:50%!important}',note:'C · Marker aylanishi va soyasi o‘chirildi.'},
+  input:{css:'input{appearance:none!important;-webkit-appearance:none!important;-webkit-text-fill-color:currentColor!important;box-shadow:none!important;-webkit-box-shadow:none!important;border-radius:0!important}',note:'D · Yozuv maydonining bezaklari soddalashtirildi.'},
+  blend:{css:'.leaflet-container img.leaflet-tile{mix-blend-mode:normal!important}',note:'E · Xarita rasmlarining aralashtirish usuli o‘zgardi.'},
+  layer:{css:'#map,.wizard-card{transform:translateZ(0);backface-visibility:hidden}',note:'F · Xarita va forma alohida chizish qatlamiga o‘tkazildi.'}
+ };
+ let map=null,tileErrors=0,tileLoads=0;
+ function state(){return {test:'R1',variant:$('variant').value,userAgent:navigator.userAgent,telegramPlatform:tg&&tg.platform,telegramVersion:tg&&tg.version,scheme:matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light',viewport:{width:innerWidth,height:innerHeight,scale:devicePixelRatio,visualHeight:visualViewport&&visualViewport.height},tileLoads,tileErrors,fields:['phone','person','shop'].map(id=>{const e=$(id),s=getComputedStyle(e);return {id,length:e.value.length,color:s.color,fill:s.webkitTextFillColor,background:s.backgroundColor}})}}
+ function update(){const s=state();$('device').textContent=JSON.stringify(s,null,2);$('counts').textContent='Belgilar soni: telefon '+s.fields[0].length+' · ism '+s.fields[1].length+' · do‘kon '+s.fields[2].length;}
+ $('variant').addEventListener('change',()=>{const o=options[$('variant').value];$('variantStyles').textContent=o.css;$('variantNote').textContent=o.note;requestAnimationFrame(()=>{if(map)map.invalidateSize({pan:false});update()})});
+ ['phone','person','shop'].forEach(id=>$(id).addEventListener('input',update));
+ addEventListener('resize',update);
+ $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('device').textContent);$('copyStatus').textContent=' Nusxalandi'}catch(e){$('copyStatus').textContent=' Nusxalash ishlamadi; skrinshot yuboring.'}});
+ // Preserve Telegram's launch fragment locally; never include it in diagnostics.
+ $('back').href='./'+location.hash;
+ try{
+  if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#101e39');tg.setBackgroundColor('#f4f7fd')}catch(e){}}
+  const response=await fetch('./',{cache:'no-store'});if(!response.ok)throw Error('Agent CSS yuklanmadi');
+  const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+  $('agentStyles').textContent=Array.from(doc.querySelectorAll('style')).map(s=>s.textContent).join('\n');
+  if(!window.L)throw Error('Leaflet yuklanmadi');
+  map=L.map('map',{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.54,70.94],10);
+  const tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:1,attribution:'© OpenStreetMap contributors'});
+  tiles.on('tileload',()=>{tileLoads++;update()});tiles.on('tileerror',()=>{tileErrors++;update()});tiles.addTo(map);
+  const pins=L.featureGroup().addTo(map);
+  for(let i=0;i<91;i++){
+   const lat=40.45+((i*37)%91)/500,lon=70.7+((i*53)%91)/250,color=['#0daf79','#e89d2c','#e55265'][i%3];
+   const icon=L.divIcon({className:'client-map-icon',html:'<div class="client-map-pin" style="--pin:'+color+'"><span></span></div>',iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-10]});
+   L.marker([lat,lon],{icon,zIndexOffset:100,title:'Sinov '+(i+1)}).addTo(pins);
+  }
+  map.fitBounds(pins.getBounds().pad(.18),{maxZoom:15,animate:false});
+  $('loadStatus').textContent='Tayyor · A holati';document.body.dataset.probeReady='true';update();
+ }catch(e){$('loadStatus').textContent='Test ochilmadi: '+e.message;update()}
+})();
+</script></body></html>
