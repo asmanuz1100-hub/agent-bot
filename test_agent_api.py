@@ -40,6 +40,21 @@ class AgentApiTests(unittest.TestCase):
             'note':'Katalog berildi'
         },request,self.now)
 
+    def test_region_persists_on_create_and_edit_and_appears_in_snapshot(self):
+        out=agent_api.mutate(self.db,2,'add_client',{
+            'shopName':'Hudud do‘koni','name':'Vali','phone':'+998901234569',
+            'lat':40.54,'lon':70.94,'region':'Bag‘dod'
+        },'region_create_98765',self.now)
+        cid=out['clientId']
+        self.assertEqual(next(c for c in agent_api.quick_snapshot(self.db,2,self.now)['clients']
+                              if c['id']==cid)['region'],'Bag‘dod')
+        agent_api.mutate(self.db,2,'client_edit',{
+            'clientId':cid,'shop':'Hudud do‘koni','person':'Vali',
+            'phone':'+998901234569','region':'Yapan'
+        },'region_edit_98765',self.now+1)
+        self.assertEqual(next(c for c in agent_api.quick_snapshot(self.db,2,self.now+1)['clients']
+                              if c['id']==cid)['region'],'Yapan')
+
     def live_shift(self):
         self.db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(99,2,?,777)',(self.now-600,))
         self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(99,?,40.54,70.94,8)',(self.now-30,))
