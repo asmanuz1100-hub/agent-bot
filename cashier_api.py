@@ -25,6 +25,17 @@ def _cashier_summary(db):
     now = datetime.now(TZ)
     start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
     end = int((now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).timestamp())
+    cash_balance_usd = core.cashier_balance_usd(db)
+    rate = core.cashier_rate(db)
+    cash_balance_uzs = int(round((cash_balance_usd / 100) * rate)) if rate else 0
+    bank = db.execute("""SELECT
+            COALESCE(SUM(amount_usd),0) AS usd,
+            COALESCE(SUM(amount_uzs),0) AS uzs
+        FROM cashier_incomes
+        WHERE category LIKE '%Банк%' OR LOWER(source_name) LIKE '%bank%'
+           OR LOWER(source_name) LIKE '%банк%'""").fetchone()
+    bank_usd = int(bank['usd'] or 0)
+    bank_uzs = int(bank['uzs'] or 0)
     accepted_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND accepted_ts>=? AND accepted_ts<?""",(start,end)).fetchone()[0] or 0)
     expense_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
@@ -52,6 +63,11 @@ def _cashier_summary(db):
         'pendingUzs': int(pending['uzs'] or 0),
         'agentWalletTotal': wallet_total,
         'agentWalletTotalUzs': wallet_total_uzs,
+        'cashBalanceUsd': cash_balance_usd,
+        'cashBalanceUzs': cash_balance_uzs,
+        'bankTotalUsd': bank_usd,
+        'bankTotalUzs': bank_uzs,
+        'grandTotalUsd': cash_balance_usd + bank_usd,
     }
 
 
