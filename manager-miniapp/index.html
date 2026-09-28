@@ -998,7 +998,8 @@ async function openCustomerEdit(id){
    '<label>To‘lov sanasi<input id="edit-client-due" value="'+escapeHtml(c.paymentDue)+'"></label>'+
    '<label>Izoh<textarea id="edit-client-comment">'+escapeHtml(c.comment)+'</textarea></label>'+
    '<div class="settings-note">Tovar, qarz va to‘lov tarixi bu oynadan o‘zgartirilmaydi. Profil o‘zgarishlari auditda saqlanadi.</div>'+
-   '<button type="button" class="mini-btn primary settings-save" data-client-edit-preview="'+id+'">O‘zgarishni tekshirish</button></div>';
+   '<button type="button" class="mini-btn primary settings-save" data-client-edit-preview="'+id+'">O‘zgarishni tekshirish</button>'+
+   '<button type="button" class="mini-btn danger settings-save" data-client-delete="'+id+'">🗑 Mijozni o‘chirish</button></div>';
   openSheet("Mijozni tahrirlash",body)
  }catch(e){toast(e.message||"Tahrirlash oynasi ochilmadi")}
 }
@@ -1022,6 +1023,16 @@ async function commitCustomerEdit(){
   toast("Mijoz ma’lumoti saqlandi");
   await loadDashboard();renderCustomerControl(r.client)
  }catch(e){toast(e.message||"Ma’lumot saqlanmadi")}
+}
+async function deleteCustomer(id){
+ try{
+  var p=await request("client_delete_preview",{clientId:id});
+  var detail=p.name+"\nQarz: "+money(p.debtUsd||0)+" USD\nTarix: "+Number(p.eventCount||0)+" operatsiya, "+Number(p.visitCount||0)+" tashrif.";
+  if(!window.confirm("Mijozni aktiv ro‘yxatdan o‘chirasizmi?\n\n"+detail+"\n\n"+p.warning))return;
+  if(!window.confirm("OXIRGI TASDIQ\n\n"+p.name+" mijozini o‘chirishni tasdiqlaysizmi?"))return;
+  await request("client_delete_commit",{clientId:id,confirm:true});
+  closeSheet();await loadDashboard();toast("Mijoz o‘chirildi · tarix arxivda saqlandi");
+ }catch(e){toast(e.message||"Mijozni o‘chirib bo‘lmadi")}
 }
 function base64Bytes(value){
  var raw=atob(value),out=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out
@@ -1472,6 +1483,7 @@ document.addEventListener("click",function(e){
  if(b.dataset.clientEdit){openCustomerEdit(Number(b.dataset.clientEdit));return}
  if(b.dataset.clientEditPreview){previewCustomerEdit(Number(b.dataset.clientEditPreview));return}
  if(b.id==="client-edit-confirm"){commitCustomerEdit();return}
+ if(b.dataset.clientDelete){deleteCustomer(Number(b.dataset.clientDelete));return}
  if(b.dataset.clientExport){exportClient(Number(b.dataset.clientExport),b.dataset.format);return}
  if(b.dataset.customer){showCustomer(Number(b.dataset.customer));return}
  if(b.dataset.cashTab){state.cashTab=b.dataset.cashTab;document.querySelectorAll("[data-cash-tab]").forEach(function(x){x.classList.toggle("active",x===b)});renderCash();return}
