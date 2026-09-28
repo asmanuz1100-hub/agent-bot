@@ -20,7 +20,9 @@ const snapshot={
  const writes=[],uploads=[],actions=[];
  page.on('pageerror',e=>{throw e});
  await page.addInitScript(()=>{
-   window.events={};
+   window.events={};window.fetchCalls=[];
+   const originalFetch=window.fetch.bind(window);
+   window.fetch=function(url,options){window.fetchCalls.push({url:String(url),body:options&&options.body||""});return originalFetch(url,options)};
    window.Telegram={WebApp:{
      platform:'android',initData:'offline-test-signed',
      ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},
@@ -94,7 +96,8 @@ const snapshot={
  await page.waitForFunction(()=>navigator.onLine===true);
  await page.waitForFunction(async()=>{const s=await window.ASMANOffline.status();return s.pending===0},{timeout:15000});
  assert.equal(uploads.length,1,'photo uploads once after reconnect');
- assert.equal(writes.length,1,'client writes once after reconnect; actions='+JSON.stringify(actions));
+ const browserFetchCalls=await page.evaluate(()=>window.fetchCalls.slice());
+ assert.equal(writes.length,1,'client writes once after reconnect; actions='+JSON.stringify(actions)+' fetchCalls='+JSON.stringify(browserFetchCalls));
  assert.equal(writes[0].photoFileId,'offline-test-photo-id');
  assert.ok(Number(writes[0].offlineTs)>0);
  assert.ok(writes[0].nonce,'idempotency nonce must survive offline queue');
