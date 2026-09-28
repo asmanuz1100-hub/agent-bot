@@ -594,29 +594,53 @@ function setClientProductMode(mode){
  if(prospect)prospect.classList.toggle("show",mode==="none");
  reviewing=false;nonce=null;$("review").style.display="none";renderClientWizardStep();
 }
+function canvasToJpegDataUrl(canvas,quality){
+ return new Promise(function(resolve,reject){
+  function blobToDataUrl(blob){
+   if(!blob){reject(Error("Foto tayyorlanmadi."));return}
+   var reader=new FileReader();
+   reader.onerror=function(){reject(Error("Foto o‘qilmadi."))};
+   reader.onload=function(){resolve(reader.result)};
+   reader.readAsDataURL(blob);
+  }
+  if(canvas.toBlob)canvas.toBlob(blobToDataUrl,"image/jpeg",quality);
+  else{
+   try{resolve(canvas.toDataURL("image/jpeg",quality))}
+   catch(e){reject(Error("Foto tayyorlanmadi."))}
+  }
+ });
+}
+async function encodePhotoCanvas(canvas){
+ var quality=.72,dataUrl=await canvasToJpegDataUrl(canvas,quality);
+ if(dataUrl.length>950000){quality=.6;dataUrl=await canvasToJpegDataUrl(canvas,quality)}
+ if(dataUrl.length>950000){quality=.5;dataUrl=await canvasToJpegDataUrl(canvas,quality)}
+ if(dataUrl.length>1050000)throw Error("Foto hajmi katta. Qayta rasm oling.");
+ return dataUrl;
+}
 function compressCameraFile(file){
  return new Promise(function(resolve,reject){
   if(!file||!String(file.type||"").startsWith("image/")){reject(Error("Faqat rasm oling."));return}
-  if(file.size>12*1024*1024){reject(Error("Foto juda katta. Qayta rasm oling."));return}
-  var reader=new FileReader();
-  reader.onerror=function(){reject(Error("Foto o‘qilmadi."))};
-  reader.onload=function(){
-   var img=new Image();
-   img.onerror=function(){reject(Error("Foto formati ochilmadi. Kameradan qayta oling."))};
-   img.onload=function(){
-    var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,maxSide=1280;
+  if(file.size>15*1024*1024){reject(Error("Foto juda katta. Qayta rasm oling."));return}
+  var img=new Image(),url="";
+  img.onerror=function(){if(url)URL.revokeObjectURL(url);reject(Error("Foto formati ochilmadi. Kameradan qayta oling."))};
+  img.onload=async function(){
+   try{
+    var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,maxSide=1024;
     if(w>maxSide||h>maxSide){var ratio=Math.min(maxSide/w,maxSide/h);w=Math.max(1,Math.round(w*ratio));h=Math.max(1,Math.round(h*ratio))}
     var canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
-    var ctx=canvas.getContext("2d");if(!ctx){reject(Error("Foto tayyorlanmadi."));return}
+    var ctx=canvas.getContext("2d",{alpha:false});if(!ctx)throw Error("Foto tayyorlanmadi.");
     ctx.drawImage(img,0,0,w,h);
-    var quality=.8,dataUrl=canvas.toDataURL("image/jpeg",quality);
-    while(dataUrl.length>1500000&&quality>.5){quality-=.1;dataUrl=canvas.toDataURL("image/jpeg",quality)}
-    if(dataUrl.length>1650000){reject(Error("Foto hajmi katta. Kameradan yaqinroq va qayta oling."));return}
-    resolve(dataUrl);
-   };
-   img.src=reader.result;
+    resolve(await encodePhotoCanvas(canvas));
+   }catch(e){reject(e)}
+   finally{if(url)URL.revokeObjectURL(url)}
   };
-  reader.readAsDataURL(file);
+  try{url=URL.createObjectURL(file);img.src=url}
+  catch(e){
+   var reader=new FileReader();
+   reader.onerror=function(){reject(Error("Foto o‘qilmadi."))};
+   reader.onload=function(){img.src=reader.result};
+   reader.readAsDataURL(file);
+  }
  });
 }
 function stopLiveCamera(){
@@ -653,24 +677,38 @@ async function startLiveCamera(){
   notify("Kameraga ruxsat berilmadi. Zaxira kamerani oching.");
  }
 }
+async function uploadPhotoWithRetry(imageData,statusEl){
+ var lastError=null;
+ for(var attempt=1;attempt<=2;attempt++){
+  try{
+   if(statusEl)statusEl.textContent=attempt===1?"Foto yuklanmoqda...":"Aloqa uzildi · avtomatik qayta urinilmoqda...";
+   var out=await request("photo_upload",{imageData:imageData});
+   if(!out.photoFileId)throw Error("Foto serverda saqlanmadi.");
+   return out;
+  }catch(err){
+   lastError=err;
+   if(attempt<2)await new Promise(function(resolve){setTimeout(resolve,500)});
+  }
+ }
+ throw lastError||Error("Foto yuklanmadi.");
+}
 async function saveCameraImage(imageData){
  if(cameraUploading)return;cameraUploading=true;
  var button=$("captureLivePhoto")||$("takePhoto"),statusEl=$("cameraStatus"),preview=$("cameraPreview"),hidden=$("photoFileId");
- if(button){button.disabled=true;button.textContent="⏳ Saqlanmoqda..."}
- if(statusEl){statusEl.textContent="Foto xavfsiz yuklanmoqda...";statusEl.className=""}
+ if(button){button.disabled=true;button.textContent="⏳ Yuklanmoqda..."}
+ if(statusEl){statusEl.textContent="Foto tayyorlandi · yuklanmoqda...";statusEl.className=""}
  if(hidden)hidden.value="";
  try{
   if(preview){preview.src=imageData;preview.classList.add("show")}
-  var out=await request("photo_upload",{imageData:imageData});
-  if(!out.photoFileId)throw Error("Foto serverda saqlanmadi.");
+  var out=await uploadPhotoWithRetry(imageData,statusEl);
   hidden.value=out.photoFileId;
   stopLiveCamera();
-  if(statusEl){statusEl.textContent="✓ Foto tayyor · mijoz kartasiga saqlanadi";statusEl.className="camera-ok"}
-  notify("Foto olindi ✅");
+  if(statusEl){statusEl.textContent="✓ Foto yuklandi · mijoz kartasiga saqlanadi";statusEl.className="camera-ok"}
+  notify("Foto yuklandi ✅");
   reviewing=false;nonce=null;$("review").style.display="none";if(formAction==="client")renderClientWizardStep();else $("submitForm").textContent="Davom etish · Tekshirish";
  }catch(err){
   if(preview){preview.removeAttribute("src");preview.classList.remove("show")}
-  if(statusEl){statusEl.textContent=err.message||"Foto yuklanmadi.";statusEl.className=""}
+  if(statusEl){statusEl.textContent=(err.message||"Foto yuklanmadi.")+" Qayta urinib ko‘ring.";statusEl.className=""}
   notify(err.message||"Foto yuklanmadi. Qayta urinib ko‘ring.");
  }finally{
   cameraUploading=false;
@@ -681,14 +719,12 @@ async function saveCameraImage(imageData){
 async function captureLivePhoto(){
  var video=$("cameraLive");
  if(!cameraStream||!video||video.readyState<2){notify("Kamera hali tayyor emas.");return}
- var sw=video.videoWidth||1280,sh=video.videoHeight||720,maxSide=1280,scale=Math.min(1,maxSide/Math.max(sw,sh));
+ var sw=video.videoWidth||1280,sh=video.videoHeight||720,maxSide=1024,scale=Math.min(1,maxSide/Math.max(sw,sh));
  var canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(sw*scale));canvas.height=Math.max(1,Math.round(sh*scale));
- var ctx=canvas.getContext("2d");if(!ctx){notify("Kadr olinmadi.");return}
+ var ctx=canvas.getContext("2d",{alpha:false});if(!ctx){notify("Kadr olinmadi.");return}
  ctx.drawImage(video,0,0,canvas.width,canvas.height);
- var quality=.82,imageData=canvas.toDataURL("image/jpeg",quality);
- while(imageData.length>1500000&&quality>.5){quality-=.08;imageData=canvas.toDataURL("image/jpeg",quality)}
- if(imageData.length>1650000){notify("Foto hajmi katta. Kamerani yaqinroq tutib qayta oling.");return}
- await saveCameraImage(imageData);
+ try{await saveCameraImage(await encodePhotoCanvas(canvas))}
+ catch(err){notify(err.message||"Foto tayyorlanmadi. Qayta urinib ko‘ring.")}
 }
 async function uploadCameraFile(file){
  try{var imageData=await compressCameraFile(file);await saveCameraImage(imageData)}
