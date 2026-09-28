@@ -465,5 +465,46 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(detail['events'][0]['kind'],'delivery')
 
 
+    def test_offline_mutation_preserves_original_event_and_visit_time(self):
+        self.add_client('offline_time_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        offline_ts=self.now-120
+        self.db.execute('INSERT INTO shifts(id,agent,start,"end",live_id) VALUES(77,2,?,?,700)',
+                        (offline_ts-600,offline_ts+600))
+        self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(77,?,40.54,70.94,8)',
+                        (offline_ts-20,))
+        out=agent_api.mutate(self.db,2,'payment',{
+            'clientId':cid,'currency':'USD','amount':'1.00','offlineTs':offline_ts
+        },'offline_payment_time_123',self.now)
+        self.assertTrue(out['ok'])
+        event=self.db.execute("SELECT ts FROM events WHERE client=? AND kind='payment' ORDER BY id DESC LIMIT 1",
+                              (cid,)).fetchone()
+        self.assertEqual(event['ts'],offline_ts)
+
+        agent_api.mutate(self.db,2,'visit',{
+            'clientId':cid,'status':'interested','note':'Offline tashrif','offlineTs':offline_ts+5
+        },'offline_visit_time_123',self.now)
+        visit=self.db.execute("SELECT ts FROM client_visits WHERE client=? ORDER BY id DESC LIMIT 1",
+                              (cid,)).fetchone()
+        self.assertEqual(visit['ts'],offline_ts+5)
+
+    def test_offline_payment_uses_historical_shift_and_rejects_too_old_time(self):
+        self.add_client('offline_history_client')
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        op_ts=self.now-3600
+        self.db.execute('INSERT INTO shifts(id,agent,start,"end",live_id) VALUES(78,2,?,?,701)',
+                        (op_ts-600,op_ts+600))
+        self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(78,?,40.54,70.94,8)',
+                        (op_ts-25,))
+        out=agent_api.mutate(self.db,2,'payment',{
+            'clientId':cid,'currency':'USD','amount':'1.00','offlineTs':op_ts
+        },'offline_historical_pay_123',self.now)
+        self.assertTrue(out['ok'])
+        with self.assertRaisesRegex(ValueError,'7 kundan eski'):
+            agent_api.mutate(self.db,2,'visit',{
+                'clientId':cid,'status':'interested','note':'Eski offline','offlineTs':self.now-8*86400
+            },'offline_too_old_12345',self.now)
+
+
 if __name__=='__main__':
     unittest.main()
