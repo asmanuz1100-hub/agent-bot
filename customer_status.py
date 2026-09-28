@@ -25,7 +25,7 @@ def normalize(status, followup=None):
         return followup
     return None
 
-def add_visit(db,actor,client,status,note,followup=None):
+def add_visit(db,actor,client,status,note,followup=None,ts=None):
     person=db.execute('SELECT agent FROM clients WHERE id=?',(client,)).fetchone()
     who=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not person or not who or who[0] not in ('admin','agent'):
@@ -35,7 +35,7 @@ def add_visit(db,actor,client,status,note,followup=None):
         raise ValueError('Суҳбат ҳақида 1–1000 белги ёзинг.')
     followup=normalize(status,followup)
     db.execute('INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(?,?,?,?,?,?)',
-               (client,actor,status,note,followup,int(time.time())))
+               (client,actor,status,note,followup,int(time.time() if ts is None else ts)))
 
 def history(db,client,limit=5):
     return db.execute("""SELECT v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name
