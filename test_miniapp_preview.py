@@ -24,7 +24,7 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('id="gate"',self.html)
 
     def test_live_workflows_and_real_map(self):
-        for term in ('id="startShift"','id="endShift"','shift_start','shift_end',
+        for term in ('id="mapRegion"','id="clientRegion"','function regionMatches(c)',
                      '"client"','"visit"','"delivery"','"payment"','"return"',
                      '"handover"','nonce:nonce','window.confirm',
                      'function renderMap(','function renderCash(',
@@ -32,6 +32,8 @@ class LiveAgentMiniAppTests(unittest.TestCase):
                      'id="page-home"','id="page-map"','id="page-clients"',
                      'id="page-detail"','id="page-cash"','id="page-reports"'):
             self.assertIn(term,self.html)
+        self.assertNotIn('id="startShift"',self.html)
+        self.assertNotIn('id="endShift"',self.html)
         self.assertNotIn('cdn.tailwindcss.com',self.html)
         self.assertNotIn('api/mcp/asset',self.html)
         self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',self.html)
