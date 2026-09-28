@@ -2068,6 +2068,23 @@ def serve_webhook(db,base_url):
                     elif action=='client_detail':
                         data=agent_api.client_detail(local,subject,payload.get('clientId'))
                         local.commit()
+                    elif action=='client_delete_preview':
+                        if not admin_mode:
+                            answer_agent(403,{'error':'Mijozni faqat admin o‘chira oladi.'});return
+                        data=manager_api.client_delete_preview(local,payload.get('clientId'))
+                        if int(data['agentId'])!=int(subject):
+                            raise ValueError('Tanlangan agentga tegishli mijozni oching.')
+                        local.commit()
+                    elif action=='client_delete_commit':
+                        if not admin_mode:
+                            answer_agent(403,{'error':'Mijozni faqat admin o‘chira oladi.'});return
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Mijozni o‘chirishni tasdiqlang.')
+                        preview=manager_api.client_delete_preview(local,payload.get('clientId'))
+                        if int(preview['agentId'])!=int(subject):
+                            raise ValueError('Tanlangan agentga tegishli mijozni oching.')
+                        data=manager_api.client_delete_commit(local,actor,preview['clientId'])
+                        local.commit()
                     elif action=='route':
                         data=agent_api.route(local,subject,payload.get('period'))
                         local.commit()
@@ -2146,6 +2163,12 @@ def serve_webhook(db,base_url):
                         preview=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
                         edit_client(local,actor,preview['clientId'],preview['values'])
                         data={'ok':True,'client':manager_api.client_detail(local,preview['clientId'])}
+                    elif action=='client_delete_preview':
+                        data=manager_api.client_delete_preview(local,payload.get('clientId'))
+                    elif action=='client_delete_commit':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Mijozni o‘chirishni tasdiqlang.')
+                        data=manager_api.client_delete_commit(local,actor,payload.get('clientId'))
                     elif action=='client_export':
                         client_id=payload.get('clientId')
                         fmt=str(payload.get('format') or '').lower()
