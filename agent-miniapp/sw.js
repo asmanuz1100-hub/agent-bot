@@ -1,6 +1,6 @@
 /* ASMAN Agent Mini App offline shell cache.
    Data writes are queued by index.html in IndexedDB; this worker only keeps the UI shell available. */
-const CACHE_NAME="asman-agent-shell-20260928-v1";
+const CACHE_NAME="asman-agent-shell-20260928-v2";
 const SHELL=[
   "./",
   "./index.html",
