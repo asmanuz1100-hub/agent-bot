@@ -55,6 +55,20 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(next(c for c in agent_api.quick_snapshot(self.db,2,self.now+1)['clients']
                               if c['id']==cid)['region'],'Yapan')
 
+    def test_legacy_address_regions_are_backfilled_once_without_guessing_test_rows(self):
+        self.db.execute("DELETE FROM meta WHERE key='client_regions_from_address_20260928'")
+        samples=[(1,'Багдод',''),(2,'Учкўприк тумани',''),(3,'Яйпан, Ўзбекистон тумани',''),
+                 (4,'Чиркай',''),(5,'Қушқўноқ',''),(6,'Томоша, Фурқат тумани',''),
+                 (7,'Тест',''),(8,'Бувайда','Old Region'),(92,'Бағдод тумани','')]
+        self.db.executemany('INSERT INTO clients(id,agent,address,region) VALUES(?,2,?,?)',samples)
+        core._backfill_existing_client_regions_once(self.db)
+        actual={r['id']:r['region'] for r in self.db.execute('SELECT id,region FROM clients').fetchall()}
+        self.assertEqual(actual,{1:'Bag‘dod',2:'Uchko‘prik',3:'Yaypan',4:'Furqat',
+                                 5:'O‘zbekiston',6:'Furqat',7:'',8:'Old Region',92:''})
+        self.db.execute("UPDATE clients SET region='' WHERE id=1")
+        core._backfill_existing_client_regions_once(self.db)
+        self.assertEqual(self.db.execute('SELECT region FROM clients WHERE id=1').fetchone()[0],'')
+
     def live_shift(self):
         self.db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(99,2,?,777)',(self.now-600,))
         self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(99,?,40.54,70.94,8)',(self.now-30,))
