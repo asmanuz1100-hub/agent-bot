@@ -66,7 +66,7 @@ async function contrast(page,selector){
   await contrast(page,'#phone');
   assert.equal(await page.locator('nav').isVisible(),false,'keyboard focus hides fixed navigation');
   await page.locator('#submitForm').click();
-  await page.locator('#person').fill('Али Test');await page.locator('#shop').fill('Baraka');await contrast(page,'#person');
+  await page.locator('#person').fill('Али Test');await page.locator('#shop').fill('Baraka');await page.locator('#region').fill('Bag‘dod');await contrast(page,'#person');
   await page.evaluate(()=>window.events.themeChanged?.());
   assert.equal(await page.locator('#person').inputValue(),'Али Test');
   await page.locator('#submitForm').click();await page.locator('[data-client-product-mode="none"]').click();
