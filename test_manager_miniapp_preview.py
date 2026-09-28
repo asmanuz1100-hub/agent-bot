@@ -159,5 +159,13 @@ class ManagerMiniAppTests(unittest.TestCase):
         p=subprocess.run(["node","--check"],input=js,text=True,capture_output=True,timeout=12)
         self.assertEqual(p.returncode,0,p.stderr)
 
+
+    def test_manager_customer_edit_has_safe_delete_flow(self):
+        self.assertIn('data-client-delete="'+id+'"',self.html)
+        self.assertIn('request("client_delete_preview",{clientId:id})',self.html)
+        self.assertIn('request("client_delete_commit",{clientId:id,confirm:true})',self.html)
+        self.assertIn('OXIRGI TASDIQ',self.html)
+        self.assertIn('tarix arxivda saqlandi',self.html)
+
 if __name__=="__main__":
     unittest.main()
