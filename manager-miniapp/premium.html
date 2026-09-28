@@ -1211,8 +1211,8 @@ async function loadDashboard(){
   if(state.page==="map")initMap();
   document.body.classList.remove("data-fresh");void document.body.offsetWidth;document.body.classList.add("data-fresh");
   clearTimeout(loadDashboard.freshTimer);loadDashboard.freshTimer=setTimeout(function(){document.body.classList.remove("data-fresh")},650);
-  haptic("notification","success");syncTelegramBack();
- }catch(e){haptic("notification","error");gate("Kirish yoki ma’lumot xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
+  syncTelegramBack();
+ }catch(e){gate("Kirish yoki ma’lumot xatosi",e.message||"Ma’lumotlar yuklanmadi.");}
  finally{refreshing=false;$("refresh-data").disabled=false}
 }
 function switchPage(id){
