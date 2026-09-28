@@ -224,6 +224,7 @@ def connect(path,initialize=True):
                        (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
         _promote_8068123777_to_admin_once(db)
         _backfill_unbilled_deliveries(db)
+        _backfill_existing_client_regions_once(db)
         db.commit()
         return db
     db=sqlite3.connect(path,timeout=30)
@@ -262,8 +263,35 @@ def connect(path,initialize=True):
                    (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
     _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
+    _backfill_existing_client_regions_once(db)
     db.execute('PRAGMA journal_mode=WAL')
     return db
+
+def _backfill_existing_client_regions_once(db):
+    """Classify the 91 legacy clients from their written addresses, once.
+
+    Only the original IDs are eligible. Existing manual region edits are kept;
+    this never classifies new customers or reassigns one after a later edit.
+    """
+    key='client_regions_from_address_20260928'
+    if db.execute('SELECT 1 FROM meta WHERE key=?',(key,)).fetchone():return
+    patterns=(('Bag‘dod',r'ба[ғг]дод'),('Uchko‘prik',r'учк[ўуо]прик'),
+              ('Rishton',r'риштон'),('Buvayda',r'бувайда'),
+              ('Furqat',r'фур[қк]ат'),('Beshariq',r'бешари[қк]'),
+              ('O‘zbekiston',r'ўзбекистон\s+тумани'))
+    updated=0
+    for row in db.execute("SELECT id,address,region FROM clients WHERE id<=91 AND TRIM(COALESCE(region,''))='' ORDER BY id").fetchall():
+        address=(row['address'] or '').strip()
+        matches=[name for name,pattern in patterns if re.search(pattern,address,re.I)]
+        if 'Яйпан' in address and 'O‘zbekiston' in matches:
+            matches=['Yaypan']
+        if not matches and address=='Чиркай':matches=['Furqat']
+        if not matches and address=='Қушқўноқ':matches=['O‘zbekiston']
+        if len(matches)!=1:continue
+        db.execute("UPDATE clients SET region=? WHERE id=? AND TRIM(COALESCE(region,''))='' AND address=?",
+                   (matches[0],row['id'],row['address']))
+        updated+=1
+    db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING',(key,str(updated)))
 
 def _promote_8068123777_to_admin_once(db):
     """One-time requested role migration for Telegram user 8068123777.
