@@ -36,8 +36,8 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertNotIn('id="endShift"',self.html)
         self.assertNotIn('cdn.tailwindcss.com',self.html)
         self.assertNotIn('api/mcp/asset',self.html)
-        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',self.html)
-        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',self.html)
+        self.assertIn('js.src="./vendor/leaflet/leaflet.js"',self.html)
+        self.assertIn('css.href="./vendor/leaflet/leaflet.css"',self.html)
 
     def test_maps_use_markers_without_global_pane_overrides(self):
         for term in (
@@ -239,8 +239,8 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn(':root{color-scheme:light}', self.html)
         self.assertNotIn('color-scheme:only', self.html)
         self.assertNotIn('html.tg-android', self.html)
-        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', self.html)
-        self.assertIn('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', self.html)
+        self.assertIn('js.src="./vendor/leaflet/leaflet.js"', self.html)
+        self.assertIn('css.href="./vendor/leaflet/leaflet.css"', self.html)
         self.assertIn('#map{height:calc(100dvh - 265px);min-height:330px;max-height:520px', self.html)
 
     def test_android_map_compositor_is_destroyed_before_camera_flow(self):
