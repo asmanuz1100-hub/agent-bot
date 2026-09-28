@@ -106,6 +106,7 @@ const snapshot={
  assert.equal(writes[0].photoFileId,'offline-test-photo-id');
  assert.ok(Number(writes[0].offlineTs)>0);
  assert.ok(writes[0].nonce,'idempotency nonce must survive offline queue');
+ assert.equal(actions.filter(x=>x==='quick_snapshot').length,1,'cached startup must avoid duplicate quick_snapshot requests');
 
  console.log('offline queue + photo + reconnect sync passed');
  await browser.close();
