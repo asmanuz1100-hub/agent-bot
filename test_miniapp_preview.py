@@ -396,17 +396,20 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         self.assertIn('Mijozda: ',self.html)
         self.assertIn('Qaytarish miqdori mijozdagi qoldiqdan ko‘p:',self.html)
 
-    def test_android_uses_native_camera_without_live_video_surface(self):
+    def test_android_can_open_live_camera_with_native_camera_fallback(self):
         for term in (
-            'function useNativeAndroidCamera()',
-            'tg&&tg.platform==="android"',
-            '/Android/i.test(navigator.userAgent||"")',
-            'if(useNativeAndroidCamera()){',
-            'input.click();return',
-            'var cameraLiveHtml=nativeAndroid?"":',
-            'var cameraBadge=nativeAndroid?"ANDROID CAMERA":"LIVE CAMERA"'
+            'navigator.mediaDevices.getUserMedia',
+            'id="cameraLive"',
+            'id="captureLivePhoto"',
+            'id="fallbackCamera"',
+            'var cameraBadge="LIVE CAMERA"',
+            'id="editGetLocation"',
+            'name="photoFileId"',
+            'name="lat"',
+            'name="lon"'
         ):
             self.assertIn(term,self.html)
+        self.assertNotIn('function useNativeAndroidCamera()',self.html)
 
     def test_javascript_parses(self):
         if not shutil.which("node"):
