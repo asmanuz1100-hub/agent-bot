@@ -96,13 +96,32 @@ def _cash_expenses(db, since):
         WHERE e.ts>=? ORDER BY e.ts DESC,e.id DESC LIMIT 800""",(since,)).fetchall()
 
 
+def _cash_agent_funds(db, since):
+    """Cash transferred from the cashier to an agent expense wallet.
+
+    A topup leaves the cashier immediately, so manager cash reporting must show
+    it as cash-out. The later agent 'expense' row only consumes that wallet and
+    must not be deducted from the cashier a second time.
+    """
+    return db.execute("""SELECT f.id,f.agent,f.actor,f.amount_usd,f.amount_uzs,
+               f.rate_uzs_per_usd,f.note,f.ts,
+               a.name AS agent_name,u.name AS cashier_name
+        FROM agent_funds f
+        LEFT JOIN users a ON a.id=f.agent
+        LEFT JOIN users u ON u.id=f.actor
+        WHERE f.kind='topup' AND f.ts>=?
+        ORDER BY f.ts DESC,f.id DESC LIMIT 800""",(since,)).fetchall()
+
+
 def _cash_period_totals(db,start,end):
     accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
           AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
-    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+    direct_expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
         WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
-    return accepted,expenses
+    agent_funding=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
+        WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    return accepted,direct_expenses+agent_funding
 
 
 def _route_km(a, b):
@@ -232,8 +251,11 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
           AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
-    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+    direct_expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
         WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    agent_funding=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
+        WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    expenses=direct_expenses+agent_funding
     visits=sum(1 for _,ts in recent_visits if start<=ts<end)
     agents=list(by_agent.values())
     for a in agents:a["distanceKm"]=round(a["distanceKm"],2)
@@ -266,8 +288,11 @@ def _period_business_snapshot(db,start,end):
     accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
        WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
          AND COALESCE(accepted_ts,ts)<?""",(start,end)).fetchone()[0] or 0)
-    expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
+    direct_expenses=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses
        WHERE ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    agent_funding=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
+       WHERE kind='topup' AND ts>=? AND ts<?""",(start,end)).fetchone()[0] or 0)
+    expenses=direct_expenses+agent_funding
     delivered=int(row["delivered"] or 0);payments=int(row["payments"] or 0);returns=int(row["returns"] or 0)
     return {
       "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments),"returnsUsd":_usd(returns),
@@ -422,9 +447,27 @@ def dashboard(db, now=None):
             "amountUzs":int(e["amount_uzs"] or 0) if e["currency"]=="UZS" else 0,
             "currency":e["currency"] or "USD","rateUzsPerUsd":int(e["rate_uzs_per_usd"] or 0),
             "category":e["category"] or "Xarajat","recipient":e["recipient"] or "",
-            "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None
+            "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None,
+            "sourceType":"cashier_expense"
         })
-    transactions.sort(key=lambda t:(int(t["acceptedTs"] or t["ts"] or 0),int(t["id"])),reverse=True)
+    for f in _cash_agent_funds(db,since):
+        amount_uzs=int(f["amount_uzs"] or 0)
+        transactions.append({
+            "id":int(f["id"]),"type":"expense","state":"expense",
+            "cashier":f["cashier_name"] or str(f["actor"]),
+            "amountUsd":_usd(f["amount_usd"]),
+            "amountUzs":amount_uzs,
+            "currency":"UZS" if amount_uzs else "USD",
+            "rateUzsPerUsd":int(f["rate_uzs_per_usd"] or 0),
+            "category":"👨‍💼 Agentga berildi",
+            "recipient":f["agent_name"] or str(f["agent"]),
+            "note":f["note"] or "",
+            "ts":int(f["ts"] or 0),"acceptedTs":None,
+            "sourceType":"agent_fund"
+        })
+    transactions.sort(key=lambda t:(int(t["acceptedTs"] or t["ts"] or 0),
+                                    1 if t.get("sourceType")=="agent_fund" else 0,
+                                    int(t["id"])),reverse=True)
     transactions=transactions[:1200]
     # Totals cover the full ledger, independent of the limited transaction list.
     cash_total,cash_expense_today=_cash_period_totals(db,today,now+1)
