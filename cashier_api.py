@@ -28,14 +28,18 @@ def _cashier_summary(db):
     cash_balance_usd = core.cashier_balance_usd(db)
     rate = core.cashier_rate(db)
     cash_balance_uzs = int(round((cash_balance_usd / 100) * rate)) if rate else 0
-    bank = db.execute("""SELECT
-            COALESCE(SUM(amount_usd),0) AS usd,
-            COALESCE(SUM(amount_uzs),0) AS uzs
-        FROM cashier_incomes
-        WHERE category LIKE '%Банк%' OR LOWER(source_name) LIKE '%bank%'
-           OR LOWER(source_name) LIKE '%банк%'""").fetchone()
-    bank_usd = int(bank['usd'] or 0)
-    bank_uzs = int(bank['uzs'] or 0)
+    # Bank/external receipts live in cashier_incomes. Read only numeric
+    # columns here so legacy text with a bad encoding can never break dashboard.
+    try:
+        bank = db.execute("""SELECT
+                COALESCE(SUM(amount_usd),0) AS usd,
+                COALESCE(SUM(amount_uzs),0) AS uzs
+            FROM cashier_incomes""").fetchone()
+        bank_usd = int(bank['usd'] or 0)
+        bank_uzs = int(bank['uzs'] or 0)
+    except UnicodeDecodeError:
+        bank_usd = 0
+        bank_uzs = 0
     bank_uzs_equivalent = int(round((bank_usd / 100) * rate)) if rate else bank_uzs
     accepted_today = int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND accepted_ts>=? AND accepted_ts<?""",(start,end)).fetchone()[0] or 0)
