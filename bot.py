@@ -27,7 +27,7 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
-AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-map-region-nav-v2').strip()
+AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-photo-fast-v3').strip()
 AGENT_V2_TEST_URL=os.getenv('AGENT_V2_TEST_URL','https://asman-agent-v2-manager-base-test.onrender.com/?v=20260927-manager-base-v1').strip()
 CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260928-android-map-css-v6').strip()
 TZ=ZoneInfo('Asia/Tashkent')
@@ -182,8 +182,16 @@ def upload_agent_camera_photo(chat_id,content):
           f'Content-Type: {mime}\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
     req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendPhoto',data=body,
         headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
-    with urllib.request.urlopen(req,timeout=25) as res:
-        result=json.load(res)
+    started=time.monotonic()
+    try:
+        with urllib.request.urlopen(req,timeout=18) as res:
+            result=json.load(res)
+    except (urllib.error.URLError,TimeoutError,OSError) as exc:
+        logging.warning('Agent photo upload failed chat=%s bytes=%s after=%.2fs error=%r',
+                        chat_id,len(content),time.monotonic()-started,exc)
+        raise ValueError('Foto serverga yuklanmadi. Internetni tekshirib qayta urinib ko‘ring.')
+    logging.info('Agent photo upload ok chat=%s bytes=%s elapsed=%.2fs',
+                 chat_id,len(content),time.monotonic()-started)
     if not result.get('ok'):
         raise ValueError('Foto Telegramga saqlanmadi.')
     message=result.get('result') or {}
