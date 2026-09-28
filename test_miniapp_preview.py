@@ -84,6 +84,14 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+
+    def test_customer_delete_control_is_admin_only_in_agent_app(self):
+        self.assertIn('(data.adminMode?\'<button type="button" id="adminDeleteClient"',self.html)
+        self.assertIn('if(!(data&&data.adminMode)){notify("Mijozni faqat admin o‘chira oladi.")',self.html)
+        self.assertIn('request("client_delete_preview",{clientId:id})',self.html)
+        self.assertIn('request("client_delete_commit",{clientId:id,confirm:true})',self.html)
+        self.assertIn('if(navigator.onLine===false){notify("Mijozni o‘chirish uchun internet kerak.")',self.html)
+
     def test_admin_full_mode_can_sync_only_selected_agent_offline_queue(self):
         self.assertIn('canSync:function(){return !!(tg&&tg.initData)&&!!offlineAgentId()&&(!(data&&data.adminMode)||Number(adminAgentId||0)===Number(offlineAgentId()))}',self.html)
         self.assertIn('currentAgent:offlineAgentId',self.html)
