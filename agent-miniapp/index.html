@@ -1144,7 +1144,7 @@ if(window.ASMANOffline){
  ASMANOffline.configure({
   request:request,
   currentAgent:offlineAgentId,
-  canSync:function(){return !!(tg&&tg.initData)&&!(data&&data.adminMode)},
+  canSync:function(){return !!(tg&&tg.initData)&&!!offlineAgentId()&&(!(data&&data.adminMode)||Number(adminAgentId||0)===Number(offlineAgentId()))},
   isNetworkError:isNetworkError,
   onStatus:renderOfflineStatus,
   onRemap:remapOfflineClient,
