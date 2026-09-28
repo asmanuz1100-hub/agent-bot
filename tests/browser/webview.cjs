@@ -53,8 +53,8 @@ async function contrast(page,selector){
   assert.equal(await page.locator('#map .leaflet-marker-icon').count(),1);
   await page.locator('nav [data-page="home"]').click();
   await page.locator('nav [data-page="reports"]').click();
-  await page.waitForSelector('#routeMap canvas');
-  assert.ok(await page.locator('#routeMap canvas').count()>=1,'route map must use Canvas renderer');
+  await page.waitForSelector('#routeMap svg path');
+  assert.equal(await page.locator('#routeMap canvas').count(),0,'route map must avoid the Android Canvas compositor');
   await page.locator('nav [data-page="home"]').click();
   await page.locator('[data-action="client"]').first().click();
   await page.locator('#submitForm').click();
