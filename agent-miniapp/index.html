@@ -136,6 +136,10 @@ function safeId(v){return Number.isInteger(Number(v))?Number(v):null}
 function client(){return data&&data.clients.find(function(c){return c.id===selected})}
 function isNetworkError(err){return !!(err&&(err.network===true||err.name==="AbortError"||(!err.httpStatus&&navigator.onLine===false)))}
 function offlineAgentId(){return Number((data&&data.me&&data.me.id)||0)}
+function telegramActorId(){
+ var u=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;
+ return Number((u&&u.id)||offlineAgentId()||0);
+}
 function offlineTempId(){return -(Date.now()*1000+Math.floor(Math.random()*900+100))}
 function offlineStatusLabel(value){
  var labels={active:"Tovar olgan",interested:"Taklif berilgan",waiting:"Kutilmoqda",declined:"Hozircha olmaydi"};
@@ -184,7 +188,7 @@ function optimisticOffline(action,payload,tempId,photoData){
  if(action==="agent_expense"&&data.expenseWallet)data.expenseWallet.balanceUzs=Number(data.expenseWallet.balanceUzs||0)-Number(payload.amount||0);
 }
 async function remapOfflineClient(tempId,realId){
- if(data&&data.clients){var c=data.clients.find(function(x){return Number(x.id)===Number(tempId)});if(c){c.id=Number(realId);c._offlinePending=false}if(Number(selected)===Number(tempId))selected=Number(realId);try{await ASMANOffline.saveSnapshot(data)}catch(_e){}}
+ if(data&&data.clients){var c=data.clients.find(function(x){return Number(x.id)===Number(tempId)});if(c){c.id=Number(realId);c._offlinePending=false}if(Number(selected)===Number(tempId))selected=Number(realId);try{await ASMANOffline.saveSnapshot(data,telegramActorId())}catch(_e){}}
 }
 async function request(action,extra){
  if(!tg||!tg.initData){var auth=Error("Telegram sessiyasi hozir mavjud emas.");auth.authUnavailable=true;throw auth}
@@ -229,11 +233,11 @@ async function refresh(){
   try{
    data=await request(heavy?"snapshot":"quick_snapshot");
    data._offlineCached=false;fullDataLoaded=heavy;
-   if(window.ASMANOffline)ASMANOffline.saveSnapshot(data).catch(function(){});
+   if(window.ASMANOffline)ASMANOffline.saveSnapshot(data,telegramActorId()).catch(function(){});
   }catch(fetchError){
    var cached=null;
    if(window.ASMANOffline&&(isNetworkError(fetchError)||fetchError.authUnavailable||navigator.onLine===false)){
-    try{cached=await ASMANOffline.loadSnapshot()}catch(_e){}
+    try{cached=await ASMANOffline.loadSnapshot(telegramActorId()||undefined)}catch(_e){}
    }
    if(!cached)throw fetchError;
    data=cached;fullDataLoaded=false;
@@ -955,7 +959,7 @@ async function saveForm(e){
    if(pendingPhotoData)delete payload.photoFileId;
    await ASMANOffline.enqueue({action:formAction,payload:payload,nonce:nonce,photoData:pendingPhotoData,tempClientId:tempId,agentId:offlineAgentId()});
    optimisticOffline(formAction,payload,tempId,pendingPhotoData);
-   await ASMANOffline.saveSnapshot(data);
+   await ASMANOffline.saveSnapshot(data,telegramActorId());
    out={queued:true,clientId:tempId,message:"Offline saqlandi. Internet kelganda avtomatik sinxronlanadi."};queued=true;
   }else{
    try{out=await request(formAction,Object.assign({},payload,{nonce:nonce}))}
@@ -965,7 +969,7 @@ async function saveForm(e){
     tempId=formAction==="client"?offlineTempId():null;
     await ASMANOffline.enqueue({action:formAction,payload:payload,nonce:nonce,photoData:null,tempClientId:tempId,agentId:offlineAgentId()});
     optimisticOffline(formAction,payload,tempId,null);
-    await ASMANOffline.saveSnapshot(data);
+    await ASMANOffline.saveSnapshot(data,telegramActorId());
     out={queued:true,clientId:tempId,message:"Aloqa uzildi. Amal offline navbatga saqlandi."};queued=true;
    }
   }
@@ -1156,7 +1160,21 @@ window.addEventListener("online",function(){
 });
 document.addEventListener("focusin",function(e){if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))document.body.classList.add("editing")});
 document.addEventListener("focusout",function(){setTimeout(function(){if(!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))document.body.classList.remove("editing")},0)});
-refresh().then(function(){if(window.ASMANOffline&&navigator.onLine!==false)ASMANOffline.sync()});
+async function bootstrapAgentApp(){
+ if(window.ASMANOffline){
+  var actor=telegramActorId(),cached=null;
+  if(actor>0||navigator.onLine===false){
+   try{cached=await ASMANOffline.loadSnapshot(actor||undefined)}catch(_e){}
+  }
+  if(cached){
+   data=cached;fullDataLoaded=false;
+   applySnapshotUi();
+  }
+ }
+ await refresh();
+ if(window.ASMANOffline&&navigator.onLine!==false)await ASMANOffline.sync();
+}
+bootstrapAgentApp();
 setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
 })();
 </script></body></html>
