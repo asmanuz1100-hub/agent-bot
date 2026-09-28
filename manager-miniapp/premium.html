@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASMAN · Rahbar Premium TEST</title>
+    <title>ASMAN · Rahbar Premium PRO TEST</title>
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -772,9 +772,120 @@ body.low-motion header,body.low-motion nav,body.low-motion .exec-cash-main,body.
   *,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
 }
 
+
+
+/* =========================================================
+   ASMAN PREMIUM PRO v2 — visual polish only
+   Keeps all existing IDs, events and API behavior intact.
+   ========================================================= */
+body.premium-pro-v2,body{
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+header,nav,.sheet,.map-card,.auth-card{
+  transform:translateZ(0);
+  backface-visibility:hidden;
+}
+header:after{
+  content:"";position:absolute;left:18px;right:18px;bottom:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(95,169,255,.46),transparent);
+  pointer-events:none;
+}
+.auth-gate{
+  background:
+    radial-gradient(circle at 50% 14%,rgba(14,112,255,.18),transparent 34%),
+    linear-gradient(180deg,#06162f 0%,#0b2b5f 42%,#eef5ff 42%,#f7faff 100%)!important;
+}
+.auth-card{
+  border:1px solid rgba(201,220,246,.9)!important;
+  border-radius:26px!important;
+  box-shadow:0 24px 60px rgba(3,29,69,.22)!important;
+  padding:28px 24px!important;
+}
+.auth-mark{
+  width:64px;height:64px;display:grid;place-items:center;margin:0 auto;
+  border-radius:20px;background:linear-gradient(145deg,#0a83ff,#0755ed);
+  color:#fff!important;font-size:20px!important;letter-spacing:.4px!important;
+  box-shadow:0 16px 30px rgba(6,99,244,.28);
+}
+.auth-card h2{font-size:21px!important;letter-spacing:-.35px!important}
+.auth-card button{
+  min-height:48px;border-radius:15px!important;
+  background:linear-gradient(135deg,#0a7cff,#0754e8)!important;
+  box-shadow:0 10px 24px rgba(6,99,244,.22)!important;
+}
+.exec-kpi-card,.exec-attention,.exec-shortcuts button,.customer-card,.txn,#agent-list .agent-card,.cash-kpi,.report-kpi,.analysis-insight{
+  position:relative;overflow:hidden;
+}
+.exec-kpi-card:after,.exec-shortcuts button:after,.cash-kpi:after,.report-kpi:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(120deg,transparent 0%,rgba(255,255,255,.00) 42%,rgba(255,255,255,.54) 50%,rgba(255,255,255,0) 58%,transparent 100%);
+  transform:translateX(-145%);
+  transition:transform .7s cubic-bezier(.2,.72,.22,1);
+  pointer-events:none;
+}
+.exec-kpi-card:active:after,.exec-shortcuts button:active:after,.cash-kpi:active:after,.report-kpi:active:after{transform:translateX(145%)}
+.exec-kpi-card,.exec-shortcuts button,.customer-card,.txn,#agent-list .agent-card,.cash-kpi,.report-kpi{
+  box-shadow:0 10px 26px rgba(7,31,72,.055)!important;
+}
+.exec-kpi-card:active,.exec-shortcuts button:active,.customer-card:active,.txn:active,#agent-list .agent-card:active{
+  box-shadow:0 5px 15px rgba(7,31,72,.045)!important;
+}
+nav button{position:relative}
+nav button.active:after,nav button.text-blue-600:after{
+  content:"";position:absolute;left:50%;bottom:4px;width:18px;height:3px;border-radius:999px;
+  transform:translateX(-50%);
+  background:linear-gradient(90deg,#63c8ff,#ffffff);
+  box-shadow:0 0 12px rgba(91,190,255,.72);
+}
+nav button span{padding-bottom:3px}
+#map,.map-shell{isolation:isolate}
+.map-shell:after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:20;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),inset 0 -28px 40px rgba(5,35,79,.05);
+  border-radius:inherit;
+}
+.toast{
+  display:none;min-width:180px;max-width:calc(100% - 34px);
+  padding:11px 15px!important;border-radius:14px!important;
+  background:rgba(5,24,53,.94)!important;border:1px solid rgba(112,169,236,.28)!important;
+  box-shadow:0 14px 34px rgba(0,18,45,.25)!important;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  text-align:center;font-weight:750;
+}
+.sheet{
+  background:
+    radial-gradient(circle at 92% -12%,rgba(8,103,255,.08),transparent 34%),
+    #fff!important;
+}
+.refresh{
+  transition:transform .35s cubic-bezier(.2,.72,.22,1),background .18s ease!important
+}
+.refresh:active{transform:rotate(90deg) scale(.92)!important}
+.manager-avatar{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 18px rgba(0,0,0,.08)!important
+}
+@media(hover:hover) and (pointer:fine){
+  .exec-kpi-card:hover,.exec-shortcuts button:hover,.customer-card:hover,.txn:hover,#agent-list .agent-card:hover{
+    transform:translateY(-2px)!important;
+    box-shadow:0 14px 30px rgba(7,31,72,.085)!important;
+  }
+}
+@media(max-width:480px){
+  header{contain:layout paint style}
+  nav{contain:layout paint style}
+  .map-shell{contain:paint}
+  .page-content{transform:translateZ(0)}
+}
+@media(max-width:360px){
+  .brand-word{font-size:18px!important}
+  .brand-word:before{width:28px;height:28px;font-size:17px}
+  .refresh,.manager-avatar{width:36px!important;height:36px!important}
+}
+
 </style>
 </head>
-<body class="pb-24">
+<body class="pb-24 premium-pro-v2">
 <div id="auth-gate" class="auth-gate"><div class="auth-card"><div class="auth-mark">ASMAN</div><h2 id="auth-title">Rahbar Premium TEST</h2><p id="auth-message">Telegram orqali kirish tekshirilmoqda…</p><button id="auth-retry" type="button">Qayta urinish</button><small>Haqiqiy mijoz va kassa ma’lumotlari faqat tasdiqlangan admin uchun.</small></div></div>
 
     <!-- Header (Telegram UI Kit Style) -->
