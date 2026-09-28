@@ -684,7 +684,7 @@ def cash(db,a):
     paid=db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='accepted'",(a,)).fetchone()[0]
     return collected-paid
 
-def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', source=None, currency='UZS'):
+def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', source=None, currency='UZS', ts=None):
     role=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not role or role[0] not in ('admin','agent'): raise ValueError('Рухсат йўқ.')
     if role[0]!='admin' and actor!=agent: raise ValueError('Рухсат йўқ.')
@@ -723,7 +723,7 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         # Sale is physical confirmation only: delivery already generated the USD receivable.
         value=0
     cur=db.execute('INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id',
-               (actor,agent,client,kind,pack,qty,value,usd,note,int(time.time()),source))
+               (actor,agent,client,kind,pack,qty,value,usd,note,int(time.time() if ts is None else ts),source))
     if kind=='delivery':
         db.execute('UPDATE clients SET map_only=0 WHERE id=? AND map_only<>0',(client,))
     if allocations:
@@ -732,7 +732,7 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
             db.execute('INSERT INTO return_allocations(return_event,delivery_event,qty,amount_usd) VALUES(?,?,?,?)',
                        (return_id,delivery_id,count,cents))
 
-def handover(db,a,value,source,currency='UZS'):
+def handover(db,a,value,source,currency='UZS',ts=None):
     role=db.execute('SELECT role FROM users WHERE id=?',(a,)).fetchone()
     if not role or role[0]!='agent': raise ValueError('Фақат агент.')
     lock_agent(db,a)
@@ -742,7 +742,7 @@ def handover(db,a,value,source,currency='UZS'):
     available=cash_usd(db,a) if currency=='USD' else cash(db,a)
     if value<=0 or value>available-reserved: raise ValueError('Қўлдаги эркин пулдан ортиқ сумма.')
     db.execute('INSERT INTO handovers(agent,amount,amount_usd,source,ts) VALUES(?,?,?,?,?)',
-               (a,0 if currency=='USD' else value,value if currency=='USD' else 0,source,int(time.time())))
+               (a,0 if currency=='USD' else value,value if currency=='USD' else 0,source,int(time.time() if ts is None else ts)))
 
 def accept(db,actor,hid,accepted=True):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -827,7 +827,7 @@ def fund_agent_expense_uzs(db,actor,agent,amount_uzs,note,source,expected_rate=N
     return int(row[0]),amount_usd,rate
 
 
-def add_agent_expense_uzs(db,actor,amount_uzs,category,note,source,expected_rate=None):
+def add_agent_expense_uzs(db,actor,amount_uzs,category,note,source,expected_rate=None,ts=None):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not identity or identity[0]!='agent':
         raise ValueError('Харажатни фақат агент ўз ҳисобидан киритади.')
@@ -850,7 +850,7 @@ def add_agent_expense_uzs(db,actor,amount_uzs,category,note,source,expected_rate
     amount_usd=som_to_usd_cents(amount_uzs,rate)
     row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,amount_uzs,rate_uzs_per_usd,category,note,source,ts)
         VALUES(?,?,'expense',?,?,?,?,?,?,?) RETURNING id""",
-        (actor,actor,amount_usd,amount_uzs,rate,category,note.strip(),source,int(time.time()))).fetchone()
+        (actor,actor,amount_usd,amount_uzs,rate,category,note.strip(),source,int(time.time() if ts is None else ts))).fetchone()
     return int(row[0]),amount_usd,rate
 
 
