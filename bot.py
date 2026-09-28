@@ -27,6 +27,7 @@ ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
+MANAGER_PREMIUM_TEST_URL=os.getenv('MANAGER_PREMIUM_TEST_URL','https://asman-manager-miniapp-test.onrender.com/premium.html?v=20260928-premium-test-v1').strip()
 AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-photo-fast-v3').strip()
 AGENT_V2_TEST_URL=os.getenv('AGENT_V2_TEST_URL','https://asman-agent-v2-manager-base-test.onrender.com/?v=20260927-manager-base-v1').strip()
 CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260928-cash-bank-summary-v7').strip()
@@ -335,10 +336,12 @@ def menu(db,u):
         # Telegram reply-keyboard Web Apps can omit signed initData. Only
         # inline-keyboard web_app launches may access the real admin dashboard.
         rows.insert(0,['📱 Раҳбар Mini App'])
+        if MANAGER_PREMIUM_TEST_URL:
+            rows.insert(1,['🧪 Rahbar Premium TEST'])
         if AGENT_MINIAPP_URL:
-            rows.insert(1,['📱 Agent Mini App'])
+            rows.insert(2,['📱 Agent Mini App'])
         if AGENT_V2_TEST_URL:
-            rows.insert(2,['🧪 Agent V2 TEST'])
+            rows.insert(3,['🧪 Agent V2 TEST'])
     elif r=='agent' and AGENT_MINIAPP_URL:
         # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
         # launches can have empty initData, so the button asks the bot to send
@@ -1158,6 +1161,14 @@ def handle(db,update):
             text='📱 Раҳбар панели · Реал маълумотлар. Қуйидаги тугмадан очинг (ҳавола бошқаларга рухсат бермайди).',
             reply_markup={'inline_keyboard':[[{'text':'📱 Раҳбар панелини очиш',
                                                   'web_app':{'url':MANAGER_MINIAPP_URL}}]]})
+        return
+    if text=='🧪 Rahbar Premium TEST':
+        if r!='admin' or not MANAGER_PREMIUM_TEST_URL:
+            raise ValueError('Фақат админ.')
+        api('sendMessage',chat_id=u,
+            text='🧪 Rahbar Premium TEST · Янги премиум дизайн синов режими. Реал маълумотлар фақат админ учун.',
+            reply_markup={'inline_keyboard':[[{'text':'🧪 Premium Rahbar Appни очиш',
+                                              'web_app':{'url':MANAGER_PREMIUM_TEST_URL}}]]})
         return
     if text=='📱 Agent Mini App':
         if r not in ('agent','admin') or not AGENT_MINIAPP_URL:
