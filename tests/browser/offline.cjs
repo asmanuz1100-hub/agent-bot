@@ -17,7 +17,7 @@ const snapshot={
  const browser=await chromium.launch({headless:true});
  const context=await browser.newContext({viewport:{width:390,height:820},isMobile:true,hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage();
- const writes=[],uploads=[];
+ const writes=[],uploads=[],actions=[];
  page.on('pageerror',e=>{throw e});
  await page.addInitScript(()=>{
    window.events={};
@@ -30,7 +30,7 @@ const snapshot={
  await page.route('**/*',async route=>{
    const u=new URL(route.request().url());
    if(u.pathname.includes('/api/')){
-     const req=route.request().postDataJSON();
+     const req=route.request().postDataJSON();actions.push(req.action);
      if(req.action==='photo_upload'){uploads.push(req);return route.fulfill({json:{photoFileId:'offline-test-photo-id'}})}
      if(req.action==='client'){writes.push(req);return route.fulfill({json:{ok:true,clientId:77,message:'Synced'}})}
      return route.fulfill({json:snapshot});
@@ -94,7 +94,7 @@ const snapshot={
  await page.waitForFunction(()=>navigator.onLine===true);
  await page.waitForFunction(async()=>{const s=await window.ASMANOffline.status();return s.pending===0},{timeout:15000});
  assert.equal(uploads.length,1,'photo uploads once after reconnect');
- assert.equal(writes.length,1,'client writes once after reconnect');
+ assert.equal(writes.length,1,'client writes once after reconnect; actions='+JSON.stringify(actions));
  assert.equal(writes[0].photoFileId,'offline-test-photo-id');
  assert.ok(Number(writes[0].offlineTs)>0);
  assert.ok(writes[0].nonce,'idempotency nonce must survive offline queue');
