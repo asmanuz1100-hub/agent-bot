@@ -192,7 +192,7 @@ def _client_snapshot(db,now,client_id=None):
         result.append({
             "id":cid,"name":c['shop_name'] or c['name'] or f"Mijoz #{cid}",
             "person":c['name'] or "","phone":c['phone'] or "",
-            "address":c['address'] or "","lat":lat,"lon":lon,
+            "address":c['address'] or "","region":c['region'] or "","lat":lat,"lon":lon,
             "owner":c['agent_name'] or str(c['agent']),"ownerId":int(c['agent']),
             "status":status,"statusLabel":STATUS_LABELS.get(status,status),
             "age":age,"days":days,"lastTs":last or None,"followup":followup,
@@ -372,7 +372,7 @@ def quick_snapshot(db,agent,now=None):
         "generatedTs":now,"timezone":"Asia/Tashkent","quick":True,
         "me":{"id":int(agent),"name":user["name"] or str(agent),
               "shiftOpen":bool(shift),"shiftStart":int(shift["start"]) if shift else None,
-              "liveAttached":bool(shift and shift["live_id"] is not None),
+              "liveAttached":bool(shift and shift['live_id'] is not None),
               "gps":{"ts":int(point["ts"]) if point else None,"lat":lat,"lon":lon}},
         "features":features,"clients":clients,"products":products,
         "collectionTasks":_collection_tasks(db,agent),
@@ -669,6 +669,8 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         address=str(payload.get("address") or "").strip()
         if len(address)>300:raise ValueError("Manzil juda uzun.")
         if not address:address=f"GPS: {lat:.6f}, {lon:.6f}"
+        region=str(payload.get('region') or '').strip()
+        if len(region)>80:raise ValueError('Hudud nomi juda uzun.')
         photo_file=str(payload.get("photoFileId") or "").strip()
         if photo_file and not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",photo_file):
             raise ValueError("Mijoz fotosi identifikatori noto‘g‘ri.")
@@ -693,10 +695,10 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         if len(note)>1000:raise ValueError("Izoh juda uzun.")
         if not note:
             note=("Tovar berildi" if clean else "Yangi mijoz · mahsulot hozircha berilmadi")
-        cur=db.execute("""INSERT INTO clients(agent,name,phone,address,lat,lon,photo,shop_name,
+        cur=db.execute("""INSERT INTO clients(agent,name,phone,address,region,lat,lon,photo,shop_name,
             comment,payment_due,created_ts,map_only)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,1) RETURNING id""",
-            (agent,name," · ".join(phones),address,lat,lon,photo_file or None,shop,note,None,now))
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1) RETURNING id""",
+            (agent,name," · ".join(phones),address,region,lat,lon,photo_file or None,shop,note,None,now))
         cid=int(cur.fetchone()[0])
         if clean:
             for idx,(pack,qty) in enumerate(clean):
@@ -752,8 +754,10 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         note=str(payload.get("note") or payload.get("comment") or "").strip()
         if len(address)>300:raise ValueError("Manzil juda uzun.")
         if len(note)>1000:raise ValueError("Izoh juda uzun.")
+        region=str(payload.get('region') or '').strip()
+        if len(region)>80:raise ValueError('Hudud nomi juda uzun.')
         values={"shop_name":shop,"name":person,"phone":" · ".join(phones),
-                "address":address,"comment":note}
+                "address":address,"region":region,"comment":note}
         if "lat" in payload or "lon" in payload:
             lat,lon=_coord(payload.get("lat"),payload.get("lon"))
             if lat is None:raise ValueError("Mijoz lokatsiyasining ikkala koordinatasini kiriting.")
