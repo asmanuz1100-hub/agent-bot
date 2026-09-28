@@ -15,6 +15,7 @@ import customer_status as cs
 import manager_api
 import agent_api
 import cashier_api
+import full_backup
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -142,6 +143,7 @@ _PHOTO_FETCH_SLOTS=threading.BoundedSemaphore(3)
 _PHOTO_CACHE_MAX_BYTES=24_000_000
 _PHOTO_CACHE_TTL=1800
 _PHOTO_CACHE_SIZE=0
+_FULL_BACKUP_LOCK=threading.Lock()
 
 def photo_content_type(content):
     """Return the actual safe image MIME type, not one inferred from a filename."""
@@ -308,6 +310,41 @@ def document(uid,filename,content):
     with urllib.request.urlopen(req,timeout=50) as res:
         if not json.load(res).get('ok'):raise RuntimeError('File send failed')
 
+def _full_backup_worker(uid):
+    paths=[]
+    if not _FULL_BACKUP_LOCK.acquire(blocking=False):
+        try:send(uid,'⚠️ Тўлиқ backup аллақачон тайёрланяпти.')
+        except Exception:pass
+        return
+    local=None
+    try:
+        dsn=os.getenv('DATABASE_URL') or DB_PATH
+        local=connect(dsn,initialize=False)
+        paths,summary=full_backup.build_archives(local,customer_photo_bytes)
+        local.commit()
+        for path in paths:
+            payload=Path(path).read_bytes()
+            document(uid,Path(path).name,payload)
+        send(uid,
+             f"✅ ТЎЛИҚ BACKUP ТАЙЁР\n"
+             f"👥 Мижозлар: {summary['clients']}\n"
+             f"📷 Расмлар: {summary['photos_ok']} та\n"
+             f"⚠️ Юкланмаган расмлар: {summary['photos_failed']} та\n"
+             f"📦 Архивлар: {len(summary['archives'])} та\n\n"
+             "Парол, BOT_TOKEN ва API key архивга хавфсизлик сабаб қўшилмади.")
+    except Exception:
+        logging.exception('Full backup export failed user=%s',uid)
+        try:send(uid,'⚠️ Тўлиқ backup тайёрлашда хато бўлди. Лог текширилади.')
+        except Exception:pass
+    finally:
+        if local is not None:
+            try:local.close()
+            except Exception:pass
+        try:full_backup.cleanup(paths)
+        except Exception:logging.exception('Full backup cleanup failed')
+        _FULL_BACKUP_LOCK.release()
+
+
 def role(db,u):
     row=db.execute('SELECT role FROM users WHERE id=?',(u,)).fetchone()
     if not row:return None
@@ -333,6 +370,8 @@ def menu(db,u):
     rows=[keys[i:i+2] for i in range(0,len(keys),2)]
     r=role(db,u)
     if r=='admin':
+        if u in ADMINS:
+            rows.append(['📦 Тўлиқ Backup'])
         # Keep admin launchers independent: removing Rahbar tests must not hide Agent apps.
         if MANAGER_MINIAPP_URL:
             rows.insert(0,['📱 Раҳбар Mini App'])
@@ -1216,6 +1255,14 @@ def handle(db,update):
         pending.pop('basket_ready',None)
         pending['step']=next(i for i,(key,_) in enumerate(FLOW[pending['action']]) if key=='pack')
         save(db,u,pending);prompt(db,u,pending)
+        return
+    if text in ('📦 Тўлиқ Backup','/fullbackup'):
+        if r!='admin' or u not in ADMINS:
+            raise ValueError('Тўлиқ backup фақат асосий раҳбар учун.')
+        if _FULL_BACKUP_LOCK.locked():
+            send(u,'⚠️ Тўлиқ backup аллақачон тайёрланяпти.');return
+        send(u,'⏳ Тўлиқ backup тайёрланяпти: база ва мижоз расмлари йиғилади. Бот ишлашда давом этади.')
+        threading.Thread(target=_full_backup_worker,args=(u,),daemon=True,name='full-backup-export').start()
         return
     if text=='/failed':
         if r!='admin':raise ValueError('Фақат админ.')
