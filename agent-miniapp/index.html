@@ -253,6 +253,13 @@ function syncTelegramBack(){
   if(current==="home")tg.BackButton.hide();else tg.BackButton.show();
  }catch(e){}
 }
+function syncTelegramChrome(){
+ try{
+  if(!tg)return;
+  if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");
+  if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd");
+ }catch(e){}
+}
 function goBack(){
  if(current==="detail"){go(detailBackPage||"clients");return}
  if(current==="form"){go(backPage||"home");return}
@@ -1124,9 +1131,9 @@ if(tg){
  try{
   tg.ready();tg.expand();
   if(tg.BackButton&&tg.BackButton.onClick)tg.BackButton.onClick(goBack);
+  if(tg.onEvent)tg.onEvent("themeChanged",syncTelegramChrome);
   syncTelegramBack();
-  if(tg.setHeaderColor)tg.setHeaderColor("#ffffff");
-  if(tg.setBackgroundColor)tg.setBackgroundColor("#f4f7fd");
+  syncTelegramChrome();
  }catch(e){}
 }
 if(window.ASMANOffline){
