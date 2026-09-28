@@ -84,6 +84,10 @@ class LiveAgentMiniAppTests(unittest.TestCase):
         ):
             self.assertIn(term,self.html)
 
+    def test_admin_full_mode_can_sync_only_selected_agent_offline_queue(self):
+        self.assertIn('canSync:function(){return !!(tg&&tg.initData)&&!!offlineAgentId()&&(!(data&&data.adminMode)||Number(adminAgentId||0)===Number(offlineAgentId()))}',self.html)
+        self.assertIn('currentAgent:offlineAgentId',self.html)
+
     def test_admin_full_agent_selector_and_write_mode(self):
         for term in ('id="adminPicker"','id="adminAgent"','adminAgentId',
                      'data.adminMode','admin-full','ADMIN · TO‘LIQ REJIM',
