@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fb">
+<title>ASMAN Rahbar — Design Preview</title>
+<style>
+:root{
+  --bg:#f5f7fb;--card:#fff;--ink:#10213b;--muted:#7f8ca0;--line:#e7edf4;
+  --blue:#2267f5;--blue-soft:#eaf1ff;--green:#17a67a;--amber:#e7a03b;--red:#d85264;
+  --violet:#8068f0;--shadow:0 10px 35px rgba(16,33,59,.08)
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh}
+button,input{font:inherit}
+button{cursor:pointer}
+.app{max-width:1180px;margin:0 auto;padding:18px 18px 96px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{width:46px;height:46px;border-radius:14px;background:#0f2038;color:#fff;display:grid;place-items:center;font-weight:900;letter-spacing:-.04em;box-shadow:var(--shadow)}
+.eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:900}
+.title{font-size:20px;font-weight:900;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:9px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px;font-weight:800;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.refresh{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;background:var(--card);color:var(--ink);font-weight:900}
+.navtabs{display:flex;gap:8px;overflow:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none}
+.navtabs::-webkit-scrollbar{display:none}
+.navtabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 14px;font-size:11px;font-weight:900}
+.navtabs button.active{background:#0f2038;color:#fff;border-color:#0f2038}
+.grid{display:grid;gap:14px}
+.hero-grid{grid-template-columns:1.35fr .65fr}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 6px 20px rgba(16,33,59,.04)}
+.pad{padding:18px}
+.hero{background:#0f2038;color:#fff;overflow:hidden;position:relative}
+.hero:after{content:"";position:absolute;right:-80px;top:-80px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(255,255,255,.07)}
+.hero .eyebrow{color:rgba(255,255,255,.5)}
+.hero-main{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-top:18px}
+.hero-value{font-size:58px;line-height:.9;letter-spacing:-.07em;font-weight:950}
+.delta{color:#7adab2;font-size:19px;font-weight:900}
+.subtle{color:var(--muted);font-size:12px}
+.hero .subtle{color:rgba(255,255,255,.5)}
+.chart{margin-top:24px;height:112px}
+.chart svg{width:100%;height:100%;display:block}
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(255,255,255,.1);margin:18px -18px -18px}
+.kpi{padding:14px 16px}
+.kpi+.kpi{border-left:1px solid rgba(255,255,255,.1)}
+.kpi small{display:block;color:rgba(255,255,255,.45);font-size:9px;font-weight:900;letter-spacing:.14em}
+.kpi b{display:block;margin-top:4px;font-size:20px}
+.section-title{display:flex;align-items:end;justify-content:space-between;gap:10px}
+.section-title h3{margin:4px 0 0;font-size:18px;letter-spacing:-.025em}
+.attention{display:grid;gap:16px;margin-top:18px}
+.alert{border-left:3px solid var(--tone);padding-left:12px;text-align:left;background:none;border-top:0;border-right:0;border-bottom:0}
+.alert b{display:block;font-size:13px;color:var(--ink)}
+.alert span{display:block;margin-top:4px;font-size:11px;color:var(--muted)}
+.badge{min-width:28px;height:28px;padding:0 8px;border-radius:999px;background:#fff0f2;color:var(--red);display:grid;place-items:center;font-size:11px;font-weight:900}
+.two-col{grid-template-columns:.9fr 1.1fr}
+.region-row{display:grid;grid-template-columns:92px 1fr auto;gap:12px;align-items:center;margin-top:15px}
+.track{height:7px;background:#eef2f7;border-radius:999px;overflow:hidden}
+.track i{display:block;height:100%;border-radius:999px;background:var(--fill)}
+.statline{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);margin-top:18px;padding-top:14px}
+.statline>div{text-align:center}
+.statline b{display:block;font-size:18px}
+.statline span{display:block;font-size:9px;color:var(--muted);font-weight:900;margin-top:3px}
+.list{margin-top:10px}
+.row{display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);align-items:center}
+.row:last-child{border-bottom:0}
+.row strong{display:block;font-size:13px}
+.meta{font-size:10px;color:var(--muted);margin-top:4px}
+.right{text-align:right}
+.agent-grid{grid-template-columns:1.15fr .85fr}
+.agent-btn{width:100%;border:0;background:none;text-align:left}
+.agent-main{display:flex;align-items:center;gap:10px}
+.avatar{width:42px;height:42px;border-radius:12px;background:#eef3f9;display:grid;place-items:center;font-weight:900;position:relative;flex:0 0 auto}
+.avatar .dot{position:absolute;right:-2px;top:-2px;border:2px solid #fff}
+.agent-detail{background:#0f2038;color:#fff}
+.agent-detail .eyebrow{color:rgba(255,255,255,.5)}
+.detail-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:rgba(255,255,255,.11);margin-top:20px}
+.detail-grid>div{background:#0f2038;padding:13px}
+.detail-grid small{color:rgba(255,255,255,.45);font-size:9px;font-weight:900}
+.detail-grid b{display:block;margin-top:5px;font-size:20px}
+.primary{border:0;background:var(--blue-soft);color:var(--blue);border-radius:12px;padding:12px 14px;font-size:11px;font-weight:900}
+.client-filters{display:flex;gap:8px}
+.client-filters button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900}
+.client-filters button.active{background:var(--blue-soft);color:var(--blue);border-color:#cddcff}
+.heat{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:18px}
+.heat span{aspect-ratio:1;border-radius:6px;background:color-mix(in srgb,var(--blue) var(--p),#edf2f8);border:1px solid #e8edf3}
+.bottomnav{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);width:min(680px,calc(100% - 24px));background:rgba(255,255,255,.94);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:18px;display:grid;grid-template-columns:repeat(5,1fr);padding:6px;box-shadow:0 18px 45px rgba(16,33,59,.16);z-index:20}
+.bottomnav button{border:0;background:transparent;border-radius:12px;padding:9px 5px;font-size:9px;font-weight:900;color:#6f7e93}
+.bottomnav button span{display:block;font-size:17px;margin-bottom:2px}
+.bottomnav button.active{background:var(--blue-soft);color:var(--blue)}
+.page{display:none}
+.page.active{display:block;animation:fade .18s ease-out}
+@keyframes fade{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+.note{margin-top:10px;padding:10px 12px;border-radius:11px;background:#edf5ff;color:#1769ff;font-size:11px;font-weight:800}
+.hidden{display:none!important}
+@media(max-width:780px){
+ .app{padding:14px 14px 94px}
+ .hero-grid,.two-col,.agent-grid{grid-template-columns:1fr}
+ .hero-value{font-size:48px}
+ .kpi-strip{grid-template-columns:repeat(2,1fr)}
+ .kpi:nth-child(3){border-top:1px solid rgba(255,255,255,.1);border-left:0}
+ .kpi:nth-child(4){border-top:1px solid rgba(255,255,255,.1)}
+ .statline{grid-template-columns:repeat(2,1fr);row-gap:14px}
+ .status .pill{display:none}
+}
+@media(max-width:420px){
+ .title{font-size:17px}
+ .logo{width:42px;height:42px}
+ .hero-value{font-size:43px}
+ .hero-main{align-items:flex-start;flex-direction:column}
+ .region-row{grid-template-columns:76px 1fr auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">AS</div>
+      <div style="min-width:0">
+        <div class="eyebrow">ASMAN · DESIGN PREVIEW</div>
+        <div class="title">Rahbar boshqaruv markazi</div>
+      </div>
+    </div>
+    <div class="status">
+      <div class="pill"><span class="dot"></span> DEMO LIVE</div>
+      <button class="refresh" id="refreshBtn" aria-label="Yangilash">↻</button>
+    </div>
+  </header>
+
+  <nav class="navtabs">
+    <button class="active" data-page="home">ASOSIY</button>
+    <button data-page="agents">AGENTLAR</button>
+    <button data-page="clients">MIJOZLAR</button>
+    <button data-page="cash">KASSA</button>
+    <button data-page="reports">TAHLIL</button>
+  </nav>
+
+  <main>
+    <section id="page-home" class="page active">
+      <div class="grid hero-grid">
+        <article class="card hero pad">
+          <div class="eyebrow">BUGUNGI SAVDO · DEMO DATA</div>
+          <div class="hero-main">
+            <div>
+              <div class="subtle">Umumiy savdo</div>
+              <div class="hero-value">$4,820</div>
+            </div>
+            <div class="right">
+              <div class="subtle">kechaga nisbatan</div>
+              <div class="delta">+18.4%</div>
+            </div>
+          </div>
+          <div class="chart">
+            <svg viewBox="0 0 620 112" role="img" aria-label="Savdo dinamikasi">
+              <path d="M0 86 C42 82,74 55,112 64 S173 83,214 52 S273 64,321 42 S382 55,430 30 S493 43,535 19 S575 26,620 8" fill="none" stroke="#4e8cff" stroke-width="4"/>
+              <path d="M0 102H620M0 67H620M0 32H620" stroke="rgba(255,255,255,.09)"/>
+              <circle cx="620" cy="8" r="5" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="kpi-strip">
+            <div class="kpi"><small>TASHRIF</small><b>38</b></div>
+            <div class="kpi"><small>YANGI</small><b>9</b></div>
+            <div class="kpi"><small>YIG‘ILDI</small><b>$3.2K</b></div>
+            <div class="kpi"><small>QARZ</small><b>$12.6K</b></div>
+          </div>
+        </article>
+
+        <article class="card pad">
+          <div class="section-title">
+            <div><div class="eyebrow">RAHBAR DIQQATI</div><h3>Qaror kerak</h3></div>
+            <div class="badge">4</div>
+          </div>
+          <div class="attention">
+            <button class="alert" style="--tone:var(--red)" data-jump="cash"><b>$1,150 tasdiq kutmoqda</b><span>2 ta agent kassir tasdig‘ini kutmoqda</span></button>
+            <button class="alert" style="--tone:var(--amber)" data-jump="clients"><b>7 mijoz nazoratda</b><span>5 kundan ortiq tashrif bo‘lmagan</span></button>
+            <button class="alert" style="--tone:var(--violet)" data-jump="agents"><b>1 agent GPS kechikkan</b><span>Sardor · 14 daqiqa oldin</span></button>
+          </div>
+        </article>
+      </div>
+
+      <div class="grid two-col" style="margin-top:14px">
+        <article class="card pad">
+          <div class="eyebrow">OPERATSION SCORE</div>
+          <div class="section-title"><h3 style="margin-top:5px">Bugungi holat</h3><b style="color:var(--blue)">86%</b></div>
+          <div style="margin-top:18px;display:grid;gap:14px">
+            <div><div class="section-title"><span class="subtle">Agentlar faol</span><b style="font-size:12px">75%</b></div><div class="track" style="margin-top:6px"><i style="width:75%;--fill:var(--blue)"></i></div></div>
+            <div><div class="section-title"><span class="subtle">Pul yig‘imi</span><b style="font-size:12px">67%</b></div><div class="track" style="margin-top:6px"><i style="width:67%;--fill:var(--green)"></i></div></div>
+            <div><div class="section-title"><span class="subtle">Mijoz tashrifi</span><b style="font-size:12px">88%</b></div><div class="track" style="margin-top:6px"><i style="width:88%;--fill:var(--violet)"></i></div></div>
+          </div>
+        </article>
+
+        <article class="card pad">
+          <div class="section-title"><div><div class="eyebrow">HUDUDLAR</div><h3>Bugungi savdo zichligi</h3></div><button class="primary" data-jump="reports">BATAFSIL</button></div>
+          <div class="region-row"><b>Furqat</b><div class="track"><i style="width:92%;--fill:var(--blue)"></i></div><b>$1,840</b></div>
+          <div class="region-row"><b>Bag‘dod</b><div class="track"><i style="width:78%;--fill:var(--green)"></i></div><b>$1,320</b></div>
+          <div class="region-row"><b>Buvayda</b><div class="track"><i style="width:61%;--fill:var(--violet)"></i></div><b>$980</b></div>
+          <div class="region-row"><b>Uchko‘prik</b><div class="track"><i style="width:43%;--fill:var(--amber)"></i></div><b>$680</b></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-agents" class="page">
+      <div class="grid agent-grid">
+        <article class="card pad">
+          <div class="eyebrow">FIELD FORCE · DEMO</div>
+          <div class="section-title"><h3>Agentlar nazorati</h3><b style="font-size:12px;color:var(--green)">3 / 4 ISHDA</b></div>
+          <div class="list" id="agentList"></div>
+        </article>
+        <article class="card pad agent-detail">
+          <div class="eyebrow">TANLANGAN AGENT</div>
+          <div id="agentName" style="font-size:32px;font-weight:900;margin-top:12px">Alisher</div>
+          <div id="agentArea" class="subtle" style="margin-top:4px">Furqat hududi</div>
+          <div class="detail-grid">
+            <div><small>SAVDO</small><b id="agentSales">$1,840</b></div>
+            <div><small>TASHRIF</small><b id="agentVisits">18</b></div>
+            <div><small>GPS</small><b id="agentGps">2 daq</b></div>
+            <div><small>KPI</small><b id="agentKpi">91%</b></div>
+          </div>
+          <button class="primary" id="routeBtn" style="width:100%;margin-top:18px">MARSHRUTNI KO‘RISH</button>
+          <div class="note hidden" id="routeNote">Demo: haqiqiy app’da bu yerda GPS marshrut va tashrif nuqtalari ochiladi.</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-clients" class="page">
+      <article class="card pad">
+        <div class="section-title">
+          <div><div class="eyebrow">CLIENT CONTROL</div><h3>Mijozlar portfeli</h3></div>
+          <div class="client-filters"><button class="active" data-filter="all">BARCHASI</button><button data-filter="late">5+ KUN</button></div>
+        </div>
+        <div id="clientList" class="list"></div>
+        <div class="statline">
+          <div><b>97</b><span>JAMI</span></div><div><b>9</b><span>YANGI</span></div><div><b>7</b><span>5+ KUN</span></div><div><b>$12.6K</b><span>QARZ</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="page-cash" class="page">
+      <div class="grid two-col">
+        <article class="card pad hero">
+          <div class="eyebrow">KASSA HOLATI</div>
+          <div class="subtle" style="margin-top:16px">Joriy balans</div>
+          <div class="hero-value" style="margin-top:5px">$5,460</div>
+          <div class="detail-grid">
+            <div><small>QABUL</small><b style="color:#72d6ac">+$3,240</b></div>
+            <div><small>XARAJAT</small><b style="color:#ff9caa">−$680</b></div>
+          </div>
+        </article>
+        <article class="card pad">
+          <div class="section-title"><div><div class="eyebrow">TASDIQ NAVBATI</div><h3>2 operatsiya</h3></div><div class="badge">2</div></div>
+          <div class="list">
+            <button class="cash-row row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left"><div><strong>Alisher</strong><div class="meta">Baraka Savdo · 08:41</div></div><div class="right"><strong>$650</strong></div></button>
+            <button class="cash-row row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left"><div><strong>Javohir</strong><div class="meta">Nur Qurilish · 08:57</div></div><div class="right"><strong>$500</strong></div></button>
+          </div>
+          <div class="note hidden" id="cashNote">Demo: operatsiya tekshiruv uchun ochildi.</div>
+        </article>
+      </div>
+    </section>
+
+    <section id="page-reports" class="page">
+      <div class="grid two-col">
+        <article class="card pad">
+          <div class="eyebrow">HAFTA 39</div>
+          <h3 style="margin:5px 0 0">Natija pulse</h3>
+          <div class="statline" style="margin-top:18px">
+            <div><b>$28.4K</b><span>SAVDO</span></div><div><b>71%</b><span>YIG‘IM</span></div><div><b>214</b><span>TASHRIF</span></div><div><b>42</b><span>YANGI</span></div>
+          </div>
+        </article>
+        <article class="card pad">
+          <div class="section-title"><div><div class="eyebrow">ACTIVITY MATRIX</div><h3>Hudud × hafta</h3></div><span class="subtle">PAST → YUQORI</span></div>
+          <div class="heat" id="heat"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--muted);font-weight:900"><span>DU</span><span>SE</span><span>CH</span><span>PA</span><span>JU</span><span>SH</span><span>YA</span></div>
+          <div class="meta" style="margin-top:16px">Eng kuchli: <b style="color:var(--ink)">Furqat · Juma</b>. Nazorat: <b style="color:var(--ink)">Buvayda · Dushanba</b>.</div>
+        </article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottomnav">
+  <button class="active" data-page="home"><span>⌂</span>ASOSIY</button>
+  <button data-page="agents"><span>◎</span>AGENT</button>
+  <button data-page="clients"><span>▦</span>MIJOZ</button>
+  <button data-page="cash"><span>$</span>KASSA</button>
+  <button data-page="reports"><span>◔</span>TAHLIL</button>
+</nav>
+
+<script>
+const agents=[
+ {name:"Alisher",area:"Furqat",sales:1840,visits:18,kpi:91,gps:"2 daq"},
+ {name:"Javohir",area:"Bag‘dod",sales:1320,visits:13,kpi:84,gps:"1 daq"},
+ {name:"Sardor",area:"Buvayda",sales:980,visits:9,kpi:68,gps:"14 daq"}
+];
+const clients=[
+ {name:"Baraka Savdo",area:"Furqat",debt:1240,last:"Bugun",state:"fresh"},
+ {name:"Nur Qurilish",area:"Bag‘dod",debt:860,last:"3 kun",state:"warn"},
+ {name:"Imkon Market",area:"Buvayda",debt:2100,last:"8 kun",state:"late"},
+ {name:"Saxovat",area:"Uchko‘prik",debt:420,last:"Bugun",state:"fresh"}
+];
+const navButtons=[...document.querySelectorAll("[data-page]")];
+function showPage(page){
+ document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id==="page-"+page));
+ navButtons.forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+navButtons.forEach(b=>b.addEventListener("click",()=>showPage(b.dataset.page)));
+document.querySelectorAll("[data-jump]").forEach(b=>b.addEventListener("click",()=>showPage(b.dataset.jump)));
+document.getElementById("refreshBtn").addEventListener("click",e=>{e.currentTarget.textContent="✓";setTimeout(()=>e.currentTarget.textContent="↻",700)});
+
+const agentList=document.getElementById("agentList");
+agentList.innerHTML=agents.map((a,i)=>'<button class="agent-btn row" data-agent="'+i+'"><div class="agent-main"><div class="avatar">'+a.name[0]+'<span class="dot" style="background:'+(a.kpi>75?'var(--green)':'var(--amber)')+'"></span></div><div><strong>'+a.name+'</strong><div class="meta">'+a.area+' · '+a.visits+' tashrif · GPS '+a.gps+'</div><div class="track" style="margin-top:7px"><i style="width:'+a.kpi+'%;--fill:'+(i===0?'var(--blue)':i===1?'var(--green)':'var(--amber)')+'"></i></div></div></div><div class="right"><strong>$'+a.sales.toLocaleString()+'</strong><div class="meta">'+a.kpi+'% KPI</div></div></button>').join("");
+agentList.querySelectorAll("[data-agent]").forEach(b=>b.addEventListener("click",()=>{
+ const a=agents[Number(b.dataset.agent)];
+ document.getElementById("agentName").textContent=a.name;
+ document.getElementById("agentArea").textContent=a.area+" hududi";
+ document.getElementById("agentSales").textContent="$"+a.sales.toLocaleString();
+ document.getElementById("agentVisits").textContent=a.visits;
+ document.getElementById("agentGps").textContent=a.gps;
+ document.getElementById("agentKpi").textContent=a.kpi+"%";
+}));
+document.getElementById("routeBtn").addEventListener("click",()=>document.getElementById("routeNote").classList.toggle("hidden"));
+
+function renderClients(filter="all"){
+ document.getElementById("clientList").innerHTML=clients.filter(c=>filter==="all"||c.state==="late").map(c=>'<div class="client-row row"><div><div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:'+(c.state==="fresh"?'var(--green)':c.state==="warn"?'var(--amber)':'var(--red)')+'"></span><strong>'+c.name+'</strong></div><div class="meta">'+c.area+' · oxirgi aloqa '+c.last+'</div></div><div class="right"><strong>$'+c.debt.toLocaleString()+'</strong><div class="meta">QARZ</div></div></div>').join("");
+}
+renderClients();
+document.querySelectorAll(".client-filters button").forEach(b=>b.addEventListener("click",()=>{
+ document.querySelectorAll(".client-filters button").forEach(x=>x.classList.remove("active"));
+ b.classList.add("active");renderClients(b.dataset.filter);
+}));
+document.querySelectorAll(".cash-row").forEach(b=>b.addEventListener("click",()=>document.getElementById("cashNote").classList.remove("hidden")));
+document.getElementById("heat").innerHTML=[18,34,55,73,42,88,66,25,43,62,79,92,71,48,12,31,44,59,78,84,69,22,40,61,76,89,82,53].map(v=>'<span style="--p:'+v+'%" title="Faollik '+v+'%"></span>').join("");
+</script>
+</body>
+</html>
