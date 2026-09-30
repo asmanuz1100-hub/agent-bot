@@ -147,7 +147,6 @@ nav{border:1px solid #e6ecf3!important;border-bottom:0!important;border-radius:1
 html,body{
   background:var(--mx)!important;
   color:var(--mx-ink)!important;
-  overscroll-behavior-y:none;
   -webkit-text-size-adjust:100%;
 }
 body{
@@ -397,7 +396,7 @@ nav button span{font-size:7.5px!important;margin-top:5px!important;font-weight:7
 
 /* Android/Telegram WebView hardening */
 @media(max-width:480px){
-  html,body{width:100%;overflow-x:hidden}
+  html,body{width:100%}
   .page-content{max-width:100%!important}
   .cash-exec-row{align-items:stretch!important}
   .cash-exec-badge{display:flex;flex-direction:column;justify-content:center}
@@ -408,6 +407,17 @@ nav button span{font-size:7.5px!important;margin-top:5px!important;font-weight:7
   .cash-kpi-grid .cash-kpi:last-child{grid-column:1/-1}
   .exec-cash-grid{grid-template-columns:1fr!important}
 }
+
+/* Keep the document as the vertical scroller in Telegram WebViews.
+   Hiding overflow-x on both roots implicitly makes overflow-y:auto,
+   creating competing scroll containers on mobile. Clip only the x axis. */
+html{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:auto}
+body{height:auto;min-height:100%;overflow:visible;overscroll-behavior-y:auto}
+@supports(overflow:clip){
+  html{overflow-x:clip;overflow-y:visible}
+}
+.page-content.active{overflow:visible}
+.sheet{overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 
 </style>
 </head>
