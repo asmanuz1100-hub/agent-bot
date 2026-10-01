@@ -27,5 +27,5 @@ async function exportAll(format){toast('Umumiy akt tayyorlanmoqda…');try{const
 function navigate(i){const c=cAt(i);if(!c||!Number.isFinite(Number(c.lat))||!Number.isFinite(Number(c.lon))){toast('GPS koordinata yo‘q');return}const u='https://www.google.com/maps?q='+encodeURIComponent(c.lat+','+c.lon);if(tg&&tg.openLink)tg.openLink(u);else window.open(u,'_blank','noopener')}
 function clearFilters(){filters={agent:'all',debt:'all',status:'all',sort:'newest'};installFilters();rc()}
 window.RahbarLegacyClients={edit:edit,preview:preview,commit:commit,remove:remove,exportOne:exportOne,exportAll:exportAll,navigate:navigate,clearFilters:clearFilters};
-installFilters();toolbar();setTimeout(installFilters,700);
+installFilters();toolbar();setTimeout(installFilters,700);window.addEventListener('rahbar-v2-data',function(){installFilters();toolbar();rc()});
 })();
