@@ -228,6 +228,18 @@ async function loadReal(silent){
 
 sync=function(b){if(b){b.style.transition='transform .8s';b._r=(b._r||0)+360;b.style.transform='rotate('+b._r+'deg)'}loadReal(true).then(function(){toast('🔄 Haqiqiy ma’lumotlar yangilandi')})};
 
+window.RahbarV2={
+ request:req,
+ reload:function(){return loadReal(true)},
+ dashboard:function(){return REAL_DASH},
+ clients:function(){return REAL_CLIENTS},
+ agents:function(){return REAL_AGENTS},
+ transactions:function(){return REAL_TX},
+ renderAgentMap:renderAgentMap,
+ renderClientMap:renderClientMap,
+ isReal:function(){return REAL_MODE}
+};
+
 if(tg&&tg.initData){setTimeout(function(){loadReal(false)},180)}
 else{
  document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});
