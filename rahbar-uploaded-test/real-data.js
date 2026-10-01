@@ -222,6 +222,7 @@ async function loadReal(silent){
   REAL_MODE=true;REAL_DASH=d;REAL_CLIENTS=Array.isArray(d.clients)?d.clients:[];REAL_AGENTS=Array.isArray(d.agents)?d.agents:[];REAL_TX=Array.isArray(d.transactions)?d.transactions:[];
   markReal();updateHome(d);refreshAgents(d);refreshClients(d);updateCash(d);renderReport('week');tog(rseg,function(i){if(i===3){go(1);return}renderReport(['today','week','month'][i]||'week')});
   if(currentPage()===1)setTimeout(renderAgentMap,80);if(currentPage()===2)setTimeout(renderClientMap,80);
+  try{window.dispatchEvent(new CustomEvent('rahbar-v2-data',{detail:{clients:REAL_CLIENTS.length,agents:REAL_AGENTS.length}}))}catch(_){}
   if(!silent)toast('✅ Haqiqiy ma’lumotlar yangilandi');
  }catch(e){REAL_MODE=false;document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});toast('⚠️ Real data: '+e.message)}
 }
