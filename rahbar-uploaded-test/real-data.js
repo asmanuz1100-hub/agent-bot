@@ -237,6 +237,7 @@ window.RahbarV2={
  transactions:function(){return REAL_TX},
  renderAgentMap:renderAgentMap,
  renderClientMap:renderClientMap,
+ loadLeaflet:loadLeaflet,
  isReal:function(){return REAL_MODE}
 };
 
