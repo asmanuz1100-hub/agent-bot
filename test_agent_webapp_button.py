@@ -26,7 +26,7 @@ class AgentMiniAppButtonTests(unittest.TestCase):
         self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in cashier_rows for b in row))
 
         self.assertTrue(bot.AGENT_MINIAPP_URL.startswith('https://'))
-        self.assertIn('asman-agent-miniapp-v2-test.onrender.com',bot.AGENT_MINIAPP_URL)
+        self.assertIn('/app/agent/',bot.AGENT_MINIAPP_URL)
 
         with patch.object(bot,'api') as api:
             message={'from':{'id':2},'chat':{'id':2,'type':'private'},
