@@ -14,16 +14,20 @@ class AgentMiniAppButtonTests(unittest.TestCase):
 
     def test_agent_button_requests_signed_inline_webapp_for_agent_and_admin(self):
         agent_rows=bot.menu(self.db,2)
+        admin_rows=bot.menu(self.db,1)
+        cashier_rows=bot.menu(self.db,3)
+
         self.assertIn('📱 Agent Mini App',[b for row in agent_rows for b in row])
+        self.assertIn('📱 Agent Mini App',[b for row in admin_rows for b in row])
+        self.assertIn('🧪 Rahbar Premium TEST',[b for row in admin_rows for b in row])
         self.assertNotIn('🧪 Agent V2 TEST',[b for row in agent_rows for b in row])
-        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in agent_rows for b in row))
-        self.assertIn('📱 Agent Mini App',[b for row in bot.menu(self.db,1) for b in row])
-        self.assertIn('🧪 Agent V2 TEST',[b for row in bot.menu(self.db,1) for b in row])
-        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in bot.menu(self.db,3) for b in row))
+        self.assertNotIn('🧪 Agent V2 TEST',[b for row in admin_rows for b in row])
+        self.assertNotIn('🧪 Rahbar V2 FUNCTION TEST',[b for row in admin_rows for b in row])
+        self.assertFalse(any(isinstance(b,dict) and b.get('web_app') for row in cashier_rows for b in row))
+
         self.assertTrue(bot.AGENT_MINIAPP_URL.startswith('https://'))
         self.assertIn('asman-agent-miniapp-v2-test.onrender.com',bot.AGENT_MINIAPP_URL)
-        self.assertTrue(bot.AGENT_V2_TEST_URL.startswith('https://'))
-        self.assertIn('asman-agent-v2-manager-base-test.onrender.com',bot.AGENT_V2_TEST_URL)
+
         with patch.object(bot,'api') as api:
             message={'from':{'id':2},'chat':{'id':2,'type':'private'},
                      'text':'📱 Agent Mini App','date':1234}
@@ -31,6 +35,7 @@ class AgentMiniAppButtonTests(unittest.TestCase):
             button=api.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]
             self.assertEqual(button['web_app']['url'],bot.AGENT_MINIAPP_URL)
             self.assertNotIn('url',button)
+
         with patch.object(bot,'api') as api:
             message={'from':{'id':1},'chat':{'id':1,'type':'private'},
                      'text':'📱 Agent Mini App','date':1234}
@@ -38,20 +43,17 @@ class AgentMiniAppButtonTests(unittest.TestCase):
             button=api.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]
             self.assertEqual(button['web_app']['url'],bot.AGENT_MINIAPP_URL)
             self.assertIn('Админ назорат режими',api.call_args.kwargs['text'])
-        with patch.object(bot,'api') as api:
-            message={'from':{'id':1},'chat':{'id':1,'type':'private'},
-                     'text':'🧪 Agent V2 TEST','date':1234}
-            bot.handle(self.db,{'message':message})
-            button=api.call_args.kwargs['reply_markup']['inline_keyboard'][0][0]
-            self.assertEqual(button['web_app']['url'],bot.AGENT_V2_TEST_URL)
-            self.assertIn('Agent V2 TEST',api.call_args.kwargs['text'])
-        with self.assertRaisesRegex(ValueError,'Фақат агент ёки админ|Фақат админ'):
-            bot.handle(self.db,{'message':{'from':{'id':2},'chat':{'id':2,'type':'private'},
-                'text':'🧪 Agent V2 TEST','date':1234}})
 
-
-    def test_agent_v2_origin_is_allowed_by_backend_cors(self):
-        self.assertIn('https://asman-agent-v2-manager-base-test.onrender.com',open('bot.py',encoding='utf-8').read())
+    def test_obsolete_v2_launchers_and_origins_are_removed(self):
+        source=open('bot.py',encoding='utf-8').read()
+        self.assertNotIn('Rahbar V2 FUNCTION TEST',source)
+        self.assertNotIn('Agent V2 TEST',source)
+        self.assertNotIn('MANAGER_V2_TEST_URL',source)
+        self.assertNotIn('AGENT_V2_TEST_URL',source)
+        self.assertNotIn('https://asman-rahbar-v2-functional-test.onrender.com',source)
+        self.assertNotIn('https://asman-agent-v2-manager-base-test.onrender.com',source)
+        self.assertIn('Rahbar Premium TEST',source)
+        self.assertIn('https://asman-rahbar-uploaded-test.onrender.com',source)
 
 if __name__=='__main__':
     unittest.main()

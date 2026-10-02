@@ -1812,7 +1812,6 @@ def serve_webhook(db,base_url):
             allowed={
                 'https://asman-manager-miniapp-test.onrender.com',
                 'https://asman-rahbar-uploaded-test.onrender.com',
-                'https://asman-rahbar-v2-functional-test.onrender.com',
             }
             if origin not in allowed:return None
             return self._cors_headers(origin)
@@ -1820,7 +1819,6 @@ def serve_webhook(db,base_url):
             origin=self.headers.get('Origin','')
             allowed={
                 'https://asman-agent-miniapp-v2-test.onrender.com',
-                'https://asman-agent-v2-manager-base-test.onrender.com',
             }
             if origin not in allowed:return None
             return self._cors_headers(origin)
