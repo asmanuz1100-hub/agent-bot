@@ -19,7 +19,7 @@ MAX_AUTH_AGE = 3600
 MAX_CLIENTS = 5000
 
 
-def verify_init_data(raw, token, now=None):
+def verify_init_data(raw, token, now=None, max_age=None):
     """Return Telegram's verified user id, or raise ValueError.
 
     This works with signed initData from an inline-keyboard Web App button,
@@ -50,7 +50,8 @@ def verify_init_data(raw, token, now=None):
             raise ValueError("Telegram imzosi tasdiqlanmadi.")
         issued = int(data["auth_date"])
         now = int(time.time() if now is None else now)
-        if issued > now + 60 or issued < now - MAX_AUTH_AGE:
+        age_limit = MAX_AUTH_AGE if max_age is None else int(max_age)
+        if issued > now + 60 or issued < now - age_limit:
             raise ValueError("Sessiya muddati tugagan. Botdan qayta oching.")
         user = json.loads(data["user"])
         uid = user.get("id")

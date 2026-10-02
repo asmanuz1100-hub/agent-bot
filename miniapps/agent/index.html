@@ -134,7 +134,17 @@ function notify(msg){$("notice").textContent=msg;$("notice").style.display="bloc
 function fail(msg){$("gateMessage").textContent=msg;$("gate").classList.remove("hidden")}
 function safeId(v){return Number.isInteger(Number(v))?Number(v):null}
 function client(){return data&&data.clients.find(function(c){return c.id===selected})}
-function isNetworkError(err){return !!(err&&(err.network===true||err.name==="AbortError"||(!err.httpStatus&&navigator.onLine===false)))}
+var sessionExpired=false;
+function isNetworkError(err){return !!(err&&(err.network===true||err.sessionExpired===true||err.name==="AbortError"||(!err.httpStatus&&navigator.onLine===false)))}
+function markSessionExpired(){
+ if(sessionExpired)return;sessionExpired=true;
+ var bar=document.createElement("div");bar.id="sessionExpired";bar.setAttribute("role","alert");
+ bar.style.cssText="position:fixed;left:10px;right:10px;top:10px;z-index:9999;background:#e55265;color:#fff;border-radius:14px;padding:12px 14px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(16,30,57,.25);display:flex;gap:10px;align-items:center";
+ var txt=document.createElement("div");txt.style.flex="1";txt.textContent="Telegram sessiyasi tugadi. Kiritgan ma’lumotlaringiz telefonda saqlanadi. Mini App’ni yopib, botdan qayta oching — ular avtomatik yuboriladi.";
+ var btn=document.createElement("button");btn.type="button";btn.textContent="Yopish";btn.style.cssText="border:0;border-radius:10px;padding:8px 12px;background:#fff;color:#e55265;font-weight:700";
+ btn.addEventListener("click",function(){try{tg&&tg.close?tg.close():null}catch(_e){}});
+ bar.appendChild(txt);bar.appendChild(btn);document.body.appendChild(bar);
+}
 function offlineAgentId(){return Number((data&&data.me&&data.me.id)||0)}
 function telegramActorId(){
  var u=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;
@@ -197,7 +207,7 @@ async function request(action,extra){
   var base={initData:tg.initData,action:action};if(adminAgentId)base.agentId=adminAgentId;
   var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,body:JSON.stringify(Object.assign(base,extra||{}))});
   var body={};try{body=await r.json()}catch(_json){}
-  if(!r.ok){var serverError=Error(body.error||"Server xatosi ("+r.status+")");serverError.httpStatus=r.status;serverError.server=true;throw serverError}
+  if(!r.ok){var serverError=Error(body.error||"Server xatosi ("+r.status+")");serverError.httpStatus=r.status;serverError.server=true;if(r.status===401){serverError.sessionExpired=true;markSessionExpired()}throw serverError}
   return body
  }catch(e){
   if(e.name==="AbortError"){var timeout=Error("Server javob bermadi. Amal offline navbatga saqlanishi mumkin.");timeout.network=true;throw timeout}
@@ -228,7 +238,7 @@ function applySnapshotUi(){
  if(data.truncated)notify("Baza katta: dastlabki 5000 mijoz ko‘rsatilgan.");
 }
 async function refresh(){
- if(busy)return;busy=true;try{
+ if(busy||(sessionExpired&&data))return;busy=true;try{
   var heavy=current==="cash"||current==="reports";
   try{
    data=await request(heavy?"snapshot":"quick_snapshot");
@@ -241,7 +251,7 @@ async function refresh(){
    }
    if(!cached)throw fetchError;
    data=cached;fullDataLoaded=false;
-   notify("Offline rejim: oxirgi saqlangan ma’lumotlar ochildi.");
+   if(!fetchError.sessionExpired)notify("Offline rejim: oxirgi saqlangan ma’lumotlar ochildi.");
   }
   if(data.adminMode&&!data.me){
    var options=(data.agents||[]).map(function(a){return '<option value="'+a.id+'">'+esc(a.name)+'</option>'}).join("");
@@ -972,7 +982,7 @@ async function saveForm(e){
     await ASMANOffline.enqueue({action:formAction,payload:payload,nonce:nonce,photoData:null,tempClientId:tempId,agentId:offlineAgentId()});
     optimisticOffline(formAction,payload,tempId,null);
     await ASMANOffline.saveSnapshot(data,telegramActorId());
-    out={queued:true,clientId:tempId,message:"Aloqa uzildi. Amal offline navbatga saqlandi."};queued=true;
+    out={queued:true,clientId:tempId,message:err.sessionExpired?"Sessiya tugagan. Amal telefonda saqlandi — Mini App’ni qayta ochganingizda avtomatik yuboriladi.":"Aloqa uzildi. Amal offline navbatga saqlandi."};queued=true;
    }
   }
   notify(out.duplicate?"Bu amal avval saqlangan.":out.message||"Muvaffaqiyatli saqlandi.");
@@ -1160,7 +1170,7 @@ if(window.ASMANOffline){
  ASMANOffline.configure({
   request:request,
   currentAgent:offlineAgentId,
-  canSync:function(){return !!(tg&&tg.initData)&&!!offlineAgentId()&&(!(data&&data.adminMode)||Number(adminAgentId||0)===Number(offlineAgentId()))},
+  canSync:function(){return !sessionExpired&&!!(tg&&tg.initData)&&!!offlineAgentId()&&(!(data&&data.adminMode)||Number(adminAgentId||0)===Number(offlineAgentId()))},
   isNetworkError:isNetworkError,
   onStatus:renderOfflineStatus,
   onRemap:remapOfflineClient,
@@ -1191,6 +1201,6 @@ async function bootstrapAgentApp(){
  if(window.ASMANOffline&&navigator.onLine!==false)await ASMANOffline.sync();
 }
 bootstrapAgentApp();
-setInterval(function(){if(data&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
+setInterval(function(){if(data&&!sessionExpired&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
 })();
 </script></body></html>
