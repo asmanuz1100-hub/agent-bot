@@ -27,9 +27,62 @@ TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
-MANAGER_MINIAPP_URL=os.getenv('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1').strip()
-MANAGER_PREMIUM_TEST_URL=os.getenv('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2').strip()
-AGENT_MINIAPP_URL=os.getenv('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3').strip()
+# --- Mini Apps are served by this same service under /app/<name>/ (folder: miniapps/). ---
+# Set SELF_HOSTED_MINIAPPS=0 to fall back to the old separate Render static sites.
+PUBLIC_BASE_URL=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')
+SELF_HOSTED_MINIAPPS=os.getenv('SELF_HOSTED_MINIAPPS','1').strip().lower() not in ('0','false','no','off')
+MINIAPP_DIR=Path(__file__).resolve().with_name('miniapps')
+LEGACY_MINIAPP_HOSTS={'asman-manager-miniapp-test.onrender.com','asman-rahbar-uploaded-test.onrender.com',
+                      'asman-agent-miniapp-v2-test.onrender.com'}
+def _url_origin(value):
+    p=urlparse((value or '').strip())
+    return f'{p.scheme}://{p.netloc}' if p.scheme in ('http','https') and p.netloc else ''
+def _miniapp_url(env_name,legacy_url,app,version):
+    raw=os.environ.get(env_name)
+    if raw is not None and not raw.strip():
+        return ''  # explicitly disabled
+    value=(raw or '').strip()
+    if SELF_HOSTED_MINIAPPS and (not value or urlparse(value).netloc in LEGACY_MINIAPP_HOSTS):
+        return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
+    return value or legacy_url
+MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261002-selfhost-v1')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261002-selfhost-v1')
+SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
+                      _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
+_MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
+                '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8',
+                '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml',
+                '.webp':'image/webp','.ico':'image/x-icon','.webmanifest':'application/manifest+json',
+                '.woff2':'font/woff2','.txt':'text/plain; charset=utf-8'}
+
+def miniapp_response(path,query=''):
+    """Resolve GET /app/<name>/<file> to (status, body, content_type, headers). Never leaves MINIAPP_DIR."""
+    m=re.fullmatch(r'/app/([a-z0-9-]{1,40})(/.*)?',path or '')
+    if not m:
+        return 404,b'Not found','text/plain; charset=utf-8',{}
+    app,rest=m.group(1),m.group(2)
+    if rest is None:
+        loc=f'/app/{app}/'+(f'?{query}' if query else '')
+        return 301,b'','text/plain; charset=utf-8',{'Location':loc}
+    rel=rest[1:]
+    if rel=='' or rel.endswith('/'):
+        rel+='index.html'
+    if '\x00' in rel or '\\' in rel or any(part in ('..','') or part.startswith('.') for part in rel.split('/')):
+        return 404,b'Not found','text/plain; charset=utf-8',{}
+    base=(MINIAPP_DIR/app).resolve()
+    target=(base/rel).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return 404,b'Not found','text/plain; charset=utf-8',{}
+    if not base.is_dir() or not target.is_file():
+        return 404,b'Not found','text/plain; charset=utf-8',{}
+    ctype=_MINIAPP_TYPES.get(target.suffix.lower(),'application/octet-stream')
+    fresh=target.suffix.lower()=='.html' or target.name=='sw.js'
+    headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
+             'X-Content-Type-Options':'nosniff'}
+    return 200,target.read_bytes(),ctype,headers
 CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260928-cash-bank-summary-v7').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
@@ -1812,14 +1865,14 @@ def serve_webhook(db,base_url):
             allowed={
                 'https://asman-manager-miniapp-test.onrender.com',
                 'https://asman-rahbar-uploaded-test.onrender.com',
-            }
+            }|SELF_MINIAPP_ORIGINS
             if origin not in allowed:return None
             return self._cors_headers(origin)
         def _agent_headers(self):
             origin=self.headers.get('Origin','')
             allowed={
                 'https://asman-agent-miniapp-v2-test.onrender.com',
-            }
+            }|SELF_MINIAPP_ORIGINS
             if origin not in allowed:return None
             return self._cors_headers(origin)
         def do_OPTIONS(self):
@@ -1831,13 +1884,17 @@ def serve_webhook(db,base_url):
             self._reply(204,b'',extra_headers=headers)
         def do_HEAD(self):
             # Render and browser clients may probe HEAD / before GET /health.
-            code=200 if urlparse(self.path).path in ('/','/health') else 404
+            head_path=urlparse(self.path).path
+            code=200 if head_path in ('/','/health') else (miniapp_response(head_path)[0] if head_path.startswith('/app/') else 404)
             self.send_response(code)
             self.send_header('Content-Length','0')
             self.send_header('Cache-Control','no-store')
             self.end_headers()
         def do_GET(self):
             path=urlparse(self.path).path
+            if path=='/app' or path.startswith('/app/'):
+                code,body,ctype,headers=miniapp_response(path,urlparse(self.path).query)
+                self._reply(code,body,ctype,headers);return
             if path in ('/cashier','/cashier/'):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
