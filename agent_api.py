@@ -5,6 +5,7 @@ Telegram initData and the current database role. Write actions reuse core
 inventory/cash rules and customer_status visit rules.
 """
 import hashlib
+import os
 import re
 import time
 from datetime import datetime, timedelta
@@ -38,8 +39,20 @@ FEATURE_ACTION={
 }
 
 
+def _agent_session_seconds():
+    """Agents keep the Mini App open for a whole shift; Telegram initData is only issued on open."""
+    try:
+        hours=float(os.getenv('AGENT_SESSION_HOURS','12'))
+    except ValueError:
+        hours=12.0
+    return int(min(24.0,max(1.0,hours))*3600)
+
+
+AGENT_MAX_AUTH_AGE=_agent_session_seconds()
+
+
 def verify_init_data(raw,token,now=None):
-    return manager_api.verify_init_data(raw,token,now)
+    return manager_api.verify_init_data(raw,token,now,max_age=AGENT_MAX_AUTH_AGE)
 
 
 def _midnight(now):
