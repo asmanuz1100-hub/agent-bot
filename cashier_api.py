@@ -66,6 +66,8 @@ def _cashier_summary(db):
         'pendingCount': int(pending['count'] or 0),
         'pendingUsd': int(pending['usd'] or 0),
         'pendingUzs': int(pending['uzs'] or 0),
+        'cardPendingCount': int(db.execute("SELECT COUNT(*) FROM card_payments WHERE status='pending'").fetchone()[0] or 0),
+        'cashUzsFromAgents': int(db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE status='accepted'").fetchone()[0] or 0)//100,
         'agentWalletTotal': wallet_total,
         'agentWalletTotalUzs': wallet_total_uzs,
         'cashBalanceUsd': cash_balance_usd,
@@ -159,8 +161,12 @@ def dashboard(db, actor):
         FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
         ORDER BY f.ts DESC,f.id DESC LIMIT 100""").fetchall()]
     debtors,total_debt=_cashier_debtors(db)
+    card_pending = [dict(x) for x in db.execute("""SELECT p.id,p.agent,p.client,p.currency,p.amount_uzs,p.amount_usd,
+        p.rate_uzs_per_usd,p.note,p.ts,u.name AS agent_name,COALESCE(c.shop_name,c.name) AS client_name
+        FROM card_payments p LEFT JOIN users u ON u.id=p.agent LEFT JOIN clients c ON c.id=p.client
+        WHERE p.status='pending' ORDER BY p.ts,p.id""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),
-            'pending': pending, 'history': history, 'expenses': expenses,
+            'pending': pending, 'cardPending': card_pending, 'history': history, 'expenses': expenses,
             'agents': agents, 'agentFunds': agent_funds, 'summary': _cashier_summary(db),
             'activity': _cashier_activity(db),'debtors':debtors,
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
@@ -180,7 +186,7 @@ def review(db, actor, hid):
 
 def mutate(db, actor, action, payload):
     require_cashier(db, actor)
-    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt'):
+    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject'):
         raise ValueError('Амал нотўғри.')
     rid = payload.get('requestId', '')
     if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,96}', rid):
@@ -226,14 +232,30 @@ def mutate(db, actor, action, payload):
                 +f"\n👤 Кассир: {require_cashier(db,actor)}"}
         db.execute('INSERT INTO meta(key,value) VALUES(?,?)', (key, fingerprint))
         return {'ok':True,'taskId':tid,'_notify':notify}
-    if action in ('accept', 'reject'):
+    if action in ('card_confirm', 'card_reject'):
+        try:pid=int(payload.get('paymentId') or 0)
+        except (TypeError,ValueError):raise ValueError('Karta to‘lovi ID noto‘g‘ri.')
+        row=db.execute('SELECT * FROM card_payments WHERE id=?',(pid,)).fetchone()
+        if not row:raise ValueError('Karta to‘lovi topilmadi.')
+        core.decide_card_payment(db,actor,pid,action=='card_confirm')
+        client=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(row['client'],)).fetchone()
+        label=(client['shop_name'] or client['name']) if client else f"#{row['client']}"
+        shown=(f"{int(row['amount_uzs']):,} сўм → {cashier_pending.usd(row['amount_usd'])} USD (курс {int(row['rate_uzs_per_usd']):,})"
+               if int(row['amount_uzs'] or 0) else f"{cashier_pending.usd(row['amount_usd'])} USD")
+        if action=='card_confirm':
+            text=(f"✅ КАРТА ТЎЛОВИ ТАСДИҚЛАНДИ #{pid}\n🏪 {label}\n💵 {shown}\n"
+                  f"📉 Қолган қарз: {cashier_pending.usd(core.client_debt_usd(db,row['client']))} USD\nКассир: {require_cashier(db,actor)}")
+        else:
+            text=f"❌ КАРТА ТЎЛОВИ РАД ЭТИЛДИ #{pid}\n🏪 {label}\n💵 {shown}\nБанкка тушмаган. Мижоз қарзи ўзгармади.\nКассир: {require_cashier(db,actor)}"
+        notify={'agent':int(row['agent']),'text':text}
+    elif action in ('accept', 'reject'):
         hid = int(payload.get('handoverId') or 0)
         reviewed = db.execute('SELECT value FROM meta WHERE key=?', (f'cashier_review:{actor}:{hid}',)).fetchone()
         if not reviewed or int(reviewed[0]) < int(time.time())-900:
             raise ValueError('Аввал топшириқни кўриб чиқинг.')
         row = db.execute('SELECT * FROM handovers WHERE id=?', (hid,)).fetchone()
         core.accept(db, actor, hid, action=='accept')
-        amount = f"{cashier_pending.usd(row['amount_usd'])} USD" if row['amount_usd'] else f"{cashier_pending.usd(row['amount'])} сўм"
+        amount = core.handover_value_text(row)
         notify = {'agent': int(row['agent']), 'text': f"{'✅ ҚАБУЛ ҚИЛИНДИ' if action=='accept' else '❌ РАД ЭТИЛДИ'}\nТопшириш #{hid} · {amount}\nКассир: {require_cashier(db,actor)}"}
     elif action == 'fund':
         agent = int(payload.get('agentId') or 0)
