@@ -91,6 +91,17 @@ class SelfHostedMiniAppTests(unittest.TestCase):
             self.assertIn(origin, src)
         self.assertEqual(src.count('}|SELF_MINIAPP_ORIGINS'), 2)
 
+    def test_premium_manage_layer_is_wired(self):
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'miniapps', 'rahbar-premium')
+        html = open(os.path.join(base, 'index.html'), encoding='utf-8').read()
+        real = open(os.path.join(base, 'real-data.js'), encoding='utf-8').read()
+        manage = open(os.path.join(base, 'manage.js'), encoding='utf-8').read()
+        self.assertLess(html.index('real-data.js?v='), html.index('manage.js?v='))
+        self.assertIn('window.PremiumReal=', real)
+        for action in ('warehouse', 'product_add', 'order_status', 'agent_period_detail',
+                       'client_edit_preview', 'client_delete_preview', 'agent_feature_set'):
+            self.assertIn("'" + action + "'", manage)
+
 
 if __name__ == '__main__':
     unittest.main()

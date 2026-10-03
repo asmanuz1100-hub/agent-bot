@@ -216,6 +216,8 @@ function renderReport(period){
 
 go=function(i){baseGo(i);if(!REAL_MODE)return;if(i===1)setTimeout(renderAgentMap,90);if(i===2)setTimeout(renderClientMap,90)};
 
+const PM_HOOKS=[];
+window.PremiumReal={req:req,reload:loadReal,clients:function(){return REAL_CLIENTS},agents:function(){return REAL_AGENTS},data:function(){return REAL_DASH},onLoad:function(f){PM_HOOKS.push(f);if(REAL_DASH){try{f(REAL_DASH)}catch(e){}}}};
 async function loadReal(silent){
  try{
   const d=await req('dashboard');if(!d||d.readOnly!==true)throw new Error('Manager API read-only javob bermadi.');
@@ -223,6 +225,7 @@ async function loadReal(silent){
   markReal();updateHome(d);refreshAgents(d);refreshClients(d);updateCash(d);renderReport('week');tog(rseg,function(i){if(i===3){go(1);return}renderReport(['today','week','month'][i]||'week')});
   if(currentPage()===1)setTimeout(renderAgentMap,80);if(currentPage()===2)setTimeout(renderClientMap,80);
   if(!silent)toast('✅ Haqiqiy ma’lumotlar yangilandi');
+  PM_HOOKS.forEach(function(f){try{f(d)}catch(e){console.error(e)}});
  }catch(e){REAL_MODE=false;document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});toast('⚠️ Real data: '+e.message)}
 }
 
