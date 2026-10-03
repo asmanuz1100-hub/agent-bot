@@ -596,6 +596,32 @@ def notify_cashiers_payment(db,agent,client,amount_usd,currency='USD',amount_uzs
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many(cashier_ids(db),text)
 
+def notify_admins_order(db,agent,order_id):
+    row=db.execute('SELECT * FROM orders WHERE id=?',(order_id,)).fetchone()
+    if not row:return
+    v=order_view(db,row)
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(row['client'],)).fetchone()
+    label=(c['shop_name'] or c['name']) if c else f"#{row['client']}"
+    lines=[f"• {i['name']} — {i['qty']} дона"+(" ⚠️ каталогда йўқ" if i['custom'] else '') for i in v['items']]
+    text=(f"🛒 ЯНГИ БУЮРТМА #{order_id}\n👨‍💼 Агент: {_staff_name(db,agent)}\n🏪 Мижоз: {label}\n"+"\n".join(lines)+
+          (f"\n📝 {v['note']}" if v['note'] else '')+
+          ("\n\n⚠️ Каталогда йўқ маҳсулот бор — Раҳбар Mini App → Омбор бўлимида қўшинг ёки боғланг." if v['unmapped'] else
+           "\n\nРаҳбар Mini App → 📦 Омбор бўлимида кўриб чиқинг."))
+    _safe_send_many(admin_ids(db),text)
+
+def notify_agent_order_status(db,order_id):
+    row=db.execute('SELECT * FROM orders WHERE id=?',(order_id,)).fetchone()
+    if not row:return
+    v=order_view(db,row)
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(row['client'],)).fetchone()
+    label=(c['shop_name'] or c['name']) if c else f"#{row['client']}"
+    icon={'preparing':'📦','loaded':'🚚','delivered':'✅','rejected':'❌','new':'🆕'}.get(row['status'],'ℹ️')
+    extra={'loaded':'\nТовар қолдиғингизга қўшилди. Мижозга топширгач, мижоз картасида «Мижозга топшириш»ни босинг.',
+           'rejected':f"\nСабаб: {row['admin_note']}" if row['admin_note'] else ''}.get(row['status'],'')
+    text=(f"{icon} БУЮРТМА #{order_id}: {v['statusLabel'].upper()}\n🏪 {label}\n"+
+          "\n".join(f"• {i['name']} — {i['qty']} дона" for i in v['items'])+extra)
+    _safe_send_many([int(row['agent'])],text)
+
 def notify_cashiers_card_payment(db,agent,client,payment_id,amount_usd,currency='UZS',amount_uzs=None,rate=None):
     c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
     label=(c['shop_name'] or c['name']) if c else f'Мижоз #{client}'
@@ -2203,6 +2229,8 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'],
                                                         notify.get('currency','USD'),notify.get('amountUzs'),
                                                         notify.get('rate'))
+                            elif notify.get('kind')=='order':
+                                notify_admins_order(local,effective_agent,notify['orderId'])
                             elif notify.get('kind')=='card_payment':
                                 notify_cashiers_card_payment(local,effective_agent,notify['client'],notify['paymentId'],
                                                              notify['amount'],notify.get('currency','UZS'),
@@ -2294,6 +2322,31 @@ def serve_webhook(db,base_url):
                         data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
+                    elif action=='warehouse':
+                        data=manager_api.warehouse(local,payload.get('status'))
+                    elif action=='product_add':
+                        if payload.get('confirm') is not True:raise ValueError('Yangi mahsulotni tasdiqlang.')
+                        pack=add_product(local,actor,payload.get('name'),payload.get('weightKg'),
+                                         money(payload.get('priceUsd')),payload.get('blockUnits') or 0)
+                        mapped=0
+                        if payload.get('mapName'):mapped=map_custom_name(local,actor,payload.get('mapName'),pack)
+                        data={'ok':True,'pack':pack,'mapped':mapped,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='product_update':
+                        price=payload.get('priceUsd')
+                        update_product(local,actor,payload.get('pack'),name=payload.get('name'),
+                                       price_cents=money(price) if price not in (None,'') else None,
+                                       active=payload.get('active'),weight_kg=payload.get('weightKg'))
+                        data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='custom_map':
+                        mapped=map_custom_name(local,actor,payload.get('name'),payload.get('pack'))
+                        data={'ok':True,'mapped':mapped,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='order_status':
+                        oid=int(payload.get('orderId') or 0)
+                        set_order_status(local,actor,oid,str(payload.get('to') or ''),payload.get('note'))
+                        local.commit()
+                        try:notify_agent_order_status(local,oid)
+                        except Exception:logging.exception('Order status notification failed order=%s',oid)
+                        data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
                     elif action=='agent_management':
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':
