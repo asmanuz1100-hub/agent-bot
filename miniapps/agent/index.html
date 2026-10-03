@@ -190,11 +190,16 @@ function optimisticOffline(action,payload,tempId,photoData){
   return;
  }
  if(action==="payment"&&c){
-  var amount=Number(payload.amount||0),usd=payload.currency==="UZS"?(Number(data.cashierRateUzsPerUsd||0)?amount/Number(data.cashierRateUzsPerUsd):0):amount;
-  c.debtUsd=Number(c.debtUsd||0)-usd;c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
-  if(data.summary)data.summary.paymentTodayUsd=Number(data.summary.paymentTodayUsd||0)+usd;return;
+  var amount=Number(payload.amount||0),payRate=Number(payload.rate||data.cashierRateUzsPerUsd||0),usd=payload.currency==="UZS"?(payRate?amount/payRate:0):amount;
+  c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
+  if(payload.method==="card")return;
+  c.debtUsd=Number(c.debtUsd||0)-usd;
+  if(data.summary){data.summary.paymentTodayUsd=Number(data.summary.paymentTodayUsd||0)+usd;
+   if(payload.currency==="UZS")data.summary.cashAvailableUzs=Number(data.summary.cashAvailableUzs||0)+amount;
+   else data.summary.cashAvailableUsd=Number(data.summary.cashAvailableUsd||0)+amount}
+  return;
  }
- if(action==="handover"&&data.summary)data.summary.cashAvailableUsd=Math.max(0,Number(data.summary.cashAvailableUsd||0)-Number(payload.amount||0));
+ if(action==="handover"&&data.summary){if(payload.currency==="UZS")data.summary.cashAvailableUzs=Math.max(0,Number(data.summary.cashAvailableUzs||0)-Number(payload.amount||0));else data.summary.cashAvailableUsd=Math.max(0,Number(data.summary.cashAvailableUsd||0)-Number(payload.amount||0))}
  if(action==="agent_expense"&&data.expenseWallet)data.expenseWallet.balanceUzs=Number(data.expenseWallet.balanceUzs||0)-Number(payload.amount||0);
 }
 async function remapOfflineClient(tempId,realId){
@@ -313,7 +318,7 @@ function renderHome(){
   }).join("");
  }
  $("homePlan").innerHTML=target.map(function(c){return shopRow(c,true)}).join("")||'<div class="card muted">Hozircha kechikkan mijoz yo‘q.</div>';
- $("homeCashAvailable").textContent=fmt(data.summary.cashAvailableUsd||0)+" USD";
+ $("homeCashAvailable").textContent=fmtSom(data.summary.cashAvailableUzs||0)+" so‘m · "+fmt(data.summary.cashAvailableUsd||0)+" USD";
  $("homeUrgentCount").textContent=urgent.length+" ta";
  $("homeCommandTitle").textContent=data.me.shiftOpen?"Ish kuni davom etmoqda":"Ish kunini boshlang";
  $("homeCommandStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";
@@ -395,8 +400,10 @@ async function loadClientDetail(id){
 function renderCash(){
  if(!data)return;
  var wallet=data.expenseWallet||{balanceUzs:0,balanceUsd:0,history:[],categories:[]};
- $("cashFree").textContent=fmt(data.summary.cashAvailableUsd)+" USD";
- $("cashHold").textContent="Qo‘ldagi jami: "+fmt(data.summary.cashOnHandUsd)+" USD. Kutilayotgan topshirishlar chegirilgan.";
+ $("cashFree").innerHTML=fmtSom(data.summary.cashAvailableUzs||0)+" so‘m<br>"+fmt(data.summary.cashAvailableUsd||0)+" USD";
+ var cards=data.summary.cardPending||[];
+ $("cashHold").innerHTML="Qo‘ldagi jami: "+fmtSom(data.summary.cashOnHandUzs||0)+" so‘m · "+fmt(data.summary.cashOnHandUsd)+" USD. Kutilayotgan topshirishlar chegirilgan."+
+   (cards.length?"<br>💳 Kassir tasdig‘ini kutayotgan karta to‘lovlari: "+cards.map(function(x){return esc(x.client)+" — "+(x.amountUzs?fmtSom(x.amountUzs)+" so‘m":fmt(x.amountUsd)+" USD")}).join("; "):"");
  $("expenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
  $("homeExpenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
  $("expenseList").innerHTML=(wallet.history||[]).map(function(x){
@@ -407,7 +414,7 @@ function renderCash(){
  }).join("")||'<div class="card muted">Xarajat hisobida hali harakat yo‘q.</div>';
  var payments=data.events.filter(function(e){return e.kind==="payment"});
  $("cashList").innerHTML=payments.slice(0,60).map(function(e){return '<div class="card"><div class="flex between"><b>'+esc(e.shop)+'</b><span class="pill green">+'+fmt(e.amountUsd)+' USD</span></div><p class="tiny">'+date(e.ts)+'</p></div>'}).join("")||'<div class="card muted">To‘lovlar hozircha yo‘q.</div>';
- $("handoverList").innerHTML=data.handovers.map(function(h){var label=h.status==="accepted"?"Qabul qilindi":h.status==="rejected"?"Rad etildi":"Kassir tasdig‘ida";return '<div class="card"><div class="flex between"><b>'+fmt(h.amountUsd)+' USD</b><span class="pill '+(h.status==="accepted"?"green":h.status==="pending"?"yellow":"red")+'">'+label+'</span></div><p class="tiny">'+date(h.ts)+'</p></div>'}).join("")||'<div class="card muted">Kassirga topshirishlar yo‘q.</div>';
+ $("handoverList").innerHTML=data.handovers.map(function(h){var label=h.status==="accepted"?"Qabul qilindi":h.status==="rejected"?"Rad etildi":"Kassir tasdig‘ida";return '<div class="card"><div class="flex between"><b>'+(h.currency==="UZS"&&h.amountUzs?fmtSom(h.amountUzs)+' so‘m':fmt(h.amountUsd)+' USD')+'</b><span class="pill '+(h.status==="accepted"?"green":h.status==="pending"?"yellow":"red")+'">'+label+'</span></div><p class="tiny">'+date(h.ts)+'</p></div>'}).join("")||'<div class="card muted">Kassirga topshirishlar yo‘q.</div>';
 }
 function renderReports(){
  if(!data)return;
@@ -439,7 +446,7 @@ function renderReports(){
    ["Mijozdan olingan",fmt(p.paymentsUsd||0)+" USD","green"],
    ["Kassirga topshirilgan",fmt(p.handoverAcceptedUsd||0)+" USD",""],
    ["Agent xarajati",fmt(p.expenseUsd||0)+" USD",(p.expenseUsd||0)?"red":""],
-   ["Qo‘ldagi mavjud pul",fmt((data.summary||{}).cashAvailableUsd||0)+" USD",""]
+   ["Qo‘ldagi mavjud pul",fmtSom((data.summary||{}).cashAvailableUzs||0)+" so‘m · "+fmt((data.summary||{}).cashAvailableUsd||0)+" USD",""]
  ].map(function(r){return '<div class="report-flow-card '+r[2]+'"><small>'+r[0]+'</small><b>'+r[1]+'</b></div>'}).join("");
 
  var series=(analytics.series||[]);
@@ -841,16 +848,17 @@ async function uploadCameraFile(file){
 }
 function updatePaymentConversion(){
  if(formAction!=="payment")return;
- var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),expected=$("paymentExpectedRate");
+ var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),rateIn=$("paymentRate"),rateBox=$("paymentRateBox"),method=$("paymentMethod"),hint=$("paymentMethodHint");
  if(!currency||!amount||!box)return;
- var cur=currency.value,rate=Number(data&&data.cashierRateUzsPerUsd||0),value=Number(amount.value||0);
- if(expected)expected.value=rate||"";
+ var cur=currency.value,card=method&&method.value==="card",rate=Number(rateIn&&rateIn.value||0),value=Number(amount.value||0);
+ if(hint)hint.innerHTML=card?"<small>Karta / o‘tkazma</small><b>Pul bankka tushadi. Kassir tasdiqlagach qarzdan ayriladi</b>":"<small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b>";
  if(cur==="UZS"){
-  label.textContent="Summa (UZS)";amount.step="1";amount.min="1";amount.inputMode="numeric";amount.placeholder="Masalan, 128000";
-  if(!rate){box.className="payment-convert warn";box.innerHTML="<small>Konvertatsiya</small><b>Kassir kursi belgilanmagan</b>";return}
-  var usd=value>0?value/rate:0;
-  box.className="payment-convert";box.innerHTML="<small>Kassir kursi bo‘yicha USD ekvivalenti</small><b>"+fmt(usd)+" USD</b>";
+  if(rateBox)rateBox.style.display="";if(rateIn)rateIn.required=true;
+  label.textContent="Summa (UZS)";amount.step="1";amount.min="1";amount.inputMode="numeric";amount.placeholder="Masalan, 1185000";
+  if(!rate){box.className="payment-convert warn";box.innerHTML="<small>Konvertatsiya</small><b>Kelishilgan kursni kiriting</b>";}
+  else{var usd=value>0?value/rate:0;box.className="payment-convert";box.innerHTML="<small>Mijoz qarzidan ayriladi (kurs "+rate.toLocaleString("en-US")+")</small><b>"+fmt(usd)+" USD</b>";}
  }else{
+  if(rateBox)rateBox.style.display="none";if(rateIn)rateIn.required=false;
   label.textContent="Summa (USD)";amount.step="0.01";amount.min="0.01";amount.inputMode="decimal";amount.placeholder="0.00";
   box.className="payment-convert";box.innerHTML="<small>Hisob</small><b>"+(value>0?fmt(value)+" USD":"USD summani kiriting")+"</b>";
  }
@@ -897,14 +905,21 @@ function openForm(action){
   if(action!=="handover"&&action!=="agent_expense")h=clientSelect();
   if(action==="visit")h+='<label>Natija</label><select name="status"><option value="interested">Taklif berildi</option><option value="waiting">Kutilmoqda</option><option value="declined">Hozircha olmaydi</option><option value="active">Tovar olgan</option></select>'+field("note","Suhbat izohi","text","Nima kelishildi?",true)+field("followup","Keyingi tashrif sanasi","date","",false);
   if(action==="payment"){
-   var rate=Number(data.cashierRateUzsPerUsd||0),disabled=rate?"":" disabled";
-   h+='<label>Valyuta</label><select name="currency" id="paymentCurrency"><option value="USD">USD</option><option value="UZS"'+disabled+'>UZS'+(rate?"":" — kassir kursi yo‘q")+'</option></select>'+
-      '<div class="payment-rate-card"><small>Kassir belgilagan kurs</small><b>'+(rate?("1 USD = "+rate.toLocaleString("en-US")+" UZS"):"Kurs belgilanmagan")+'</b></div>'+
-      '<label id="paymentAmountLabel" for="paymentAmount">Summa (USD)</label><input id="paymentAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required>'+
-      '<input type="hidden" name="expectedRate" id="paymentExpectedRate" value="'+(rate||"")+'">'+
-      '<div id="paymentConversion" class="payment-convert"><small>Hisob</small><b>USD summani kiriting</b></div>';
+   var rate=Number(data.cashierRateUzsPerUsd||0);
+   h+='<label>To‘lov usuli</label><select name="method" id="paymentMethod"><option value="cash">💵 Naqd pul</option><option value="card">💳 Karta / bank o‘tkazmasi</option></select>'+
+      '<div id="paymentMethodHint" class="payment-rate-card"><small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b></div>'+
+      '<label>Valyuta</label><select name="currency" id="paymentCurrency"><option value="UZS">So‘m (UZS)</option><option value="USD">Dollar (USD)</option></select>'+
+      '<div id="paymentRateBox"><label for="paymentRate">Mijoz bilan kelishilgan kurs (1 USD = ? so‘m)</label><input id="paymentRate" name="rate" type="number" min="1000" step="1" inputmode="numeric" placeholder="'+(rate||"12000")+'" value="'+(rate||"")+'">'+
+      '<small class="muted">Kassa kursi: '+(rate?("1 USD = "+rate.toLocaleString("en-US")+" so‘m"):"belgilanmagan")+' · kelishilgan kursni yozing</small></div>'+
+      '<label id="paymentAmountLabel" for="paymentAmount">Summa (UZS)</label><input id="paymentAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Masalan, 1185000" required>'+
+      '<div id="paymentConversion" class="payment-convert"><small>Hisob</small><b>Summani kiriting</b></div>';
   }
-  if(action==="handover")h+=field("amount","Summa (USD)","number","0.00",true);
+  if(action==="handover"){
+   var sm=data.summary||{};
+   h+='<div class="card"><b>Qo‘lingizdagi pul</b><div style="margin-top:8px">💴 '+fmtSom(sm.cashAvailableUzs||0)+' so‘m<br>💵 '+fmt(sm.cashAvailableUsd||0)+' USD</div><p class="muted">So‘m va dollar alohida topshiriladi.</p></div>'+
+      '<label>Valyuta</label><select name="currency" id="handoverCurrency"><option value="UZS">So‘m (UZS)</option><option value="USD">Dollar (USD)</option></select>'+
+      '<label>Summa</label><input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Summa" required>';
+  }
   if(action==="agent_expense"){
    var cats=((data.expenseWallet||{}).categories||[]),rate=Number(data.cashierRateUzsPerUsd||0);
    h='<div class="card"><b>Joriy xarajat balansi</b><div style="font-size:28px;font-weight:900;margin-top:8px">'+fmtSom((data.expenseWallet||{}).balanceUzs||0)+' UZS</div><p class="muted">Xarajat faqat shu so‘m balansidan yechiladi.</p></div>'+
@@ -950,9 +965,10 @@ async function saveForm(e){
   if(formAction==="client"){detail=payload.shop+" · "+payload.person+" · "+payload.phone+" · Foto ✅ · "+(payload.items.length?payload.items.length+" xil mahsulot":"mahsulotsiz")}
   else if(payload.items){payload.items.forEach(function(it){var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
   else if(formAction==="payment"){
-   if(payload.currency==="UZS"){var rate=Number(data.cashierRateUzsPerUsd||0),som=Number(payload.amount||0);detail=som.toLocaleString("en-US")+" UZS → "+fmt(rate?som/rate:0)+" USD · kurs "+(rate?rate.toLocaleString("en-US"):"yo‘q")}
-   else detail=fmt(payload.amount)+" USD";
-  }else if(formAction==="handover")detail=fmt(payload.amount)+" USD";
+   var how=payload.method==="card"?"💳 Karta — kassir tasdiqlaydi":"💵 Naqd";
+   if(payload.currency==="UZS"){var rate=Number(payload.rate||0),som=Number(payload.amount||0);detail=how+" · "+som.toLocaleString("en-US")+" UZS → "+fmt(rate?som/rate:0)+" USD · kurs "+(rate?rate.toLocaleString("en-US"):"yo‘q")}
+   else detail=how+" · "+fmt(payload.amount)+" USD";
+  }else if(formAction==="handover")detail=payload.currency==="UZS"?Number(payload.amount||0).toLocaleString("en-US")+" so‘m":fmt(payload.amount)+" USD";
   else if(formAction==="agent_expense"){var expenseRate=Number(data.cashierRateUzsPerUsd||0),expenseSom=Number(payload.amount||0);detail=payload.category+" · "+fmtSom(expenseSom)+" UZS"+(expenseRate?" → "+fmt(expenseSom/expenseRate)+" USD · kurs "+fmtSom(expenseRate):"")+" · "+payload.note;}
   else if(formAction==="client_edit")detail=(payload.shop||"")+" · "+(payload.person||"")+" · "+(payload.phone||"")+" · GPS: "+(payload.lat||"")+", "+(payload.lon||"")+(payload.photoFileId||pendingPhotoData?" · Yangi foto ✅":" · Avvalgi foto saqlanadi");
   else detail=payload.status;
