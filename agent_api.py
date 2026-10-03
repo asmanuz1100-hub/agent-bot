@@ -110,6 +110,67 @@ def _live_ready(db,agent,max_age=300,now=None):
     return True,''
 
 
+def visit_radius_m():
+    try:value=int(os.getenv("VISIT_RADIUS_M","200"))
+    except ValueError:value=200
+    return max(50,min(value,2000))
+
+
+VISIT_MAX_HOURS=6
+
+
+def _agent_points(db,agent,lo,hi):
+    return db.execute("""SELECT p.ts,p.lat,p.lon,p.accuracy FROM points p JOIN shifts s ON s.id=p.shift
+        WHERE s.agent=? AND p.ts>=? AND p.ts<=? ORDER BY p.ts,p.id""",(agent,lo,hi)).fetchall()
+
+
+def _visit_gps(db,agent,c,start_ts,end_ts):
+    """Closest live-location point to the shop while the visit lasted (server-side, not the phone's claim)."""
+    if c['lat'] is None or c['lon'] is None:return None,None,None
+    points=_agent_points(db,agent,int(start_ts)-300,int(end_ts)+60)
+    if not points:
+        raise ValueError("Tashrif vaqtida GPS nuqtasi topilmadi. «Ishni boshlash»ni bosing va Telegram jonli lokatsiyasini yoqing.")
+    shop={'lat':float(c['lat']),'lon':float(c['lon'])}
+    best=min(points,key=lambda p:core.distance(shop,{'lat':float(p['lat']),'lon':float(p['lon'])}))
+    d=int(round(core.distance(shop,{'lat':float(best['lat']),'lon':float(best['lon'])})))
+    radius=visit_radius_m()
+    allowed=radius+min(int(best['accuracy'] or 0),100)
+    if d>allowed:
+        raise ValueError(f"Siz do‘kondan {d} m uzoqdasiz (ruxsat: {radius} m). Tashrif faqat do‘kon yonida qayd etiladi.")
+    return float(best['lat']),float(best['lon']),d
+
+
+def visit_check(db,agent,cid,now=None):
+    """Read-only: is the agent at the shop right now? Used when a visit starts."""
+    _require_agent(db,agent);_feature(db,agent,'visit')
+    c=_client(db,cid);now=int(time.time() if now is None else now);radius=visit_radius_m()
+    ok,msg=_live_ready(db,agent,now=now)
+    if not ok:return {"ok":False,"radiusM":radius,"distanceM":None,"message":msg}
+    if c['lat'] is None or c['lon'] is None:
+        return {"ok":True,"radiusM":radius,"distanceM":None,"message":"Mijoz lokatsiyasi kiritilmagan — masofa tekshirilmaydi."}
+    p=_agent_points(db,agent,now-300,now+60)[-1]
+    d=int(round(core.distance({'lat':float(c['lat']),'lon':float(c['lon'])},{'lat':float(p['lat']),'lon':float(p['lon'])})))
+    near=d<=radius+min(int(p['accuracy'] or 0),100)
+    return {"ok":near,"radiusM":radius,"distanceM":d,"gpsAgeSec":max(0,now-int(p['ts'])),
+            "message":(f"Siz do‘kon yonidasiz ({d} m)." if near else f"Siz do‘kondan {d} m uzoqdasiz. Do‘konga yetib kelgach boshlang.")}
+
+
+def _visit_stock_items(db,cid,raw):
+    if raw in (None,""):return []
+    if not isinstance(raw,list) or len(raw)>50:raise ValueError("Qoldiq ro‘yxati noto‘g‘ri.")
+    valid=set(core.product_ids());seen=set();items=[]
+    for it in raw:
+        if not isinstance(it,dict):raise ValueError("Qoldiq ro‘yxati noto‘g‘ri.")
+        if it.get("qty") in (None,""):continue
+        try:pack=int(it.get("pack"));qty=int(str(it.get("qty")).strip())
+        except (TypeError,ValueError):raise ValueError("Qoldiq soni butun son bo‘lsin.")
+        if pack not in valid:raise ValueError("Mahsulot topilmadi.")
+        if pack in seen:raise ValueError("Bir mahsulot ikki marta sanalgan.")
+        if not 0<=qty<=100000:raise ValueError("Qoldiq soni 0 dan 100000 gacha bo‘lsin.")
+        seen.add(pack);items.append((pack,qty,int(core.client_stock_total(db,cid,pack))))
+    return items
+
+
 def _operation_ts(payload,server_now):
     raw=payload.get("offlineTs")
     if raw in (None,""):
@@ -589,9 +650,16 @@ def client_detail(db,agent,cid,now=None):
     c=_client(db,cid);now=int(time.time() if now is None else now)
     snapshots={x['id']:x for x in _client_snapshot(db,now,c['id'])}
     base=snapshots.get(int(c['id']))
-    visits=db.execute("""SELECT v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name
+    visits=db.execute("""SELECT v.id,v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name,
+        v.checkin_ts,v.distance_m,v.photo
         FROM client_visits v LEFT JOIN users u ON u.id=v.actor
         WHERE v.client=? ORDER BY v.ts DESC,v.id DESC LIMIT 20""",(c['id'],)).fetchall()
+    stock_by={}
+    ids=[int(v['id']) for v in visits]
+    if ids:
+        for r in db.execute(f"SELECT visit,pack,counted,expected FROM visit_stock WHERE visit IN ({','.join('?' for _ in ids)}) ORDER BY id",ids).fetchall():
+            stock_by.setdefault(int(r['visit']),[]).append({"pack":int(r['pack']),"name":core.product_name(int(r['pack'])),
+                "counted":int(r['counted']),"expected":int(r['expected'])})
     events=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount_usd,e.ts,u.name AS actor_name
         FROM events e LEFT JOIN users u ON u.id=e.actor WHERE e.client=?
         AND e.kind IN ('delivery','sold','return','payment','order','visit')
@@ -600,7 +668,12 @@ def client_detail(db,agent,cid,now=None):
       "client":base,
       "visits":[{"status":v['status'],"statusLabel":STATUS_LABELS.get(v['status'],v['status']),
                  "note":v['note'] or "","followup":v['followup'] or None,
-                 "ts":int(v['ts']),"actor":v['actor_name'] or str(v['actor'])} for v in visits],
+                 "ts":int(v['ts']),"actor":v['actor_name'] or str(v['actor']),
+                 "id":int(v['id']),"checkinTs":int(v['checkin_ts'] or 0) or None,
+                 "durationMin":(max(1,(int(v['ts'])-int(v['checkin_ts'])+59)//60) if int(v['checkin_ts'] or 0) else None),
+                 "distanceM":(int(v['distance_m']) if v['distance_m'] is not None else None),
+                 "hasPhoto":bool(v['photo']),"stock":stock_by.get(int(v['id']),[])} for v in visits],
+      "visitRadiusM":visit_radius_m(),
       "events":[{"id":int(e['id']),"kind":e['kind'],"pack":int(e['pack'] or 0),
                  "qty":int(e['qty'] or 0),"amountUsd":_usd(e['amount_usd']),
                  "ts":int(e['ts']),"actor":e['actor_name'] or ""} for e in events]
@@ -841,8 +914,31 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         status=str(payload.get("status") or "")
         note=str(payload.get("note") or "").strip()
         followup=payload.get("followup") or None
-        cs.add_visit(db,agent,cid,status,note,followup,ts=op_ts)
-        return {"ok":True,"message":"Tashrif saqlandi."}
+        if payload.get("checkinTs") in (None,""):
+            # Older cached app versions: plain visit note without check-in.
+            cs.add_visit(db,agent,cid,status,note,followup,ts=op_ts)
+            return {"ok":True,"message":"Tashrif saqlandi."}
+        try:checkin=int(payload.get("checkinTs"))
+        except (TypeError,ValueError):raise ValueError("Tashrif boshlanish vaqti noto‘g‘ri.")
+        if checkin>op_ts+60 or op_ts-checkin>VISIT_MAX_HOURS*3600:
+            raise ValueError("Tashrif boshlanish vaqti noto‘g‘ri. Tashrifni qaytadan boshlang.")
+        checkin=min(checkin,op_ts)
+        photo=str(payload.get("photoFileId") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",photo):raise ValueError("Do‘kon (javon) rasmini oling.")
+        stock=_visit_stock_items(db,cid,payload.get("stock"))
+        lat,lon,dist=_visit_gps(db,agent,current_client,checkin,op_ts)
+        vid=cs.add_visit(db,agent,cid,status,note,followup,ts=op_ts)
+        db.execute("UPDATE client_visits SET checkin_ts=?,lat=?,lon=?,distance_m=?,photo=? WHERE id=?",
+                   (checkin,lat,lon,dist,photo,vid))
+        for pack,qty,expected in stock:
+            db.execute("INSERT INTO visit_stock(visit,client,pack,counted,expected,ts) VALUES(?,?,?,?,?,?)",
+                       (vid,cid,pack,qty,expected,op_ts))
+        minutes=max(1,(op_ts-checkin+59)//60)
+        parts=[f"{minutes} daqiqa"]
+        if dist is not None:parts.append(f"do‘kondan {dist} m")
+        if stock:parts.append(f"{len(stock)} xil qoldiq sanaldi")
+        return {"ok":True,"visitId":vid,"distanceM":dist,"durationMin":minutes,
+                "message":"Tashrif saqlandi: "+", ".join(parts)+"."}
     if action=="delivery":
         items=payload.get("items")
         if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:

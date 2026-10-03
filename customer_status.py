@@ -34,8 +34,9 @@ def add_visit(db,actor,client,status,note,followup=None,ts=None):
     if not note or len(note)>1000:
         raise ValueError('Суҳбат ҳақида 1–1000 белги ёзинг.')
     followup=normalize(status,followup)
-    db.execute('INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(?,?,?,?,?,?)',
-               (client,actor,status,note,followup,int(time.time() if ts is None else ts)))
+    row=db.execute('INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(?,?,?,?,?,?) RETURNING id',
+               (client,actor,status,note,followup,int(time.time() if ts is None else ts))).fetchone()
+    return int(row[0])
 
 def history(db,client,limit=5):
     return db.execute("""SELECT v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name

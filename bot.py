@@ -188,6 +188,14 @@ def stable_client_photo_link(cid,now=None):
     scope=f'client-photo/{int(cid)}'
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
 
+def visit_photo_link(visit_id,now=None):
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    now=int(time.time() if now is None else now)
+    expires=((now//1800)+2)*1800
+    scope=f'visit-photo/{int(visit_id)}'
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
 # Bound image memory on the free instance, reduce repeated Telegram getFile calls.
 _PHOTO_CACHE=OrderedDict()
 _PHOTO_CACHE_LOCK=threading.Lock()
@@ -2012,6 +2020,29 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Customer card failed');self._reply(500,b'Customer card error')
                 return
+            m=re.fullmatch(r'/map/visit-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                vid=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'visit-photo/{vid}',expires,sig):
+                    self._reply(410,b'Visit photo link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        row=local.execute('SELECT photo FROM client_visits WHERE id=?',(vid,)).fetchone()
+                        local.commit()
+                    finally:
+                        if postgres:local.close()
+                    if not row or not row['photo']:
+                        self._reply(404,b'Photo not found');return
+                    photo_data=customer_photo_bytes(row['photo'])
+                    self._reply(200,photo_data,photo_content_type(photo_data),
+                                {'Cache-Control':'private, max-age=1800, stale-while-revalidate=300'})
+                except ValueError as exc:
+                    logging.warning('Visit photo unavailable visit=%s reason=%s',vid,str(exc))
+                    self._reply(404,b'Photo not found')
+                except Exception:
+                    logging.exception('Visit photo failed');self._reply(502,b'Photo temporarily unavailable')
+                return
             m=re.fullmatch(r'/map/client-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
@@ -2131,6 +2162,11 @@ def serve_webhook(db,base_url):
                         local.commit()
                     elif action=='client_detail':
                         data=agent_api.client_detail(local,subject,payload.get('clientId'))
+                        for v in data.get('visits') or []:
+                            if v.get('hasPhoto'):v['photoUrl']=visit_photo_link(int(v['id']))
+                        local.commit()
+                    elif action=='visit_check':
+                        data=agent_api.visit_check(local,subject,payload.get('clientId'))
                         local.commit()
                     elif action=='client_delete_preview':
                         if not admin_mode:
