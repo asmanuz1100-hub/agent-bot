@@ -223,7 +223,7 @@ function optimisticOffline(action,payload,tempId,photoData){
   return;
  }
  if(action==="payment"&&c){
-  var amount=Number(payload.amount||0),payRate=Number(payload.rate||data.cashierRateUzsPerUsd||0),usd=payload.currency==="UZS"?(payRate?amount/payRate:0):amount;
+  var amount=Number(payload.amount||0),payRate=Number(payload.rate||data.cashierRateUzsPerUsd||0),usd=payload.currency==="UZS"?(Number(payload.usd||0)||(payRate?amount/payRate:0)):amount;
   c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
   if(payload.method==="card")return;
   c.debtUsd=Number(c.debtUsd||0)-usd;
@@ -896,17 +896,17 @@ async function uploadCameraFile(file){
 }
 function updatePaymentConversion(){
  if(formAction!=="payment")return;
- var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),rateIn=$("paymentRate"),rateBox=$("paymentRateBox"),method=$("paymentMethod"),hint=$("paymentMethodHint");
+ var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),usdIn=$("paymentUsd"),rateBox=$("paymentRateBox"),method=$("paymentMethod"),hint=$("paymentMethodHint");
  if(!currency||!amount||!box)return;
- var cur=currency.value,card=method&&method.value==="card",rate=Number(rateIn&&rateIn.value||0),value=Number(amount.value||0);
+ var cur=currency.value,card=method&&method.value==="card",usdv=Number(usdIn&&usdIn.value||0),value=Number(amount.value||0),base=Number(data&&data.cashierRateUzsPerUsd||0);
  if(hint)hint.innerHTML=card?"<small>Karta / o‘tkazma</small><b>Pul bankka tushadi. Kassir tasdiqlagach qarzdan ayriladi</b>":"<small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b>";
  if(cur==="UZS"){
-  if(rateBox)rateBox.style.display="";if(rateIn)rateIn.required=true;
+  if(rateBox)rateBox.style.display="";if(usdIn){usdIn.required=true;usdIn.placeholder=value>0&&base?"≈ "+(value/base).toFixed(2):"0.00"}
   label.textContent="Summa (UZS)";amount.step="1";amount.min="1";amount.inputMode="numeric";amount.placeholder="Masalan, 1185000";
-  if(!rate){box.className="payment-convert warn";box.innerHTML="<small>Konvertatsiya</small><b>Kelishilgan kursni kiriting</b>";}
-  else{var usd=value>0?value/rate:0;box.className="payment-convert";box.innerHTML="<small>Mijoz qarzidan ayriladi (kurs "+rate.toLocaleString("en-US")+")</small><b>"+fmt(usd)+" USD</b>";}
+  if(!(value>0&&usdv>0)){box.className="payment-convert warn";box.innerHTML="<small>Kurs avtomatik aniqlanadi</small><b>So‘m va dollar summasini kiriting</b>";}
+  else{var r=Math.round(value/usdv),far=base&&Math.abs(r-base)>base*0.2;box.className="payment-convert"+(far?" warn":"");box.innerHTML="<small>Mijoz qarzidan "+fmt(usdv)+" USD ayriladi</small><b>Kurs: 1 USD = "+r.toLocaleString("en-US")+" so‘m</b>"+(far?"<small>Kassa kursidan ("+base.toLocaleString("en-US")+") juda farq qiladi — summalarni tekshiring</small>":"");}
  }else{
-  if(rateBox)rateBox.style.display="none";if(rateIn)rateIn.required=false;
+  if(rateBox)rateBox.style.display="none";if(usdIn)usdIn.required=false;
   label.textContent="Summa (USD)";amount.step="0.01";amount.min="0.01";amount.inputMode="decimal";amount.placeholder="0.00";
   box.className="payment-convert";box.innerHTML="<small>Hisob</small><b>"+(value>0?fmt(value)+" USD":"USD summani kiriting")+"</b>";
  }
@@ -967,9 +967,9 @@ function openForm(action){
    h+='<label>To‘lov usuli</label><select name="method" id="paymentMethod"><option value="cash">💵 Naqd pul</option><option value="card">💳 Karta / bank o‘tkazmasi</option></select>'+
       '<div id="paymentMethodHint" class="payment-rate-card"><small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b></div>'+
       '<label>Valyuta</label><select name="currency" id="paymentCurrency"><option value="UZS">So‘m (UZS)</option><option value="USD">Dollar (USD)</option></select>'+
-      '<div id="paymentRateBox"><label for="paymentRate">Mijoz bilan kelishilgan kurs (1 USD = ? so‘m)</label><input id="paymentRate" name="rate" type="number" min="1000" step="1" inputmode="numeric" placeholder="'+(rate||"12000")+'" value="'+(rate||"")+'">'+
-      '<small class="muted">Kassa kursi: '+(rate?("1 USD = "+rate.toLocaleString("en-US")+" so‘m"):"belgilanmagan")+' · kelishilgan kursni yozing</small></div>'+
       '<label id="paymentAmountLabel" for="paymentAmount">Summa (UZS)</label><input id="paymentAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Masalan, 1185000" required>'+
+      '<div id="paymentRateBox"><label for="paymentUsd">Dollar summasi (konvertatsiya, USD)</label><input id="paymentUsd" name="usd" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">'+
+      '<small class="muted">Mijoz bilan kelishgan dollar summasini yozing — kurs avtomatik hisoblanadi'+(rate?(" · kassa kursi 1 USD = "+rate.toLocaleString("en-US")+" so‘m"):"")+'</small></div>'+
       '<div id="paymentConversion" class="payment-convert"><small>Hisob</small><b>Summani kiriting</b></div>';
   }
   if(action==="handover"){
@@ -1038,7 +1038,7 @@ async function saveForm(e){
   else if(payload.items&&formAction!=="order"){payload.items.forEach(function(it){var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
   else if(formAction==="payment"){
    var how=payload.method==="card"?"💳 Karta — kassir tasdiqlaydi":"💵 Naqd";
-   if(payload.currency==="UZS"){var rate=Number(payload.rate||0),som=Number(payload.amount||0);detail=how+" · "+som.toLocaleString("en-US")+" UZS → "+fmt(rate?som/rate:0)+" USD · kurs "+(rate?rate.toLocaleString("en-US"):"yo‘q")}
+   if(payload.currency==="UZS"){var som=Number(payload.amount||0),pu=Number(payload.usd||0);detail=how+" · "+som.toLocaleString("en-US")+" UZS = "+fmt(pu)+" USD · kurs "+(pu?Math.round(som/pu).toLocaleString("en-US"):"yo‘q")}
    else detail=how+" · "+fmt(payload.amount)+" USD";
   }else if(formAction==="handover")detail=payload.currency==="UZS"?Number(payload.amount||0).toLocaleString("en-US")+" so‘m":fmt(payload.amount)+" USD";
   else if(formAction==="agent_expense"){var expenseRate=Number(data.cashierRateUzsPerUsd||0),expenseSom=Number(payload.amount||0);detail=payload.category+" · "+fmtSom(expenseSom)+" UZS"+(expenseRate?" → "+fmt(expenseSom/expenseRate)+" USD · kurs "+fmtSom(expenseRate):"")+" · "+payload.note;}
