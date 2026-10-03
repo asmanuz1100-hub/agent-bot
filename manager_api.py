@@ -493,6 +493,9 @@ def dashboard(db, now=None):
     total_debt=sum(int(v or 0) for v in debt_by_client.values())
     return {
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
+        "warehouse":{"newOrders":int(db.execute("SELECT COUNT(*) FROM orders WHERE status='new'").fetchone()[0] or 0),
+                     "openOrders":int(db.execute("SELECT COUNT(*) FROM orders WHERE status IN ('new','preparing','loaded')").fetchone()[0] or 0),
+                     "missingProducts":len(core.custom_demand(db))},
         "clientCount":int(all_clients),"clientsTruncated":int(all_clients)>MAX_CLIENTS,
         "agents":agents,"clients":clients,"transactions":transactions,
         "cash":{"balanceUsd":_usd(cash_balance),
@@ -962,3 +965,34 @@ def route(db, agent_id, now=None):
     return {"agentId":agent_id,"agent":agent["name"],
             "start":int(shift["start"]),"end":int(shift["end_ts"]) if shift["end_ts"] else None,
             "points":coords}
+
+
+def warehouse(db, status=None):
+    """Ombor: product catalog, agent orders by status and products asked for but missing from the catalog."""
+    status = str(status or 'open')
+    if status == 'open':
+        statuses = ('new', 'preparing', 'loaded')
+    elif status in core.ORDER_STATUSES:
+        statuses = (status,)
+    else:
+        raise ValueError('Holat noto‘g‘ri.')
+    rows = db.execute(f"""SELECT o.*, u.name AS agent_name, COALESCE(c.shop_name,c.name) AS client_name
+        FROM orders o LEFT JOIN users u ON u.id=o.agent LEFT JOIN clients c ON c.id=o.client
+        WHERE o.status IN ({','.join('?' for _ in statuses)})
+        ORDER BY CASE o.status WHEN 'new' THEN 0 WHEN 'preparing' THEN 1 WHEN 'loaded' THEN 2 ELSE 3 END, o.ts DESC, o.id DESC
+        LIMIT 200""", statuses).fetchall()
+    orders = []
+    for r in rows:
+        v = core.order_view(db, r)
+        v['agentName'] = r['agent_name'] or str(r['agent'])
+        v['clientName'] = r['client_name'] or f"#{r['client']}"
+        orders.append(v)
+    counts = {s: 0 for s in core.ORDER_STATUSES}
+    for r in db.execute('SELECT status, COUNT(*) FROM orders GROUP BY status').fetchall():
+        counts[r[0]] = int(r[1])
+    products = core.catalog(db)
+    for p in products:
+        p['priceUsd'] = round(p['priceCents'] / 100, 2)
+    return {'filter': status, 'counts': counts, 'orders': orders,
+            'catalog': products, 'demand': core.custom_demand(db),
+            'statusLabels': dict(core.ORDER_STATUS_LABELS)}

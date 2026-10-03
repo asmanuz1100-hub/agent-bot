@@ -38,13 +38,42 @@ PRODUCTS={sku:item['name'] for sku,item in PRODUCT_CATALOG.items()}
 PRODUCT_WEIGHTS={sku:int(item['weight_kg']) for sku,item in PRODUCT_CATALOG.items()}
 PRODUCT_DEFAULT_PRICES={sku:int(item['default_price']) for sku,item in PRODUCT_CATALOG.items()}
 PACK_UNITS={sku:int(item['block_units']) for sku,item in PRODUCT_CATALOG.items() if item['block_units']}
+BUILTIN_PRODUCTS=frozenset(PRODUCT_CATALOG)
+# Products the manager added in the Ombor (warehouse) section live in the
+# products table and are merged into the dicts above by refresh_catalog().
+INACTIVE_PRODUCTS=set()
+CUSTOM_PRODUCT_START=100000
 
 def product_ids():
     return tuple(PRODUCTS.keys())
 
+def active_product_ids():
+    return tuple(p for p in PRODUCTS if p not in INACTIVE_PRODUCTS)
+
 def product_weight(pack):
     try:return PRODUCT_WEIGHTS[int(pack)]
     except (KeyError,TypeError,ValueError):raise ValueError('Нотўғри товар.')
+
+def refresh_catalog(db):
+    """Merge manager-added products and archive flags from the DB into the in-memory catalog."""
+    try:
+        rows=db.execute('SELECT pack,name,weight_kg,block_units,active,custom FROM products').fetchall()
+    except Exception:
+        return
+    seen=set()
+    for r in rows:
+        pack=int(r['pack'])
+        if int(r['custom'] or 0) and pack not in BUILTIN_PRODUCTS:
+            seen.add(pack)
+            PRODUCTS[pack]=r['name']
+            w=float(r['weight_kg'] or 0);PRODUCT_WEIGHTS[pack]=int(w) if w==int(w) else w
+            if int(r['block_units'] or 0)>0:PACK_UNITS[pack]=int(r['block_units'])
+            else:PACK_UNITS.pop(pack,None)
+        if pack in PRODUCTS:
+            if int(r['active'] if r['active'] is not None else 1):INACTIVE_PRODUCTS.discard(pack)
+            else:INACTIVE_PRODUCTS.add(pack)
+    for pack in [p for p in PRODUCTS if p not in BUILTIN_PRODUCTS and p not in seen]:
+        PRODUCTS.pop(pack,None);PRODUCT_WEIGHTS.pop(pack,None);PACK_UNITS.pop(pack,None);INACTIVE_PRODUCTS.discard(pack)
 
 def block_units(pack):
     try:return PACK_UNITS.get(int(pack))
@@ -73,6 +102,11 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, client INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','preparing','loaded','delivered','rejected')), note TEXT NOT NULL DEFAULT '', admin_note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, updated_ts INTEGER NOT NULL, admin INTEGER);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status,ts);
+CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client,ts);
+CREATE TABLE IF NOT EXISTS order_items(id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL, pack INTEGER, custom_name TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL CHECK(qty>0));
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE TABLE IF NOT EXISTS visit_stock(id INTEGER PRIMARY KEY, visit INTEGER NOT NULL, client INTEGER NOT NULL, pack INTEGER NOT NULL, counted INTEGER NOT NULL CHECK(counted>=0), expected INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, client INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs INTEGER NOT NULL DEFAULT 0, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, cashier INTEGER, decided_ts INTEGER, event_id INTEGER);
@@ -116,6 +150,11 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS orders(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, client BIGINT NOT NULL, status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','preparing','loaded','delivered','rejected')), note TEXT NOT NULL DEFAULT '', admin_note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, updated_ts BIGINT NOT NULL, admin BIGINT);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status,ts);
+CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client,ts);
+CREATE TABLE IF NOT EXISTS order_items(id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL, pack BIGINT, custom_name TEXT NOT NULL DEFAULT '', qty BIGINT NOT NULL CHECK(qty>0));
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE TABLE IF NOT EXISTS visit_stock(id BIGSERIAL PRIMARY KEY, visit BIGINT NOT NULL, client BIGINT NOT NULL, pack BIGINT NOT NULL, counted BIGINT NOT NULL CHECK(counted>=0), expected BIGINT NOT NULL DEFAULT 0, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, client BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs BIGINT NOT NULL DEFAULT 0, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, cashier BIGINT, decided_ts BIGINT, event_id BIGINT);
@@ -208,6 +247,7 @@ def connect(path,initialize=True):
             raise ValueError('DB_SCHEMA нотўғри.')
         if not initialize:
             db.execute(f'SET search_path TO "{schema}"')
+            refresh_catalog(db)
             db.commit()
             return db
         db.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
@@ -228,14 +268,18 @@ def connect(path,initialize=True):
                                   ('distance_m','BIGINT'),('photo',"TEXT NOT NULL DEFAULT ''")):
             db.execute(f'ALTER TABLE client_visits ADD COLUMN IF NOT EXISTS {column} {definition}')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
+        for column,definition in (('weight_kg','DOUBLE PRECISION NOT NULL DEFAULT 0'),('block_units','BIGINT NOT NULL DEFAULT 0'),
+                                  ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','BIGINT NOT NULL DEFAULT 0')):
+            db.execute(f'ALTER TABLE products ADD COLUMN IF NOT EXISTS {column} {definition}')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
-        for pack,name in PRODUCTS.items():
+        for pack,item in PRODUCT_CATALOG.items():
             db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
-                       (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
+                       (pack,item['name'],PRODUCT_DEFAULT_PRICES.get(pack,0)))
+        refresh_catalog(db)
         _promote_8068123777_to_admin_once(db)
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
@@ -279,9 +323,14 @@ def connect(path,initialize=True):
     fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
     for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
-    for pack,name in PRODUCTS.items():
+    product_cols={r[1] for r in db.execute('PRAGMA table_info(products)')}
+    for column,definition in (('weight_kg','REAL NOT NULL DEFAULT 0'),('block_units','INTEGER NOT NULL DEFAULT 0'),
+                              ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','INTEGER NOT NULL DEFAULT 0')):
+        if column not in product_cols:db.execute(f'ALTER TABLE products ADD COLUMN {column} {definition}')
+    for pack,item in PRODUCT_CATALOG.items():
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
-                   (pack,name,PRODUCT_DEFAULT_PRICES.get(pack,0)))
+                   (pack,item['name'],PRODUCT_DEFAULT_PRICES.get(pack,0)))
+    refresh_catalog(db)
     _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
@@ -1223,3 +1272,229 @@ def payment_label(row):
     if method=='card':parts.append('карта')
     elif method=='cash':parts.append('нақд')
     return ' · '.join(parts)
+
+
+
+# ---------------------------------------------------------------------------
+# Ombor: manager-maintained product catalog and agent orders
+# ---------------------------------------------------------------------------
+ORDER_STATUSES=('new','preparing','loaded','delivered','rejected')
+ORDER_STATUS_LABELS={'new':'Yangi','preparing':'Tayyorlanmoqda','loaded':'Agentga berildi',
+                     'delivered':'Mijozga yetkazildi','rejected':'Rad etildi'}
+ORDER_OPEN=('new','preparing')
+
+
+def _require_admin(db,actor,msg='Фақат раҳбар (админ) учун.'):
+    r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not r or r[0]!='admin':raise ValueError(msg)
+
+
+def clean_product_name(value):
+    name=re.sub(r'\s+',' ',str(value or '')).strip()
+    if not 2<=len(name)<=120:raise ValueError('Mahsulot nomi 2–120 belgi bo‘lsin.')
+    return name
+
+
+def _name_key(value):
+    return re.sub(r'[^0-9a-zа-яёўқғҳʼ‘’]+','',str(value or '').lower().replace('‘',"'"))
+
+
+def _parse_weight(value):
+    try:w=Decimal(str(value).replace(',','.').strip())
+    except (InvalidOperation,ValueError):raise ValueError('Og‘irlik (kg) noto‘g‘ri.')
+    if not w.is_finite() or w<=0 or w>1000:raise ValueError('Og‘irlik 0 dan katta va 1000 kg gacha bo‘lsin.')
+    return float(w.quantize(Decimal('0.001')))
+
+
+def add_product(db,actor,name,weight_kg,price_cents,block=0,ts=None):
+    _require_admin(db,actor,'Mahsulotni faqat rahbar qo‘shadi.')
+    name=clean_product_name(name);weight=_parse_weight(weight_kg)
+    if isinstance(price_cents,bool) or not isinstance(price_cents,int) or price_cents<=0:raise ValueError('Narxni USD da kiriting.')
+    try:block=int(block or 0)
+    except (TypeError,ValueError):raise ValueError('Blokdagi dona soni noto‘g‘ri.')
+    if not 0<=block<=1000:raise ValueError('Blokdagi dona soni noto‘g‘ri.')
+    key=_name_key(name)
+    for r in db.execute('SELECT pack,name FROM products').fetchall():
+        if _name_key(r['name'])==key:raise ValueError(f"Bu mahsulot katalogda bor: {r['name']}")
+    top=db.execute('SELECT COALESCE(MAX(pack),0) FROM products WHERE pack>=?',(CUSTOM_PRODUCT_START,)).fetchone()[0]
+    pack=max(CUSTOM_PRODUCT_START,int(top or 0)+1)
+    db.execute('INSERT INTO products(pack,name,price,weight_kg,block_units,active,custom,created_ts) VALUES(?,?,?,?,?,1,1,?)',
+               (pack,name,price_cents,weight,block,int(time.time() if ts is None else ts)))
+    refresh_catalog(db)
+    return pack
+
+
+def update_product(db,actor,pack,name=None,price_cents=None,active=None,weight_kg=None):
+    _require_admin(db,actor,'Mahsulotni faqat rahbar o‘zgartiradi.')
+    try:pack=int(pack)
+    except (TypeError,ValueError):raise ValueError('Mahsulot topilmadi.')
+    row=db.execute('SELECT * FROM products WHERE pack=?',(pack,)).fetchone()
+    if not row or pack not in PRODUCTS:raise ValueError('Mahsulot topilmadi.')
+    custom=pack not in BUILTIN_PRODUCTS
+    if name not in (None,'') and clean_product_name(name)!=row['name']:
+        if not custom:raise ValueError('Asosiy mahsulot nomi o‘zgarmaydi — faqat narx va holat.')
+        new=clean_product_name(name);key=_name_key(new)
+        for r in db.execute('SELECT pack,name FROM products WHERE pack<>?',(pack,)).fetchall():
+            if _name_key(r['name'])==key:raise ValueError(f"Bu nom band: {r['name']}")
+        db.execute('UPDATE products SET name=? WHERE pack=?',(new,pack))
+    if weight_kg not in (None,''):
+        if not custom:raise ValueError('Asosiy mahsulot og‘irligi o‘zgarmaydi.')
+        db.execute('UPDATE products SET weight_kg=? WHERE pack=?',(_parse_weight(weight_kg),pack))
+    if price_cents is not None:
+        if isinstance(price_cents,bool) or not isinstance(price_cents,int) or price_cents<=0:raise ValueError('Narx noto‘g‘ri.')
+        db.execute('UPDATE products SET price=? WHERE pack=?',(price_cents,pack))
+    if active is not None:
+        if not isinstance(active,bool):raise ValueError('Holat noto‘g‘ri.')
+        db.execute('UPDATE products SET active=? WHERE pack=?',(1 if active else 0,pack))
+    refresh_catalog(db)
+    return pack
+
+
+def catalog(db):
+    rows=db.execute('SELECT pack,name,price,weight_kg,block_units,active,custom,created_ts FROM products ORDER BY custom,pack').fetchall()
+    out=[]
+    for r in rows:
+        pack=int(r['pack'])
+        if pack not in PRODUCTS:continue
+        out.append({'pack':pack,'name':PRODUCTS[pack],'priceCents':int(r['price'] or 0),
+                    'weightKg':PRODUCT_WEIGHTS.get(pack),'blockUnits':PACK_UNITS.get(pack),
+                    'active':pack not in INACTIVE_PRODUCTS,'custom':pack not in BUILTIN_PRODUCTS})
+    return out
+
+
+def _order_source(tag):
+    import hashlib
+    return -(int.from_bytes(hashlib.sha256(tag.encode()).digest()[:7],'big')*16+9)
+
+
+def create_order(db,agent,client,items,note='',source=None,ts=None):
+    role=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
+    if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
+    if not db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone():raise ValueError('Мижоз топилмади.')
+    if not isinstance(source,int):raise ValueError('Операция ID нотўғри.')
+    old=db.execute('SELECT id FROM orders WHERE source=?',(source,)).fetchone()
+    if old:return int(old[0]),True
+    if not isinstance(items,list) or not items or len(items)>30:raise ValueError('Buyurtmaga 1–30 qator mahsulot kiriting.')
+    clean=[];seen=set()
+    for it in items:
+        if not isinstance(it,dict):raise ValueError('Buyurtma qatori noto‘g‘ri.')
+        try:qty=int(str(it.get('qty')).strip())
+        except (TypeError,ValueError):raise ValueError('Buyurtma soni butun son bo‘lsin.')
+        if not 0<qty<=100000:raise ValueError('Buyurtma soni 1 dan 100000 gacha bo‘lsin.')
+        raw_pack=it.get('pack')
+        if raw_pack not in (None,'','custom'):
+            try:pack=int(raw_pack)
+            except (TypeError,ValueError):raise ValueError('Mahsulot topilmadi.')
+            if pack not in PRODUCTS or pack in INACTIVE_PRODUCTS:raise ValueError('Mahsulot katalogda yo‘q yoki arxivda.')
+            key=('p',pack);clean_item=(pack,'',qty)
+        else:
+            name=clean_product_name(it.get('name'))
+            # A typed name that matches a catalog product is attached to it directly.
+            match=[p for p in active_product_ids() if _name_key(PRODUCTS[p])==_name_key(name)]
+            if match:key=('p',match[0]);clean_item=(match[0],'',qty)
+            else:key=('n',_name_key(name));clean_item=(None,name,qty)
+        if key in seen:raise ValueError('Bir mahsulot buyurtmada ikki marta yozilgan.')
+        seen.add(key);clean.append(clean_item)
+    note=str(note or '').strip()
+    if len(note)>500:raise ValueError('Izoh 500 belgidan oshmasin.')
+    now=int(time.time() if ts is None else ts)
+    row=db.execute("""INSERT INTO orders(agent,client,status,note,source,ts,updated_ts) VALUES(?,?,'new',?,?,?,?) RETURNING id""",
+                   (agent,client,note,source,now,now)).fetchone()
+    oid=int(row[0])
+    for pack,name,qty in clean:
+        db.execute('INSERT INTO order_items(order_id,pack,custom_name,qty) VALUES(?,?,?,?)',(oid,pack,name,qty))
+    return oid,False
+
+
+def order_items(db,oid):
+    out=[]
+    for r in db.execute('SELECT id,pack,custom_name,qty FROM order_items WHERE order_id=? ORDER BY id',(oid,)).fetchall():
+        pack=int(r['pack']) if r['pack'] is not None else None
+        out.append({'id':int(r['id']),'pack':pack,'qty':int(r['qty']),
+                    'name':PRODUCTS.get(pack,f'Товар {pack}') if pack is not None else r['custom_name'],
+                    'custom':pack is None,'requestedName':r['custom_name'] or '',
+                    'priceCents':product_price(db,pack) if pack is not None else 0})
+    return out
+
+
+def order_view(db,row):
+    items=order_items(db,int(row['id']))
+    return {'id':int(row['id']),'agentId':int(row['agent']),'clientId':int(row['client']),
+            'status':row['status'],'statusLabel':ORDER_STATUS_LABELS.get(row['status'],row['status']),
+            'note':row['note'] or '','adminNote':row['admin_note'] or '','ts':int(row['ts']),
+            'updatedTs':int(row['updated_ts'] or row['ts']),'items':items,
+            'unmapped':sum(1 for i in items if i['custom']),
+            'totalCents':sum(i['priceCents']*i['qty'] for i in items if not i['custom'])}
+
+
+def set_order_status(db,actor,oid,status,admin_note=''):
+    _require_admin(db,actor,'Buyurtma holatini faqat rahbar o‘zgartiradi.')
+    if status not in ORDER_STATUSES:raise ValueError('Holat noto‘g‘ri.')
+    row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+    if not row:raise ValueError('Buyurtma topilmadi.')
+    lock_agent(db,row['agent'])
+    row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+    cur=row['status']
+    allowed={'new':('preparing','loaded','rejected'),'preparing':('loaded','rejected','new'),
+             'loaded':('delivered',),'delivered':(),'rejected':('new',)}
+    if status==cur:raise ValueError('Buyurtma allaqachon shu holatda.')
+    if status not in allowed[cur]:
+        raise ValueError(f"«{ORDER_STATUS_LABELS[cur]}» holatidan «{ORDER_STATUS_LABELS[status]}» ga o‘tib bo‘lmaydi.")
+    note=str(admin_note or '').strip()[:500]
+    if status=='rejected' and not note:raise ValueError('Rad etish sababini yozing.')
+    if status=='loaded':
+        items=order_items(db,oid)
+        if any(i['custom'] for i in items):
+            raise ValueError('Avval katalogda yo‘q mahsulotlarni katalogga qo‘shing yoki bog‘lang.')
+        for idx,i in enumerate(items):
+            record(db,actor,int(row['agent']),None,'load',i['pack'],i['qty'],
+                   note=f'Buyurtma #{oid}',source=_order_source(f'order-load/{oid}/{idx}'),currency='USD')
+    db.execute('UPDATE orders SET status=?,admin=?,admin_note=?,updated_ts=? WHERE id=?',
+               (status,actor,note or (row['admin_note'] or ''),int(time.time()),oid))
+    return row
+
+
+def mark_order_delivered_by_agent(db,agent,client,oid,ts=None):
+    row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+    if not row or int(row['agent'])!=int(agent) or int(row['client'])!=int(client):
+        raise ValueError('Buyurtma bu mijoz va agentga tegishli emas.')
+    if row['status']!='loaded':raise ValueError('Buyurtma hali agentga berilmagan.')
+    db.execute("UPDATE orders SET status='delivered',updated_ts=? WHERE id=?",(int(time.time() if ts is None else ts),oid))
+
+
+def map_custom_name(db,actor,name,pack):
+    """Attach every open order line typed as `name` to an existing catalog product."""
+    _require_admin(db,actor,'Faqat rahbar bog‘laydi.')
+    try:pack=int(pack)
+    except (TypeError,ValueError):raise ValueError('Mahsulot topilmadi.')
+    if pack not in PRODUCTS or pack in INACTIVE_PRODUCTS:raise ValueError('Mahsulot topilmadi yoki arxivda.')
+    key=_name_key(name)
+    if not key:raise ValueError('Nom bo‘sh.')
+    rows=db.execute(f"""SELECT i.id,i.order_id,i.qty,i.custom_name FROM order_items i JOIN orders o ON o.id=i.order_id
+        WHERE i.pack IS NULL AND o.status IN ({','.join('?' for _ in ORDER_OPEN)})""",ORDER_OPEN).fetchall()
+    n=0
+    for r in rows:
+        if _name_key(r['custom_name'])!=key:continue
+        dup=db.execute('SELECT id,qty FROM order_items WHERE order_id=? AND pack=?',(r['order_id'],pack)).fetchone()
+        if dup:
+            db.execute('UPDATE order_items SET qty=? WHERE id=?',(int(dup['qty'])+int(r['qty']),dup['id']))
+            db.execute('DELETE FROM order_items WHERE id=?',(r['id'],))
+        else:
+            db.execute('UPDATE order_items SET pack=? WHERE id=?',(pack,r['id']))
+        n+=1
+    return n
+
+
+def custom_demand(db):
+    rows=db.execute(f"""SELECT i.custom_name,i.qty,o.id AS order_id,o.client,o.agent,o.ts FROM order_items i JOIN orders o ON o.id=i.order_id
+        WHERE i.pack IS NULL AND o.status IN ({','.join('?' for _ in ORDER_OPEN)}) ORDER BY o.ts""",ORDER_OPEN).fetchall()
+    groups={}
+    for r in rows:
+        key=_name_key(r['custom_name'])
+        g=groups.setdefault(key,{'name':r['custom_name'],'names':set(),'qty':0,'orders':set(),'clients':set(),'agents':set(),'firstTs':int(r['ts'])})
+        g['names'].add(r['custom_name']);g['qty']+=int(r['qty']);g['orders'].add(int(r['order_id']))
+        g['clients'].add(int(r['client']));g['agents'].add(int(r['agent']))
+    out=[{'name':g['name'],'variants':sorted(g['names']),'qty':g['qty'],'orders':len(g['orders']),
+          'clients':len(g['clients']),'agents':len(g['agents']),'firstTs':g['firstTs']} for g in groups.values()]
+    out.sort(key=lambda x:(-x['clients'],-x['qty']))
+    return out

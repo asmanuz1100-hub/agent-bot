@@ -36,6 +36,8 @@ FEATURE_ACTION={
     "payment":"payment",
     "return":"return",
     "handover":"handover",
+    "sold":"sold",
+    "order":"order",
 }
 
 
@@ -300,7 +302,10 @@ def _client_snapshot(db,now,client_id=None):
 def _products(db,agent):
     out=[]
     for pack in core.product_ids():
-        out.append({"pack":pack,"name":core.product_name(pack),
+        active=pack not in core.INACTIVE_PRODUCTS
+        stock=int(core.agent_stock(db,agent,pack))
+        if not active and stock==0:continue
+        out.append({"pack":pack,"name":core.product_name(pack),"active":active,"custom":pack not in core.BUILTIN_PRODUCTS,
                     "weightKg":core.product_weight(pack),
                     "priceUsd":_usd(core.product_price(db,pack)),
                     "agentStock":int(core.agent_stock(db,agent,pack)),
@@ -433,7 +438,7 @@ def quick_snapshot(db,agent,now=None):
         item["status"]=item.get("statusLabel") or item.get("status")
         clients.append(item)
     products=[{"pack":x["pack"],"name":x["name"],"weightKg":x["weightKg"],"priceUsd":x["priceUsd"],
-               "stock":x["agentStock"],"blockUnits":x["blockUnits"]} for x in _products(db,agent)]
+               "stock":x["agentStock"],"blockUnits":x["blockUnits"],"active":x["active"],"custom":x["custom"]} for x in _products(db,agent)]
 
     shift=db.execute('SELECT * FROM shifts WHERE agent=? AND "end" IS NULL ORDER BY id DESC LIMIT 1',
                      (agent,)).fetchone()
@@ -674,6 +679,8 @@ def client_detail(db,agent,cid,now=None):
                  "distanceM":(int(v['distance_m']) if v['distance_m'] is not None else None),
                  "hasPhoto":bool(v['photo']),"stock":stock_by.get(int(v['id']),[])} for v in visits],
       "visitRadiusM":visit_radius_m(),
+      "orders":[core.order_view(db,o) for o in db.execute(
+          "SELECT * FROM orders WHERE client=? ORDER BY ts DESC,id DESC LIMIT 10",(c['id'],)).fetchall()],
       "events":[{"id":int(e['id']),"kind":e['kind'],"pack":int(e['pack'] or 0),
                  "qty":int(e['qty'] or 0),"amountUsd":_usd(e['amount_usd']),
                  "ts":int(e['ts']),"actor":e['actor_name'] or ""} for e in events]
@@ -951,12 +958,44 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
             except (TypeError,ValueError):raise ValueError("Tovar miqdori noto‘g‘ri.")
             if pack not in core.PRODUCTS or qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
             required[pack]=required.get(pack,0)+qty;clean.append((pack,qty))
+        oid=None
+        if payload.get("orderId") not in (None,""):
+            try:oid=int(payload.get("orderId"))
+            except (TypeError,ValueError):raise ValueError("Buyurtma raqami noto‘g‘ri.")
+            core.mark_order_delivered_by_agent(db,agent,cid,oid,ts=op_ts)   # validates before any write
         for idx,(pack,qty) in enumerate(clean):
-            core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Mini App',
+            core.record(db,agent,agent,cid,'delivery',pack,qty,0,'Mini App'+(f' · buyurtma #{oid}' if oid else ''),
                         _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
         cs.add_visit(db,agent,cid,'active','Tovar berildi: '+', '.join(
             f"{core.product_name(pack)} {qty} dona" for pack,qty in clean),ts=op_ts)
+        if oid:
+            return {"ok":True,"message":f"Buyurtma #{oid} mijozga topshirildi, qarz yangilandi."}
         return {"ok":True,"message":"Tovar topshirildi va mijoz qarzi yangilandi."}
+    if action=="sold":
+        items=payload.get("items")
+        if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:
+            raise ValueError("Sotilgan tovarni kiriting.")
+        clean={}
+        for item in items:
+            if not isinstance(item,dict):raise ValueError("Tovar noto‘g‘ri.")
+            try:pack=int(item.get("pack"));qty=int(item.get("qty"))
+            except (TypeError,ValueError):raise ValueError("Sotilgan miqdor noto‘g‘ri.")
+            if pack not in core.PRODUCTS or qty<=0 or qty>100000:raise ValueError("Sotilgan miqdor noto‘g‘ri.")
+            clean[pack]=clean.get(pack,0)+qty
+        for pack,qty in clean.items():
+            have=core.client_stock_total(db,cid,pack)
+            if have<qty:raise ValueError(f"{core.product_name(pack)}: mijozda hisob bo‘yicha {have} dona bor.")
+        for idx,(pack,qty) in enumerate(clean.items()):
+            core.record(db,agent,agent,cid,'sold',pack,qty,0,'Mini App · sotildi',
+                        _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
+        return {"ok":True,"message":"Sotilgan tovar yozildi. Mijozdagi qoldiq kamaydi, qarz o‘zgarmadi."}
+    if action=="order":
+        oid,dup=core.create_order(db,agent,cid,payload.get("items"),payload.get("note"),source=source,ts=op_ts)
+        if dup:return {"ok":True,"duplicate":True,"orderId":oid,"message":"Bu buyurtma avval yuborilgan."}
+        view=core.order_view(db,db.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
+        extra=f" {view['unmapped']} ta mahsulot katalogda yo‘q — rahbar ko‘rib chiqadi." if view['unmapped'] else ""
+        return {"ok":True,"orderId":oid,"message":f"Buyurtma #{oid} omborga yuborildi.{extra}",
+                "_notify":{"kind":"order","orderId":oid}}
     if action=="payment":
         if not admin_override:
             ok,msg=_live_ready(db,agent,now=op_ts)

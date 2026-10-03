@@ -419,6 +419,14 @@ body{height:auto;min-height:100%;overflow:visible;overscroll-behavior-y:auto}
 .page-content.active{overflow:visible}
 .sheet{overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 
+
+.wh-tabs{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto}.wh-tabs button,.wh-chips button{border:1px solid #dce6f6;background:#fff;color:#4b5f80;border-radius:12px;padding:8px 10px;font-size:11px;font-weight:800;white-space:nowrap}.wh-tabs button.active,.wh-chips button.active{background:#101e39;color:#fff;border-color:#101e39}
+.wh-chips{display:flex;gap:5px;overflow-x:auto;margin:0 0 10px}.wh-chips button{font-size:10px;padding:6px 8px}
+.wh-card{border:1px solid #e3eaf5;border-radius:16px;padding:12px;margin-bottom:10px;background:#fff}.wh-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.wh-card-head b{font-size:13px}.wh-card small{display:block;color:#7b8ba4;font-size:10px;margin-top:3px;line-height:1.45}
+.wh-pill{font-size:9px;font-weight:900;border-radius:999px;padding:4px 8px;background:#eef3fb;color:#30476b;white-space:nowrap}.wh-pill.new{background:#e9f0ff;color:#2367f5}.wh-pill.preparing{background:#fff4e0;color:#b26a00}.wh-pill.loaded{background:#e4f8ee;color:#087b51}.wh-pill.rejected{background:#ffe9ed;color:#c8334d}.wh-pill.custom{background:#fff4e0;color:#b26a00}.wh-pill.off{background:#eef1f5;color:#8a96a8}
+.wh-items{margin:8px 0 0;padding:0;list-style:none;font-size:12px}.wh-items li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px dashed #edf1f7}.wh-items li:first-child{border-top:0}.wh-items li.custom{color:#b26a00;font-weight:700}
+.wh-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.wh-actions button{border-radius:12px;padding:10px 6px;font-size:11px;font-weight:850;border:1px solid #dce6f6;background:#f4f7fc;color:#16335d}.wh-actions button.primary{background:#2367f5;color:#fff;border-color:#2367f5}.wh-actions button.danger{background:#fff0f3;color:#c8334d;border-color:#ffd2db}.wh-actions button.wide{grid-column:1/-1}
+.wh-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid #edf1f7}.wh-row:first-child{border-top:0}.wh-row b{font-size:12px}.wh-row.off{opacity:.55}.wh-row button{border:1px solid #dce6f6;background:#f4f7fc;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:800;color:#16335d;white-space:nowrap}
 </style>
 </head>
 <body class="pb-24">
@@ -498,6 +506,13 @@ body{height:auto;min-height:100%;overflow:visible;overscroll-behavior-y:auto}
             </button>
         </section>
 
+        <section class="exec-section">
+            <button type="button" class="exec-attention" id="warehouse-open">
+                <span class="exec-attention-icon">📦</span>
+                <span class="exec-attention-copy"><b>Ombor · <span id="home-wh-new">0</span> yangi buyurtma</b><small id="home-wh-sub">Katalog, narxlar va agent buyurtmalari</small></span>
+                <span class="exec-chevron">›</span>
+            </button>
+        </section>
         <section class="exec-section">
             <div class="exec-section-title"><div><small>TEZKOR KIRISH</small><h3>Boshqaruv bo‘limlari</h3></div></div>
             <div class="exec-shortcuts">
@@ -820,6 +835,8 @@ async function loadDashboard(){
   txns=Array.isArray(data.transactions)?data.transactions:[];
   summary=data.summary||{};cashData=data.cash||{};reportData=data.reports||{};generatedTs=data.generatedTs||0;dashboardToday=data.todayStart||0;primaryAdmin=!!data.primaryAdmin;
   state.ready=true;$("auth-gate").classList.add("hidden");
+  var wh=data.warehouse||{};$("home-wh-new").textContent=wh.newOrders||0;
+  $("home-wh-sub").textContent=(wh.openOrders||0)+" ta ochiq buyurtma"+(wh.missingProducts?" · "+wh.missingProducts+" ta mahsulot katalogda yo‘q":" · katalog va narxlar");
   updateManagerIdentity();
   var agentSelect=$("customer-agent-filter"),current=state.customerAgent;
   agentSelect.innerHTML='<option value="all">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'">'+escapeHtml(a.name)+'</option>'}).join("");
@@ -1481,10 +1498,110 @@ async function showRoute(id){
   state.selectedAgent=id;renderMapCard();toast("Oxirgi smena yo‘li · "+route.points.length+" ta GPS nuqta");
  }catch(e){toast(e.message||"Marshrutni ochib bo‘lmadi.")}
 }
+
+var whData=null;state.whTab="orders";state.whFilter="open";
+function whMoney(v){return money(v)+" USD"}
+async function openWarehouse(){
+ openSheet("📦 Ombor",'<div class="customer-loading">Ombor yuklanmoqda…</div>');
+ try{whData=await request("warehouse",{status:state.whFilter});renderWarehouse()}
+ catch(e){openSheet("📦 Ombor",'<div class="empty">'+escapeHtml(e.message||"Ombor yuklanmadi")+'</div>')}
+}
+function whTabs(){
+ var c=whData.counts||{},open=(c.new||0)+(c.preparing||0)+(c.loaded||0);
+ var tabs=[["orders","🛒 Buyurtmalar · "+open],["catalog","📋 Katalog · "+(whData.catalog||[]).length],["missing","⚠️ Katalogda yo‘q · "+(whData.demand||[]).length]];
+ return '<div class="wh-tabs">'+tabs.map(function(t){return '<button type="button" data-wh-tab="'+t[0]+'" class="'+(state.whTab===t[0]?"active":"")+'">'+t[1]+'</button>'}).join("")+'</div>';
+}
+function whOrderCard(o){
+ var items=o.items.map(function(i){return '<li class="'+(i.custom?"custom":"")+'"><span>'+escapeHtml(i.name)+(i.custom?' ⚠️':'')+'</span><b>'+i.qty+' dona</b></li>'}).join("");
+ var a=[];
+ if(o.status==="new")a.push('<button type="button" data-wh-status="preparing" data-order="'+o.id+'">📦 Tayyorlashga</button>');
+ if(o.status==="new"||o.status==="preparing")a.push('<button type="button" class="primary" data-wh-status="loaded" data-order="'+o.id+'">🚚 Agentga berish</button>','<button type="button" class="danger wide" data-wh-reject="'+o.id+'">❌ Rad etish</button>');
+ if(o.status==="loaded")a.push('<button type="button" class="wide" data-wh-status="delivered" data-order="'+o.id+'">✅ Yetkazildi deb belgilash</button>');
+ if(o.status==="rejected")a.push('<button type="button" class="wide" data-wh-status="new" data-order="'+o.id+'">↺ Qayta ochish</button>');
+ return '<div class="wh-card"><div class="wh-card-head"><div><b>#'+o.id+' · '+escapeHtml(o.clientName)+'</b><small>'+escapeHtml(o.agentName)+' · '+when(o.ts)+(o.totalCents?' · '+whMoney(o.totalCents/100):'')+'</small></div><span class="wh-pill '+escapeHtml(o.status)+'">'+escapeHtml(o.statusLabel)+'</span></div>'+
+  '<ul class="wh-items">'+items+'</ul>'+(o.note?'<small>📝 '+escapeHtml(o.note)+'</small>':'')+(o.adminNote?'<small>Rahbar: '+escapeHtml(o.adminNote)+'</small>':'')+
+  (o.unmapped&&o.status!=="rejected"?'<small style="color:#b26a00">⚠️ '+o.unmapped+' ta mahsulot katalogda yo‘q — «Katalogda yo‘q» bo‘limida qo‘shing yoki bog‘lang.</small>':'')+
+  (a.length?'<div class="wh-actions">'+a.join("")+'</div>':'')+'</div>';
+}
+function renderWarehouse(){
+ if(!whData)return;var body=whTabs();
+ if(state.whTab==="orders"){
+  var c=whData.counts||{},f=[["open","Ochiq"],["new","Yangi · "+(c.new||0)],["preparing","Tayyorlanmoqda · "+(c.preparing||0)],["loaded","Agentda · "+(c.loaded||0)],["delivered","Yetkazildi"],["rejected","Rad etildi"]];
+  body+='<div class="wh-chips">'+f.map(function(x){return '<button type="button" data-wh-filter="'+x[0]+'" class="'+(state.whFilter===x[0]?"active":"")+'">'+x[1]+'</button>'}).join("")+'</div>';
+  body+=(whData.orders||[]).map(whOrderCard).join("")||'<div class="empty">Bu holatda buyurtma yo‘q.</div>';
+ }else if(state.whTab==="catalog"){
+  body+='<button type="button" class="mini-btn primary" style="width:100%;margin-bottom:10px" data-wh-product-new="1">＋ Yangi mahsulot qo‘shish</button><div class="wh-card">'+
+   (whData.catalog||[]).map(function(p){return '<div class="wh-row'+(p.active?'':' off')+'"><div><b>'+escapeHtml(p.name)+'</b><small>'+(p.weightKg!=null?p.weightKg+' kg · ':'')+whMoney(p.priceUsd)+(p.custom?' · <span class="wh-pill custom">yangi</span>':'')+(p.active?'':' · <span class="wh-pill off">arxiv</span>')+'</small></div><button type="button" data-wh-product-edit="'+p.pack+'">✎</button></div>'}).join("")+'</div>'+
+   '<div class="settings-note">Arxivdagi mahsulot agentlarga ko‘rinmaydi, lekin eski savdo va akt sverkalarda saqlanadi.</div>';
+ }else{
+  var d=whData.demand||[];
+  body+=d.length?d.map(function(x,idx){return '<div class="wh-card"><div class="wh-card-head"><div><b>'+escapeHtml(x.name)+'</b><small>'+x.clients+' mijoz · '+x.agents+' agent · '+x.orders+' buyurtma · jami '+x.qty+' dona'+(x.variants.length>1?'<br>Yozilishi: '+x.variants.map(escapeHtml).join(" | "):'')+'</small></div></div><div class="wh-actions"><button type="button" class="primary" data-wh-demand-add="'+idx+'">＋ Katalogga qo‘shish</button><button type="button" data-wh-demand-map="'+idx+'">🔗 Mavjudga bog‘lash</button></div></div>'}).join(""):'<div class="empty">Katalogda yo‘q mahsulot so‘ralmagan.</div>';
+ }
+ openSheet("📦 Ombor",body);
+}
+function whProductForm(p,mapName){
+ var custom=!p||p.custom;
+ var body='<div class="client-edit-form">'+
+  (custom?'<label>Mahsulot nomi<input id="wh-p-name" maxlength="120" value="'+escapeHtml(p?p.name:(mapName||""))+'" placeholder="Masalan: Emal PF-115 oq 2.7 kg"></label><label>Og‘irligi (kg)<input id="wh-p-weight" inputmode="decimal" value="'+escapeHtml(p&&p.weightKg!=null?p.weightKg:"")+'" placeholder="2.7"></label>':'<div class="settings-note"><b>'+escapeHtml(p.name)+'</b><br>Asosiy mahsulot — nomi va og‘irligi o‘zgarmaydi.</div>')+
+  '<label>Narxi (USD, 1 dona)<input id="wh-p-price" inputmode="decimal" value="'+escapeHtml(p?p.priceUsd:"")+'" placeholder="4.50"></label>'+
+  (p?'':'<label>Blokdagi dona (ixtiyoriy)<input id="wh-p-block" inputmode="numeric" placeholder="masalan 6"></label>')+
+  (p?'<label class="settings-row"><span><b>Agentlarga ko‘rinadi</b><small>O‘chirilsa arxivga tushadi</small></span><input id="wh-p-active" type="checkbox"'+(p.active?' checked':'')+'></label>':'')+
+  (mapName?'<div class="settings-note">Saqlangach «'+escapeHtml(mapName)+'» deb yozilgan barcha ochiq buyurtmalar shu mahsulotga bog‘lanadi.</div>':'')+
+  '<button type="button" class="mini-btn primary settings-save" data-wh-product-save="'+(p?p.pack:"new")+'"'+(mapName?' data-map-name="'+escapeHtml(mapName)+'"':'')+'>💾 Saqlash</button></div>';
+ openSheet(p?"Mahsulotni tahrirlash":"Yangi mahsulot",body);
+}
+async function whSaveProduct(b){
+ var isNew=b.dataset.whProductSave==="new";b.disabled=true;
+ try{
+  var r;
+  if(isNew){
+   r=await request("product_add",{confirm:true,name:$("wh-p-name").value,weightKg:$("wh-p-weight").value,priceUsd:$("wh-p-price").value,blockUnits:($("wh-p-block")||{}).value||0,mapName:b.dataset.mapName||"",status:state.whFilter});
+   toast("Mahsulot qo‘shildi"+(r.mapped?" · "+r.mapped+" ta buyurtma qatori bog‘landi":""));
+  }else{
+   var arg={pack:Number(b.dataset.whProductSave),priceUsd:$("wh-p-price").value,active:$("wh-p-active").checked,status:state.whFilter};
+   if($("wh-p-name"))arg.name=$("wh-p-name").value;if($("wh-p-weight"))arg.weightKg=$("wh-p-weight").value;
+   r=await request("product_update",arg);toast("Saqlandi");
+  }
+  whData=r.warehouse;state.whTab=b.dataset.mapName?"missing":"catalog";renderWarehouse();
+ }catch(e){toast(e.message||"Saqlab bo‘lmadi");b.disabled=false}
+}
+function whMapForm(idx){
+ var x=(whData.demand||[])[idx];if(!x)return;
+ var opts=(whData.catalog||[]).filter(function(p){return p.active}).map(function(p){return '<option value="'+p.pack+'">'+escapeHtml(p.name)+'</option>'}).join("");
+ openSheet("Mavjud mahsulotga bog‘lash",'<div class="client-edit-form"><div class="settings-note">So‘ralgan: <b>'+escapeHtml(x.name)+'</b> · '+x.qty+' dona</div><label>Katalogdagi mahsulot<select id="wh-map-pack">'+opts+'</select></label><button type="button" class="mini-btn primary settings-save" data-wh-map-save="'+idx+'">🔗 Bog‘lash</button></div>');
+}
+async function whMapSave(b){
+ var x=(whData.demand||[])[Number(b.dataset.whMapSave)];if(!x)return;b.disabled=true;
+ try{var r=await request("custom_map",{name:x.name,pack:Number($("wh-map-pack").value),status:state.whFilter});whData=r.warehouse;toast(r.mapped+" ta qator bog‘landi");state.whTab="missing";renderWarehouse()}
+ catch(e){toast(e.message||"Bog‘lab bo‘lmadi");b.disabled=false}
+}
+async function whSetStatus(oid,to,note,b){
+ if(b)b.disabled=true;
+ try{var r=await request("order_status",{orderId:oid,to:to,note:note||"",status:state.whFilter});whData=r.warehouse;toast("Buyurtma #"+oid+": "+((whData.statusLabels||{})[to]||to));state.whTab="orders";renderWarehouse()}
+ catch(e){toast(e.message||"Holatni o‘zgartirib bo‘lmadi");if(b)b.disabled=false}
+}
+function handleWarehouseClick(b){
+ if(b.id==="warehouse-open"){openWarehouse();return true}
+ if(b.dataset.whTab){state.whTab=b.dataset.whTab;renderWarehouse();return true}
+ if(b.dataset.whFilter){state.whFilter=b.dataset.whFilter;openWarehouse();return true}
+ if(b.dataset.whProductNew){whProductForm(null);return true}
+ if(b.dataset.whProductEdit){whProductForm((whData.catalog||[]).find(function(p){return p.pack===Number(b.dataset.whProductEdit)}));return true}
+ if(b.dataset.whProductSave){whSaveProduct(b);return true}
+ if(b.dataset.whDemandAdd){var x=(whData.demand||[])[Number(b.dataset.whDemandAdd)];if(x)whProductForm(null,x.name);return true}
+ if(b.dataset.whDemandMap){whMapForm(Number(b.dataset.whDemandMap));return true}
+ if(b.dataset.whMapSave){whMapSave(b);return true}
+ if(b.dataset.whStatus){var to=b.dataset.whStatus,oid=Number(b.dataset.order);
+  if(to==="loaded"&&!b.dataset.confirmed){b.dataset.confirmed="1";b.textContent="Tasdiqlash: tovar agentga o‘tadi";return true}
+  whSetStatus(oid,to,"",b);return true}
+ if(b.dataset.whReject){openSheet("Buyurtmani rad etish",'<div class="client-edit-form"><label>Sabab<input id="wh-reject-note" maxlength="300" placeholder="Masalan: omborda yo‘q"></label><button type="button" class="mini-btn primary settings-save" data-wh-reject-save="'+b.dataset.whReject+'">❌ Rad etish</button></div>');return true}
+ if(b.dataset.whRejectSave){whSetStatus(Number(b.dataset.whRejectSave),"rejected",$("wh-reject-note").value,b);return true}
+ return false;
+}
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){switchPage(b.dataset.page);return}
  if(!state.ready)return;
+ if(handleWarehouseClick(b))return;
  if(b.dataset.agentFilter){state.agentFilter=b.dataset.agentFilter;document.querySelectorAll("[data-agent-filter]").forEach(function(x){x.classList.toggle("active",x===b)});initMap();return}
  if(b.dataset.customerFilter){state.customerFilter=b.dataset.customerFilter;document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x===b)});renderCustomers();return}
  if(b.id==="customer-filter-reset"){state.customerFilter="all";state.customerAgent="all";state.customerDebt="all";state.customerStatus="all";state.customerSort="newest";$("customer-agent-filter").value="all";$("customer-debt-filter").value="all";$("customer-status-filter").value="all";$("customer-sort").value="newest";document.querySelectorAll("[data-customer-filter]").forEach(function(x){x.classList.toggle("active",x.dataset.customerFilter==="all")});renderCustomers();return}
