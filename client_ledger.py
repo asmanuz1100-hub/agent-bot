@@ -5,7 +5,7 @@ Never count 'sold' again as a delivery or a new receivable.
 """
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from core import product_name
+from core import product_name, payment_label
 
 TZ = ZoneInfo('Asia/Tashkent')
 KINDS = ('delivery', 'payment', 'sold', 'return', 'order', 'visit')
@@ -24,6 +24,7 @@ def totals(db, client_id):
         COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivered_usd,
         COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0) AS paid_usd,
         COALESCE(SUM(CASE WHEN kind='payment' THEN amount ELSE 0 END),0) AS paid_uzs,
+        COALESCE(SUM(CASE WHEN kind='payment' THEN paid_uzs ELSE 0 END),0) AS paid_uzs_converted,
         COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0) AS returned_qty,
         COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS returned_usd,
         COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0) AS sold_qty
@@ -34,7 +35,7 @@ def totals(db, client_id):
 def rows(db, client_id, limit=25):
     limit = max(1, min(int(limit), 500))
     return db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.ts,
-                 e.actor,e.agent,u.name AS actor_name
+                 e.actor,e.agent,u.name AS actor_name,e.pay_method,e.paid_uzs,e.fx_rate
         FROM events e LEFT JOIN users u ON u.id=e.actor
         WHERE e.client=? AND e.kind IN ('delivery','payment','sold','return','order','visit')
         ORDER BY e.ts DESC,e.id DESC LIMIT ?""", (client_id, limit)).fetchall()
@@ -44,7 +45,8 @@ def summary(db, client_id):
     t = totals(db, client_id)
     lines = [
         f"📦 Жами берилган товар: {t['delivered_qty']} дона · {usd(t['delivered_usd'])} USD",
-        f"💰 Жами олинган пул: {usd(t['paid_usd'])} USD",
+        f"💰 Жами олинган пул: {usd(t['paid_usd'])} USD"
+        + (f" (шундан сўмда: {t['paid_uzs_converted']:,} сўм)".replace(',', ' ') if t.get('paid_uzs_converted') else ''),
         f"↩️ Жами қайтарилган: {t['returned_qty']} дона · {usd(t['returned_usd'])} USD",
         f"🛍 Сотилгани қайд этилган: {t['sold_qty']} дона (иккинчи марта қарз ҳисобланмайди)",
     ]
@@ -61,7 +63,8 @@ def entry(row):
     if kind == 'delivery':
         detail = f"📦 Берилди: {pack} · {row['qty']} дона · {usd(row['amount_usd'])} USD"
     elif kind == 'payment':
-        detail = (f"💰 Пул олинди: {usd(row['amount_usd'])} USD" if row['amount_usd']
+        extra = payment_label(row)
+        detail = (f"💰 Пул олинди: {usd(row['amount_usd'])} USD" + (f" ({extra})" if extra else '') if row['amount_usd']
                   else f"💰 Пул олинди: {usd(row['amount'])} сўм")
     elif kind == 'return':
         detail = f"↩️ Қайтарилди: {pack} · {row['qty']} дона · {usd(row['amount_usd'])} USD қарз камайди"
