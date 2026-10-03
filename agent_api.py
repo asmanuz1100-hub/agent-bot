@@ -265,21 +265,24 @@ def dashboard(db,agent,now=None):
         WHERE agent=? AND kind='payment' AND ts>=? AND ts<=?""",(agent,today,now)).fetchone()[0] or 0)
     delivery_today=db.execute("""SELECT COALESCE(SUM(qty),0),COALESCE(SUM(amount_usd),0)
         FROM events WHERE agent=? AND kind='delivery' AND ts>=? AND ts<=?""",(agent,today,now)).fetchone()
-    payments=db.execute("""SELECT e.id,e.client,e.amount_usd,e.ts,c.shop_name,c.name
+    payments=db.execute("""SELECT e.id,e.client,e.amount_usd,e.ts,e.paid_uzs,e.fx_rate,e.pay_method,c.shop_name,c.name
         FROM events e LEFT JOIN clients c ON c.id=e.client
         WHERE e.agent=? AND e.kind='payment' AND e.ts>=?
         ORDER BY e.ts DESC,e.id DESC LIMIT 300""",(agent,month)).fetchall()
-    handovers=db.execute("""SELECT id,amount_usd,status,ts,accepted_ts
+    handovers=db.execute("""SELECT id,amount,amount_usd,status,ts,accepted_ts
         FROM handovers WHERE agent=? AND (ts>=? OR status='pending')
         ORDER BY ts DESC,id DESC LIMIT 200""",(agent,month)).fetchall()
     cash_ops=[]
     for e in payments:
         cash_ops.append({"id":f"p{int(e['id'])}","kind":"payment",
                          "client":e['shop_name'] or e['name'] or f"Mijoz #{e['client']}",
-                         "amountUsd":_usd(e['amount_usd']),"ts":int(e['ts']),"state":"collected"})
+                         "amountUsd":_usd(e['amount_usd']),"amountUzs":int(e['paid_uzs'] or 0),
+                         "rate":int(e['fx_rate'] or 0),"method":e['pay_method'] or 'cash',
+                         "ts":int(e['ts']),"state":"bank" if e['pay_method']=='card' else "collected"})
     for h in handovers:
         cash_ops.append({"id":f"h{int(h['id'])}","kind":"handover","client":"Kassaga topshirish",
-                         "amountUsd":_usd(h['amount_usd']),"ts":int(h['ts']),
+                         "amountUsd":_usd(h['amount_usd']),"amountUzs":int(h['amount'] or 0)//100,
+                         "currency":"UZS" if int(h['amount'] or 0)>0 else "USD","ts":int(h['ts']),
                          "acceptedTs":int(h['accepted_ts'] or 0) or None,"state":h['status']})
     cash_ops.sort(key=lambda x:x['ts'],reverse=True)
     series=[]
@@ -390,7 +393,8 @@ def quick_snapshot(db,agent,now=None):
 
     cash_on_hand=int(core.cash_usd(db,agent))
     pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
-        WHERE agent=? AND status='pending'""",(agent,)).fetchone()[0] or 0)
+        WHERE agent=? AND status='pending' AND COALESCE(amount,0)=0""",(agent,)).fetchone()[0] or 0)
+    cash_on_hand_uzs,pending_uzs,card_pending=_uzs_cash_state(db,agent)
     features={name:bool(core.feature_enabled(db,agent,name)) for name in core.AGENT_FEATURES}
     owned_clients=[c for c in clients if int(c.get("agentId") or 0)==int(agent)]
     wallet={
@@ -413,12 +417,28 @@ def quick_snapshot(db,agent,now=None):
                    "paymentTodayUsd":_usd(payments_today),
                    "goodsToday":int(delivery_today[0] or 0),
                    "cashOnHandUsd":_usd(cash_on_hand),
-                   "cashAvailableUsd":_usd(max(0,cash_on_hand-pending))},
+                   "cashAvailableUsd":_usd(max(0,cash_on_hand-pending)),
+                   "cashOnHandUzs":cash_on_hand_uzs,
+                   "cashAvailableUzs":max(0,cash_on_hand_uzs-pending_uzs),
+                   "cardPending":card_pending},
         "period":{"day":{},"week":{},"month":{}},
         "reportAnalytics":{},
         "clientCount":len(owned_clients),
         "truncated":int(db.execute("SELECT COUNT(*) FROM clients").fetchone()[0] or 0)>MAX_CLIENTS
     }
+
+def _uzs_cash_state(db,agent):
+    on_hand=int(core.cash_som(db,agent))
+    pending=int(db.execute("""SELECT COALESCE(SUM(amount),0) FROM handovers
+        WHERE agent=? AND status='pending' AND COALESCE(amount,0)>0""",(agent,)).fetchone()[0] or 0)//100
+    rows=db.execute("""SELECT p.id,p.client,p.currency,p.amount_uzs,p.amount_usd,p.rate_uzs_per_usd,p.ts,
+        c.shop_name,c.name FROM card_payments p LEFT JOIN clients c ON c.id=p.client
+        WHERE p.agent=? AND p.status='pending' ORDER BY p.ts DESC,p.id DESC LIMIT 50""",(agent,)).fetchall()
+    cards=[{"id":int(r["id"]),"clientId":int(r["client"]),"client":r["shop_name"] or r["name"] or f"#{r['client']}",
+            "currency":r["currency"],"amountUzs":int(r["amount_uzs"] or 0),"amountUsd":_usd(r["amount_usd"]),
+            "rate":int(r["rate_uzs_per_usd"] or 0),"ts":int(r["ts"])} for r in rows]
+    return on_hand,pending,cards
+
 
 def snapshot(db,agent,now=None):
     """Compatibility shape consumed by the premium Agent Mini App UI."""
@@ -427,7 +447,8 @@ def snapshot(db,agent,now=None):
     today=base["todayStart"];week=today-6*86400;month=today-29*86400
     cash_on_hand=int(core.cash_usd(db,agent))
     pending=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
-        WHERE agent=? AND status='pending'""",(agent,)).fetchone()[0] or 0)
+        WHERE agent=? AND status='pending' AND COALESCE(amount,0)=0""",(agent,)).fetchone()[0] or 0)
+    cash_on_hand_uzs,pending_uzs,card_pending=_uzs_cash_state(db,agent)
     event_rows=db.execute("""SELECT e.id,e.kind,e.client,e.pack,e.qty,e.amount_usd,e.ts,
         c.shop_name,c.name FROM events e LEFT JOIN clients c ON c.id=e.client
         WHERE e.agent=? AND e.ts>=? AND e.kind IN ('delivery','sold','return','payment','order','visit')
@@ -437,10 +458,12 @@ def snapshot(db,agent,now=None):
              "shop":e["shop_name"] or e["name"] or (f"Mijoz #{e['client']}" if e["client"] else ""),
              "pack":int(e["pack"] or 0),"qty":int(e["qty"] or 0),
              "amountUsd":_usd(e["amount_usd"]),"ts":int(e["ts"])} for e in event_rows]
-    hand_rows=db.execute("""SELECT id,amount_usd,status,ts,accepted_ts FROM handovers
+    hand_rows=db.execute("""SELECT id,amount,amount_usd,status,ts,accepted_ts FROM handovers
         WHERE agent=? AND (ts>=? OR status='pending') ORDER BY ts DESC,id DESC LIMIT 300""",
         (agent,month)).fetchall()
     handovers=[{"id":int(h["id"]),"amountUsd":_usd(h["amount_usd"]),
+                "currency":"UZS" if int(h["amount"] or 0)>0 else "USD",
+                "amountUzs":int(h["amount"] or 0)//100,
                 "status":h["status"],"ts":int(h["ts"]),
                 "acceptedTs":int(h["accepted_ts"] or 0) or None} for h in hand_rows]
     fund_rows=db.execute("""SELECT f.id,f.kind,f.amount_usd,f.amount_uzs,f.rate_uzs_per_usd,f.category,f.note,f.ts,
@@ -546,7 +569,10 @@ def snapshot(db,agent,now=None):
                        "paymentTodayUsd":base["summary"]["paymentsTodayUsd"],
                        "goodsToday":base["summary"]["deliveryTodayQty"],
                        "cashOnHandUsd":_usd(cash_on_hand),
-                       "cashAvailableUsd":_usd(max(0,cash_on_hand-pending))},
+                       "cashAvailableUsd":_usd(max(0,cash_on_hand-pending)),
+                       "cashOnHandUzs":cash_on_hand_uzs,
+                       "cashAvailableUzs":max(0,cash_on_hand_uzs-pending_uzs),
+                       "cardPending":card_pending},
             "period":{"day":p(today),"week":p(week),"month":p(month)},
             "reportAnalytics":{"series":report_series,
                                "clients":{"total":len(owned_clients),"debtUsd":client_debt_usd,
@@ -746,12 +772,21 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         return {"ok":True,"clientId":cid,"deliveredItems":0,
                 "message":"Mijoz mahsulotsiz prospekt sifatida saqlandi."}
     if action=="handover":
-        amount=core.money(payload.get("amount"))
-        core.handover(db,agent,amount,source,currency='USD',ts=op_ts)
-        row=db.execute("SELECT id FROM handovers WHERE agent=? AND source=?",(agent,source)).fetchone()
+        currency=str(payload.get("currency") or "USD").upper()
+        if currency=="UZS":
+            amount=core.parse_whole_som(payload.get("amount"),"Summa")
+        elif currency=="USD":
+            amount=core.money(payload.get("amount"))
+        else:
+            raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
+        # handovers.amount keeps the legacy tiyin unit (1/100 so'm)
+        core.handover(db,agent,amount*100 if currency=="UZS" else amount,source,currency=currency,ts=op_ts)
+        row=db.execute("SELECT id,amount,amount_usd FROM handovers WHERE agent=? AND source=?",(agent,source)).fetchone()
         hid=int(row[0]) if row else None
-        return {"ok":True,"handoverId":hid,"message":"Kassaga topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
-                "_notify":{"kind":"handover","handoverId":hid,"amount":amount}}
+        shown=f"{amount:,} so‘m" if currency=="UZS" else f"{_usd(amount):.2f} USD"
+        return {"ok":True,"handoverId":hid,"message":f"Kassaga {shown} topshirish yuborildi. Kassir tasdig‘i kutilmoqda.",
+                "_notify":{"kind":"handover","handoverId":hid,"amount":int(row["amount_usd"]) if row else amount,
+                           "currency":currency,"amountUzs":amount if currency=="UZS" else None}}
     if action=="agent_expense":
         category=str(payload.get("category") or "").strip()
         note=str(payload.get("note") or "").strip()
@@ -831,35 +866,49 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
             ok,msg=_live_ready(db,agent,now=op_ts)
             if not ok:raise ValueError(msg)
         currency=str(payload.get("currency") or "USD").upper()
-        if currency=="USD":
-            amount=core.money(payload.get("amount"))
-            note="Mini App · USD"
-            message=f"{_usd(amount):.2f} USD to‘lov saqlandi."
-            notify={"kind":"payment","client":cid,"amount":amount,"currency":"USD"}
-        elif currency=="UZS":
-            rate=core.cashier_rate(db)
-            if rate is None:
-                raise ValueError("Kassir hali kurs belgilamagan. UZS to‘lov qabul qilib bo‘lmaydi.")
-            expected_raw=payload.get("expectedRate")
-            if expected_raw not in (None,""):
-                expected=core.parse_whole_som(expected_raw,"Kurs")
-                if expected!=rate:
-                    raise ValueError("Kassir kursni o‘zgartirdi. Yangi kursni ko‘rib to‘lovni qayta tasdiqlang.")
+        method=str(payload.get("method") or "cash").lower()
+        if method not in core.PAY_METHODS:raise ValueError("To‘lov usulini tanlang: naqd yoki karta.")
+        if currency not in ("USD","UZS"):raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
+        rate=None
+        if currency=="UZS":
             som=core.parse_whole_som(payload.get("amount"),"To‘lov")
-            amount=core.som_to_usd_cents(som,rate)
-            note=f"Mini App · {som} UZS · 1 USD = {rate} UZS"
-            message=f"{som:,} UZS → {_usd(amount):.2f} USD to‘lov saqlandi. Kurs: 1 USD = {rate:,} UZS."
-            notify={"kind":"payment","client":cid,"amount":amount,"currency":"UZS",
-                    "amountUzs":som,"rate":rate}
+            raw_rate=payload.get("rate")
+            if raw_rate not in (None,""):
+                rate=core.parse_whole_som(raw_rate,"Kurs")
+            else:
+                # Older cached app versions send only the cashier rate they saw.
+                rate=core.cashier_rate(db)
+                if rate is None:raise ValueError("Kassir hali kurs belgilamagan. Mijoz bilan kelishilgan kursni kiriting.")
+                expected_raw=payload.get("expectedRate")
+                if expected_raw not in (None,"") and core.parse_whole_som(expected_raw,"Kurs")!=rate:
+                    raise ValueError("Kassir kursni o‘zgartirdi. Yangi kursni ko‘rib to‘lovni qayta tasdiqlang.")
+            value=som
         else:
-            raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
-        core.record(db,agent,agent,cid,'payment',0,0,amount,note,source,currency='USD',ts=op_ts)
+            value=core.money(payload.get("amount"))
+        label="Karta" if method=="card" else "Naqd"
+        note=f"Mini App · {label} · "+(f"{value} UZS · 1 USD = {rate} UZS" if currency=="UZS" else "USD")
+        if method=="card":
+            pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts)
+            if usd is None:
+                return {"ok":True,"duplicate":True,"cardPaymentId":pid}
+            shown=f"{value:,} UZS → {_usd(usd):.2f} USD (kurs {rate:,})" if currency=="UZS" else f"{_usd(usd):.2f} USD"
+            return {"ok":True,"cardPaymentId":pid,"pendingConfirmation":True,
+                    "message":f"Karta to‘lovi yuborildi: {shown}. Kassir bankdan tasdiqlagach mijoz qarzidan ayriladi.",
+                    "_notify":{"kind":"card_payment","client":cid,"paymentId":pid,"amount":usd,"currency":currency,
+                               "amountUzs":value if currency=="UZS" else None,"rate":rate}}
+        usd,som_saved,rate_saved=core.record_client_payment(db,agent,agent,cid,currency,value,'cash',rate=rate,
+                                                            note=note,source=source,ts=op_ts)
         if core.client_debt_usd(db,cid)<=0:
             db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
                        (op_ts,cid))
-        return {"ok":True,"message":message,"convertedUsd":_usd(amount),
+        if currency=="UZS":
+            message=f"{value:,} UZS → {_usd(usd):.2f} USD to‘lov saqlandi. Kurs: 1 USD = {rate:,} UZS. Pul qo‘lingizda so‘mda turadi."
+        else:
+            message=f"{_usd(usd):.2f} USD to‘lov saqlandi."
+        return {"ok":True,"message":message,"convertedUsd":_usd(usd),
                 "rateUzsPerUsd":rate if currency=="UZS" else core.cashier_rate(db),
-                "_notify":notify}
+                "_notify":{"kind":"payment","client":cid,"amount":usd,"currency":currency,
+                           "amountUzs":value if currency=="UZS" else None,"rate":rate}}
     if action=="return":
         if not admin_override:
             ok,msg=_live_ready(db,agent,now=op_ts)

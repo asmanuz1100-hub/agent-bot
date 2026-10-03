@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
-from core import route_stats,product_name,product_ids,distance
+from core import route_stats,product_name,product_ids,distance,payment_label
 import customer_status as cs
 import client_ledger as ledger
 TZ=ZoneInfo('Asia/Tashkent')
@@ -620,7 +620,7 @@ def reconciliation(db,actor,client,start=None,end=None):
         FROM events WHERE client=? AND ts<? AND pack>0 GROUP BY pack""",(client,a)).fetchall()
     for item in opening_stock_rows:
         stocks[int(item['pack'])]=int(item['qty'] or 0)
-    events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd FROM events
+    events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd,pay_method,paid_uzs,fx_rate FROM events
         WHERE client=? AND ts>=? AND ts<? AND kind IN ('delivery','sold','return','payment')
         ORDER BY ts,id""",(client,a,b)).fetchall()
     before_usd=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
@@ -641,7 +641,12 @@ def reconciliation(db,actor,client,start=None,end=None):
         usd_balance+=usd_charge-usd_credit;usd_sales+=usd_charge
         if k=='payment':usd_payments+=usd_credit
         if k=='return':usd_returns+=usd_credit
-        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
+        label=NAMES[k]
+        if k=='payment':
+            extra=payment_label(e)
+            if extra:label=f"{label} ({extra})"
+        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':label,
+                     'paid_uzs':int(e['paid_uzs'] or 0),'fx_rate':int(e['fx_rate'] or 0),'pay_method':e['pay_method'] or '','pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
     return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
 def reconciliation_xlsx(r):

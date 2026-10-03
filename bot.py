@@ -488,7 +488,7 @@ def show_agent_profile(db,u,a):
         f"{row['name']} ({a})",
         f"Ҳолати: {'🟢 Ишда' if shift else '⚪ Смена ёпиқ'}",
         f"Мижозлар: {clients}",
-        f"Нақд пул: {fmt(cash_usd(db,a))} USD"+(f" · эски UZS: {fmt(cash(db,a))} сўм" if cash(db,a) else ''),
+        f"Нақд пул: {fmt(cash_usd(db,a))} USD"+(f" · сўм: {cash_som(db,a):,} сўм".replace(',',' ') if cash(db,a) else ''),
         f"Хизматлар: {enabled}/{len(AGENT_FEATURES)} ёқилган",
         "",
         "ХИЗМАТ РУХСАТЛАРИ:"
@@ -588,10 +588,25 @@ def notify_cashiers_payment(db,agent,client,amount_usd,currency='USD',amount_uzs
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many(cashier_ids(db),text)
 
-def notify_cashiers_handover(db,agent,hid,amount_usd):
+def notify_cashiers_card_payment(db,agent,client,payment_id,amount_usd,currency='UZS',amount_uzs=None,rate=None):
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
+    label=(c['shop_name'] or c['name']) if c else f'Мижоз #{client}'
+    original=(f"{int(amount_uzs):,} UZS → {fmt(amount_usd)} USD\n💱 Келишилган курс: 1 USD = {int(rate):,} UZS\n"
+              if currency=='UZS' and amount_uzs and rate else f"{fmt(amount_usd)} USD\n")
+    text=(f"💳 КАРТА / ЎТКАЗМА ТЎЛОВИ #{payment_id}\n"
+          f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
+          f"🏪 Мижоз: {label} · #{client}\n"
+          f"💵 Сумма: {original}"
+          f"🏦 Банкка тушганини текширинг ва Кассир Mini App’да тасдиқланг.\n"
+          f"Тасдиқлангандан кейин мижоз қарзидан айирилади.\n"
+          f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
+    _safe_send_many(cashier_ids(db),text)
+
+def notify_cashiers_handover(db,agent,hid,amount_usd,currency='USD',amount_uzs=None):
+    shown=(f"{int(amount_uzs):,} сўм (≈ {fmt(amount_usd)} USD)" if currency=='UZS' and amount_uzs else f"{fmt(amount_usd)} USD")
     text=(f"🏦 КАССАГА ПУЛ ТОПШИРИШ\n"
           f"👨‍💼 Агент: {_staff_name(db,agent)}\n"
-          f"💵 Сумма: {fmt(amount_usd)} USD\n"
+          f"💵 Сумма: {shown}\n"
           f"🧾 Топшириш: #{hid}\n"
           f"⏳ Тасдиқ кутилмоқда.\n"
           f"Пулни санаб текшириш учун қуйидаги тугмани босинг.")
@@ -652,7 +667,7 @@ def review_handover(db,u,hid):
     row=db.execute("SELECT h.*,ua.name AS agent_name FROM handovers h LEFT JOIN users ua ON ua.id=h.agent WHERE h.id=? AND h.status='pending'",(hid,)).fetchone()
     if not row:raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
     save(db,u,{'action':'handover_review','step':0,'values':{'handover':hid}})
-    value=(f"{fmt(row['amount_usd'])} USD" if row['amount_usd'] else f"{fmt(row['amount'])} сўм")
+    value=handover_value_text(row)
     send(u,f"🔎 ПУЛНИ ТЕКШИРИШ\nТопшириқ #{hid}\nАгент: {row['agent_name'] or row['agent']}\n"
          f"Топширилган: {value}\nВақти: {stamp(row['ts'])}\n\n{cashier_pending.handover_context(db,row,limit=12)}\n\nПулни санаб олгандан кейин қарорни танланг. "
          'Сумма мос келмаса рад этинг ва агентдан қайта юборишни сўранг.',
@@ -1339,7 +1354,7 @@ def handle(db,update):
         accept(db,u,hid,accepted)
         db.execute('DELETE FROM sessions WHERE agent=?',(u,))
         status='✅ ҚАБУЛ ҚИЛИНДИ' if accepted else '❌ РАД ЭТИЛДИ'
-        amount_text=(f"{fmt(row['amount_usd'])} USD" if row['amount_usd'] else f"{fmt(row['amount'])} сўм")
+        amount_text=handover_value_text(row)
         cashier=_staff_name(db,u);agent_name=row['agent_name'] or str(row['agent'])
         detail=(f"{status}\n🧾 Топшириш: #{hid}\n👨‍💼 Агент: {agent_name}\n"
                 f"💵 Сумма: {amount_text}\n👤 Кассир: {cashier}\n"
@@ -1440,7 +1455,7 @@ def handle(db,update):
         if action=='clients':report_clients(db,u);return
         if action=='balance':
             stock_rows=[f'{product_name(p)}: {agent_stock(db,u,p)} дона' for p in product_ids() if agent_stock(db,u,p)]
-            send(u,'Қўлингиздаги товар:\n'+('\n'.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ')+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+f'\n💼 Харажат ҳисоби: {agent_fund_balance_uzs(db,u):,} сўм'+(f'\nЭски UZS қолдиқ: {fmt(cash(db,u))} сўм' if cash(db,u) else ''));return
+            send(u,'Қўлингиздаги товар:\n'+('\n'.join(stock_rows) if stock_rows else 'Товар қолдиғи йўқ')+f'\nҚўлингиздаги USD нақд пул: {fmt(cash_usd(db,u))} USD'+f'\n💼 Харажат ҳисоби: {agent_fund_balance_uzs(db,u):,} сўм'+(f'\nҚўлингиздаги сўм нақд пул: {cash_som(db,u):,} сўм'.replace(',',' ') if cash(db,u) else ''));return
         if action=='cashbox':cashbox_report(db,u);return
         if action=='cashier_pending':
             send(u,cashier_pending.report(db),cashier_pending_keyboard(db,u));return
@@ -2152,8 +2167,13 @@ def serve_webhook(db,base_url):
                                 notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'],
                                                         notify.get('currency','USD'),notify.get('amountUzs'),
                                                         notify.get('rate'))
+                            elif notify.get('kind')=='card_payment':
+                                notify_cashiers_card_payment(local,effective_agent,notify['client'],notify['paymentId'],
+                                                             notify['amount'],notify.get('currency','UZS'),
+                                                             notify.get('amountUzs'),notify.get('rate'))
                             elif notify.get('kind')=='handover':
-                                notify_cashiers_handover(local,effective_agent,notify['handoverId'],notify['amount'])
+                                notify_cashiers_handover(local,effective_agent,notify['handoverId'],notify['amount'],
+                                                         notify.get('currency','USD'),notify.get('amountUzs'))
                             elif notify.get('kind')=='agent_expense':
                                 notify_agent_expense(local,effective_agent,notify['expenseId'],notify['amount'],
                                                      notify['amountUzs'],notify['rate'],notify['category'],
