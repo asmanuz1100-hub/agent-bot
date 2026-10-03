@@ -19,7 +19,7 @@ TABLES = (
     "cashier_expenses", "cashier_incomes", "cashier_fx_rates", "agent_funds",
     "return_allocations", "failed_updates", "role_audit", "client_edits",
     "client_visits", "collection_tasks", "delivery_edits", "processed", "meta",
-    "products", "agent_features",
+    "products", "agent_features", "card_payments",
 )
 
 SECRET_NAMES = (
