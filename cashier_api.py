@@ -56,7 +56,12 @@ def _cashier_summary(db):
         WHEN kind='expense' THEN -amount_usd ELSE 0 END),0) FROM agent_funds""").fetchone()[0] or 0)
     wallet_total_uzs = int(db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_uzs
         WHEN kind='expense' THEN -amount_uzs ELSE 0 END),0) FROM agent_funds""").fetchone()[0] or 0)
+    wallets = core.cashier_flows(db)
+    today_flows = core.cashier_flows(db, start, end)
     return {
+        'wallets': {'cashUzs': wallets['cash_uzs'], 'cashUsd': wallets['cash_usd'],
+                    'cardUzs': wallets['card_uzs'], 'cardUsd': wallets['card_usd']},
+        'todayFlows': today_flows,
         'acceptedToday': accepted_today,
         'cashExpenseToday': expense_today,
         'fundedToday': funded_today,
@@ -172,6 +177,51 @@ def dashboard(db, actor):
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
                            'assignedCount':sum(1 for x in debtors if x['task'])},
             'categories': list(core.CASHIER_EXPENSE_CATEGORIES), 'daily': cashier_daily.report(db)}
+
+
+def period_report(db, actor, payload):
+    """Cashier movements for a chosen period, every currency kept in its own column."""
+    require_cashier(db, actor)
+    start, end, label = core.resolve_period(payload.get('period'), payload.get('from'), payload.get('to'))
+    label = label.replace('Bugun', 'Бугун').replace('Oxirgi 7 kun', 'Охирги 7 кун').replace(' oyi', ' ойи')
+    flows = core.cashier_flows(db, start, end)
+    rows = []
+    for x in db.execute("""SELECT h.id,h.amount,h.amount_usd,COALESCE(h.accepted_ts,h.ts) AS ts,
+            a.name AS agent_name,c.name AS actor_name FROM handovers h
+            LEFT JOIN users a ON a.id=h.agent LEFT JOIN users c ON c.id=h.cashier
+            WHERE h.status='accepted' AND COALESCE(h.accepted_ts,h.ts)>=? AND COALESCE(h.accepted_ts,h.ts)<?""",
+            (start, end)).fetchall():
+        som = int(x['amount'] or 0) // 100
+        rows.append({'kind': 'in_cash', 'id': int(x['id']), 'ts': int(x['ts'] or 0),
+                     'currency': 'UZS' if som else 'USD', 'uzs': som, 'usd': 0 if som else int(x['amount_usd'] or 0),
+                     'title': 'Агентдан нақд', 'who': x['agent_name'] or '', 'actor': x['actor_name'] or ''})
+    for x in db.execute("""SELECT i.id,i.currency,i.amount_uzs,i.amount_usd,i.category,i.source_name,i.ts,
+            u.name AS actor_name FROM cashier_incomes i LEFT JOIN users u ON u.id=i.cashier
+            WHERE i.ts>=? AND i.ts<?""", (start, end)).fetchall():
+        uzs = x['currency'] == 'UZS'
+        rows.append({'kind': 'in_card', 'id': int(x['id']), 'ts': int(x['ts'] or 0),
+                     'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
+                     'usd': 0 if uzs else int(x['amount_usd'] or 0),
+                     'title': 'Карта / банк', 'who': x['source_name'] or '', 'actor': x['actor_name'] or ''})
+    for x in db.execute("""SELECT e.id,e.currency,e.amount_uzs,e.amount_usd,e.category,e.recipient,e.ts,
+            u.name AS actor_name FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
+            WHERE e.ts>=? AND e.ts<?""", (start, end)).fetchall():
+        uzs = x['currency'] == 'UZS'
+        rows.append({'kind': 'out_expense', 'id': int(x['id']), 'ts': int(x['ts'] or 0),
+                     'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
+                     'usd': 0 if uzs else int(x['amount_usd'] or 0),
+                     'title': x['category'] or 'Харажат', 'who': x['recipient'] or '', 'actor': x['actor_name'] or ''})
+    for x in db.execute("""SELECT f.id,f.amount_uzs,f.amount_usd,f.ts,a.name AS agent_name,u.name AS actor_name
+            FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
+            WHERE f.kind='topup' AND f.ts>=? AND f.ts<?""", (start, end)).fetchall():
+        uzs = int(x['amount_uzs'] or 0) > 0
+        rows.append({'kind': 'out_fund', 'id': int(x['id']), 'ts': int(x['ts'] or 0),
+                     'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
+                     'usd': 0 if uzs else int(x['amount_usd'] or 0),
+                     'title': 'Агентга харажат пули', 'who': x['agent_name'] or '', 'actor': x['actor_name'] or ''})
+    rows.sort(key=lambda r: (r['ts'], r['id']), reverse=True)
+    return {'period': payload.get('period') or 'today', 'label': label, 'start': start, 'end': end,
+            'flows': flows, 'rows': rows[:400], 'truncated': len(rows) > 400}
 
 
 def review(db, actor, hid):
