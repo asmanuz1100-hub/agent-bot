@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS visit_stock(id INTEGER PRIMARY KEY, visit INTEGER NOT NULL, client INTEGER NOT NULL, pack INTEGER NOT NULL, counted INTEGER NOT NULL CHECK(counted>=0), expected INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, client INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs INTEGER NOT NULL DEFAULT 0, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, cashier INTEGER, decided_ts INTEGER, event_id INTEGER);
 CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
@@ -114,6 +116,8 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS visit_stock(id BIGSERIAL PRIMARY KEY, visit BIGINT NOT NULL, client BIGINT NOT NULL, pack BIGINT NOT NULL, counted BIGINT NOT NULL CHECK(counted>=0), expected BIGINT NOT NULL DEFAULT 0, ts BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, client BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs BIGINT NOT NULL DEFAULT 0, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, cashier BIGINT, decided_ts BIGINT, event_id BIGINT);
 CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
@@ -220,6 +224,9 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS pay_method TEXT NOT NULL DEFAULT ''")
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS paid_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS fx_rate BIGINT NOT NULL DEFAULT 0')
+        for column,definition in (('checkin_ts','BIGINT NOT NULL DEFAULT 0'),('lat','DOUBLE PRECISION'),('lon','DOUBLE PRECISION'),
+                                  ('distance_m','BIGINT'),('photo',"TEXT NOT NULL DEFAULT ''")):
+            db.execute(f'ALTER TABLE client_visits ADD COLUMN IF NOT EXISTS {column} {definition}')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
@@ -260,6 +267,10 @@ def connect(path,initialize=True):
     event_cols={r[1] for r in db.execute('PRAGMA table_info(events)')}
     for column,definition in (('pay_method',"TEXT NOT NULL DEFAULT ''"),('paid_uzs','INTEGER NOT NULL DEFAULT 0'),('fx_rate','INTEGER NOT NULL DEFAULT 0')):
         if column not in event_cols:db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
+    visit_cols={r[1] for r in db.execute('PRAGMA table_info(client_visits)')}
+    for column,definition in (('checkin_ts','INTEGER NOT NULL DEFAULT 0'),('lat','REAL'),('lon','REAL'),
+                              ('distance_m','INTEGER'),('photo',"TEXT NOT NULL DEFAULT ''")):
+        if column not in visit_cols:db.execute(f'ALTER TABLE client_visits ADD COLUMN {column} {definition}')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN amount_usd INTEGER DEFAULT 0')
     expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
