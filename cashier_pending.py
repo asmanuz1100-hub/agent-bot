@@ -83,8 +83,12 @@ def report(db):
     ]
     if pending:
         for hand in pending:
-            value = (f"{usd(hand['amount_usd'])} USD" if hand["amount_usd"]
-                     else f"{usd(hand['amount'])} сўм")
+            if int(hand["amount"] or 0) > 0:   # so'm handover (amount in tiyin)
+                value = f"{int(hand['amount']) // 100:,} сўм".replace(",", " ")
+                if hand["amount_usd"]:
+                    value += f" (≈ {usd(hand['amount_usd'])} USD)"
+            else:
+                value = f"{usd(hand['amount_usd'])} USD"
             result.append(
                 f"\n№{hand['id']} · {hand['agent_name'] or hand['agent']}\n"
                 f"Сумма: {value} · {date_of(hand['ts'])}\n"
