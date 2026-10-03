@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS handovers(id INTEGER PRIMARY KEY, agent INTEGER, amou
 CREATE TABLE IF NOT EXISTS cashier_expenses(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, rate_uzs_per_usd INTEGER NOT NULL, source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS card_payments(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, client INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs INTEGER NOT NULL DEFAULT 0, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, cashier INTEGER, decided_ts INTEGER, event_id INTEGER);
 CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
@@ -113,6 +114,7 @@ CREATE TABLE IF NOT EXISTS handovers(id BIGSERIAL PRIMARY KEY, agent BIGINT, amo
 CREATE TABLE IF NOT EXISTS cashier_expenses(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, recipient TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_incomes(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), category TEXT NOT NULL, source_name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'USD', amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cashier_fx_rates(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, rate_uzs_per_usd BIGINT NOT NULL, source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS card_payments(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, client BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs BIGINT NOT NULL DEFAULT 0, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, cashier BIGINT, decided_ts BIGINT, event_id BIGINT);
 CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
@@ -215,6 +217,9 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_only INTEGER NOT NULL DEFAULT 0')
         db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT ''")
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
+        db.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS pay_method TEXT NOT NULL DEFAULT ''")
+        db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS paid_uzs BIGINT NOT NULL DEFAULT 0')
+        db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS fx_rate BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
@@ -252,6 +257,9 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE clients ADD COLUMN region TEXT NOT NULL DEFAULT ''")
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(events)')}:
         db.execute('ALTER TABLE events ADD COLUMN amount_usd INTEGER DEFAULT 0')
+    event_cols={r[1] for r in db.execute('PRAGMA table_info(events)')}
+    for column,definition in (('pay_method',"TEXT NOT NULL DEFAULT ''"),('paid_uzs','INTEGER NOT NULL DEFAULT 0'),('fx_rate','INTEGER NOT NULL DEFAULT 0')):
+        if column not in event_cols:db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN amount_usd INTEGER DEFAULT 0')
     expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
@@ -344,8 +352,24 @@ def client_debt_usd(db,client):
     return int(row[0] or 0)
 
 def cash_usd(db,agent):
-    paid=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE agent=? AND status='accepted'",(agent,)).fetchone()[0]
-    return amount(db,agent,['payment'],field='amount_usd')-int(paid or 0)
+    """US dollars physically held by the agent.
+
+    Only cash payments taken in USD count. Payments taken in so'm (paid_uzs>0)
+    sit in the agent's so'm cash, and card payments go straight to the bank.
+    Only USD handovers (amount=0) leave this wallet.
+    """
+    got=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM events WHERE agent=? AND kind='payment'
+        AND COALESCE(paid_uzs,0)=0 AND COALESCE(pay_method,'')<>'card'""",(agent,)).fetchone()[0]
+    paid=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE agent=? AND status='accepted' AND COALESCE(amount,0)=0",(agent,)).fetchone()[0]
+    return int(got or 0)-int(paid or 0)
+
+def agent_uzs_value_usd(db,agent,include_pending=True):
+    """USD value (at the agreed client rates) of the so'm still held by the agent."""
+    got=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM events WHERE agent=? AND kind='payment'
+        AND COALESCE(paid_uzs,0)>0 AND COALESCE(pay_method,'')='cash'""",(agent,)).fetchone()[0]
+    statuses="('accepted','pending')" if include_pending else "('accepted')"
+    handed=db.execute(f"SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE agent=? AND COALESCE(amount,0)>0 AND status IN {statuses}",(agent,)).fetchone()[0]
+    return int(got or 0)-int(handed or 0)
 
 def legacy_debt_uzs(db,client):
     row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='sold' THEN amount
@@ -682,9 +706,29 @@ def client_stock_total(db,c,p):
     return int(row[0] or 0)
 
 def cash(db,a):
+    """So'm held by the agent in tiyin (1/100 so'm), the legacy unit of events.amount and
+    handovers.amount: legacy UZS payments plus new so'm cash payments (paid_uzs is whole so'm)."""
     collected=amount(db,a,['payment'],field='amount')
+    collected+=100*int(db.execute("""SELECT COALESCE(SUM(paid_uzs),0) FROM events WHERE agent=? AND kind='payment'
+        AND COALESCE(pay_method,'')='cash'""",(a,)).fetchone()[0] or 0)
     paid=db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='accepted'",(a,)).fetchone()[0]
     return collected-paid
+
+def cash_som(db,a):
+    """Whole so'm held by the agent (for the Mini App and messages)."""
+    return cash(db,a)//100
+
+def _som_text(tiyin):
+    tiyin=int(tiyin or 0)
+    text=f"{tiyin//100:,}" if tiyin%100==0 else f"{tiyin/100:,.2f}"
+    return text.replace(',',' ')
+
+def handover_value_text(row):
+    """'1 185 000 сўм (≈ 100.00 USD)' for so'm handovers, '30.00 USD' for dollar ones."""
+    amount_tiyin=int(row['amount'] or 0);usd=int(row['amount_usd'] or 0)
+    if amount_tiyin>0:
+        return f"{_som_text(amount_tiyin)} сўм"+(f" (≈ {usd/100:,.2f} USD)".replace(',',' ') if usd else '')
+    return f"{usd/100:,.2f} USD".replace(',',' ')
 
 def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', source=None, currency='UZS', ts=None):
     role=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -739,12 +783,23 @@ def handover(db,a,value,source,currency='UZS',ts=None):
     if not role or role[0]!='agent': raise ValueError('Фақат агент.')
     lock_agent(db,a)
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
-    field='amount_usd' if currency=='USD' else 'amount'
-    reserved=db.execute(f"SELECT COALESCE(SUM({field}),0) FROM handovers WHERE agent=? AND status='pending'",(a,)).fetchone()[0]
-    available=cash_usd(db,a) if currency=='USD' else cash(db,a)
-    if value<=0 or value>available-reserved: raise ValueError('Қўлдаги эркин пулдан ортиқ сумма.')
+    if isinstance(value,bool) or not isinstance(value,int):raise ValueError('Сумма нотўғри.')
+    if currency=='USD':
+        reserved=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE agent=? AND status='pending' AND COALESCE(amount,0)=0",(a,)).fetchone()[0]
+        available=cash_usd(db,a)
+    else:
+        reserved=db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='pending' AND COALESCE(amount,0)>0",(a,)).fetchone()[0]
+        available=cash(db,a)
+    free=available-int(reserved or 0)
+    if value<=0 or value>free: raise ValueError('Қўлдаги эркин пулдан ортиқ сумма.')
+    usd=value
+    if currency=='UZS':
+        # Book the so'm at the rates the agent actually agreed with clients
+        # (average of the so'm still on hand), so the USD cashbook stays exact.
+        value_usd=max(0,agent_uzs_value_usd(db,a))
+        usd=value_usd if value==free else int((Decimal(value_usd)*value/Decimal(free)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
     db.execute('INSERT INTO handovers(agent,amount,amount_usd,source,ts) VALUES(?,?,?,?,?)',
-               (a,0 if currency=='USD' else value,value if currency=='USD' else 0,source,int(time.time() if ts is None else ts)))
+               (a,0 if currency=='USD' else value,usd,source,int(time.time() if ts is None else ts)))
 
 def accept(db,actor,hid,accepted=True):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -756,7 +811,9 @@ def accept(db,actor,hid,accepted=True):
     # have accepted this handover in the meantime.
     row=db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'",(hid,)).fetchone()
     if not row:raise ValueError('Бу топшириқ аввал ҳал қилинган.')
-    if accepted and (cash_usd(db,row['agent'])<row['amount_usd'] or cash(db,row['agent'])<row['amount']): raise ValueError('Агент пули етарли эмас.')
+    if accepted:
+        enough=cash(db,row['agent'])>=row['amount'] if int(row['amount'] or 0)>0 else cash_usd(db,row['agent'])>=row['amount_usd']
+        if not enough:raise ValueError('Агент пули етарли эмас.')
     db.execute('UPDATE handovers SET status=?,cashier=?,accepted_ts=? WHERE id=?',('accepted' if accepted else 'rejected',actor,int(time.time()),hid))
 
 def cashier_balance_usd(db):
@@ -1051,3 +1108,107 @@ def route_stats(points,start,end):
     if anchor and last['ts']-anchor['ts']>=300:stops.append((anchor['ts'],last['ts'],anchor['lat'],anchor['lon']))
     if end-points[-1]['ts']>300:gaps.append((points[-1]['ts'],end))
     return {'km':round(km,2),'gaps':gaps,'stops':stops}
+
+
+# ---------------------------------------------------------------------------
+# Client payments in so'm (agreed rate) and by card (confirmed by the cashier)
+# ---------------------------------------------------------------------------
+PAY_METHODS=('cash','card')
+
+
+def validate_agent_rate(db,rate):
+    """Rate agreed between agent and client. Guard against typos (11850 vs 1185)."""
+    if isinstance(rate,bool) or not isinstance(rate,int):raise ValueError('Kursni butun so‘mda kiriting.')
+    base=cashier_rate(db)
+    if base:
+        low,high=int(base*0.8),int(base*1.2)+1
+        if not low<=rate<=high:
+            raise ValueError(f'Kurs {rate:,} so‘m kassa kursidan ({base:,}) juda farq qiladi. Tekshirib qayta kiriting.')
+    elif not 1000<=rate<=100000:
+        raise ValueError('Kurs 1 000 – 100 000 so‘m oralig‘ida bo‘lsin.')
+    return rate
+
+
+def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,note='',source=None,ts=None):
+    """Cash payment: reduces client debt immediately (USD), money stays with the agent.
+
+    currency='USD': value in cents. currency='UZS': value in whole so'm, converted at the agreed rate.
+    """
+    if method!='cash':raise ValueError('Bu funksiya faqat naqd to‘lov uchun.')
+    if currency=='USD':
+        record(db,actor,agent,client,'payment',0,0,value,note,source,currency='USD',ts=ts)
+        db.execute("UPDATE events SET pay_method='cash' WHERE source=?",(source,))
+        return value,0,0
+    if currency!='UZS':raise ValueError('Valyutani USD yoki UZS qilib tanlang.')
+    rate=validate_agent_rate(db,rate)
+    usd=som_to_usd_cents(value,rate)
+    record(db,actor,agent,client,'payment',0,0,usd,note,source,currency='USD',ts=ts)
+    db.execute("UPDATE events SET pay_method='cash',paid_uzs=?,fx_rate=? WHERE source=?",(value,rate,source))
+    return usd,value,rate
+
+
+def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None):
+    """Card / bank transfer: waits for the cashier; client debt is NOT reduced yet."""
+    role=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
+    if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
+    if not db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone():raise ValueError('Мижоз топилмади.')
+    if not isinstance(source,int):raise ValueError('Операция ID нотўғри.')
+    lock_agent(db,agent)
+    old=db.execute('SELECT id FROM card_payments WHERE source=?',(source,)).fetchone()
+    if old:return int(old[0]),None,None,None
+    if currency=='USD':
+        if isinstance(value,bool) or not isinstance(value,int) or value<=0:raise ValueError('Сумма киритилмаган.')
+        som,usd,rate=0,value,0
+    elif currency=='UZS':
+        rate=validate_agent_rate(db,rate);som=value;usd=som_to_usd_cents(som,rate)
+    else:raise ValueError('Valyutani USD yoki UZS qilib tanlang.')
+    row=db.execute("""INSERT INTO card_payments(agent,client,currency,amount_uzs,amount_usd,rate_uzs_per_usd,note,status,source,ts)
+        VALUES(?,?,?,?,?,?,?,'pending',?,?) RETURNING id""",
+        (agent,client,currency,som,usd,rate,str(note or '')[:500],source,int(time.time() if ts is None else ts))).fetchone()
+    return int(row[0]),usd,som,rate
+
+
+def decide_card_payment(db,actor,payment_id,confirm=True):
+    """Cashier confirms the money reached the bank (or rejects it)."""
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Karta to‘lovini faqat kassir yoki admin tasdiqlaydi.')
+    row=db.execute("SELECT * FROM card_payments WHERE id=?",(payment_id,)).fetchone()
+    if not row:raise ValueError('Karta to‘lovi topilmadi.')
+    lock_agent(db,row['agent'])
+    row=db.execute("SELECT * FROM card_payments WHERE id=? AND status='pending'",(payment_id,)).fetchone()
+    if not row:raise ValueError('Bu karta to‘lovi avval ko‘rib chiqilgan.')
+    now=int(time.time())
+    if not confirm:
+        db.execute("UPDATE card_payments SET status='rejected',cashier=?,decided_ts=? WHERE id=?",(actor,now,payment_id))
+        return None
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(row['client'],)).fetchone()
+    label=(c['shop_name'] or c['name']) if c else f"#{row['client']}"
+    som=int(row['amount_uzs'] or 0);rate=int(row['rate_uzs_per_usd'] or 0)
+    note=(f"Karta · {som:,} UZS · 1 USD = {rate:,} UZS" if som else "Karta · USD")+(f" · {row['note']}" if row['note'] else '')
+    ev=db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
+        VALUES(?,?,?,'payment',0,0,0,?,?,?,?,'card',?,?) RETURNING id""",
+        (row['agent'],row['agent'],row['client'],int(row['amount_usd']),note,int(row['ts']),int(row['source']),som,rate)).fetchone()
+    event_id=int(ev[0])
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    db.execute("""INSERT INTO cashier_incomes(cashier,amount_usd,category,source_name,note,source,ts,currency,amount_uzs,rate_uzs_per_usd)
+        VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (actor,int(row['amount_usd']),'Mijoz to‘lovi · karta',label,f"Karta to‘lovi #{payment_id}",int(row['source']),now,
+         row['currency'],som,rate))
+    db.execute("UPDATE card_payments SET status='confirmed',cashier=?,decided_ts=?,event_id=? WHERE id=?",(actor,now,event_id,payment_id))
+    if client_debt_usd(db,row['client'])<=0:
+        db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",(now,row['client']))
+    return event_id
+
+
+def payment_label(row):
+    """Human text for a payment row in act sverka / client card."""
+    try:som=int(row['paid_uzs'] or 0);rate=int(row['fx_rate'] or 0);method=row['pay_method'] or ''
+    except (KeyError,IndexError,TypeError):return ''
+    parts=[]
+    if som:parts.append(f"{som:,} сўм".replace(',',' '))
+    if rate:parts.append(f"курс {rate:,}".replace(',',' '))
+    if method=='card':parts.append('карта')
+    elif method=='cash':parts.append('нақд')
+    return ' · '.join(parts)
