@@ -39,6 +39,10 @@ var css=document.createElement('style');css.textContent=
 '#pm-map{height:260px;border-radius:16px;overflow:hidden;margin:10px 0;background:var(--soft)}'+
 '.pm-entry{display:flex;align-items:center;gap:12px;cursor:pointer}.pm-entry .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:var(--soft);flex:none}.pm-entry b{font-size:15px}.pm-entry small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.pm-entry em{margin-left:auto;font-style:normal;font-weight:800;color:var(--pri)}'+
 '.pm-badge{display:inline-block;min-width:20px;padding:2px 7px;border-radius:12px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;text-align:center;margin-left:6px}'+
+'.pm-cphoto{width:56px;height:56px;border-radius:16px;object-fit:cover;flex:none;cursor:zoom-in;background:var(--soft)}.pm-vphoto{width:52px;height:52px;border-radius:12px;object-fit:cover;cursor:zoom-in;background:var(--soft)}'+
+'#pm-photo{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}#pm-photo img{max-width:100%;max-height:100%;border-radius:14px}'+
+'.pm-pock{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.pm-pock div{background:var(--soft);border-radius:14px;padding:10px 9px;min-width:0}.pm-pock small{display:block;color:var(--mu);font-size:10.5px}.pm-pock b{display:block;font-size:16px;margin-top:4px;overflow-wrap:anywhere}.pm-pock em{display:block;font-style:normal;color:var(--mu);font-size:10.5px}'+
+'.pm-cur3{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:6px 8px;font-size:12.5px;align-items:center}.pm-cur3 b{text-align:right}.pm-cur3 small{text-align:right;color:var(--mu);font-size:10.5px}.pm-pos{color:var(--ok)}.pm-neg{color:var(--bad)}.pm-off{opacity:.6}'+
 '.pm-chg{display:grid;grid-template-columns:1fr;gap:3px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.pm-chg span{color:var(--mu);text-decoration:line-through}.pm-chg strong{color:var(--ok)}';
 document.head.appendChild(css);
 
@@ -152,13 +156,31 @@ function renderAgent(a){
   '<div class="pm-card"><b>⚙️ Boshqaruv</b>'+manage+'</div>',esc(a.name));
 }
 async function openAgent(id){loading('Agent profili');try{renderAgent(await api('agent_detail',{agentId:id}))}catch(e){sheet('Agent profili','<div class="pm-note">'+esc(e.message||'Yuklanmadi')+'</div>')}}
-async function agentManagement(){
- loading('👥 Agentlar boshqaruvi');
- try{var d=await api('agent_management');
-  sheet('👥 Agentlar boshqaruvi','<div class="pm-b p" data-pm="ag-add" style="margin-bottom:10px">＋ Yangi agent qo‘shish</div>'+
-   (d.agents||[]).map(function(a){return '<div class="row" data-pm="ag-open" data-id="'+a.id+'"><div class="av">'+esc((a.name||'?')[0])+'</div><div class="t"><b>'+esc(a.name)+'</b><small>ID '+a.id+(a.clients!=null?' · '+a.clients+' mijoz':'')+'</small></div><span class="pill '+(a.active!==false?'p-ok':'p-bad')+'">'+(a.active!==false?'Faol':'Blok')+'</span></div>'}).join('')+
-   '<div class="pm-note">Bloklash ma’lumotlarni o‘chirmaydi. Akkaunt almashtirish mijozlar, tovar va pul tarixini yangi Telegram IDga ko‘chiradi.</div>');
- }catch(e){sheet('👥 Agentlar boshqaruvi','<div class="pm-note">'+esc(e.message||'Yuklanmadi')+'</div>')}
+var staffTab='agents',staff=null;
+function renderStaff(){
+ var d=staff||{agents:[],cashiers:[]},act=function(x){return x.active!==false};
+ var tabs='<div class="pm-tabs">'+[['agents','🧑‍💼 Agentlar · '+d.agents.filter(act).length],['cashiers','🏦 Kassirlar · '+d.cashiers.filter(act).length]].map(function(t){return '<button data-pm="st-tab" data-tab="'+t[0]+'" class="'+(staffTab===t[0]?'on':'')+'">'+t[1]+'</button>'}).join('')+'</div>';
+ var body;
+ if(staffTab==='agents'){
+  body='<div class="pm-b p" data-pm="ag-add" style="margin-bottom:10px">＋ Yangi agent qo‘shish</div><div class="pm-card">'+
+   (d.agents.map(function(a){return '<div class="pm-row'+(act(a)?'':' off')+'" data-pm="ag-open" data-id="'+a.id+'" style="cursor:pointer"><div><b>'+esc(a.name)+'</b><small>ID '+a.id+(a.clients!=null?' · '+a.clients+' mijoz':'')+(a.shiftOpen?' · 🟢 smenada':'')+'</small></div><span class="pm-tag '+(act(a)?'ok':'bad')+'">'+(act(a)?'Faol':'Blok')+'</span></div>'}).join('')||'<small>Agent yo‘q</small>')+'</div>'+
+   '<div class="pm-note">Agentni bosing — profil, huquqlar, nomini o‘zgartirish, akkaunt almashtirish va bloklash. Bloklash ma’lumotlarni o‘chirmaydi.</div>';
+ }else{
+  body='<div class="pm-b p" data-pm="cs-add" style="margin-bottom:10px">＋ Yangi kassir qo‘shish</div>'+
+   (d.cashiers.map(function(c){var a=act(c);return '<div class="pm-card'+(a?'':' pm-off')+'"><div class="pm-top"><div><b>'+esc(c.name)+'</b><small>ID '+c.id+' · '+c.accepted+' ta topshiriq qabul qilgan'+(c.lastTs?' · oxirgi '+when(c.lastTs):'')+'</small></div><span class="pm-tag '+(a?'ok':'bad')+'">'+(a?'Faol':'Yopiq')+'</span></div><div class="pm-act">'+
+    (a?'<div class="pm-b" data-pm="cs-rename" data-id="'+c.id+'" data-name="'+esc(c.name)+'">✏️ Nomini o‘zgartirish</div>'+(primaryAdmin?'<div class="pm-b" data-pm="cs-transfer" data-id="'+c.id+'" data-name="'+esc(c.name)+'">🔁 Akkaunt almashtirish</div><div class="pm-b r w" data-pm="cs-off" data-id="'+c.id+'" data-name="'+esc(c.name)+'">⛔ Kirishni yopish</div>':'')
+     :(primaryAdmin?'<div class="pm-b w" data-pm="cs-on" data-id="'+c.id+'" data-name="'+esc(c.name)+'">↺ Qayta ochish</div>':''))+'</div></div>'}).join('')||'<div class="pm-note">Kassir yo‘q.</div>')+
+   '<div class="pm-note">Yopilgan kassirning qabul qilgan pullari va xarajatlari tarixda o‘z ismi bilan qoladi.'+(primaryAdmin?'':' Almashtirish va yopish faqat asosiy rahbarga ruxsat.')+'</div>';
+ }
+ sheet('👥 Xodimlar',tabs+body,'Agentlar va kassirlarni boshqarish');
+}
+async function agentManagement(tab){
+ if(tab)staffTab=tab;loading('👥 Xodimlar');
+ try{staff=await api('staff_list');renderStaff()}catch(e){sheet('👥 Xodimlar','<div class="pm-note">'+esc(e.message||'Yuklanmadi')+'</div>')}
+}
+async function staffDo(action,payload,btn,msg){
+ if(btn)btn.setAttribute('disabled','');
+ try{var r=await api(action,Object.assign({confirm:true},payload));staff=r.staff;say('✅ '+msg);renderStaff()}catch(e){say('⚠️ '+(e.message||'Saqlanmadi'));if(btn)btn.removeAttribute('disabled')}
 }
 async function agentPeriod(id,period){
  var labels={today:'Bugun',week:'7 kun',month:'30 kun'};loading(labels[period]+' · marshrut');
@@ -232,12 +254,12 @@ function ensureEntries(d){
   var e=$('pm-home-ombor');
   if(!e){e=document.createElement('div');e.className='c';e.id='pm-home-ombor';home.insertBefore(e,home.children[1]||null)}
   e.innerHTML='<div class="pm-entry" data-pm="ombor"><div class="ic">📦</div><div><b>Ombor'+(w.newOrders?'<span class="pm-badge">'+w.newOrders+'</span>':'')+'</b><small>'+(w.openOrders||0)+' ta ochiq buyurtma'+(w.missingProducts?' · '+w.missingProducts+' ta mahsulot katalogda yo‘q':' · katalog va narxlar')+'</small></div><em>›</em></div>'+
-   '<div class="pm-act" style="margin-top:12px"><div class="pm-b" data-pm="ag-manage">👥 Agentlar boshqaruvi</div><div class="pm-b" data-pm="all-export" data-f="xlsx">📊 Barcha mijozlar</div></div>';
+   '<div class="pm-act" style="margin-top:12px"><div class="pm-b" data-pm="ag-manage">👥 Xodimlar</div><div class="pm-b" data-pm="all-export" data-f="xlsx">📊 Barcha mijozlar</div></div>';
  }
  var ag=s[1]&&s[1].querySelector('.bd');
  if(ag&&!$('pm-ag-tools')){
   var t=document.createElement('div');t.id='pm-ag-tools';t.className='pm-act';t.style.margin='0 0 12px';
-  t.innerHTML='<div class="pm-b p" data-pm="ag-selected">⚙️ Tanlangan agent profili</div><div class="pm-b" data-pm="ag-manage">👥 Boshqaruv · ＋ agent</div>';
+  t.innerHTML='<div class="pm-b p" data-pm="ag-selected">⚙️ Tanlangan agent profili</div><div class="pm-b" data-pm="ag-manage">👥 Xodimlar · ＋ qo‘shish</div>';
   var card=ag.querySelector('#sa_av');card=card&&card.closest('.c');
   if(card&&card.nextSibling)ag.insertBefore(t,card.nextSibling);else ag.appendChild(t);
  }
@@ -249,6 +271,34 @@ function ensureEntries(d){
  }
 }
 P.onLoad(function(d){if(d&&typeof d.primaryAdmin==='boolean')primaryAdmin=d.primaryAdmin;ensureEntries(d)});
+
+window.pmPhoto=function(src){var o=document.createElement('div');o.id='pm-photo';o.innerHTML='<img alt="" src="'+esc(src)+'">';o.onclick=function(){o.remove()};document.body.appendChild(o)};
+document.addEventListener('click',function(ev){var card=ev.target.closest('.c');if(!card||!card.querySelector('#sa_av')||ev.target.closest('button,.pill,a,[data-pm]'))return;var a=(P.agents()||[])[window.pmSelAgent||0];if(a)openAgent(a.id)});
+
+/* =================== KASSA: 3 pockets + period =================== */
+var cashPeriod='today';
+function som(v){return Number(v||0).toLocaleString('en-US')}
+function flowsHtml(c){c=c||{};function r(t,a,b,k,cls){return '<span>'+t+'</span><b class="'+(cls||'')+'">'+a+'</b><b class="'+(cls||'')+'">'+b+'</b><b class="'+(cls||'')+'">'+k+'</b>'}
+ return '<div class="pm-cur3"><span></span><small>Naqd so‘m</small><small>Naqd $</small><small>Karta</small>'+
+  r('Kirim','+'+som(c.inCashUzs),'+'+usd(c.inCashUsd),'+'+som(c.inCardUzs)+(c.inCardUsd?' / '+usd(c.inCardUsd)+'$':''),'pm-pos')+
+  r('Chiqim','−'+som(c.outCashUzs),'−'+usd(c.outCashUsd),'—','pm-neg')+
+  r('Sof',som((c.inCashUzs||0)-(c.outCashUzs||0)),usd((c.inCashUsd||0)-(c.outCashUsd||0)),som(c.inCardUzs))+'</div>'}
+function ensureCash(d){
+ var s=sections()[3],bd=s&&s.querySelector('.bd');if(!bd)return;var w=(d&&d.cash&&d.cash.wallets)||{};
+ var e=$('pm-pockets');if(!e){e=document.createElement('div');e.className='c';e.id='pm-pockets';bd.insertBefore(e,bd.firstChild)}
+ e.innerHTML='<h3 style="margin:0 0 10px">💼 Kassa qoldig‘i <small style="color:var(--mu);font-weight:600;font-size:11px">har biri o‘z valyutasida</small></h3><div class="pm-pock"><div><small>💵 Naqd so‘m</small><b class="'+(w.cashUzs<0?'pm-neg':'')+'">'+som(w.cashUzs)+'</b><em>so‘m</em></div><div><small>💲 Naqd dollar</small><b class="'+(w.cashUsd<0?'pm-neg':'')+'">'+usd(w.cashUsd)+'</b><em>USD</em></div><div><small>💳 Karta / bank</small><b>'+som(w.cardUzs)+'</b><em>so‘m'+(w.cardUsd?' + '+usd(w.cardUsd)+' $':'')+'</em></div></div>'+
+  '<div class="pm-chips" style="margin:12px 0 8px">'+[['today','Bugun'],['week','7 kun'],['month','Shu oy'],['custom','Davr']].map(function(x){return '<button data-pm="cash-per" data-p="'+x[0]+'" class="'+(cashPeriod===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+  '<div id="pm-cash-custom" style="display:'+(cashPeriod==='custom'?'grid':'none')+';grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:8px" class="pm-f"><input type="date" id="pm-cf" style="margin:0"><input type="date" id="pm-ct" style="margin:0"><div class="pm-b p" data-pm="cash-go" style="padding:9px 12px">OK</div></div><div id="pm-cash-flows"><small style="color:var(--mu)">Yuklanmoqda…</small></div>';
+ if(cashPeriod!=='custom')loadCashPeriod();
+ var home=sections()[0],hb=home&&home.querySelector('.hero .hb small:last-child');if(hb)hb.textContent='Naqd: '+som(w.cashUzs)+' so‘m · '+usd(w.cashUsd)+' $ · Karta: '+som(w.cardUzs)+' so‘m';
+}
+async function loadCashPeriod(){
+ var box=$('pm-cash-flows');if(!box)return;var arg={period:cashPeriod};
+ if(cashPeriod==='custom'){arg.from=($('pm-cf')||{}).value;arg.to=($('pm-ct')||{}).value;if(!arg.from||!arg.to){box.innerHTML='<small style="color:var(--mu)">Sanalarni tanlang</small>';return}}
+ box.innerHTML='<small style="color:var(--mu)">Yuklanmoqda…</small>';
+ try{var r=await api('period_report',arg);box.innerHTML='<small style="display:block;color:var(--mu);margin-bottom:6px">📅 '+esc(r.label)+'</small>'+flowsHtml(r.cash)}catch(e){box.innerHTML='<small style="color:var(--bad)">'+esc(e.message)+'</small>'}
+}
+P.onLoad(function(d){ensureCash(d)});
 
 /* =================== CLICKS =================== */
 document.addEventListener('click',function(ev){
@@ -268,8 +318,20 @@ document.addEventListener('click',function(ev){
  if(k==='wh-reject'){sheet('Buyurtmani rad etish','<div class="pm-f"><label>Sabab<input id="pm-rej" maxlength="300" placeholder="Masalan: omborda yo‘q"></label></div><div class="pm-b r" style="margin-top:14px" data-pm="wh-reject-save" data-id="'+id+'">❌ Rad etish</div>');return}
  if(k==='wh-reject-save'){setStatus(id,'rejected',$('pm-rej').value,b);return}
  if(k==='ag-manage'){agentManagement();return}
+ if(k==='st-tab'){staffTab=b.dataset.tab;renderStaff();return}
+ if(k==='cs-add'){sheet('Yangi kassir','<div class="pm-f"><label>Telegram ID<input id="pm-cs-id" inputmode="numeric" placeholder="Masalan: 123456789"></label><label>Kassir ismi<input id="pm-cs-name" placeholder="Ism familiya"></label></div><div class="pm-note">Kassir botga /start yuborib Telegram ID sini bilib oladi.</div><div class="pm-b p" data-pm="cs-add-ok">✅ Qo‘shish</div><div class="pm-b" style="margin-top:8px" data-pm="st-back">← Xodimlar</div>');return}
+ if(k==='cs-add-ok'){staffTab='cashiers';staffDo('cashier_add',{id:$('pm-cs-id').value,name:$('pm-cs-name').value},b,'Kassir qo‘shildi');return}
+ if(k==='cs-rename'){sheet('Kassir nomini o‘zgartirish','<div class="pm-f"><label>Yangi ism<input id="pm-cs-rn" value="'+esc(b.dataset.name||'')+'"></label></div><div class="pm-b p" style="margin-top:14px" data-pm="cs-rename-ok" data-id="'+id+'">💾 Saqlash</div><div class="pm-b" style="margin-top:8px" data-pm="st-back">← Xodimlar</div>');return}
+ if(k==='cs-rename-ok'){staffDo('cashier_rename',{cashierId:id,name:$('pm-cs-rn').value},b,'Saqlandi');return}
+ if(k==='cs-transfer'){sheet('Kassir akkauntini almashtirish','<div class="pm-note"><b>'+esc(b.dataset.name)+'</b> · eski ID '+id+'</div><div class="pm-f"><label>Yangi Telegram ID<input id="pm-cs-new" inputmode="numeric"></label></div><div class="pm-note">Eski akkaunt yopiladi, yangi ID kassir bo‘ladi. Eski operatsiyalar tarixda qoladi.</div><div class="pm-b p" data-pm="cs-transfer-ok" data-id="'+id+'">🔁 Almashtirish</div><div class="pm-b" style="margin-top:8px" data-pm="st-back">← Xodimlar</div>');return}
+ if(k==='cs-transfer-ok'){staffDo('cashier_transfer',{cashierId:id,newId:$('pm-cs-new').value},b,'Akkaunt almashtirildi');return}
+ if(k==='cs-off'){if(!b.dataset.ok){b.dataset.ok='1';b.textContent='Tasdiqlash: '+(b.dataset.name||'')+' kira olmaydi';return}staffDo('cashier_deactivate',{cashierId:id},b,'Kassir yopildi');return}
+ if(k==='cs-on'){staffDo('cashier_activate',{cashierId:id},b,'Kassir qayta ochildi');return}
+ if(k==='st-back'){renderStaff();return}
+ if(k==='cash-per'){cashPeriod=b.dataset.p;b.parentNode.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});var cc=$('pm-cash-custom');if(cc){cc.style.display=cashPeriod==='custom'?'grid':'none';if(cashPeriod==='custom'&&!$('pm-cf').value){var n=new Date(),pd=function(x){return String(x).padStart(2,'0')};$('pm-ct').value=n.getFullYear()+'-'+pd(n.getMonth()+1)+'-'+pd(n.getDate());$('pm-cf').value=n.getFullYear()+'-'+pd(n.getMonth()+1)+'-01'}}if(cashPeriod!=='custom')loadCashPeriod();return}
+ if(k==='cash-go'){loadCashPeriod();return}
  if(k==='ag-open'){openAgent(id);return}
- if(k==='ag-selected'){var ags=P.agents()||[],a=ags[window.selAgent||0];if(a)openAgent(a.id);else say('Agent tanlanmagan');return}
+ if(k==='ag-selected'){var ags=P.agents()||[],a=ags[window.pmSelAgent||0];if(a)openAgent(a.id);else say('Agent tanlanmagan');return}
  if(k==='ag-period'){agentPeriod(id,b.dataset.period);return}
  if(k==='ag-feature'){var on=b.dataset.on!=='1',label=b.querySelector('span').textContent;confirmBox('Huquqni o‘zgartirish','<b>'+esc(label)+'</b><small>Yangi holat: <b>'+(on?'ON · ruxsat beriladi':'OFF · o‘chiriladi')+'</b></small>','agent_feature_set',{agentId:id,feature:b.dataset.key,enabled:on});return}
  if(k==='ag-add'){sheet('Yangi agent','<div class="pm-f"><label>Telegram ID<input id="pm-a-id" inputmode="numeric" placeholder="Masalan: 123456789"></label><label>Agent ismi<input id="pm-a-name" placeholder="Ism familiya"></label></div><div class="pm-note">Agent botga /start yuborib Telegram ID sini bilib oladi.</div><div class="pm-b p" data-pm="ag-add-prev">Tekshirish →</div>');return}
