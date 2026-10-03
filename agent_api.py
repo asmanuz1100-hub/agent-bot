@@ -1004,11 +1004,15 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         method=str(payload.get("method") or "cash").lower()
         if method not in core.PAY_METHODS:raise ValueError("To‘lov usulini tanlang: naqd yoki karta.")
         if currency not in ("USD","UZS"):raise ValueError("Valyutani USD yoki UZS qilib tanlang.")
-        rate=None
+        rate=None;usd_in=None
         if currency=="UZS":
             som=core.parse_whole_som(payload.get("amount"),"To‘lov")
             raw_rate=payload.get("rate")
-            if raw_rate not in (None,""):
+            if payload.get("usd") not in (None,""):
+                # New flow: agent enters the so'm received AND its dollar equivalent; the rate is derived.
+                usd_in=core.money(payload.get("usd"))
+                rate=core.implied_rate(db,som,usd_in)
+            elif raw_rate not in (None,""):
                 rate=core.parse_whole_som(raw_rate,"Kurs")
             else:
                 # Older cached app versions send only the cashier rate they saw.
@@ -1021,9 +1025,9 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         else:
             value=core.money(payload.get("amount"))
         label="Karta" if method=="card" else "Naqd"
-        note=f"Mini App · {label} · "+(f"{value} UZS · 1 USD = {rate} UZS" if currency=="UZS" else "USD")
+        note=f"Mini App · {label} · "+((f"{value} UZS = {_usd(usd_in):.2f} USD · kurs {rate}" if usd_in else f"{value} UZS · 1 USD = {rate} UZS") if currency=="UZS" else "USD")
         if method=="card":
-            pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts)
+            pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts,usd_cents=usd_in)
             if usd is None:
                 return {"ok":True,"duplicate":True,"cardPaymentId":pid}
             shown=f"{value:,} UZS → {_usd(usd):.2f} USD (kurs {rate:,})" if currency=="UZS" else f"{_usd(usd):.2f} USD"
@@ -1032,7 +1036,7 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                     "_notify":{"kind":"card_payment","client":cid,"paymentId":pid,"amount":usd,"currency":currency,
                                "amountUzs":value if currency=="UZS" else None,"rate":rate}}
         usd,som_saved,rate_saved=core.record_client_payment(db,agent,agent,cid,currency,value,'cash',rate=rate,
-                                                            note=note,source=source,ts=op_ts)
+                                                            note=note,source=source,ts=op_ts,usd_cents=usd_in)
         if core.client_debt_usd(db,cid)<=0:
             db.execute("UPDATE collection_tasks SET status='done',completed_ts=? WHERE client=? AND status='open'",
                        (op_ts,cid))

@@ -272,6 +272,39 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
 
 
 
+def _flows_json(f):
+    return {"inCashUzs":f["in_cash_uzs"],"inCashUsd":_usd(f["in_cash_usd"]),
+            "inCardUzs":f["in_card_uzs"],"inCardUsd":_usd(f["in_card_usd"]),
+            "outCashUzs":f["out_expense_uzs"]+f["out_fund_uzs"],"outCashUsd":_usd(f["out_expense_usd"]+f["out_fund_usd"]),
+            "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"])}
+
+
+def period_report(db, period, date_from=None, date_to=None, now=None):
+    """Manager report for today / 7 days / this month / any custom date range."""
+    now=int(time.time() if now is None else now)
+    start,end,label=core.resolve_period(period,date_from,date_to,now)
+    staff=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()
+    visits=[(int(v[0]),int(v[1])) for v in db.execute(
+        "SELECT actor,ts FROM client_visits WHERE ts>=? AND ts<?",(start,end)).fetchall()]
+    visits+=[(int(v[0]),int(v[1])) for v in db.execute(
+        "SELECT agent,ts FROM events WHERE kind='visit' AND ts>=? AND ts<?",(start,end)).fetchall()]
+    report=_enrich_period_analysis(db,_period_report(db,start,end,staff,[],visits,now),max(86400,end-start))
+    report["label"]=label;report["period"]=period
+    report["cash"]=_flows_json(core.cashier_flows(db,start,end))
+    series=[]
+    days=(end-start+86399)//86400
+    if days<=31:
+        day=start
+        while day<end:
+            nxt=min(day+86400,end)
+            snap=_period_business_snapshot(db,day,nxt)
+            series.append({"day":datetime.fromtimestamp(day,TZ).strftime("%d.%m"),
+                           "deliveredUsd":snap["deliveredUsd"],"paymentsUsd":snap["paymentsUsd"]})
+            day=nxt
+    report["series"]=series
+    return report
+
+
 def _period_business_snapshot(db,start,end):
     """Lightweight prior-period comparison without scanning GPS points."""
     start,end=int(start),int(end)
@@ -503,7 +536,8 @@ def dashboard(db, now=None):
                 "netTodayUsd":_usd(int(cash_total or 0)-int(cash_expense_today or 0)),
                 "acceptedWeekUsd":_usd(cash_week),"expensesWeekUsd":_usd(cash_expense_week),
                 "netWeekUsd":_usd(int(cash_week or 0)-int(cash_expense_week or 0)),
-                "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0)},
+                "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0),
+                "wallets":_flows_json(core.cashier_flows(db))},
         "summary":{"agentCount":len(agents),"workingAgents":sum(a["shiftOpen"] for a in agents),
                    "visitsToday":sum(visits_today.values()),"newClientsToday":int(new_today),
                    "overdueClients":red_count,
@@ -562,14 +596,14 @@ def client_detail(db, client_id, limit=120):
         "amountUsd":_usd(r["amount_usd"]),"note":r["note"] or "",
         "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—"
     } for r in rows]
-    visits=db.execute("""SELECT v.id,v.actor,v.status,v.note,v.followup,v.ts,
+    visits=db.execute("""SELECT v.id,v.actor,v.status,v.note,v.followup,v.ts,v.photo,
                COALESCE(u.name,CAST(v.actor AS TEXT)) AS actor_name
         FROM client_visits v LEFT JOIN users u ON u.id=v.actor
         WHERE v.client=? ORDER BY v.ts DESC,v.id DESC LIMIT 80""",(client_id,)).fetchall()
     visit_rows=[{
         "id":int(r["id"]),"status":r["status"] or "","note":r["note"] or "",
         "followup":r["followup"] or "","ts":int(r["ts"] or 0),
-        "actor":r["actor_name"] or "—"
+        "actor":r["actor_name"] or "—","hasPhoto":bool(r["photo"])
     } for r in visits]
     edits=db.execute("""SELECT ce.id,ce.field,ce.old_value,ce.new_value,ce.ts,
                COALESCE(u.name,CAST(ce.actor AS TEXT)) AS actor_name
@@ -594,7 +628,7 @@ def client_detail(db, client_id, limit=120):
         "comment":c["comment"] or "","paymentDue":c["payment_due"] or "",
         "agentId":int(c["agent"]),"agent":c["agent_name"] or str(c["agent"]),
         "createdTs":int(c["created_ts"] or 0),"mapOnly":bool(c["map_only"]),
-        "lat":lat,"lon":lon,"photo":c["photo"] or "",
+        "lat":lat,"lon":lon,"photo":c["photo"] or "","hasPhoto":bool(c["photo"]),
         "debtUsd":_usd(debt),"stocks":stocks,"events":events,"visits":visit_rows,"edits":edit_rows,
         "totals":{"deliveredUsd":_usd(totals[0]),"paidUsd":_usd(totals[1]),
                   "returnedUsd":_usd(totals[2]),"deliveredQty":int(totals[3] or 0),
@@ -754,6 +788,19 @@ def agent_management(db):
                         "role":r["role"],"active":r["role"]=="agent",
                         "clients":int(r["clients"] or 0),"shiftOpen":bool(r["shift_open"])}
                        for r in rows]}
+
+
+def staff_list(db):
+    """Xodimlar: agents (with disabled history) and cashiers."""
+    agents=agent_management(db)["agents"]
+    rows=db.execute("""SELECT u.id,u.name,u.role,
+        (SELECT COUNT(*) FROM handovers h WHERE h.cashier=u.id AND h.status='accepted') AS accepted,
+        (SELECT MAX(COALESCE(h.accepted_ts,h.ts)) FROM handovers h WHERE h.cashier=u.id) AS last_ts
+        FROM users u WHERE u.role IN ('cashier','cashier_disabled')
+        ORDER BY CASE WHEN u.role='cashier' THEN 0 ELSE 1 END,u.name,u.id""").fetchall()
+    cashiers=[{"id":int(r["id"]),"name":r["name"] or str(r["id"]),"active":r["role"]=="cashier",
+               "accepted":int(r["accepted"] or 0),"lastTs":int(r["last_ts"] or 0)} for r in rows]
+    return {"agents":agents,"cashiers":cashiers}
 
 
 def agent_detail(db,agent_id,now=None):

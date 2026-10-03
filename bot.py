@@ -46,8 +46,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261003-manage-v1')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261002-selfhost-v1')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261004-staff-v1')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261004-uzsusd-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -83,7 +83,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20260928-cash-bank-summary-v7').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261004-pockets-v1').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -326,6 +326,10 @@ def attach_client_photo_urls(data):
     if isinstance(clients,list):
         for c in clients:attach(c)
     if isinstance(data.get('client'),dict):attach(data['client'])
+    if not isinstance(clients,list) and 'hasPhoto' in data and 'visits' in data:
+        attach(data)
+        for v in data.get('visits') or []:
+            if isinstance(v,dict) and v.get('hasPhoto') and v.get('id'):v['photoUrl']=visit_photo_link(int(v['id']))
     return data
 
 def agent_action_payload(verb,agent,client,ttl=8*3600):
@@ -1265,7 +1269,7 @@ def handle(db,update):
     m=update.get('message') or update.get('edited_message')
     if not m or m.get('chat',{}).get('type')!='private':return
     u=m['from']['id']; text=m.get('text','').strip(); r=role(db,u)
-    if r=='disabled':
+    if r in ('disabled','cashier_disabled'):
         if 'edited_message' not in update:send(u,'Бу аккаунтга кириш ёпилган. Асосий админга мурожаат қилинг.')
         return
     if not r:
@@ -2116,6 +2120,7 @@ def serve_webhook(db,base_url):
                     action=payload.get('action','dashboard')
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
+                    elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
                     local.commit()
@@ -2351,6 +2356,8 @@ def serve_webhook(db,base_url):
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':
                         data=manager_api.agent_detail(local,payload.get('agentId'))
+                    elif action=='period_report':
+                        data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
                     elif action=='agent_period_detail':
                         data=manager_api.agent_period_detail(local,payload.get('agentId'),payload.get('period'))
                     elif action=='agent_add_preview':
@@ -2377,6 +2384,18 @@ def serve_webhook(db,base_url):
                             raise ValueError('Huquq holati noto‘g‘ri.')
                         set_agent_feature(local,actor,int(payload.get('agentId')),str(payload.get('feature') or ''),enabled)
                         data={'ok':True,'agent':manager_api.agent_detail(local,payload.get('agentId'))}
+                    elif action=='staff_list':
+                        data=manager_api.staff_list(local)
+                    elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
+                        if payload.get('confirm') is not True:raise ValueError('Amalni tasdiqlang.')
+                        if action in ('cashier_transfer','cashier_deactivate','cashier_activate') and actor not in ADMINS:
+                            answer(403,{'error':'Kassir akkauntini almashtirish yoki yopish faqat asosiy rahbarga ruxsat.'});return
+                        if action=='cashier_add':add_cashier(local,actor,payload.get('id'),payload.get('name'))
+                        elif action=='cashier_rename':rename_cashier(local,actor,payload.get('cashierId'),payload.get('name'))
+                        elif action=='cashier_transfer':transfer_cashier_account(local,actor,payload.get('cashierId'),payload.get('newId'))
+                        elif action=='cashier_deactivate':deactivate_cashier(local,actor,payload.get('cashierId'))
+                        else:activate_cashier(local,actor,payload.get('cashierId'))
+                        data={'ok':True,'staff':manager_api.staff_list(local)}
                     elif action=='agent_transfer_preview':
                         if actor not in ADMINS:
                             answer(403,{'error':'Akkaunt almashtirish faqat asosiy rahbarga ruxsat.'});return

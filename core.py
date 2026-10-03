@@ -509,6 +509,83 @@ def add_agent(db,actor,uid,name):
     return uid
 
 
+def _require_admin(db,actor):
+    row=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not row or row[0]!='admin':raise ValueError('Фақат раҳбар (админ).')
+
+
+def _staff_name(name,label='Исм'):
+    if not isinstance(name,str) or not name.strip() or len(name.strip())>120:raise ValueError(f'{label}ни киритинг (1–120 белги).')
+    return name.strip()
+
+
+def _telegram_id(uid):
+    try:uid=int(str(uid).strip())
+    except (TypeError,ValueError):raise ValueError('Telegram ID нотўғри.')
+    if not 1<=uid<=10**13:raise ValueError('Telegram ID нотўғри.')
+    return uid
+
+
+def add_cashier(db,actor,uid,name):
+    """New cashier (or re-open a previously disabled cashier ID)."""
+    _require_admin(db,actor);uid=_telegram_id(uid);name=_staff_name(name,'Кассир исми')
+    row=db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()
+    if row and row[0]!='cashier_disabled':raise ValueError('Бу Telegram ID аввал рўйхатдан ўтган. Бошқа ID киритинг.')
+    if row:db.execute("UPDATE users SET role='cashier',name=? WHERE id=?",(name,uid))
+    else:db.execute("INSERT INTO users(id,role,name) VALUES(?,'cashier',?)",(uid,name))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,None,uid,'cashier_created',int(time.time())))
+    return uid
+
+
+def rename_cashier(db,actor,uid,name):
+    _require_admin(db,actor);name=_staff_name(name,'Янги исм')
+    row=db.execute("SELECT name FROM users WHERE id=? AND role='cashier'",(_telegram_id(uid),)).fetchone()
+    if not row:raise ValueError('Фаол кассир топилмади.')
+    if row[0]==name:raise ValueError('Исм ўзгармаган.')
+    db.execute('UPDATE users SET name=? WHERE id=?',(name,int(uid)))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,int(uid),int(uid),'cashier_renamed',int(time.time())))
+    return name
+
+
+def deactivate_cashier(db,actor,uid):
+    """Close cashier access; every accepted handover and expense keeps the old name."""
+    _require_admin(db,actor);uid=_telegram_id(uid)
+    if not db.execute("SELECT 1 FROM users WHERE id=? AND role='cashier'",(uid,)).fetchone():
+        raise ValueError('Фаол кассир топилмади.')
+    if db.execute("SELECT COUNT(*) FROM users WHERE role='cashier'").fetchone()[0]<=1:
+        raise ValueError('Охирги кассирни ёпиб бўлмайди. Аввал янги кассир қўшинг.')
+    db.execute("UPDATE users SET role='cashier_disabled' WHERE id=?",(uid,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,uid,None,'cashier_deactivated',int(time.time())))
+
+
+def activate_cashier(db,actor,uid):
+    _require_admin(db,actor);uid=_telegram_id(uid)
+    if not db.execute("SELECT 1 FROM users WHERE id=? AND role='cashier_disabled'",(uid,)).fetchone():
+        raise ValueError('Ёпилган кассир топилмади.')
+    db.execute("UPDATE users SET role='cashier' WHERE id=?",(uid,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,None,uid,'cashier_activated',int(time.time())))
+
+
+def transfer_cashier_account(db,actor,old_id,new_id):
+    """Give the cashier role to a new Telegram account; the old account is closed, history stays."""
+    _require_admin(db,actor);old_id=_telegram_id(old_id);new_id=_telegram_id(new_id)
+    if old_id==new_id:raise ValueError('Янги ID эскисидан фарқ қилсин.')
+    row=db.execute("SELECT name FROM users WHERE id=? AND role='cashier'",(old_id,)).fetchone()
+    if not row:raise ValueError('Фаол кассир топилмади.')
+    other=db.execute('SELECT role FROM users WHERE id=?',(new_id,)).fetchone()
+    if other and other[0]!='cashier_disabled':raise ValueError('Янги Telegram ID аввал рўйхатдан ўтган.')
+    if other:db.execute("UPDATE users SET role='cashier',name=? WHERE id=?",(row[0],new_id))
+    else:db.execute("INSERT INTO users(id,role,name) VALUES(?,'cashier',?)",(new_id,row[0]))
+    db.execute("UPDATE users SET role='cashier_disabled' WHERE id=?",(old_id,))
+    db.execute('INSERT INTO role_audit(actor,old_id,new_id,action,ts) VALUES(?,?,?,?,?)',
+               (actor,old_id,new_id,'cashier_transferred',int(time.time())))
+    return new_id
+
+
 def rename_agent(db,actor,agent_id,name):
     """Rename one active agent and record the administrative action."""
     administrator=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -889,6 +966,66 @@ def cashier_balance_usd(db):
     return int(accepted or 0)-int(spent or 0)-int(funded or 0)
 
 
+PERIOD_NAMES={'today':'Bugun','week':'7 kun','month':'Shu oy','custom':'Davr'}
+
+
+def resolve_period(period,date_from=None,date_to=None,now=None):
+    """[start,end) Unix range in Asia/Tashkent for today / week (7 days) / month (this month) / custom dates."""
+    from datetime import datetime as _dt,timedelta as _td
+    from zoneinfo import ZoneInfo as _Z
+    tz=_Z('Asia/Tashkent')
+    now=int(time.time() if now is None else now)
+    today=_dt.fromtimestamp(now,tz).replace(hour=0,minute=0,second=0,microsecond=0)
+    period=str(period or 'today')
+    if period=='today':start=today;label='Bugun'
+    elif period=='week':start=today-_td(days=6);label='Oxirgi 7 kun'
+    elif period=='month':start=today.replace(day=1);label=today.strftime('%m.%Y')+' oyi'
+    elif period=='custom':
+        try:
+            a=_dt.strptime(str(date_from or ''),'%Y-%m-%d').replace(tzinfo=tz)
+            b=_dt.strptime(str(date_to or ''),'%Y-%m-%d').replace(tzinfo=tz)
+        except ValueError:
+            raise ValueError('Davr sanalarini to‘g‘ri tanlang.')
+        if b<a:a,b=b,a
+        if (b-a).days>400:raise ValueError('Davr 400 kundan oshmasin.')
+        start=a;end=int((b+_td(days=1)).timestamp())
+        return int(start.timestamp()),min(end,now+1),a.strftime('%d.%m.%Y')+' – '+b.strftime('%d.%m.%Y')
+    else:raise ValueError('Davr noto‘g‘ri.')
+    return int(start.timestamp()),now+1,label
+
+
+def cashier_flows(db,start=None,end=None):
+    """Cashier money split by real pocket, never mixed through a rate.
+
+    cash_uzs / card_uzs are whole so'm, cash_usd / card_usd are USD cents.
+    With start/end it returns the movement inside [start,end) instead of the balance.
+    """
+    def one(sql,args):
+        return int(db.execute(sql,args).fetchone()[0] or 0)
+    if start is None:
+        hw,ew,fw,cw,args='','','','',()
+    else:
+        start,end=int(start),int(end)
+        hw=' AND COALESCE(accepted_ts,ts)>=? AND COALESCE(accepted_ts,ts)<?'
+        ew=fw=cw=' AND ts>=? AND ts<?'
+        args=(start,end)
+    out={
+        'in_cash_uzs':one("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE status='accepted' AND COALESCE(amount,0)>0"+hw,args)//100,
+        'in_cash_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted' AND COALESCE(amount,0)=0"+hw,args),
+        'in_card_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_incomes WHERE currency='UZS'"+cw,args),
+        'in_card_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes WHERE currency<>'UZS'"+cw,args),
+        'out_expense_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_expenses WHERE currency='UZS'"+ew,args),
+        'out_expense_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE currency<>'UZS'"+ew,args),
+        'out_fund_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)>0"+fw,args),
+        'out_fund_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)=0"+fw,args),
+    }
+    out['cash_uzs']=out['in_cash_uzs']-out['out_expense_uzs']-out['out_fund_uzs']
+    out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']
+    out['card_uzs']=out['in_card_uzs']
+    out['card_usd']=out['in_card_usd']
+    return out
+
+
 def agent_fund_balance_usd(db,agent):
     row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='topup' THEN amount_usd
         WHEN kind='expense' THEN -amount_usd ELSE 0 END),0)
@@ -1038,7 +1175,7 @@ def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
-def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source):
+def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD'):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not identity or identity[0] not in ('cashier','admin'):
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
@@ -1120,7 +1257,7 @@ def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,e
     if expected_rate is not None and rate!=expected_rate:
         raise ValueError('Курс ўзгарган. Янги курсда харажатни қайта киритинг.')
     cents=som_to_usd_cents(amount_uzs,rate)
-    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source)
+    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source,pocket='UZS')
     db.execute("""UPDATE cashier_expenses SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
            WHERE id=?""",(amount_uzs,rate,expense_id))
     return expense_id,cents,rate
@@ -1189,7 +1326,19 @@ def validate_agent_rate(db,rate):
     return rate
 
 
-def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,note='',source=None,ts=None):
+def implied_rate(db,som,usd_cents):
+    """Agent typed both the so'm received and its dollar equivalent: derive and sanity-check the rate."""
+    if isinstance(som,bool) or not isinstance(som,int) or som<=0:raise ValueError('So‘m summasini kiriting.')
+    if isinstance(usd_cents,bool) or not isinstance(usd_cents,int) or usd_cents<=0:raise ValueError('Dollar summasini kiriting.')
+    rate=int((Decimal(som)*100/Decimal(usd_cents)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    try:validate_agent_rate(db,rate)
+    except ValueError:
+        base=cashier_rate(db)
+        raise ValueError(f'{som:,} so‘m = {usd_cents/100:.2f} $ bo‘lsa kurs {rate:,} chiqadi'+(f' (kassa kursi {base:,})' if base else '')+'. Summalarni tekshiring.')
+    return rate
+
+
+def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,note='',source=None,ts=None,usd_cents=None):
     """Cash payment: reduces client debt immediately (USD), money stays with the agent.
 
     currency='USD': value in cents. currency='UZS': value in whole so'm, converted at the agreed rate.
@@ -1200,14 +1349,17 @@ def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,
         db.execute("UPDATE events SET pay_method='cash' WHERE source=?",(source,))
         return value,0,0
     if currency!='UZS':raise ValueError('Valyutani USD yoki UZS qilib tanlang.')
-    rate=validate_agent_rate(db,rate)
-    usd=som_to_usd_cents(value,rate)
+    if usd_cents is not None:
+        rate=implied_rate(db,value,usd_cents);usd=usd_cents
+    else:
+        rate=validate_agent_rate(db,rate)
+        usd=som_to_usd_cents(value,rate)
     record(db,actor,agent,client,'payment',0,0,usd,note,source,currency='USD',ts=ts)
     db.execute("UPDATE events SET pay_method='cash',paid_uzs=?,fx_rate=? WHERE source=?",(value,rate,source))
     return usd,value,rate
 
 
-def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None):
+def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None,usd_cents=None):
     """Card / bank transfer: waits for the cashier; client debt is NOT reduced yet."""
     role=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
     if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
@@ -1220,7 +1372,9 @@ def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=
         if isinstance(value,bool) or not isinstance(value,int) or value<=0:raise ValueError('Сумма киритилмаган.')
         som,usd,rate=0,value,0
     elif currency=='UZS':
-        rate=validate_agent_rate(db,rate);som=value;usd=som_to_usd_cents(som,rate)
+        som=value
+        if usd_cents is not None:rate=implied_rate(db,som,usd_cents);usd=usd_cents
+        else:rate=validate_agent_rate(db,rate);usd=som_to_usd_cents(som,rate)
     else:raise ValueError('Valyutani USD yoki UZS qilib tanlang.')
     row=db.execute("""INSERT INTO card_payments(agent,client,currency,amount_uzs,amount_usd,rate_uzs_per_usd,note,status,source,ts)
         VALUES(?,?,?,?,?,?,?,'pending',?,?) RETURNING id""",
