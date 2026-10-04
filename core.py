@@ -994,21 +994,43 @@ def resolve_period(period,date_from=None,date_to=None,now=None):
     return int(start.timestamp()),now+1,label
 
 
+POCKETS_SINCE_KEY='cashier_pockets_since'
+
+
+def pockets_since(db):
+    """Moment from which the three pockets are counted separately.
+
+    Older ledger rows mixed so'm and dollars through a rate, so they stay in one
+    'opening' USD figure. A fresh database starts at 0 (everything counted).
+    """
+    row=db.execute('SELECT value FROM meta WHERE key=?',(POCKETS_SINCE_KEY,)).fetchone()
+    if row:
+        try:return int(row[0])
+        except (TypeError,ValueError):pass
+    used=db.execute("""SELECT EXISTS(SELECT 1 FROM handovers WHERE status='accepted')
+        OR EXISTS(SELECT 1 FROM cashier_expenses) OR EXISTS(SELECT 1 FROM agent_funds)""").fetchone()[0]
+    since=int(time.time()) if used else 0
+    db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING',(POCKETS_SINCE_KEY,str(since)))
+    return since
+
+
 def cashier_flows(db,start=None,end=None):
     """Cashier money split by real pocket, never mixed through a rate.
 
     cash_uzs / card_uzs are whole so'm, cash_usd / card_usd are USD cents.
-    With start/end it returns the movement inside [start,end) instead of the balance.
+    Without start/end: pocket balances counted from pockets_since(), plus the
+    older mixed balance as opening_usd. With start/end: the movement in [start,end).
     """
     def one(sql,args):
         return int(db.execute(sql,args).fetchone()[0] or 0)
-    if start is None:
-        hw,ew,fw,cw,args='','','','',()
-    else:
-        start,end=int(start),int(end)
-        hw=' AND COALESCE(accepted_ts,ts)>=? AND COALESCE(accepted_ts,ts)<?'
-        ew=fw=cw=' AND ts>=? AND ts<?'
-        args=(start,end)
+    balance=start is None
+    if balance:
+        since=pockets_since(db)
+        start,end=since,2**62
+    start,end=int(start),int(end)
+    hw=' AND COALESCE(accepted_ts,ts)>=? AND COALESCE(accepted_ts,ts)<?'
+    ew=fw=cw=' AND ts>=? AND ts<?'
+    args=(start,end)
     out={
         'in_cash_uzs':one("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE status='accepted' AND COALESCE(amount,0)>0"+hw,args)//100,
         'in_cash_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted' AND COALESCE(amount,0)=0"+hw,args),
@@ -1023,6 +1045,12 @@ def cashier_flows(db,start=None,end=None):
     out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']
     out['card_uzs']=out['in_card_uzs']
     out['card_usd']=out['in_card_usd']
+    if balance:
+        moved=(one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'"+hw,args)
+               -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE 1=1"+ew,args)
+               -one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'"+fw,args))
+        out['since']=since
+        out['opening_usd']=cashier_balance_usd(db)-moved if since else 0
     return out
 
 
