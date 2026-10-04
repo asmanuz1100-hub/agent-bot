@@ -23,6 +23,7 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
         self.cid = out['clientId']
         core.record(self.db, 2, 2, self.cid, 'delivery', 1, 10, 0, '', 8001, currency='USD')
         core.set_cashier_rate(self.db, 3, 12000, 9001)
+        self.db.execute("INSERT INTO meta(key,value) VALUES('cashier_pockets_since','0')")
         self.db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(99,2,?,777)', (self.now - 600,))
         self.db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(99,?,40.54,70.94,8)', (self.now - 30,))
         self.db.commit()
@@ -69,13 +70,40 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
         w = core.cashier_flows(self.db)
         self.assertEqual((w['cash_uzs'], w['cash_usd'], w['card_uzs']), (1000000, 5000, 240000))
         summary = cashier_api.dashboard(self.db, 3)['summary']
-        self.assertEqual(summary['wallets'], {'cashUzs': 1000000, 'cashUsd': 5000, 'cardUzs': 240000, 'cardUsd': 0})
+        self.assertEqual(summary['wallets'], {'cashUzs': 1000000, 'cashUsd': 5000, 'cardUzs': 240000, 'cardUsd': 0,
+                                              'openingUsd': 0, 'since': 0})
         rep = cashier_api.period_report(self.db, 3, {'period': 'today'})
         self.assertEqual(rep['flows']['in_cash_uzs'], 1200000)
         self.assertEqual(rep['flows']['out_expense_uzs'], 200000)
         self.assertEqual({r['kind'] for r in rep['rows']}, {'in_cash', 'in_card', 'out_expense'})
         dash = manager_api.dashboard(self.db)
         self.assertEqual(dash['cash']['wallets']['cashUzs'], 1000000)
+
+    def test_pockets_start_from_cutoff_with_opening_balance(self):
+        self.db.execute("DELETE FROM meta WHERE key='cashier_pockets_since'")
+        self.pay('old_usd', currency='USD', amount='80', method='cash')
+        agent_api.mutate(self.db, 2, 'handover', {'currency': 'USD', 'amount': '80'}, 'req_old_000000', self.now)
+        core.accept(self.db, 3, self.db.execute('SELECT id FROM handovers').fetchone()[0], True)
+        self.db.execute('UPDATE handovers SET accepted_ts=accepted_ts-100')
+        core.add_cashier_expense_uzs(self.db, 3, 120000, core.CASHIER_EXPENSE_CATEGORIES[0], 'Old', '', 6001)
+        self.db.execute('UPDATE cashier_expenses SET ts=ts-100')
+        w = core.cashier_flows(self.db)          # first call fixes the cutoff at "now"
+        self.assertGreater(w['since'], 0)
+        self.assertEqual((w['cash_uzs'], w['cash_usd']), (0, 0))   # no negative so'm from old rows
+        self.assertEqual(w['opening_usd'], 8000 - 1000)
+        self.pay('new_som', currency='UZS', amount='600000', usd='50', method='cash')
+        agent_api.mutate(self.db, 2, 'handover', {'currency': 'UZS', 'amount': '600000'}, 'req_new_000000', self.now)
+        hid = self.db.execute("SELECT id FROM handovers WHERE status='pending'").fetchone()[0]
+        core.accept(self.db, 3, hid, True)
+        w = core.cashier_flows(self.db)
+        self.assertEqual((w['cash_uzs'], w['cash_usd'], w['opening_usd']), (600000, 0, 7000))
+
+    def test_long_period_series_is_bucketed(self):
+        rep = manager_api.period_report(self.db, 'custom', '2026-01-01', '2026-03-31')
+        self.assertEqual(rep['seriesUnit'], 'haftalik')
+        self.assertLessEqual(len(rep['series']), 14)
+        rep = manager_api.period_report(self.db, 'custom', '2025-10-01', '2026-09-30')
+        self.assertEqual((rep['seriesUnit'], len(rep['series'])), ('oylik', 12))
 
     # --- periods -----------------------------------------------------------------------
     def test_period_resolver_and_manager_report(self):
