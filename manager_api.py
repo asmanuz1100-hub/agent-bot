@@ -276,7 +276,8 @@ def _flows_json(f):
     return {"inCashUzs":f["in_cash_uzs"],"inCashUsd":_usd(f["in_cash_usd"]),
             "inCardUzs":f["in_card_uzs"],"inCardUsd":_usd(f["in_card_usd"]),
             "outCashUzs":f["out_expense_uzs"]+f["out_fund_uzs"],"outCashUsd":_usd(f["out_expense_usd"]+f["out_fund_usd"]),
-            "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"])}
+            "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"]),
+            "openingUsd":_usd(f.get("opening_usd",0)),"since":int(f.get("since",0) or 0)}
 
 
 def period_report(db, period, date_from=None, date_to=None, now=None):
@@ -293,15 +294,21 @@ def period_report(db, period, date_from=None, date_to=None, now=None):
     report["cash"]=_flows_json(core.cashier_flows(db,start,end))
     series=[]
     days=(end-start+86399)//86400
-    if days<=31:
-        day=start
-        while day<end:
-            nxt=min(day+86400,end)
-            snap=_period_business_snapshot(db,day,nxt)
-            series.append({"day":datetime.fromtimestamp(day,TZ).strftime("%d.%m"),
-                           "deliveredUsd":snap["deliveredUsd"],"paymentsUsd":snap["paymentsUsd"]})
-            day=nxt
-    report["series"]=series
+    if days<=31:unit,step="kunlik",86400
+    elif days<=120:unit,step="haftalik",7*86400
+    else:unit,step="oylik",None
+    cur=start
+    while cur<end:
+        if step:nxt=min(cur+step,end)
+        else:
+            d=datetime.fromtimestamp(cur,TZ)
+            nxt=min(int((d.replace(day=1)+timedelta(days=32)).replace(day=1,hour=0,minute=0,second=0,microsecond=0).timestamp()),end)
+        snap=_period_business_snapshot(db,cur,nxt)
+        a=datetime.fromtimestamp(cur,TZ)
+        label=a.strftime("%d.%m") if unit=="kunlik" else (a.strftime("%d.%m")+"–"+datetime.fromtimestamp(nxt-1,TZ).strftime("%d.%m") if unit=="haftalik" else a.strftime("%m.%Y"))
+        series.append({"day":label,"deliveredUsd":snap["deliveredUsd"],"paymentsUsd":snap["paymentsUsd"]})
+        cur=nxt
+    report["series"]=series;report["seriesUnit"]=unit
     return report
 
 
