@@ -43,6 +43,8 @@ var css=document.createElement('style');css.textContent=
 '#pm-photo{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}#pm-photo img{max-width:100%;max-height:100%;border-radius:14px}'+
 '.pm-pock{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.pm-pock div{background:var(--soft);border-radius:14px;padding:10px 9px;min-width:0}.pm-pock small{display:block;color:var(--mu);font-size:10.5px}.pm-pock b{display:block;font-size:16px;margin-top:4px;overflow-wrap:anywhere}.pm-pock em{display:block;font-style:normal;color:var(--mu);font-size:10.5px}'+
 '.pm-cur3{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:6px 8px;font-size:12.5px;align-items:center}.pm-cur3 b{text-align:right}.pm-cur3 small{text-align:right;color:var(--mu);font-size:10.5px}.pm-pos{color:var(--ok)}.pm-neg{color:var(--bad)}.pm-off{opacity:.6}'+
+'.three>.c.kp{flex-direction:column;align-items:flex-start;gap:8px;padding:12px 10px;min-width:0}.three>.c.kp>div:last-child{min-width:0;width:100%}.three>.c.kp>:first-child:not(:last-child){width:38px!important;height:38px!important;min-width:38px;flex:none;font-size:17px}.three>.c.kp b{font-size:17px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}.three>.c.kp small,.three>.c.kp em{white-space:nowrap}'+
+'.pm-lphoto{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}.av.pm-hasph{padding:0;overflow:hidden;cursor:zoom-in}.pm-open{display:block;margin-top:8px;color:var(--mu);font-size:11.5px}'+
 '.pm-chg{display:grid;grid-template-columns:1fr;gap:3px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.pm-chg span{color:var(--mu);text-decoration:line-through}.pm-chg strong{color:var(--ok)}';
 document.head.appendChild(css);
 
@@ -253,8 +255,11 @@ function ensureEntries(d){
  if(home){
   var e=$('pm-home-ombor');
   if(!e){e=document.createElement('div');e.className='c';e.id='pm-home-ombor';home.insertBefore(e,home.children[1]||null)}
-  e.innerHTML='<div class="pm-entry" data-pm="ombor"><div class="ic">📦</div><div><b>Ombor'+(w.newOrders?'<span class="pm-badge">'+w.newOrders+'</span>':'')+'</b><small>'+(w.openOrders||0)+' ta ochiq buyurtma'+(w.missingProducts?' · '+w.missingProducts+' ta mahsulot katalogda yo‘q':' · katalog va narxlar')+'</small></div><em>›</em></div>'+
-   '<div class="pm-act" style="margin-top:12px"><div class="pm-b" data-pm="ag-manage">👥 Xodimlar</div><div class="pm-b" data-pm="all-export" data-f="xlsx">📊 Barcha mijozlar</div></div>';
+  e.innerHTML='<div class="pm-entry" data-pm="ombor"><div class="ic">📦</div><div><b>Ombor'+(w.newOrders?'<span class="pm-badge">'+w.newOrders+'</span>':'')+'</b><small>'+(w.openOrders||0)+' ta ochiq buyurtma'+(w.missingProducts?' · '+w.missingProducts+' ta mahsulot katalogda yo‘q':' · katalog va narxlar')+'</small></div><em>›</em></div>';
+  var t2=$('pm-home-tools');
+  if(!t2){t2=document.createElement('div');t2.className='c';t2.id='pm-home-tools';e.parentNode.insertBefore(t2,e.nextSibling)}
+  t2.innerHTML='<div class="pm-entry" data-pm="ag-manage"><div class="ic">👥</div><div><b>Xodimlar</b><small>Agentlar va kassirlar · qo‘shish, almashtirish, yopish</small></div><em>›</em></div>'+
+   '<div class="pm-entry" data-pm="all-export" data-f="xlsx" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="ic">📊</div><div><b>Barcha mijozlar</b><small>Excel hisobot yuklab olish</small></div><em>›</em></div>';
  }
  var ag=s[1]&&s[1].querySelector('.bd');
  if(ag&&!$('pm-ag-tools')){
@@ -287,6 +292,7 @@ function ensureCash(d){
  var s=sections()[3],bd=s&&s.querySelector('.bd');if(!bd)return;var w=(d&&d.cash&&d.cash.wallets)||{};
  var e=$('pm-pockets');if(!e){e=document.createElement('div');e.className='c';e.id='pm-pockets';bd.insertBefore(e,bd.firstChild)}
  e.innerHTML='<h3 style="margin:0 0 10px">💼 Kassa qoldig‘i <small style="color:var(--mu);font-weight:600;font-size:11px">har biri o‘z valyutasida</small></h3><div class="pm-pock"><div><small>💵 Naqd so‘m</small><b class="'+(w.cashUzs<0?'pm-neg':'')+'">'+som(w.cashUzs)+'</b><em>so‘m</em></div><div><small>💲 Naqd dollar</small><b class="'+(w.cashUsd<0?'pm-neg':'')+'">'+usd(w.cashUsd)+'</b><em>USD</em></div><div><small>💳 Karta / bank</small><b>'+som(w.cardUzs)+'</b><em>so‘m'+(w.cardUsd?' + '+usd(w.cardUsd)+' $':'')+'</em></div></div>'+
+  (w.since&&w.openingUsd?'<small class="pm-open">Oldingi umumiy qoldiq ('+when(w.since)+' gacha, USD ekvivalent): <b>'+usd(w.openingUsd)+' $</b> · hamyonlar shu vaqtdan keyingi kirim-chiqimni ko‘rsatadi</small>':'')+
   '<div class="pm-chips" style="margin:12px 0 8px">'+[['today','Bugun'],['week','7 kun'],['month','Shu oy'],['custom','Davr']].map(function(x){return '<button data-pm="cash-per" data-p="'+x[0]+'" class="'+(cashPeriod===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
   '<div id="pm-cash-custom" style="display:'+(cashPeriod==='custom'?'grid':'none')+';grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:8px" class="pm-f"><input type="date" id="pm-cf" style="margin:0"><input type="date" id="pm-ct" style="margin:0"><div class="pm-b p" data-pm="cash-go" style="padding:9px 12px">OK</div></div><div id="pm-cash-flows"><small style="color:var(--mu)">Yuklanmoqda…</small></div>';
  if(cashPeriod!=='custom')loadCashPeriod();
@@ -299,6 +305,19 @@ async function loadCashPeriod(){
  try{var r=await api('period_report',arg);box.innerHTML='<small style="display:block;color:var(--mu);margin-bottom:6px">📅 '+esc(r.label)+'</small>'+flowsHtml(r.cash)}catch(e){box.innerHTML='<small style="color:var(--bad)">'+esc(e.message)+'</small>'}
 }
 P.onLoad(function(d){ensureCash(d)});
+function decorateClientList(){
+ var list=$('cllist');if(!list)return;var cl=P.clients()||[];
+ list.querySelectorAll('.row > .av[onclick^="openC("]').forEach(function(av){
+  var i=Number((av.getAttribute('onclick').match(/openC\((\d+)\)/)||[])[1]),c=cl[i];if(!c||!c.photoUrl||av.classList.contains('pm-hasph'))return;
+  var letter=av.textContent;av.classList.add('pm-hasph');av.removeAttribute('onclick');av.dataset.photo=c.photoUrl;
+  var img=document.createElement('img');img.className='pm-lphoto';img.alt='';img.loading='lazy';img.src=c.photoUrl;
+  img.onerror=function(){av.classList.remove('pm-hasph');delete av.dataset.photo;av.textContent=letter};
+  av.textContent='';av.appendChild(img);
+  av.addEventListener('click',function(ev){ev.stopPropagation();if(av.dataset.photo)window.pmPhoto(av.dataset.photo);else window.openC(i)});
+ });
+}
+if(typeof window.rc==='function'){var baseRc=window.rc;window.rc=function(){var r=baseRc.apply(this,arguments);try{decorateClientList()}catch(e){}return r}}
+P.onLoad(function(){setTimeout(decorateClientList,50)});
 
 /* =================== CLICKS =================== */
 document.addEventListener('click',function(ev){
