@@ -60,7 +60,8 @@ def _cashier_summary(db):
     today_flows = core.cashier_flows(db, start, end)
     return {
         'wallets': {'cashUzs': wallets['cash_uzs'], 'cashUsd': wallets['cash_usd'],
-                    'cardUzs': wallets['card_uzs'], 'cardUsd': wallets['card_usd']},
+                    'cardUzs': wallets['card_uzs'], 'cardUsd': wallets['card_usd'],
+                    'openingUsd': wallets.get('opening_usd', 0), 'since': wallets.get('since', 0)},
         'todayFlows': today_flows,
         'acceptedToday': accepted_today,
         'cashExpenseToday': expense_today,
