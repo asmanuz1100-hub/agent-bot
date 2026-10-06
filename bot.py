@@ -108,9 +108,9 @@ FLOW={
  'order':[('client','Мижозни танланг:'),('pack','Товарни танланг:'),('unit','Миқдор бирлиги:'),('qty','Нечта?')],
  'sold':[('client','Мижозни танланг:'),('pack','Қайси товар сотилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта сотилди?')],
  'return':[('client','Мижозни танланг:'),('pack','Қайси товар қайтарилди?'),('unit','Миқдор бирлиги:'),('qty','Нечта қайтарилди?')],
- 'payment':[('client','Мижозни танланг:'),('amount','Мижоздан олинган тўлов (USD):')],
+ 'payment':[('client','Мижозни танланг:'),('currency','Тўлов қайси валютада олинди?'),('amount','Мижоздан олинган сумма:'),('usd','Шу сўм неча долларга тенг? (мижоз билан келишилган USD):')],
  'visit':[('client','Мижозни танланг:'),('status','Ташриф натижасини танланг:'),('note','Мижоз билан нима гаплашдингиз? Изоҳ ёзинг:'),('followup','Қайта ташриф санасини YYYY-MM-DD кўринишида киритинг:')],
- 'handover':[('amount','Кассирга топширилаётган сумма (USD):')],
+ 'handover':[('currency','Кассирга қайси пулни топширасиз?'),('amount','Кассирга топширилаётган сумма:')],
  'cashier_expense':[('category','Харажат турини танланг:'),('amount','Харажат суммаси (USD):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_expense_uzs':[('category','Сўмдаги харажат турини танланг:'),('amount','Харажат суммасини бутун сўмда киритинг (масалан: 100000):'),('recipient','Кимга ёки нима учун берилди?'),('note','Изоҳ киритинг (ёки —):')],
  'cashier_rate':[('rate','Касса учун 1 USD неча сўм? Фақат бутун сон киритинг (масалан: 12500):')],
@@ -640,6 +640,13 @@ def notify_cashiers_card_payment(db,agent,client,payment_id,amount_usd,currency=
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many(cashier_ids(db),text)
 
+def _agent_free_cash(db,agent):
+    """(so'm, USD cents) the agent can still hand over: cash on hand minus pending handovers."""
+    pend_som=int(db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='pending' AND COALESCE(amount,0)>0",(agent,)).fetchone()[0] or 0)
+    pend_usd=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE agent=? AND status='pending' AND COALESCE(amount,0)=0",(agent,)).fetchone()[0] or 0)
+    return max(0,(cash(db,agent)-pend_som)//100),max(0,cash_usd(db,agent)-pend_usd)
+
+
 def notify_cashiers_handover(db,agent,hid,amount_usd,currency='USD',amount_uzs=None):
     shown=(f"{int(amount_uzs):,} сўм (≈ {fmt(amount_usd)} USD)" if currency=='UZS' and amount_uzs else f"{fmt(amount_usd)} USD")
     text=(f"🏦 КАССАГА ПУЛ ТОПШИРИШ\n"
@@ -814,6 +821,9 @@ def prompt(db,u,s):
             cents=som_to_usd_cents(parse_whole_som(s['values']['amount']),rate)
             lines.append(f"💱 Курс: 1 USD = {rate:,} сўм · Харажат USD эквиваленти: {fmt(cents)} USD")
         if s['action']=='cashier_rate':lines.append('Курс ўзгарса ҳам аввалги харажатлар ўз вақтидаги курс билан сақланади.')
+        if s['action']=='payment' and s['values'].get('currency')=='UZS' and s['values'].get('usd'):
+            som=parse_whole_som(s['values']['amount']);cents=money(s['values']['usd'])
+            lines.append(f'💱 Курс автомат: 1 USD = {implied_rate(db,som,cents):,} сўм · мижоз қарзидан {fmt(cents)} USD айрилади')
         if s['action']=='admin_add':
             existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
             if existing:lines.append(f'Аввалги мақом: {existing[0]} → админ. Эски ҳисоб тарихи сақланади.')
@@ -839,6 +849,16 @@ def prompt(db,u,s):
         else:
             msg+='\nБу товар учун ҳозирча фақат дона ҳисоби киритилган.'
     if key=='role':keys=[['agent','cashier']]
+    if key=='currency' and s['action'] in ('payment','handover'):
+        keys=[['💴 Сўм','💵 Доллар']]
+        if s['action']=='handover':
+            som,usd=_agent_free_cash(db,u)
+            msg+=f'\nҚўлингизда: {som:,} сўм ва {fmt(usd)} USD (кутилаётган топширишлар чегирилган).'
+    if key=='amount' and s['action'] in ('payment','handover'):
+        msg+=(' (бутун сўмда, масалан 1250000)' if s['values'].get('currency')=='UZS' else ' (USD, масалан 100 ёки 99.50)')
+    if key=='usd' and s['action']=='payment':
+        base=cashier_rate(db)
+        if base:msg+=f'\nКасса курси бўйича тахминан: {fmt(som_to_usd_cents(parse_whole_som(s["values"]["amount"]),base))} USD. Курс автомат ҳисобланади.'
     if key=='status':keys=[[label] for label in cs.LABELS.values()]
     if key=='name' and s['action']=='admin_add':
         existing=db.execute('SELECT role FROM users WHERE id=?',(s['values']['id'],)).fetchone()
@@ -1213,10 +1233,25 @@ def finish(db,u,s,source):
                       f"Қолдиқ: {fmt(cashier_balance_usd(db))} USD")
         _safe_send_many([admin for admin in admin_ids(db) if admin!=u],expense_text)
     elif a=='handover':
-        value=money(v['amount'])
-        handover(db,u,value,source,currency='USD')
-        row=db.execute('SELECT id FROM handovers WHERE agent=? AND source=?',(u,source)).fetchone()
-        if row:notify_cashiers_handover(db,u,int(row[0]),value)
+        if v.get('currency')=='UZS':
+            som=parse_whole_som(v['amount'])
+            handover(db,u,som*100,source,currency='UZS')
+            row=db.execute('SELECT id,amount_usd FROM handovers WHERE agent=? AND source=?',(u,source)).fetchone()
+            if row:notify_cashiers_handover(db,u,int(row[0]),int(row[1] or 0),currency='UZS',amount_uzs=som)
+        else:
+            value=money(v['amount'])
+            handover(db,u,value,source,currency='USD')
+            row=db.execute('SELECT id FROM handovers WHERE agent=? AND source=?',(u,source)).fetchone()
+            if row:notify_cashiers_handover(db,u,int(row[0]),value)
+    elif a=='payment':
+        agent=v.get('agent',u)
+        if v.get('currency')=='UZS':
+            som=parse_whole_som(v['amount']);cents=money(v['usd'])
+            usd,_,rate=record_client_payment(db,u,agent,v['client'],'UZS',som,'cash',note='Telegram бот · сўм',source=source,usd_cents=cents)
+            notify_cashiers_payment(db,agent,v['client'],usd,currency='UZS',amount_uzs=som,rate=rate)
+        else:
+            usd,_,_=record_client_payment(db,u,agent,v['client'],'USD',money(v['amount']),'cash',note='Telegram бот · USD',source=source)
+            notify_cashiers_payment(db,agent,v['client'],usd)
     elif a=='tracking':tracking(db,u,v['agent'])
     else:
         q=v.get('qty',0)*(units_per_block(v['pack']) if v.get('unit')=='Блок' else 1)
@@ -1261,7 +1296,8 @@ def finish(db,u,s,source):
     elif a=='handover':
         send(u,'✅ Кассага пул топшириш юборилди. Кассир тасдиғи кутилмоқда.',menu(db,u))
     elif a=='payment':
-        send(u,f"✅ Мижоздан {fmt(money(v['amount']))} USD тўлов сақланди. Кассирга хабар юборилди.",menu(db,u))
+        shown=(f"{int(v['amount']):,} сўм (= {fmt(money(v['usd']))} USD)" if v.get('currency')=='UZS' else f"{fmt(money(v['amount']))} USD")
+        send(u,f"✅ Мижоздан {shown} тўлов сақланди. Пул қўлингизда {'сўмда' if v.get('currency')=='UZS' else 'долларда'} туради. Кассирга хабар юборилди.",menu(db,u))
     else:
         send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
@@ -1745,6 +1781,23 @@ def handle(db,update):
         v=parse_whole_som(text,'1 USD курси')
         if v<100 or v>10**7:raise ValueError('Курс: 100–10 000 000 сўм киритинг.')
     elif key=='qty':v=count(text)
+    elif key=='currency' and s['action'] in ('payment','handover'):
+        v={'💴 Сўм':'UZS','💵 Доллар':'USD'}.get(text)
+        if not v:raise ValueError('Валютани тугмадан танланг: 💴 Сўм ёки 💵 Доллар.')
+    elif key=='usd' and s['action']=='payment':
+        cents=money(text)
+        implied_rate(db,parse_whole_som(s['values']['amount'],'Сумма'),cents)
+        v=text
+    elif key=='amount' and s['action'] in ('payment','handover') and s['values'].get('currency')=='UZS':
+        som=parse_whole_som(text,'Сумма')
+        if s['action']=='handover':
+            free=_agent_free_cash(db,u)[0]
+            if som>free:raise ValueError(f'Қўлингиздаги сўмдан ортиқ. Топшириш мумкин: {free:,} сўм.')
+        v=str(som)
+    elif key=='amount' and s['action']=='handover':
+        cents=money(text);free=_agent_free_cash(db,u)[1]
+        if cents>free:raise ValueError(f'Қўлингиздаги доллардан ортиқ. Топшириш мумкин: {fmt(free)} USD.')
+        v=text
     elif key=='amount':
         if s['action'] in ('cashier_expense_uzs','agent_fund','agent_expense'):
             rate=cashier_rate(db)
@@ -1776,6 +1829,8 @@ def handle(db,update):
             raise ValueError('Кимга ёки нима учун берилгани 200 белгидан ошмасин.')
         v=text
     s['values'][key]=v;s['step']+=1
+    if s['action']=='payment' and key=='amount' and s['values'].get('currency')!='UZS':
+        s['step']=len(FLOW['payment'])
     if s['action']=='visit' and key=='note' and s['values']['status']!='waiting':
         s['step']=len(FLOW['visit'])
     if s['action']=='agent_profile' and key=='agent':
