@@ -358,7 +358,7 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(99706,2,'/start '+payload))
    self.assertEqual(bot.state(self.db,2)['values']['client'],1)
    self.assertEqual(bot.state(self.db,2)['action'],'payment')
-   for i,t in enumerate(['3.00','✅ Тасдиқлаш'],99707):bot.handle(self.db,msg(i,2,t))
+   for i,t in enumerate(['💵 Доллар','3.00','✅ Тасдиқлаш'],99740):bot.handle(self.db,msg(i,2,t))
    self.assertEqual(core.client_debt_usd(self.db,1),core.money('5.00'))
    self.assertEqual(core.cash_usd(self.db,2),core.money('3.00'))
    bot.handle(self.db,msg(99709,2,'/start '+bot.agent_action_payload('r',2,1)))
@@ -383,6 +383,7 @@ class Tests(unittest.TestCase):
            'from':{'id':2},'chat':{'id':2,'type':'private'},'text':txt}}
   with patch.object(bot,'send'):
    bot.handle(self.db,msg(99721,'/start '+bot.agent_action_payload('p',2,1)))
+   bot.handle(self.db,msg(99730,'💵 Доллар'))
    bot.handle(self.db,msg(99722,'1.00'))
    self.db.execute('UPDATE shifts SET end=? WHERE agent=2 AND end IS NULL',(now,))
    with self.assertRaises(ValueError):bot.handle(self.db,msg(99723,'✅ Тасдиқлаш'))
@@ -919,7 +920,7 @@ class Tests(unittest.TestCase):
    for i,t in enumerate(seq,710):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.client_stock(self.db,2,1,1),3)
    self.assertEqual(core.client_debt_usd(self.db,1),core.money('10.00'))
-   seq=['💰 Пул олиш','1','5000','✅ Тасдиқлаш']
+   seq=['💰 Пул олиш','1','💵 Доллар','5000','✅ Тасдиқлаш']
    for i,t in enumerate(seq,720):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.cash_usd(self.db,2),core.money('5000'))
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')
