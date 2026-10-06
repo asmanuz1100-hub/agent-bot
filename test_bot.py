@@ -4,6 +4,7 @@ import core, bot
 
 class Tests(unittest.TestCase):
  def setUp(self):
+  self._mini_only=patch.object(bot,'BOT_MINIAPP_ONLY',set());self._mini_only.start();self.addCleanup(self._mini_only.stop)
   self.db=core.connect(':memory:')
   self.db.executemany('INSERT INTO users VALUES(?,?,?)',[(1,'admin','A'),(2,'agent','B'),(3,'cashier','C'),(4,'agent','D')])
   self.db.execute("INSERT INTO clients(id,agent,name,phone,address,lat,lon,photo,shop_name) VALUES(1,2,'Мижоз','+998900000001','Тест манзил',40,71,NULL,'Тест дўкон')")
