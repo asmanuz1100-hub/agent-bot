@@ -1,0 +1,62 @@
+/* ASMAN Premium theme for the Agent Mini App.
+ * Loaded only when the app is opened with ?theme=premium (test launcher),
+ * every rule is scoped to html.pm so the regular app is untouched. */
+html.pm{--tg-bg:#eef3fb;--paper:#eef3fb;--tg-text:#0b1f4d;--tg-section:#fff;--tg-hint:#6b7a99;--muted:#6b7a99;--line:#e3eaf6;
+ --navy:#0b1f4d;--blue:#1f6bff;--green:#16b364;--red:#f0384f;--amber:#f59e0b;--purple:#7e61dd;
+ --pm-soft:#eaf1ff;--pm-shadow:0 10px 28px -16px #0a1f5a40}
+html.pm,html.pm body{background:var(--tg-bg);font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tg-text)}
+html.pm .app{background:var(--tg-bg);padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+
+/* Header: light, logo wordmark, hero card */
+html.pm .app>header{background:transparent!important;color:var(--tg-text)!important;border-top:0;padding:16px 16px 6px}
+html.pm .app>header .logo{font-size:0;width:112px;height:22px;background:url(/app/premium-kit/logo.png) no-repeat left center/contain;display:inline-block;filter:brightness(0);opacity:.86}
+html.pm .app>header .tag{font-size:10px;font-weight:800;letter-spacing:.8px;color:#0d8a52;background:#e4f8ee;border:1px solid #bdebd3;border-radius:20px;padding:5px 10px}
+html.pm .app>header .greet{color:var(--tg-text)!important;font-size:24px;font-weight:800;letter-spacing:-.4px;margin-top:16px}
+html.pm .app>header .sub{color:var(--muted)}
+html.pm main{padding:0 14px 18px}
+html.pm .screenhead{font-size:22px;font-weight:800;letter-spacing:-.3px;margin:18px 2px 12px}
+html.pm .title{font-size:16px;font-weight:800;margin:20px 2px 10px}
+
+/* Cards */
+html.pm .card{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--pm-shadow)}
+html.pm .kpis{margin-top:10px;gap:10px}html.pm .kpis .card{margin:0}
+html.pm .kpi{border-radius:20px;min-height:118px;position:relative;overflow:hidden}
+html.pm .kpi:after{content:"";position:absolute;right:-26px;top:-26px;width:90px;height:90px;border-radius:50%;background:radial-gradient(#1f6bff1f,transparent 70%)}
+html.pm .kpi .symbol{width:40px;height:40px;border-radius:14px;background:linear-gradient(135deg,#4f9bff,#1f56e0);box-shadow:0 8px 16px -8px #1f6bffaa}
+html.pm .kpi.green .symbol{background:linear-gradient(135deg,#34d399,#0f9f63);box-shadow:0 8px 16px -8px #16b364aa}
+html.pm .kpi.amber .symbol{background:linear-gradient(135deg,#fbbf24,#e08a0b);box-shadow:0 8px 16px -8px #f59e0baa}
+html.pm .kpi.purple .symbol{background:linear-gradient(135deg,#a78bfa,#6d4ae0);box-shadow:0 8px 16px -8px #7e61ddaa}
+html.pm .kpi .num{font-size:22px;font-weight:800;letter-spacing:-.4px}
+
+/* Hero-like dark cards */
+html.pm .balance,html.pm .report-hero,html.pm .customer-hero,html.pm .expense-balance{background:linear-gradient(160deg,#04143d,#0a2a80 70%,#0d3aa8)!important;border:0;border-radius:22px;box-shadow:0 18px 34px -18px #04143dcc;position:relative;overflow:hidden}
+html.pm .balance:after,html.pm .expense-balance:after{content:"";position:absolute;right:-40px;top:-40px;width:170px;height:170px;background:radial-gradient(#5aa2ff55,transparent 70%)}
+html.pm .balance .muted,html.pm .expense-balance .muted{color:#b9cbf3}
+
+/* Buttons, chips, pills */
+html.pm .primary{background:linear-gradient(135deg,#4f9bff,#1f56e0);border-radius:16px;box-shadow:0 12px 22px -12px #1f6bffcc;font-weight:800}
+html.pm .secondary{background:var(--pm-soft);color:var(--blue);border-radius:14px;font-weight:800}
+html.pm .rowbtn{border-radius:18px;box-shadow:var(--pm-shadow);border-color:var(--line)}
+html.pm .icon{border-radius:14px;background:var(--pm-soft)}
+html.pm .chip{background:#fff;border-color:var(--line);color:var(--muted);font-weight:700;border-radius:20px}
+html.pm .chip.active{background:linear-gradient(135deg,#4f9bff,#1f56e0);border-color:transparent;color:#fff;box-shadow:0 8px 16px -10px #1f6bffcc}
+html.pm .pill{border-radius:20px;font-weight:800}
+
+/* Forms */
+html.pm input,html.pm select,html.pm textarea{border-radius:14px;border-color:var(--line);background:#f7f9fe}
+html.pm input:focus,html.pm select:focus,html.pm textarea:focus{border-color:var(--blue);background:#fff;outline:0;box-shadow:0 0 0 3px #1f6bff22}
+html.pm label{color:var(--muted);font-weight:700}
+
+/* Floating navigation pill */
+html.pm nav{left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));width:min(412px,calc(100% - 24px));max-width:none;border:1px solid var(--line);border-radius:30px;padding:8px;
+ background:color-mix(in srgb,#fff 90%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 14px 32px -14px #17212b55}
+html.pm nav button{border-radius:22px;color:var(--muted);font-weight:700;font-size:10px;min-height:52px}
+html.pm nav button.active{background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;box-shadow:0 10px 22px -6px #1f6bffcc,inset 0 1px 0 #ffffff55;transform:translateY(-6px)}
+@media(min-width:760px){html.pm nav{bottom:28px;border-radius:30px}}
+
+/* Small details */
+html.pm .adminbar{background:#eaf1ff;border-bottom:0;border-radius:0 0 18px 18px}
+html.pm #notice{background:#0b1f4d;border-radius:16px}
+html.pm .bar{background:var(--pm-soft)}html.pm .bar i{background:linear-gradient(90deg,#4f9bff,#1f56e0)}
+html.pm #gate{background:var(--tg-bg)}
+html.pm .pm-testbadge{position:fixed;z-index:60;bottom:calc(92px + env(safe-area-inset-bottom));left:12px;opacity:.9;pointer-events:none;font:800 10px Manrope,sans-serif;letter-spacing:.6px;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:20px;padding:4px 9px}
