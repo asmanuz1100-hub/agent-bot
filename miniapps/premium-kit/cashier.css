@@ -1,50 +1,56 @@
-/* ASMAN Premium theme for the Cashier Mini App.
- * Loaded only with ?theme=premium; all rules are scoped to html.pm and use
- * !important where the base page already forces its own palette. */
-html.pm{--tg-bg:#eef3fb;--tg-text:#0b1f4d;--tg-section:#fff;--tg-hint:#6b7a99;--tg-line:#e3eaf6;--pm-blue:#1f6bff;--pm-soft:#eaf1ff;--pm-shadow:0 10px 28px -16px #0a1f5a40}
-html.pm,html.pm body,html.pm main{background:#eef3fb!important;color:#0b1f4d!important;font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif}
-html.pm main{padding-bottom:40px}
-html.pm header{background:transparent!important;color:#0b1f4d!important}
-html.pm .brand{font-size:0!important;width:112px;height:22px;background:url(/app/premium-kit/logo.png) no-repeat left center/contain;display:block;filter:brightness(0);opacity:.86}
-html.pm .brand span{display:none}
-html.pm header small,html.pm small,html.pm .muted{color:#6b7a99}
+/* Cashier Mini App — Rahbar Premium layout (test mode only, html.pm).
+ * Shared tokens/header/nav live in premium.css. */
+html.pm{--tg-bg:var(--bg);--tg-text:var(--tx);--tg-header:var(--bg);--tg-section:var(--card);--tg-hint:var(--mu);--tg-line:var(--line);font-size:15px}
+html.pm main{max-width:440px;margin:0 auto;padding:0 0 calc(112px + env(safe-area-inset-bottom))!important;background:transparent!important}
+html.pm main>.hd{margin:0 0 14px}
+html.pm .hd.pm-wait #pmHero{display:none}
+html.pm:not(.pm-home) #pmHero{display:none}
+html.pm:not(.pm-home) .hd{padding-bottom:16px}
+html.pm:not(.pm-home) .hd .gr{margin-bottom:0}
+html.pm main>:not(.hd){margin-left:14px;margin-right:14px}
+html.pm #app{margin:0 14px!important}
+html.pm #app>*{margin-left:0;margin-right:0}
+html.pm #identity{display:block}
+html.pm .pm-hidden-tabs{display:none!important}
+html.pm .pocket3{margin-top:12px!important}
+html.pm .pocket3 strong{font-size:16px!important}
+html.pm .pm-gb{font-size:12px;opacity:.78;margin:10px 0 0;color:#dbe7ff}
+
+/* Typography */
 html.pm h1{font-weight:800;letter-spacing:-.5px}
-html.pm h2,html.pm h3{font-weight:800;letter-spacing:-.2px}
+html.pm h2{font-size:15.5px!important;font-weight:800!important;letter-spacing:-.2px;margin:18px 2px 10px!important;color:var(--tx)!important}
+html.pm h3{font-size:15.5px;font-weight:800;letter-spacing:-.2px;color:var(--tx)}
+html.pm small,html.pm .muted{color:var(--mu)}
+html.pm .hd small,html.pm .hero small{color:#fff}
 
-/* Hero balance */
-html.pm .balance{background:linear-gradient(160deg,#04143d,#0a2a80 70%,#0d3aa8)!important;border-radius:24px;box-shadow:0 18px 34px -18px #04143dcc;position:relative;overflow:hidden}
-html.pm .balance:after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;background:radial-gradient(#5aa2ff55,transparent 70%);pointer-events:none}
-html.pm .balance small,html.pm .balance p{color:#b9cbf3!important}
-html.pm .balance-status{background:#16b36433;border:1px solid #16b364;color:#6ff0b0}
-html.pm .pocket3 div{background:#ffffff14;border:1px solid #ffffff22;border-radius:16px}
+/* KPI grid */
+html.pm .stats{display:grid!important;grid-template-columns:1fr 1fr;gap:10px!important;margin:0 0 12px}
+html.pm .stats .card{margin:0!important}
+html.pm .metric .up,html.pm .positive{color:#16b364!important}
+html.pm .metric .down,html.pm .negative{color:#f0384f!important}
 
-/* Cards and metrics */
-html.pm .card,html.pm dialog{background:#fff!important;color:#0b1f4d!important;border-color:#e3eaf6!important;border-radius:20px;box-shadow:var(--pm-shadow)}
-html.pm .metric strong{font-weight:800;letter-spacing:-.4px}
-html.pm .wallet{background:#f7f9fe;border-color:#e3eaf6;border-radius:16px}
-html.pm .activity{border-left-color:#c9d9ff}
-html.pm .positive,html.pm .metric .up{color:#0f9f63}
-html.pm .negative,html.pm .metric .down{color:#e0324b}
-html.pm .flowline{border-bottom-color:#eef2fa}
-html.pm .cur3 .h{color:#6b7a99}
+/* Cards */
+html.pm .card,html.pm dialog{background:linear-gradient(180deg,var(--card),color-mix(in srgb,var(--card) 93%,var(--soft)))!important;color:var(--tx)!important;border:1px solid color-mix(in srgb,var(--line) 85%,transparent)!important;border-radius:22px!important;box-shadow:inset 0 1px 0 var(--hi),0 14px 30px -16px #0a1f5a40,0 2px 6px #0a1f5a0a!important}
+html.pm .wallet,html.pm .activity,html.pm .debt-card{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;box-shadow:inset 0 1px 0 var(--hi),0 14px 30px -16px #0a1f5a40!important}
+html.pm .debt-card{border-left:4px solid #f0384f!important}
+html.pm .flowline{border-bottom-color:var(--line)!important}
+html.pm .debt-amount{color:#f0384f!important}
+html.pm .debt-task{background:var(--soft)!important;border-color:var(--line)!important;color:var(--pri)!important}
 
-/* Buttons and tabs */
-html.pm button{background:var(--pm-soft);color:#1f56e0;border-radius:14px;font-weight:700}
-html.pm .primary{background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;box-shadow:0 12px 22px -12px #1f6bffcc}
-html.pm .danger{background:#ffe9ed;color:#c8334d}
-html.pm .tabs{gap:6px}
-html.pm .tabs button{background:#fff;color:#6b7a99;border:1px solid #e3eaf6;border-radius:20px;min-height:40px;padding:9px 14px}
-html.pm .tabs .active{background:linear-gradient(135deg,#4f9bff,#1f56e0)!important;color:#fff!important;border-color:transparent;box-shadow:0 8px 16px -10px #1f6bffcc}
-html.pm .pseg button.on{background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;border-color:transparent}
-html.pm .pill{background:#fff4e0;color:#b26a00;font-weight:800}
-
-/* Forms */
-html.pm input,html.pm select,html.pm textarea{background:#f7f9fe!important;border-color:#e3eaf6!important;color:#0b1f4d!important;-webkit-text-fill-color:#0b1f4d!important;border-radius:14px}
-html.pm input:focus,html.pm select:focus,html.pm textarea:focus{border-color:#1f6bff!important;background:#fff!important;outline:0;box-shadow:0 0 0 3px #1f6bff22}
-html.pm dialog::backdrop{background:#04143dcc}
-html.pm .notice{background:#fff7ed;color:#9a3412;border-radius:14px}
-html.pm .success{background:#e4f8ee;color:#087b51}
-html.pm .debt-card{border-left-color:#f0384f}
-html.pm .debt-amount{color:#e0324b}
-html.pm .debt-task{background:#eaf1ff;border-color:#c9d9ff;color:#1f56e0}
-html.pm .pm-testbadge{position:fixed;z-index:60;bottom:calc(14px + env(safe-area-inset-bottom));left:12px;opacity:.9;pointer-events:none;font:800 10px Manrope,sans-serif;letter-spacing:.6px;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:20px;padding:4px 9px}
+/* Buttons */
+html.pm button{font-family:inherit;background:var(--soft);color:var(--pri);border:0;border-radius:14px;font-weight:700}
+html.pm .primary,html.pm button[type=submit]{background:linear-gradient(135deg,#4f9bff,#1f56e0)!important;color:#fff!important;box-shadow:0 10px 22px -10px #1f6bffcc}
+html.pm .danger{background:#f0384f1f!important;color:#f0384f!important}
+html.pm .pseg button,html.pm #pseg button{background:var(--card);color:var(--mu);border:1px solid var(--line);border-radius:20px}
+html.pm .pseg button.on,html.pm #pseg button.on{background:linear-gradient(135deg,#4f9bff,#1f56e0)!important;color:#fff!important;border-color:transparent;box-shadow:0 8px 20px -6px #1f6bffcc}
+html.pm .pill{background:#f59e0b24;color:#c77c00;font-weight:800;border-radius:20px}
+html.pm .notice{background:#f59e0b1c!important;color:var(--tx)!important;border-radius:14px}
+html.pm .success{background:#16b3641f!important;color:#0f9f63!important}
+html.pm dialog::backdrop{background:#000a}
+html.pm #welcome{margin:14px}
+html.pm #app>section:not(.hidden)>*{animation:pmup .5s cubic-bezier(.2,.9,.3,1) both}
+html.pm:not(.pm-home) .pm-homeonly{display:none!important}
+html.pm #pmHero small.k{padding-right:104px}
+html.pm .pseg{display:flex!important;flex-wrap:nowrap!important;gap:0!important;background:var(--soft);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:16px;padding:4px}
+html.pm .pseg button{flex:1;min-width:0!important;border:0!important;background:none!important;color:var(--mu)!important;padding:10px 4px!important;border-radius:12px!important;font-size:13.5px;white-space:nowrap;box-shadow:none}
+html.pm .pseg button.on{background:linear-gradient(135deg,#4f9bff,#1f56e0)!important;color:#fff!important;box-shadow:0 8px 18px -6px #1f6bffcc!important;font-weight:700}
