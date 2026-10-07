@@ -60,7 +60,11 @@ function icons(root){
 var CY=/[\u0400-\u04FF]/;
 var TL={'а':'a','б':'b','в':'v','г':'g','ғ':'g‘','д':'d','ё':'yo','ж':'j','з':'z','и':'i','й':'y','к':'k','қ':'q','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ў':'o‘','ф':'f','х':'x','ҳ':'h','ч':'ch','ш':'sh','щ':'sh','ъ':'’','ы':'i','ь':'','э':'e','ю':'yu','я':'ya','ц':'s','е':'e'};
 var VOW=/[аеёиоуўэюяaeiou]/i,LET=/[\u0400-\u04FFa-z]/i;
-function lat(s){if(!s||!CY.test(s))return s;var o='';for(var i=0;i<s.length;i++){var c=s[i],lc=c.toLowerCase(),up=c!==lc,r;
+/* Product names stay exactly as they were entered (Cyrillic or Latin): only UI text is transliterated. */
+var RAWK=null,RAWRE=null;
+function rawRe(){var d=null;try{d=window.pmRawProducts?window.pmRawProducts():null}catch(e){}if(!d||!d.length)return null;if(d===RAWK)return RAWRE;RAWK=d;var n=[];d.forEach(function(p){if(p&&p.name&&CY.test(p.name)&&n.indexOf(p.name)<0)n.push(p.name)});n.sort(function(a,b){return b.length-a.length});RAWRE=n.length?new RegExp('('+n.map(function(x){return x.replace(/[.*+?^$(){}|[\]\\]/g,'\\$&')}).join('|')+')'):null;return RAWRE}
+function lat(s){if(!s||!CY.test(s))return s;var re=rawRe();if(!re)return lat0(s);return s.split(re).map(function(p,i){return i%2?p:lat0(p)}).join('')}
+function lat0(s){var o='';for(var i=0;i<s.length;i++){var c=s[i],lc=c.toLowerCase(),up=c!==lc,r;
  if(!Object.prototype.hasOwnProperty.call(TL,lc)){o+=c;continue}
  var prev=s[i-1]||'',next=s[i+1]||'';
  if(lc==='е')r=(!prev||!LET.test(prev)||VOW.test(prev)||/[ъь]/i.test(prev))?'ye':'e';
@@ -70,12 +74,12 @@ function lat(s){if(!s||!CY.test(s))return s;var o='';for(var i=0;i<s.length;i++)
  o+=r}return o}
 function latin(root){
  if(!root)return;
- if(root.nodeType===3){if(CY.test(root.nodeValue)&&!(root.parentNode&&/^(SCRIPT|STYLE|TEXTAREA)$/.test(root.parentNode.nodeName)))root.nodeValue=lat(root.nodeValue);return}
+ if(root.nodeType===3){if(CY.test(root.nodeValue)&&!(root.parentNode&&/^(SCRIPT|STYLE|TEXTAREA)$/.test(root.parentNode.nodeName))){var v0=lat(root.nodeValue);if(v0!==root.nodeValue)root.nodeValue=v0}return}
  if(root.nodeType!==1)return;
  var w=D.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){var p=n.parentNode;return (!p||/^(SCRIPT|STYLE|TEXTAREA)$/.test(p.nodeName)||!CY.test(n.nodeValue))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
- var L=[];while(w.nextNode())L.push(w.currentNode);L.forEach(function(n){n.nodeValue=lat(n.nodeValue)});
+ var L=[];while(w.nextNode())L.push(w.currentNode);L.forEach(function(n){var v=lat(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
  var els=[root].concat([].slice.call(root.querySelectorAll('[placeholder],[title],[aria-label]')));
- els.forEach(function(e){['placeholder','title','aria-label'].forEach(function(a){var v=e.getAttribute&&e.getAttribute(a);if(v&&CY.test(v))e.setAttribute(a,lat(v))})});
+ els.forEach(function(e){['placeholder','title','aria-label'].forEach(function(a){var v=e.getAttribute&&e.getAttribute(a);if(v&&CY.test(v)){var w=lat(v);if(w!==v)e.setAttribute(a,w)}})});
 }
 function split2(e){if(!e||e.children.length||e.textContent.indexOf(' · ')<0)return;var p=e.textContent.split(' · ');e.textContent='';var a=D.createElement('span');a.textContent=p.shift();var b=D.createElement('span');b.className='pm-l2';b.textContent=p.join(' · ');e.append(a,b)}
 function watch2(e){if(!e)return;split2(e);new MutationObserver(function(){split2(e)}).observe(e,{childList:true,characterData:true,subtree:true})}
@@ -195,7 +199,7 @@ function cashier(){
 /* cheap pre-check: most inserted subtrees have neither Cyrillic nor emoji, skip the tree walks */
 function fix(n){var t=n.nodeType===1||n.nodeType===3?n.textContent:'';if(n.nodeType===1&&!CY.test(t)&&!RT.test(t)&&!n.querySelector('[placeholder],[title],[aria-label]'))return;latin(n);if(n.nodeType===1)icons(n);else if(n.nodeType===3&&n.parentNode)icons(n.parentNode)}
 function start(){H.setAttribute('lang','uz-Latn');D.title=lat(D.title);try{if(APP==='cashier')cashier();else agent();iconBtns()}catch(e){console.error('premium',e)}latin(D.body);icons(D.body);
- new MutationObserver(function(ms){ms.forEach(function(m){if(m.type==='attributes'){var v=m.target.getAttribute(m.attributeName);if(v&&CY.test(v))m.target.setAttribute(m.attributeName,lat(v));return}
+ new MutationObserver(function(ms){ms.forEach(function(m){if(m.type==='attributes'){var v=m.target.getAttribute(m.attributeName);if(v&&CY.test(v)){var w=lat(v);if(w!==v)m.target.setAttribute(m.attributeName,w)}return}
   if(m.type==='characterData'){if(CY.test(m.target.nodeValue))fix(m.target);return}
   [].forEach.call(m.addedNodes,fix)})}).observe(D.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']})}
 if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',start);else start();
