@@ -44,11 +44,33 @@ var EM={"👥":"users","🏪":"store","📅":"cal","⚠":"alert","🪙":"coins",
 var DC={"🟢":"#16b364","🟡":"#f59e0b","🟣":"#8b5cf6","🔵":"#3b82ff","🟠":"#f97316","🔴":"#f0384f","⚪":"#c3cbe0"};
 var keys=Object.keys(EM).concat(Object.keys(DC)).map(function(k){return k.replace(/[.*+?^$(){}|[\]\\]/g,'\\$&')});
 var RE=new RegExp('('+keys.join('|')+')️?','g'),RT=new RegExp(RE.source);
-function svg(n){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||'')+'</svg>'}
+function svg(n){return '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(IC[n]||'')+'</svg>'}
 function icons(root){
  var w=D.createTreeWalker(root||D.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){var p=n.parentNode;if(!p||/^(SCRIPT|STYLE|OPTION|TEXTAREA|TITLE|INPUT)$/.test(p.nodeName)||!RT.test(n.nodeValue))return NodeFilter.FILTER_REJECT;return NodeFilter.FILTER_ACCEPT}}),L=[];
  while(w.nextNode())L.push(w.currentNode);
  L.forEach(function(n){var f=D.createDocumentFragment(),t=n.nodeValue,last=0;t.replace(RE,function(m,k,off){if(off>last)f.append(t.slice(last,off));var e=D.createElement(DC[k]?'dot':'ico');if(DC[k])e.style.setProperty('--c',DC[k]);else e.innerHTML=svg(EM[k]);f.append(e);last=off+m.length;return m});if(last<t.length)f.append(t.slice(last));n.replaceWith(f)});
+}
+/* Uzbek Cyrillic → Latin: every visible label, server text and placeholder in the
+ * premium apps is shown in Latin script (o‘, g‘, sh, ch, ye-at-word-start rules). */
+var CY=/[\u0400-\u04FF]/;
+var TL={'а':'a','б':'b','в':'v','г':'g','ғ':'g‘','д':'d','ё':'yo','ж':'j','з':'z','и':'i','й':'y','к':'k','қ':'q','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ў':'o‘','ф':'f','х':'x','ҳ':'h','ч':'ch','ш':'sh','щ':'sh','ъ':'’','ы':'i','ь':'','э':'e','ю':'yu','я':'ya','ц':'s','е':'e'};
+var VOW=/[аеёиоуўэюяaeiou]/i,LET=/[\u0400-\u04FFa-z]/i;
+function lat(s){if(!s||!CY.test(s))return s;var o='';for(var i=0;i<s.length;i++){var c=s[i],lc=c.toLowerCase(),up=c!==lc,r;
+ if(!Object.prototype.hasOwnProperty.call(TL,lc)){o+=c;continue}
+ var prev=s[i-1]||'',next=s[i+1]||'';
+ if(lc==='е')r=(!prev||!LET.test(prev)||VOW.test(prev)||/[ъь]/i.test(prev))?'ye':'e';
+ else if(lc==='ц')r=(prev&&VOW.test(prev))?'ts':'s';
+ else r=TL[lc];
+ if(up&&r){var nu=next&&next!==next.toLowerCase();r=nu?r.toUpperCase():r.charAt(0).toUpperCase()+r.slice(1)}
+ o+=r}return o}
+function latin(root){
+ if(!root)return;
+ if(root.nodeType===3){if(CY.test(root.nodeValue)&&!(root.parentNode&&/^(SCRIPT|STYLE|TEXTAREA)$/.test(root.parentNode.nodeName)))root.nodeValue=lat(root.nodeValue);return}
+ if(root.nodeType!==1)return;
+ var w=D.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){var p=n.parentNode;return (!p||/^(SCRIPT|STYLE|TEXTAREA)$/.test(p.nodeName)||!CY.test(n.nodeValue))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
+ var L=[];while(w.nextNode())L.push(w.currentNode);L.forEach(function(n){n.nodeValue=lat(n.nodeValue)});
+ var els=[root].concat([].slice.call(root.querySelectorAll('[placeholder],[title],[aria-label]')));
+ els.forEach(function(e){['placeholder','title','aria-label'].forEach(function(a){var v=e.getAttribute&&e.getAttribute(a);if(v&&CY.test(v))e.setAttribute(a,lat(v))})});
 }
 function el(h){var t=D.createElement('template');t.innerHTML=h.trim();return t.content.firstChild}
 var tg=window.Telegram&&window.Telegram.WebApp;
@@ -59,6 +81,7 @@ function toggleTheme(){var t=H.getAttribute('data-pmt')==='dark'?'light':'dark';
 applyTheme(savedTheme()||((tg&&tg.colorScheme)==='dark'?'dark':'light'));
 var LOGO='<img class="lg-wm" src="/app/premium-kit/logo.png" alt="ASMAN">';
 function brand(sub,initial){return '<div class="br"><div class="lg">'+LOGO+'<small>'+sub+'</small></div><div class="rt"><i id="pmSync" role="button" aria-label="Yangilash">'+svg('refresh')+'</i><i id="pmTheme" role="button" aria-label="Mavzu">'+svg(H.getAttribute('data-pmt')==='dark'?'sun':'moon')+'</i><i class="pf" id="pmAvatar">'+initial+'</i></div></div>'}
+function iconBtns(){[].slice.call(D.querySelectorAll('.rt i[role=button]')).forEach(function(i){i.tabIndex=0;i.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();i.click()}})})}
 function ripple(sel){D.addEventListener('pointerdown',function(e){var t=e.target.closest&&e.target.closest(sel);if(!t)return;var r=t.getBoundingClientRect(),z=Math.max(r.width,r.height)*2,x=D.createElement('u');x.className='rp';x.style.cssText='width:'+z+'px;height:'+z+'px;left:'+(e.clientX-r.left-z/2)+'px;top:'+(e.clientY-r.top-z/2)+'px';t.appendChild(x);setTimeout(function(){x.remove()},700)})}
 function slider(nav,isOn){var ni=el('<i id="ni"></i>');nav.insertBefore(ni,nav.firstChild);function mv(){var bs=[].slice.call(nav.querySelectorAll('button')),b=bs.find(isOn)||bs[0];if(b){ni.style.left=b.offsetLeft+'px';ni.style.width=b.offsetWidth+'px'}}
  new MutationObserver(mv).observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});addEventListener('resize',mv);setTimeout(mv,60);return mv}
@@ -96,8 +119,8 @@ function agent(){
 function cashier(){
  var main=D.querySelector('main'),hd=main&&main.querySelector(':scope>header'),appS=D.getElementById('app');if(!hd||!appS)return;
  var idt=D.getElementById('identity'),h1=appS.querySelector(':scope>h1'),bal=appS.querySelector(':scope>.balance'),refresh=D.getElementById('refresh');
- var nh=el('<header class="hd" id="pmHd">'+brand('КАССА · CONTROL','K')+'<div class="gr" id="pmGr"></div></header>');
- var gr=nh.querySelector('#pmGr');if(idt)gr.append(idt);if(h1){var b=D.createElement('b');b.textContent='Касса бошқаруви';gr.append(b);h1.remove()}
+ var nh=el('<header class="hd" id="pmHd">'+brand('KASSA · CONTROL','K')+'<div class="gr" id="pmGr"></div></header>');
+ var gr=nh.querySelector('#pmGr');if(idt)gr.append(idt);if(h1){var b=D.createElement('b');b.textContent='Kassa boshqaruvi';gr.append(b);h1.remove()}
  if(bal){var hero=el('<div class="hero" id="pmHero">'+MT+'</div>');var head=bal.querySelector('.balance-head'),st=bal.querySelector('.balance-status');if(st){st.classList.add('live');hero.append(st)}
   if(head){var k=head.querySelector('small');if(k){k.className='k';hero.append(k)}head.remove()}
   var p3=bal.querySelector('.pocket3');if(p3){p3.classList.add('three');[].slice.call(p3.children).forEach(function(d){d.classList.add('hb')});hero.append(p3)}
@@ -114,16 +137,17 @@ function cashier(){
  /* bottom floating nav: 4 main sections + "Yana" sheet, driving the original tab buttons */
  var tabs=appS.querySelector('nav.tabs');if(!tabs)return;
  tabs.classList.add('pm-hidden-tabs');
- var MAIN=[['overview','home','Асосий'],['pending','clock','Кутилган'],['debtors','users','Қарздор'],['report','chart','Ҳисобот']];
+ var MAIN=[['overview','home','Asosiy'],['pending','clock','Kutilmoqda'],['debtors','users','Qarzdorlar'],['report','chart','Hisobot']];
  var MORE=[['agentFund','wallet'],['expense','tdown'],['history','clock'],['daily','doc'],['rate','rate']];
- var bn=el('<nav class="pm-nav" aria-label="Бўлимлар"></nav>');
+ var bn=el('<nav class="pm-nav" aria-label="Bo‘limlar"></nav>');
  function tabBtn(id){return tabs.querySelector('[data-tab="'+id+'"]')}
  MAIN.forEach(function(m){var b=el('<button type="button" data-pm-tab="'+m[0]+'"><span><ico>'+svg(m[1])+'</ico></span>'+m[2]+'</button>');b.onclick=function(){var t=tabBtn(m[0]);if(t)t.click();scrollTo({top:0,behavior:'smooth'})};bn.append(b)});
- var mb=el('<button type="button" data-pm-tab="more"><span><ico>'+svg('more')+'</ico></span>Яна</button>');bn.append(mb);
- var ov=el('<div id="pmOv"></div>'),sh=el('<div id="pmSh"><div class="pm-grab"></div><h3>Бошқа бўлимлар</h3><div class="pm-list"></div></div>'),ls=sh.querySelector('.pm-list');
- MORE.forEach(function(m){var t=tabBtn(m[0]);if(!t)return;var r=el('<div class="row" data-pm-more="'+m[0]+'"><span class="ic"><ico>'+svg(m[1])+'</ico></span><div class="t"><b></b></div><ico class="chev">'+svg('arr')+'</ico></div>');r.querySelector('b').textContent=t.textContent;r.onclick=function(){t.click();close();scrollTo({top:0,behavior:'smooth'})};ls.append(r)});
- function close(){ov.classList.remove('on');sh.classList.remove('on')}
- mb.onclick=function(){ov.classList.add('on');sh.classList.add('on')};ov.onclick=close;
+ var mb=el('<button type="button" data-pm-tab="more"><span><ico>'+svg('more')+'</ico></span>Yana</button>');bn.append(mb);
+ var ov=el('<div id="pmOv"></div>'),sh=el('<div id="pmSh"><div class="pm-grab"></div><h3>Boshqa bo‘limlar</h3><div class="pm-list"></div></div>'),ls=sh.querySelector('.pm-list');
+ MORE.forEach(function(m){var t=tabBtn(m[0]);if(!t)return;var r=el('<div class="row" data-pm-more="'+m[0]+'"><span class="ic"><ico>'+svg(m[1])+'</ico></span><div class="t"><b></b></div><ico class="chev">'+svg('arr')+'</ico></div>');r.querySelector('b').textContent=lat(t.textContent);r.setAttribute('role','button');r.tabIndex=0;r.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();r.onclick()}};r.onclick=function(){t.click();close();scrollTo({top:0,behavior:'smooth'})};ls.append(r)});
+ function close(){ov.classList.remove('on');sh.classList.remove('on');mb.setAttribute('aria-expanded','false')}
+ mb.setAttribute('aria-haspopup','dialog');mb.setAttribute('aria-expanded','false');sh.setAttribute('role','dialog');sh.setAttribute('aria-label','Boshqa bo‘limlar');
+ mb.onclick=function(){ov.classList.add('on');sh.classList.add('on');mb.setAttribute('aria-expanded','true');var f=sh.querySelector('.row');if(f)f.focus()};ov.onclick=close;D.addEventListener('keydown',function(e){if(e.key==='Escape'&&sh.classList.contains('on'))close()});
  D.body.append(bn,ov,sh);
  function cur(){var a=tabs.querySelector('.active');return a?a.dataset.tab:'overview'}
  function upd(){var c=cur(),isMain=MAIN.some(function(m){return m[0]===c});[].slice.call(bn.querySelectorAll('button')).forEach(function(b){b.classList.toggle('on',b.dataset.pmTab===c||(!isMain&&b.dataset.pmTab==='more'))});H.classList.toggle('pm-home',c==='overview')}
@@ -132,9 +156,13 @@ function cashier(){
  /* "Ўзгартириш" rate button and other data-open-tab links keep working through the original tabs */
  D.getElementById('pmSync').onclick=function(){if(refresh)refresh.click();else location.reload()};
  D.getElementById('pmTheme').onclick=toggleTheme;
- var av=D.getElementById('pmAvatar');function ini(){av.textContent=initials(idt&&idt.textContent||'K')}if(idt)new MutationObserver(ini).observe(idt,{childList:true,characterData:true,subtree:true});ini();
+ var av=D.getElementById('pmAvatar');function ini(){av.textContent=initials(String(idt&&idt.textContent||'K').split(',').pop().trim())}if(idt)new MutationObserver(ini).observe(idt,{childList:true,characterData:true,subtree:true});ini();
  ripple('.c,.row,.card,.pm-nav button,button,.hb');
 }
-function start(){try{if(APP==='cashier')cashier();else agent()}catch(e){console.error('premium',e)}icons(D.body);new MutationObserver(function(ms){ms.forEach(function(m){[].forEach.call(m.addedNodes,function(n){if(n.nodeType===1)icons(n);else if(n.nodeType===3&&n.parentNode)icons(n.parentNode)})})}).observe(D.body,{childList:true,subtree:true,characterData:false})}
+function fix(n){latin(n);if(n.nodeType===1)icons(n);else if(n.nodeType===3&&n.parentNode)icons(n.parentNode)}
+function start(){H.setAttribute('lang','uz-Latn');D.title=lat(D.title);try{if(APP==='cashier')cashier();else agent();iconBtns()}catch(e){console.error('premium',e)}latin(D.body);icons(D.body);
+ new MutationObserver(function(ms){ms.forEach(function(m){if(m.type==='attributes'){var v=m.target.getAttribute(m.attributeName);if(v&&CY.test(v))m.target.setAttribute(m.attributeName,lat(v));return}
+  if(m.type==='characterData'){if(CY.test(m.target.nodeValue))fix(m.target);return}
+  [].forEach.call(m.addedNodes,fix)})}).observe(D.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']})}
 if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',start);else start();
 })();

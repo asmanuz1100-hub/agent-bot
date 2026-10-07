@@ -1,7 +1,7 @@
 /* ASMAN Premium design system — shared by the Agent and Cashier Mini Apps in
  * test mode (?theme=premium). Tokens, header, hero, cards, icons and the
  * floating nav are copied from the Rahbar Premium app so all three look alike. */
-html.pm{--bg:#eef3fb;--card:#fff;--tx:#0b1f4d;--mu:#6b7a99;--line:#e3eaf6;--pri:#1f6bff;--ok:#16b364;--bad:#f0384f;--warn:#f59e0b;--soft:#eaf1ff;--hi:#fffc;--field:#f7f9fe;color-scheme:light}
+html.pm{--bg:#eef3fb;--card:#fff;--tx:#0b1f4d;--mu:#5d6c8a;--line:#e3eaf6;--pri:#1f6bff;--ok:#16b364;--bad:#f0384f;--warn:#f59e0b;--soft:#eaf1ff;--hi:#fffc;--field:#f7f9fe;color-scheme:light}
 html.pm[data-pmt="dark"]{--bg:#0a1226;--card:#111c38;--tx:#eaf0ff;--mu:#8a9bc0;--line:#1e2c50;--soft:#172447;--hi:#ffffff0f;--field:#0d1630;color-scheme:dark}
 html.pm,html.pm body{background:var(--bg)!important;color:var(--tx)!important}
 html.pm body{font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif!important;font-variant-numeric:tabular-nums;background:radial-gradient(70% 35% at 100% 25%,#1f6bff18,transparent),radial-gradient(60% 30% at 0% 65%,#8b5cf614,transparent),var(--bg)!important;-webkit-font-smoothing:antialiased}
@@ -18,7 +18,7 @@ html.pm .lg{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 html.pm .lg-wm{height:22px;display:block;filter:drop-shadow(0 2px 6px #00000040)}
 html.pm .lg small{font-size:9px;letter-spacing:3px;opacity:.75;padding-left:1px;color:#fff}
 html.pm .rt{display:flex;gap:10px}
-html.pm .rt i{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-style:normal;cursor:pointer;color:#fff;background:linear-gradient(145deg,#ffffff26,#ffffff0a);border:1px solid #ffffff3a;box-shadow:inset 0 1px 0 #ffffff33,0 6px 16px -6px #000a}
+html.pm .rt i{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-style:normal;cursor:pointer;color:#fff;background:linear-gradient(145deg,#ffffff26,#ffffff0a);border:1px solid #ffffff3a;box-shadow:inset 0 1px 0 #ffffff33,0 6px 16px -6px #000a}
 html.pm .rt i svg{width:19px;height:19px}
 html.pm .rt i.pf{background:linear-gradient(135deg,#7db4ff,#1f56e0);box-shadow:0 0 0 2px #061a55,0 0 0 4px #5aa2ff88;font-weight:800;font-size:15px}
 html.pm .gr{margin:0 0 14px 2px}
@@ -92,3 +92,6 @@ html.pm ::placeholder{color:var(--mu)!important;-webkit-text-fill-color:var(--mu
 html.pm .pm-testbadge{position:fixed;z-index:60;bottom:calc(96px + env(safe-area-inset-bottom));left:12px;opacity:.9;pointer-events:none;font:800 10px Manrope,sans-serif;letter-spacing:.6px;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:20px;padding:4px 9px}
 @keyframes pmup{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){html.pm *{animation:none!important;transition:none!important}}
+html.pm .rt i:focus-visible,html.pm .pm-nav button:focus-visible,html.pm nav button:focus-visible,html.pm #pmSh .row:focus-visible{outline:2px solid #8fc0ff;outline-offset:2px}
+html.pm nav:not(.tabs) button,html.pm .pm-nav button{min-height:52px!important}
+html.pm #pmSh .row{min-height:56px}
