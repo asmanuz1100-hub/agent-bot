@@ -1,0 +1,136 @@
+/* ASMAN v3 design system for the Agent and Cashier Mini Apps (test mode,
+ * ?theme=premium). Same tokens as Rahbar Premium v3: white-first surfaces,
+ * graphite text, one deep blue accent, Telegram-like dark theme.
+ * Quiet by design: no gradient text, no glass, no glow, no decorative motion. */
+html.pm{
+ --bg:#f1f2f6;--card:#fff;--tx:#17212b;--mu:#5f6b78;--line:#e3e6ec;--soft:#f3f5f9;--field:#f7f8fb;
+ --pri:#1f6fd1;--pri-soft:#e8f1fc;--pri-tx:#1a62bb;--ok:#14894a;--ok-soft:#e5f5ec;--bad:#d42f45;--bad-soft:#fcebee;--warn:#a85f00;--warn-soft:#fff3e0;
+ --hi:#fff;--sh:0 1px 2px #17212b0a,0 8px 20px -14px #17212b40;--r:18px;--r-sm:12px;
+ --ease:cubic-bezier(.2,.8,.2,1);--e-in:cubic-bezier(.4,0,1,1);--t:180ms;--m-fast:140ms;--m:200ms;--m-slow:280ms;color-scheme:light}
+html.pm[data-pmt="dark"]{
+ --bg:#0e1621;--card:#17212b;--tx:#f5f7fa;--mu:#9aa6b2;--line:#263241;--soft:#1e2a38;--field:#131c27;
+ --pri:#3b8fe8;--pri-soft:#1c2f47;--pri-tx:#7db6f5;--ok:#4cc27a;--ok-soft:#173326;--bad:#ff6b7d;--bad-soft:#3a1d24;--warn:#f0a43a;--warn-soft:#3a2b14;
+ --hi:#ffffff08;--sh:0 10px 24px -16px #000c;color-scheme:dark}
+html.pm,html.pm body{background:var(--bg)!important;color:var(--tx)!important}
+html.pm body{font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif!important;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+html.pm b,html.pm strong,html.pm h1,html.pm h2,html.pm h3{font-weight:800}
+html.pm ::selection{background:color-mix(in srgb,var(--pri) 28%,transparent)}
+html.pm{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+html.pm :focus-visible{outline:2px solid var(--pri)!important;outline-offset:2px}
+
+/* Header — calm, same surface as the page (Rahbar v3) */
+html.pm .hd,html.pm header.hd{display:block!important;position:relative;margin:0!important;color:var(--tx)!important;background:var(--bg)!important;box-shadow:none!important;border-radius:0!important;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 8px!important}
+html.pm .br{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+html.pm .lg{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+html.pm .lg-wm{height:22px;display:block;filter:brightness(0)}
+html.pm[data-pmt="dark"] .lg-wm{filter:none}
+html.pm .lg small{font-size:10px;letter-spacing:2px;color:var(--pri-tx);font-weight:700}
+html.pm .rt{display:flex;gap:8px}
+html.pm .rt i{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-style:normal;cursor:pointer;color:var(--tx);background:var(--card);border:1px solid var(--line)}
+html.pm .rt i:active{background:var(--soft)}
+html.pm .rt i svg{width:20px;height:20px}
+html.pm .rt i.pf{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:800;font-size:15px}
+html.pm .gr{margin:2px 2px 12px}
+html.pm .gr small,html.pm .gr .sub{display:block;font-size:13px;color:var(--mu)!important;margin-top:2px}
+html.pm .gr b,html.pm .gr .greet{display:block;font-size:22px;font-weight:800;letter-spacing:-.3px;line-height:1.25;color:var(--tx)!important;margin:0}
+
+/* Hero card — the one summary surface per screen */
+html.pm .hero{position:relative;color:var(--tx);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:var(--sh)}
+html.pm .hero h1{margin:0 0 4px;font-size:20px;letter-spacing:-.3px;line-height:1.25;font-weight:800;color:var(--tx);padding-right:96px}
+html.pm .hero p{margin:0 0 12px;font-size:13px;color:var(--mu)}
+html.pm .hero small.k{display:block;font-size:13px;color:var(--mu);margin:0 0 10px;padding-right:110px;letter-spacing:0;text-transform:none;opacity:1}
+html.pm .live{position:absolute;right:14px;top:14px;font-size:12px;font-weight:700;background:var(--ok-soft)!important;border:0!important;color:var(--ok)!important;padding:5px 10px;border-radius:20px;animation:none!important}
+html.pm .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+html.pm .three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+html.pm .hb{background:var(--soft)!important;border:1px solid var(--line)!important;box-shadow:none!important;border-radius:14px!important;padding:11px 12px!important;min-width:0;color:var(--tx)}
+html.pm .hb small{font-size:12px;color:var(--mu);display:block;line-height:1.3}
+html.pm .hb b,html.pm .hb strong{display:block;font-size:18px;margin:3px 0;font-weight:800;letter-spacing:-.3px;line-height:1.2;overflow-wrap:anywhere;color:var(--tx)!important;-webkit-text-fill-color:currentColor!important;background:none!important}
+html.pm .hb b *{-webkit-text-fill-color:currentColor!important}
+html.pm .pm-gb{font-size:12px;color:var(--mu);margin:10px 0 0}
+
+/* Cards */
+html.pm .c{border-radius:var(--r)!important;border:1px solid var(--line)!important;background:var(--card)!important;color:var(--tx)!important;box-shadow:var(--sh)!important}
+html.pm .c.kp{display:flex!important;gap:12px;align-items:center;position:relative;padding:14px!important;min-height:0!important}
+html.pm .kpt{min-width:0;flex:1}
+html.pm .kpt small,html.pm .kpt .small{font-size:12px;color:var(--mu)!important;display:block;line-height:1.3}
+html.pm .kpt b,html.pm .kpt strong,html.pm .kpt .num{font-size:20px!important;display:block;font-weight:800;letter-spacing:-.4px;line-height:1.2;color:var(--tx);margin:3px 0 1px}
+html.pm .kpt .pm-l2{display:block;font-size:14px;font-weight:700;letter-spacing:0;opacity:.85}
+/* Squircle icon tiles (Rahbar v3), no glow */
+html.pm .ic{--a:#2a8bf2;width:40px;height:40px;flex:none;display:grid!important;place-items:center;border-radius:12px!important;color:#fff!important;background:var(--a)!important;border:0!important;box-shadow:none!important}
+html.pm .ic ico{margin:0}html.pm .ic ico svg{width:21px;height:21px;filter:none!important;stroke-width:1.9}
+
+/* Icons */
+html.pm ico{display:inline-flex;vertical-align:-.2em;margin-right:.3em}
+html.pm ico svg{width:1.1em;height:1.1em}
+html.pm dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:1px}
+
+/* Bottom nav — Telegram-like bar, one accent */
+html.pm nav:not(.tabs),html.pm .pm-nav{position:fixed!important;left:50%!important;right:auto!important;top:auto!important;transform:translateX(-50%)!important;bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;width:min(440px,calc(100% - 20px))!important;max-width:none!important;display:flex!important;justify-content:space-between;gap:2px!important;padding:6px!important;z-index:40;border-radius:26px!important;
+ background:var(--card)!important;border:1px solid var(--line)!important;box-shadow:0 12px 30px -14px #17212b66!important}
+html.pm nav:not(.tabs) button,html.pm .pm-nav button{position:relative;z-index:1;overflow:hidden;flex:1;border:0!important;background:none!important;box-shadow:none!important;transform:none!important;color:var(--mu)!important;font:700 11px Manrope,sans-serif!important;padding:6px 2px!important;min-height:52px!important;border-radius:20px!important;cursor:pointer;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;letter-spacing:0;transition:color var(--m-fast) var(--ease)}
+html.pm nav:not(.tabs) button.active,html.pm .pm-nav button.on{color:#fff!important}
+html.pm nav:not(.tabs) button span,html.pm .pm-nav button span{font-size:19px;line-height:1;display:block;background:none!important;width:auto!important;height:auto!important;animation:none!important}
+html.pm nav:not(.tabs) ico,html.pm .pm-nav ico{margin:0}
+html.pm nav:not(.tabs) button span ico svg,html.pm .pm-nav button span ico svg{width:22px;height:22px;filter:none!important}
+html.pm #ni{position:absolute;top:6px;bottom:6px;left:6px;width:60px;border-radius:20px;background:var(--pri);box-shadow:none;transition:transform 240ms var(--ease)}
+
+/* Bottom sheet */
+html.pm #pmOv{position:fixed;inset:0;background:#0b121bb3;opacity:0;pointer-events:none;z-index:45}html.pm #pmOv.on{opacity:1;pointer-events:auto}
+html.pm #pmSh{position:fixed;left:50%;bottom:0;width:min(520px,100%);transform:translate(-50%,105%);background:var(--card);color:var(--tx);border-radius:24px 24px 0 0;padding:10px 16px calc(20px + env(safe-area-inset-bottom,0px));z-index:46;max-height:80vh;overflow:auto;border:1px solid var(--line)}
+html.pm #pmSh.on{transform:translate(-50%,0)}
+html.pm #pmSh h3{margin:6px 2px 12px;font-size:16px}
+html.pm .pm-grab{width:40px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 8px}
+html.pm #pmSh .row{display:flex;align-items:center;gap:12px;padding:10px 12px;min-height:56px;border-radius:16px;margin-bottom:8px;background:var(--soft);border:1px solid var(--line);cursor:pointer;position:relative;overflow:hidden}
+html.pm #pmSh .row .t{flex:1}html.pm #pmSh .row b{font-size:15px}
+html.pm .chev{color:var(--mu)}
+
+/* Forms */
+html.pm input,html.pm select,html.pm textarea{background:var(--field)!important;border:1px solid var(--line)!important;color:var(--tx)!important;-webkit-text-fill-color:var(--tx)!important;border-radius:12px!important;font-family:inherit;font-size:16px!important;min-height:46px;transition:border-color var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+html.pm textarea{min-height:88px}
+html.pm input:focus,html.pm select:focus,html.pm textarea:focus{border-color:var(--pri)!important;outline:0!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--pri) 22%,transparent)!important}
+html.pm input[aria-invalid="true"],html.pm input:user-invalid{border-color:var(--bad)!important}
+html.pm ::placeholder{color:var(--mu)!important;-webkit-text-fill-color:var(--mu)!important;opacity:1}
+html.pm button:disabled,html.pm button[aria-busy="true"]{opacity:.55;cursor:not-allowed}
+
+/* Loading skeleton (shown until the app has its first data) */
+html.pm .pm-skel{display:grid;gap:12px;padding:0 14px}
+html.pm .pm-skel i{display:block;height:92px;border-radius:var(--r);border:1px solid var(--line);position:relative;overflow:hidden;background:var(--soft)}
+
+html.pm .pm-skel i:first-child{height:150px}
+html.pm .pm-skel .two i{height:76px}
+
+/* Empty states — explain, don't shrug */
+html.pm .empty,html.pm .card.muted{display:flex!important;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:26px 16px!important;color:var(--mu)!important;font-size:14px;background:var(--card)!important;border:1px dashed var(--line)!important;box-shadow:none!important;border-radius:var(--r)!important}
+html.pm .empty:before,html.pm .card.muted:before{content:"";width:36px;height:36px;border-radius:12px;background:var(--soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237b8794' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 13h5l1.5 3h5L16 13h5'/%3E%3Cpath d='M5.5 6h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z'/%3E%3C/svg%3E") center/20px no-repeat}
+
+/* Test badge — out of the way */
+html.pm .pm-testbadge{position:fixed;z-index:60;top:calc(4px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);pointer-events:none;font:800 10px Manrope,sans-serif;letter-spacing:.4px;color:var(--warn);background:var(--warn-soft);border-radius:20px;padding:3px 9px}
+
+/* Tablet / desktop */
+@media (min-width:760px){
+ html.pm .hd,html.pm header.hd{max-width:760px;margin:0 auto!important;padding-left:24px!important;padding-right:24px!important}
+ html.pm .gr b,html.pm .gr .greet{font-size:26px}
+ html.pm .hero{padding:20px}
+ html.pm .hero h1{font-size:24px}
+ html.pm .hb b,html.pm .hb strong{font-size:22px}
+}
+@media (min-width:1100px){
+ html.pm .hd,html.pm header.hd{max-width:920px}
+}
+
+/* ===== Motion system: transform/opacity only; enter (ease-out, longer) vs exit (ease-in, shorter) ===== */
+html.pm nav:not(.tabs) button span,html.pm .pm-nav button span{transition:transform var(--m) var(--ease)}
+html.pm nav:not(.tabs) button.active span,html.pm .pm-nav button.on span{transform:translateY(-1px)}
+html.pm .c,html.pm .card,html.pm .rowbtn,html.pm .quick-tile,html.pm .chip,html.pm button,html.pm #pmSh .row,html.pm .rt i{transition:transform var(--m-fast) var(--ease),background-color var(--m) var(--ease),color var(--m) var(--ease),border-color var(--m) var(--ease)!important}
+html.pm .rowbtn:active,html.pm .quick-tile:active,html.pm .chip:active,html.pm button:active,html.pm #pmSh .row:active,html.pm .c.kp:active,html.pm .rt i:active{transform:scale(.97);transition-duration:90ms!important}
+html.pm #pmSh{transition:transform var(--m) var(--e-in)}html.pm #pmSh.on{transition:transform var(--m-slow) var(--ease)}
+html.pm #pmOv{transition:opacity var(--m) var(--e-in)}html.pm #pmOv.on{transition:opacity var(--m-slow) var(--ease)}
+html.pm section.view.active,html.pm #app>section:not(.hidden){animation:pmscr var(--m) var(--ease) both!important}
+@keyframes pmscr{from{opacity:0;transform:translate3d(0,8px,0)}to{opacity:1;transform:none}}
+html.pm .pm-skel i:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--card) 70%,transparent),transparent);transform:translate3d(-100%,0,0);animation:pmskx 1.3s var(--ease) infinite}
+@keyframes pmskx{to{transform:translate3d(100%,0,0)}}
+html.pm.pm-paused .pm-skel i:after{animation-play-state:paused!important}
+html.pm.pm-lite section.view.active,html.pm.pm-lite #app>section:not(.hidden){animation-name:pmfade!important}@keyframes pmfade{from{opacity:0}to{opacity:1}}
+html.pm.pm-lite .pm-skel i:after{display:none}
+html.pm.pm-lite .c,html.pm.pm-lite .card{box-shadow:none!important}
+@media (prefers-reduced-motion:reduce){html.pm *,html.pm *:before,html.pm *:after{animation:none!important;transition:none!important}}

@@ -1,0 +1,83 @@
+/* Agent Mini App on ASMAN v3 (test mode only, html.pm).
+ * Maps the agent's own classes onto the shared tokens in premium.css. */
+html.pm{--tg-bg:var(--bg);--paper:var(--bg);--tg-text:var(--tx);--tg-section:var(--card);--tg-hint:var(--mu);--muted:var(--mu);--navy:var(--tx);--blue:var(--pri);--green:var(--ok);--red:var(--bad);--amber:#e08a0b;--purple:#7a5af0}
+html.pm .app{background:transparent!important;max-width:760px;margin:0 auto;padding-bottom:calc(104px + env(safe-area-inset-bottom))!important}
+html.pm .adminbar{background:var(--pri-soft)!important;color:var(--tx)!important;border:0!important;margin:0 14px;border-radius:14px}
+html.pm main{padding:6px 14px 18px!important}
+html.pm #pmHero .pill{background:var(--soft)!important;color:var(--mu)!important;border:1px solid var(--line)!important;font-weight:700}
+html.pm #pmHero h1 #homeCommandTitle{color:var(--tx)}
+html.pm .pm-next{margin-top:12px;width:100%;min-height:48px;border:0!important;border-radius:14px!important;padding:12px!important;font-weight:800!important;color:#fff!important;background:var(--pri)!important;box-shadow:none!important}
+
+/* Typography: one family, tight steps */
+html.pm .screenhead{font-size:22px!important;font-weight:800!important;letter-spacing:-.3px;margin:6px 2px 12px!important;color:var(--tx)!important}
+html.pm .title{font-size:16px!important;font-weight:800!important;letter-spacing:-.2px;margin:22px 2px 10px!important;color:var(--tx)!important}
+html.pm .muted,html.pm .small,html.pm .tiny,html.pm label{color:var(--mu)}
+html.pm .tiny{font-size:12px!important}
+html.pm label{font-weight:700;font-size:13px}
+
+/* KPI grid */
+html.pm .kpis{margin:0!important;gap:10px!important;display:grid!important;grid-template-columns:1fr 1fr}
+html.pm .kpis .card{margin:0!important}
+html.pm .kpis .c.kp:after,html.pm .kpi:after{display:none!important}
+
+/* Cards and rows */
+html.pm .card{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important}
+html.pm .rowbtn,html.pm .client,html.pm .client-row,html.pm .plan-row,html.pm .visit-card,html.pm .order-card,html.pm .collection-task{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--sh)!important}
+html.pm .rowbtn:active,html.pm .client:active{background:var(--soft)!important}
+
+/* Summary cards that used to be dark — now the v3 hero card */
+html.pm .balance,html.pm .report-hero,html.pm .customer-hero,html.pm .expense-balance{color:var(--tx)!important;background:var(--card)!important;border:1px solid var(--line)!important;border-radius:22px!important;box-shadow:var(--sh)!important;position:relative;overflow:hidden}
+html.pm .balance:after,html.pm .report-hero:after,html.pm .expense-balance:after,html.pm .customer-hero:after{display:none!important}
+html.pm .balance *,html.pm .expense-balance *,html.pm .report-hero *{color:inherit}
+html.pm .balance .muted,html.pm .expense-balance .muted,html.pm .report-hero small{color:var(--mu)!important}
+html.pm .balance .num,html.pm .expense-balance .num{font-weight:800;letter-spacing:-.6px;color:var(--tx)!important;-webkit-text-fill-color:currentColor!important;background:none!important}
+html.pm .report-hero-mini,html.pm .report-kpi,html.pm .report-flow-card,html.pm .profile-stat,html.pm .gps-stat{background:var(--soft)!important;border:1px solid var(--line)!important;color:var(--tx)!important;box-shadow:none!important;border-radius:14px!important}
+html.pm .customer-hero-overlay{background:linear-gradient(transparent,#0b121bcc)!important}
+html.pm .customer-hero-overlay,html.pm .customer-hero-overlay *{color:#fff!important}
+
+/* Quick actions → Rahbar .qa tiles */
+html.pm .quick-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:10px}
+html.pm .quick-tile{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important;text-align:left;padding:14px!important;min-height:76px;position:relative;overflow:hidden}
+html.pm .quick-tile b{color:var(--tx)!important;font-size:15px;display:flex;align-items:center;gap:8px}
+html.pm .quick-tile b ico{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;margin:0;color:#fff;background:var(--pri)}
+html.pm .quick-tile b ico svg{width:18px;height:18px}
+html.pm .quick-tile small{color:var(--mu)!important;font-size:12px;margin-top:4px;display:block}
+html.pm .quick-tile.primary{background:var(--pri)!important;border-color:var(--pri)!important}
+html.pm .quick-tile.primary b,html.pm .quick-tile.primary small{color:#fff!important}
+html.pm .quick-tile.primary b ico{background:#ffffff2e}
+
+/* Buttons, chips, pills */
+html.pm button{font-family:inherit}
+html.pm .primary{background:var(--pri)!important;color:#fff!important;border:0!important;border-radius:14px!important;box-shadow:none!important;font-weight:800!important;min-height:48px}
+html.pm .primary:active{filter:brightness(.92)}
+html.pm .secondary{background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important;border-radius:14px!important;font-weight:700!important;min-height:44px}
+html.pm .tools{gap:8px}
+html.pm .chip{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;font-weight:700!important;box-shadow:none!important;min-height:40px}
+html.pm .chip.active{background:var(--pri)!important;color:#fff!important;border-color:var(--pri)!important}
+html.pm .pill{border-radius:20px!important;font-weight:700!important}
+html.pm .pill.green,html.pm .green .pill{background:var(--ok-soft)!important;color:var(--ok)!important}
+html.pm .pill.red,html.pm .red .pill{background:var(--bad-soft)!important;color:var(--bad)!important}
+html.pm .pill.yellow,html.pm .yellow .pill{background:var(--warn-soft)!important;color:var(--warn)!important}
+html.pm .icon{border-radius:12px!important;background:var(--pri-soft)!important;color:var(--pri-tx)!important}
+html.pm .bar{background:var(--soft)!important}html.pm .bar i{background:var(--pri)!important}
+html.pm .client-wizard-progress i,html.pm .wizard-step.on{background:var(--pri)!important}
+
+/* Feedback */
+html.pm #notice{background:var(--tx)!important;color:var(--bg)!important;border-radius:14px!important;border:0;box-shadow:0 12px 28px -12px #0009;font-weight:600}
+html.pm .offlinebar{background:var(--warn-soft)!important;color:var(--warn)!important}
+html.pm #gate{background:var(--bg)!important;color:var(--tx)!important}
+html.pm #gate .card{max-width:420px}
+html.pm .client-photo,html.pm .client-photo-fallback,html.pm .client-thumb{background:var(--soft)!important}
+
+/* Tablet / desktop */
+@media (min-width:760px){
+ html.pm main{padding:6px 24px 24px!important}
+ html.pm .kpis{grid-template-columns:repeat(4,1fr)}
+ html.pm .quick-grid{grid-template-columns:repeat(4,1fr)}
+ html.pm .app{max-width:760px}
+}
+@media (min-width:1100px){html.pm .app{max-width:920px}}
+
+/* Long lists: skip layout/paint of off-screen rows */
+html.pm #clientList>*,html.pm #homePlan>*,html.pm #collectionTaskList>*{content-visibility:auto;contain-intrinsic-size:auto 76px}
+html.pm [hidden]{display:none!important}

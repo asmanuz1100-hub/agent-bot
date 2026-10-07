@@ -46,7 +46,7 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261004-fix2')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261007-calm1')
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261004-uzsusd-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
@@ -342,6 +342,14 @@ def agent_action_link(verb,agent,client):
     if not re.fullmatch(r'[A-Za-z0-9_]{5,32}',BOT_USERNAME):return None
     return f'https://t.me/{BOT_USERNAME}?start='+agent_action_payload(verb,agent,client)
 
+def send_agent_app_hint(u,label):
+    text=f'ℹ️ «{label}» endi faqat 📱 Agent Mini App ichida bajariladi (GPS, rasm, so‘m/dollar va qoldiq tekshiruvi u yerda).'
+    if AGENT_MINIAPP_URL:
+        api('sendMessage',chat_id=u,text=text,
+            reply_markup={'inline_keyboard':[[{'text':'📱 Agent Mini Appни очиш','web_app':{'url':AGENT_MINIAPP_URL}}]]})
+    else:
+        send(u,text)
+
 def open_agent_client_action(db,u,payload):
     match=re.fullmatch(r'([prdv])_(\d+)_(\d+)_(\d{10,})_([0-9a-f]{16})',payload)
     if not match:raise ValueError('Мижозга ўтиш ҳаволаси нотўғри.')
@@ -351,6 +359,9 @@ def open_agent_client_action(db,u,payload):
     if agent!=u or int(expires)<int(time.time()) or not hmac.compare_digest(sig,_map_sig(scope,expires)[:16]):
         raise ValueError('Бу ҳавола муддати тугаган ёки бошқа агентга тегишли. Харитани қайта очинг.')
     action={'p':'payment','r':'return','d':'delivery','v':'visit'}[verb]
+    if role(db,u)=='agent' and action in BOT_MINIAPP_ONLY:
+        db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+        send_agent_app_hint(u,'пул олиш' if verb=='p' else 'товар бериш');return
     if not allowed(db,u,action):raise ValueError('Бу хизмат сизга ёпилган.')
     row=db.execute("""SELECT id,name,shop_name FROM clients WHERE id=?
         AND ((? IN ('d','v') AND map_only=1) OR EXISTS (SELECT 1 FROM events WHERE events.client=clients.id
@@ -421,13 +432,23 @@ def role(db,u):
             return 'admin'
     return current
 
+# Agents do these only in the Agent Mini App (GPS, photo, so'm/dollar, stock checks live there).
+BOT_MINIAPP_ONLY={'client','delivery','payment','handover'}
+
 def allowed(db,u,action):
     r=role(db,u)
     if action=='load':return False
+    if r=='agent' and action in BOT_MINIAPP_ONLY:return False
     if action in ('admin_add','agent_transfer','agent_deactivate'):return r=='admin' and u in ADMINS
     if action=='client_view':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     if action=='agent_clients_map':return r=='admin' or (r=='agent' and feature_enabled(db,u,'clients'))
     return (r=='admin' and action in ('user','agent_add','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_expense','agent_expense_balance') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
+
+BTN_LABEL_BY_ACTION={a:b for b,a in BTN.items()}
+
+def premium_test_url(url):
+    if not url:return ''
+    return url+('&' if '?' in url else '?')+'theme=premium'
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -443,6 +464,7 @@ def menu(db,u):
             rows.insert(1,['🧪 Rahbar Premium TEST'])
         if AGENT_MINIAPP_URL:
             rows.insert(3,['📱 Agent Mini App'])
+            rows.insert(4,['🧪 Agent Premium TEST','🧪 Kassir Premium TEST'])
     elif r=='agent' and AGENT_MINIAPP_URL:
         # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
         # launches can have empty initData, so the button asks the bot to send
@@ -1348,6 +1370,16 @@ def handle(db,update):
             reply_markup={'inline_keyboard':[[{'text':'🧪 Premium Rahbar Appни очиш',
                                               'web_app':{'url':MANAGER_PREMIUM_TEST_URL}}]]})
         return
+    if text in ('🧪 Agent Premium TEST','🧪 Kassir Premium TEST'):
+        if r!='admin':raise ValueError('Фақат админ.')
+        agent_test=text.startswith('🧪 Agent')
+        url=premium_test_url(AGENT_MINIAPP_URL if agent_test else CASHIER_MINIAPP_URL)
+        if not url:raise ValueError('Mini App манзили созланмаган.')
+        api('sendMessage',chat_id=u,
+            text=('🧪 Agent Premium TEST · янги дизайн, реал маълумотлар (админ назорат режими). Агентлар эски кўринишда ишлайверади.'
+                  if agent_test else '🧪 Kassir Premium TEST · янги дизайн, реал касса маълумотлари. Кассир эски кўринишда ишлайверади.'),
+            reply_markup={'inline_keyboard':[[{'text':'🧪 Очиш','web_app':{'url':url}}]]})
+        return
     if text=='📱 Agent Mini App':
         if r not in ('agent','admin') or not AGENT_MINIAPP_URL:
             raise ValueError('Фақат агент ёки админ.')
@@ -1443,6 +1475,10 @@ def handle(db,update):
                         '📥 КАССА ҲАРАКАТИ\n'+detail)
         return
     action=BTN.get(text)
+    if action and r=='agent' and action in BOT_MINIAPP_ONLY:
+        db.execute('DELETE FROM sessions WHERE agent=?',(u,))
+        send_agent_app_hint(u,BTN_LABEL_BY_ACTION.get(action,text))
+        return
     if action:
         if action=='load':
             db.execute('DELETE FROM sessions WHERE agent=?',(u,))

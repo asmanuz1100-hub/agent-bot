@@ -12,6 +12,7 @@ import customer_status as cs
 
 class CustomerStatusTests(unittest.TestCase):
     def setUp(self):
+        from unittest.mock import patch as _p; _mo=_p.object(__import__('bot'),'BOT_MINIAPP_ONLY',set()); _mo.start(); self.addCleanup(_mo.stop)  # legacy bot wizard coverage
         self.db=core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',[(1,'admin','Admin'),(2,'agent','Old Agent'),(3,'agent','Other Agent')])
         self.db.execute('INSERT INTO shifts(agent,start) VALUES(2,?)',(int(time.time())-10,))

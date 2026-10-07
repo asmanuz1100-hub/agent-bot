@@ -9,6 +9,7 @@ import core
 
 class BotSomHandoverTests(unittest.TestCase):
     def setUp(self):
+        p = patch.object(bot, 'BOT_MINIAPP_ONLY', set()); p.start(); self.addCleanup(p.stop)
         self.db = core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
                             [(1, 'admin', 'Admin'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir')])

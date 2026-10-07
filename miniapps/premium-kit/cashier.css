@@ -1,0 +1,63 @@
+/* Cashier Mini App on ASMAN v3 (test mode only, html.pm).
+ * Shared tokens/header/nav live in premium.css. */
+html.pm{--tg-bg:var(--bg);--tg-text:var(--tx);--tg-header:var(--bg);--tg-section:var(--card);--tg-hint:var(--mu);--tg-line:var(--line);font-size:15px}
+html.pm main{max-width:760px;margin:0 auto;padding:0 0 calc(104px + env(safe-area-inset-bottom))!important;background:transparent!important;color:var(--tx)!important}
+html.pm main>.hd{margin:0 0 12px!important}
+html.pm .hd.pm-wait #pmHero{display:none}
+html.pm main>:not(.hd){margin-left:14px;margin-right:14px}
+html.pm #app{margin:0 14px!important}
+html.pm #app>*{margin-left:0;margin-right:0}
+html.pm #identity{display:block}
+html.pm .pm-hidden-tabs{display:none!important}
+html.pm .pocket3{margin-top:0!important}
+html.pm .pocket3 strong{font-size:17px!important}
+html.pm #welcome{display:none!important}
+html.pm .notice{margin:0 14px 12px}
+
+/* Typography */
+html.pm h1{font-weight:800;letter-spacing:-.4px}
+html.pm h2{font-size:16px!important;font-weight:800!important;letter-spacing:-.2px;margin:22px 2px 10px!important;color:var(--tx)!important}
+html.pm h3{font-size:16px;font-weight:800;letter-spacing:-.2px;color:var(--tx);margin:0 0 10px}
+html.pm small,html.pm .muted{color:var(--mu)}
+
+/* KPI grid */
+html.pm .stats{display:grid!important;grid-template-columns:1fr 1fr;gap:10px!important;margin:12px 0}
+html.pm .stats .card{margin:0!important}
+html.pm .metric .up,html.pm .positive{color:var(--ok)!important}
+html.pm .metric .down,html.pm .negative{color:var(--bad)!important}
+
+/* Cards */
+html.pm .card,html.pm dialog{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important}
+html.pm .wallet,html.pm .activity,html.pm .debt-card{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--sh)!important}
+html.pm .debt-card{border-left:1px solid var(--line)!important}
+html.pm .flowline{border-bottom-color:var(--line)!important}
+html.pm .debt-amount{color:var(--bad)!important}
+html.pm .debt-task{background:var(--pri-soft)!important;border-color:transparent!important;color:var(--pri-tx)!important}
+html.pm table{border-collapse:collapse;width:100%}
+html.pm td,html.pm th{border-color:var(--line)!important}
+
+/* Buttons */
+html.pm button{font-family:inherit;background:var(--pri-soft);color:var(--pri-tx);border:0;border-radius:14px;font-weight:700;min-height:44px}
+html.pm button:active{filter:brightness(.94)}
+html.pm .primary,html.pm button[type=submit]{background:var(--pri)!important;color:#fff!important;box-shadow:none!important}
+html.pm .danger{background:var(--bad-soft)!important;color:var(--bad)!important}
+html.pm .pill{background:var(--warn-soft);color:var(--warn);font-weight:800;border-radius:20px}
+html.pm .notice{background:var(--warn-soft)!important;color:var(--tx)!important;border-radius:14px;border:0!important}
+html.pm .success{background:var(--ok-soft)!important;color:var(--ok)!important}
+html.pm dialog::backdrop{background:#0b121bb3}
+
+/* Period segment (Hisobot) — Rahbar .seg */
+html.pm .pseg{display:flex!important;flex-wrap:nowrap!important;gap:0!important;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:4px}
+html.pm .pseg button{flex:1;min-width:0!important;border:0!important;background:none!important;color:var(--mu)!important;padding:10px 4px!important;border-radius:10px!important;font-size:14px;white-space:nowrap;box-shadow:none;min-height:40px}
+html.pm .pseg button.on{background:var(--pri)!important;color:#fff!important;font-weight:800}
+
+/* Tablet / desktop */
+@media (min-width:760px){
+ html.pm #app{margin:0 24px!important}
+ html.pm .stats{grid-template-columns:repeat(4,1fr)}
+}
+@media (min-width:1100px){html.pm main{max-width:920px}}
+
+/* Long lists: skip layout/paint of off-screen rows */
+html.pm #activityFeed>*,html.pm #agentWallets>*,html.pm #history .card>*,html.pm #debtors .debt-card{content-visibility:auto;contain-intrinsic-size:auto 64px}
+html.pm [hidden]{display:none!important}

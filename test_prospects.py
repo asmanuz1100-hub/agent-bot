@@ -12,6 +12,7 @@ import reports
 
 class ProspectsTests(unittest.TestCase):
     def setUp(self):
+        from unittest.mock import patch as _p; _mo=_p.object(__import__('bot'),'BOT_MINIAPP_ONLY',set()); _mo.start(); self.addCleanup(_mo.stop)  # legacy bot wizard coverage
         self.db = core.connect(':memory:')
         self.db.executemany(
             'INSERT INTO users(id,role,name) VALUES(?,?,?)',
