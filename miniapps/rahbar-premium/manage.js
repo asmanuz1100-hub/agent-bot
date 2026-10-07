@@ -19,6 +19,7 @@ async function api(action,arg){var r=await P.req(action,arg);if(r&&typeof r.prim
 
 /* ---------- styles ---------- */
 var css=document.createElement('style');css.textContent=
+'.pm-tap{cursor:pointer}.pm-tap:active{transform:scale(.985)}.pm-rk{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line);animation:up .45s cubic-bezier(.2,.9,.3,1) both}.pm-rk:first-child{border-top:0}.pm-rk .n{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-weight:800;color:#fff;background:linear-gradient(160deg,#ffffff4d,#fff0 60%),var(--q,#2a8bf2);box-shadow:0 8px 14px -8px var(--q,#2a8bf2)}.pm-rk b{font-size:14px;display:block}.pm-rk small{display:block;color:var(--mu);font-size:12px;margin-top:3px}.pm-rk .v{text-align:right;font-weight:800;font-size:14px}.pm-rk .v small{font-weight:600}.pm-rk .tr{grid-column:2/4;height:6px;border-radius:6px;background:var(--soft);overflow:hidden}.pm-rk .tr i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#6bb4ff,#2a8bf2 45%,#1f6fd1);transform-origin:left;animation:pmgx .8s cubic-bezier(.2,.9,.3,1) both}@keyframes pmgx{from{transform:scaleX(0)}}'+
 '.pm-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}.pm-h b{font-size:18px}.pm-h small{display:block;color:var(--mu);font-size:12px;margin-top:2px}'+
 '.pm-grab{width:44px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 14px}'+
 '.pm-tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px}.pm-tabs button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:20px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer}.pm-tabs button.on{background:var(--pri);border-color:var(--pri);color:#fff}'+
@@ -367,4 +368,18 @@ document.addEventListener('click',function(ev){
  if(k==='cl-export'){exportFile('client_export',{clientId:id,format:b.dataset.f},'Akt sverka '+(b.dataset.f==='pdf'?'PDF':'Excel'));return}
  if(k==='all-export'){exportFile('all_clients_export',{format:b.dataset.f},'Barcha mijozlar '+(b.dataset.f==='pdf'?'PDF':'Excel'));return}
 },true);
+
+/* ---------- product rating (Hisobot → Mahsulotlar bo'yicha) ---------- */
+window.pmProducts=function(){
+ var rep=window.__pmRep,d=P.data();
+ if(!rep&&d&&d.reports)rep=d.reports.today;
+ var list=((rep&&rep.products)||[]).slice();
+ if(!list.length){sheet('📦 Mahsulotlar reytingi','<div class="pm-note" style="text-align:center">Bu davrda realizatsiya yo‘q.</div>',rep&&rep.label);return}
+ var mx=Math.max.apply(null,[1].concat(list.map(function(p){return Number(p.deliveredUsd||0)})));
+ var Q=['#2a8bf2','#8b5cf6','#34c759','#f5a524','#f0527a','#2b9ac9'];
+ var tot=list.reduce(function(a,p){return a+Number(p.deliveredUsd||0)},0),qty=list.reduce(function(a,p){return a+Number(p.deliveredQty||0)},0);
+ var body='<div class="pm-kpis" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"><div class="pm-card" style="margin:0"><small>Jami realizatsiya</small><b style="font-size:20px">'+usd(tot)+' $</b></div><div class="pm-card" style="margin:0"><small>Berilgan dona</small><b style="font-size:20px">'+qty.toLocaleString('en-US')+'</b></div></div><div class="pm-card">'+
+  list.map(function(p,i){var w=mx?Math.max(2,Number(p.deliveredUsd||0)/mx*100):0;return '<div class="pm-rk" style="--q:'+Q[i%Q.length]+';animation-delay:'+Math.min(i,10)*40+'ms"><span class="n">'+(i+1)+'</span><div><b>'+esc(p.name||('Mahsulot '+p.pack))+'</b><small>Berildi '+Number(p.deliveredQty||0)+' · sotildi '+Number(p.soldQty||0)+' · qaytdi '+Number(p.returnedQty||0)+'</small></div><div class="v">'+usd(p.deliveredUsd)+' $<small>'+Number(p.sharePct||0).toFixed(1)+'%</small></div><div class="tr"><i style="width:'+w.toFixed(1)+'%;animation-delay:'+Math.min(i,10)*40+'ms"></i></div></div>'}).join('')+'</div>';
+ sheet('📦 Mahsulotlar reytingi',body,(rep&&rep.label)||window.__pmRepLabel||'Tanlangan davr');
+};
 })();

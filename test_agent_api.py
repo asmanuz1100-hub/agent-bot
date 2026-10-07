@@ -506,5 +506,27 @@ class AgentApiTests(unittest.TestCase):
             },'offline_too_old_12345',self.now)
 
 
+    def test_custom_period_report_counts_only_selected_days(self):
+        self.add_client()
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        d1=int(datetime(2026,9,10,12,0,tzinfo=TZ).timestamp())
+        d2=int(datetime(2026,9,20,12,0,tzinfo=TZ).timestamp())
+        core.record(self.db,2,2,cid,'delivery',1,4,0,'',8501,currency='USD',ts=d1)
+        core.record(self.db,2,2,cid,'delivery',1,2,0,'',8502,currency='USD',ts=d2)
+        core.record(self.db,2,2,cid,'payment',0,0,500,'',8503,currency='USD',ts=d2)
+        rep=agent_api.period_report(self.db,2,'2026-09-15','2026-09-21',self.now)
+        self.assertEqual(rep['label'],'15.09.2026 – 21.09.2026')
+        self.assertEqual(rep['period']['deliveryQty'],2)
+        self.assertEqual(rep['period']['paymentsUsd'],5.0)
+        row=next(x for x in rep['products'] if x['pack']==1)
+        self.assertEqual(row['deliveryQty'],2)
+        both=agent_api.period_report(self.db,2,'2026-09-21','2026-09-01',self.now)
+        self.assertEqual(both['period']['deliveryQty'],6)
+        with self.assertRaises(ValueError):
+            agent_api.period_report(self.db,2,'bad','2026-09-21',self.now)
+        with self.assertRaises(ValueError):
+            agent_api.period_report(self.db,2,'2024-01-01','2026-09-21',self.now)
+
+
 if __name__=='__main__':
     unittest.main()

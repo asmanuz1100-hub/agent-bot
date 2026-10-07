@@ -6,7 +6,7 @@ html.pm .adminbar{background:var(--pri-soft)!important;color:var(--tx)!important
 html.pm main{padding:6px 14px 18px!important}
 html.pm #pmHero .pill{background:var(--soft)!important;color:var(--mu)!important;border:1px solid var(--line)!important;font-weight:700}
 html.pm #pmHero h1 #homeCommandTitle{color:var(--tx)}
-html.pm .pm-next{margin-top:12px;width:100%;min-height:48px;border:0!important;border-radius:14px!important;padding:12px!important;font-weight:800!important;color:#fff!important;background:var(--pri)!important;box-shadow:none!important}
+html.pm .pm-next{margin-top:12px;width:100%;min-height:48px;border:0!important;border-radius:14px!important;padding:12px!important;font-weight:800!important;color:#fff!important;background:var(--gl)!important;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66!important}
 
 /* Typography: one family, tight steps */
 html.pm .screenhead{font-size:22px!important;font-weight:800!important;letter-spacing:-.3px;margin:6px 2px 12px!important;color:var(--tx)!important}
@@ -22,7 +22,7 @@ html.pm .kpis .c.kp:after,html.pm .kpi:after{display:none!important}
 
 /* Cards and rows */
 html.pm .card{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important}
-html.pm .rowbtn,html.pm .client,html.pm .client-row,html.pm .plan-row,html.pm .visit-card,html.pm .order-card,html.pm .collection-task{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--sh)!important}
+html.pm .rowbtn,html.pm .client,html.pm .client-row,html.pm .plan-row,html.pm .order-card,html.pm .collection-task{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--sh)!important}
 html.pm .rowbtn:active,html.pm .client:active{background:var(--soft)!important}
 
 /* Summary cards that used to be dark — now the v3 hero card */
@@ -39,27 +39,28 @@ html.pm .customer-hero-overlay,html.pm .customer-hero-overlay *{color:#fff!impor
 html.pm .quick-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:10px}
 html.pm .quick-tile{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important;text-align:left;padding:14px!important;min-height:76px;position:relative;overflow:hidden}
 html.pm .quick-tile b{color:var(--tx)!important;font-size:15px;display:flex;align-items:center;gap:8px}
-html.pm .quick-tile b ico{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;margin:0;color:#fff;background:var(--pri)}
+html.pm .quick-tile b ico{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;margin:0;color:#fff;background:linear-gradient(160deg,#ffffff4d,#fff0 60%),var(--q,#2a8bf2);box-shadow:0 8px 14px -8px var(--q,#2a8bf2)}
+html.pm .quick-grid>:nth-child(2){--q:#34c759}html.pm .quick-grid>:nth-child(3){--q:#f0527a}html.pm .quick-grid>:nth-child(4){--q:#8b5cf6}
 html.pm .quick-tile b ico svg{width:18px;height:18px}
 html.pm .quick-tile small{color:var(--mu)!important;font-size:12px;margin-top:4px;display:block}
-html.pm .quick-tile.primary{background:var(--pri)!important;border-color:var(--pri)!important}
+html.pm .quick-tile.primary{background:var(--gl)!important;border-color:transparent!important;box-shadow:0 12px 24px -12px #1f6fd1cc!important}
 html.pm .quick-tile.primary b,html.pm .quick-tile.primary small{color:#fff!important}
 html.pm .quick-tile.primary b ico{background:#ffffff2e}
 
 /* Buttons, chips, pills */
 html.pm button{font-family:inherit}
-html.pm .primary{background:var(--pri)!important;color:#fff!important;border:0!important;border-radius:14px!important;box-shadow:none!important;font-weight:800!important;min-height:48px}
+html.pm .primary{background:var(--gl)!important;color:#fff!important;border:0!important;border-radius:14px!important;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66!important;font-weight:800!important;min-height:48px}
 html.pm .primary:active{filter:brightness(.92)}
-html.pm .secondary{background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important;border-radius:14px!important;font-weight:700!important;min-height:44px}
+html.pm .secondary{background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important;border-radius:14px!important;font-weight:700!important;min-height:44px;white-space:nowrap}
 html.pm .tools{gap:8px}
 html.pm .chip{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;font-weight:700!important;box-shadow:none!important;min-height:40px}
-html.pm .chip.active{background:var(--pri)!important;color:#fff!important;border-color:var(--pri)!important}
+html.pm .chip.active{background:var(--gl)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 8px 18px -8px #1f6fd1cc!important}
 html.pm .pill{border-radius:20px!important;font-weight:700!important}
 html.pm .pill.green,html.pm .green .pill{background:var(--ok-soft)!important;color:var(--ok)!important}
 html.pm .pill.red,html.pm .red .pill{background:var(--bad-soft)!important;color:var(--bad)!important}
 html.pm .pill.yellow,html.pm .yellow .pill{background:var(--warn-soft)!important;color:var(--warn)!important}
 html.pm .icon{border-radius:12px!important;background:var(--pri-soft)!important;color:var(--pri-tx)!important}
-html.pm .bar{background:var(--soft)!important}html.pm .bar i{background:var(--pri)!important}
+html.pm .bar{background:var(--soft)!important}html.pm .bar i{background:var(--gl)!important}
 html.pm .client-wizard-progress i,html.pm .wizard-step.on{background:var(--pri)!important}
 
 /* Feedback */
@@ -81,3 +82,49 @@ html.pm .client-photo,html.pm .client-photo-fallback,html.pm .client-thumb{backg
 /* Long lists: skip layout/paint of off-screen rows */
 html.pm #clientList>*,html.pm #homePlan>*,html.pm #collectionTaskList>*{content-visibility:auto;contain-intrinsic-size:auto 76px}
 html.pm [hidden]{display:none!important}
+
+/* Visit card: vivid gradient card like Rahbar heroes (text stays readable) */
+html.pm .visit-card{background:var(--gl)!important;color:#fff!important;border:0!important;border-radius:22px!important;box-shadow:0 16px 30px -16px #1f6fd1cc!important}
+html.pm .visit-card.live{background:linear-gradient(135deg,#34c759,#1c9b43)!important;box-shadow:0 16px 30px -16px #1c9b43cc!important}
+html.pm .visit-card.other{background:linear-gradient(135deg,#f5b544,#c77c00)!important}
+html.pm .visit-card small{color:#ffffffd9!important;font-size:12px!important}
+html.pm .visit-card b{color:#fff!important}
+html.pm .visit-card .visit-main{background:#fff!important;color:#1f6fd1!important;box-shadow:0 8px 18px -10px #0006!important}
+html.pm .visit-card .visit-ghost{background:#ffffff26!important;color:#fff!important;border:1px solid #ffffff55!important}
+/* Report bars: gradient like Rahbar dynamics */
+html.pm .report-trend-col i,html.pm .report-client-bar i{background:var(--gl)!important;box-shadow:0 8px 14px -8px #1f6fd199}
+html.pm .report-trend-col em,html.pm .report-trend-col small{font-size:10px!important}
+html.pm .report-kpi small{font-size:12px!important;color:var(--mu)!important}
+html.pm .report-trend-tabs button{border-radius:20px!important}
+html.pm .report-trend-tabs .active,html.pm .report-trend-tabs button.on{background:var(--gl)!important;color:#fff!important;border-color:transparent!important}
+html.pm .report-kpi.pm-k{display:flex!important;flex-direction:row!important;align-items:center;gap:10px;padding:12px!important;background:var(--card)!important}
+html.pm .report-kpi.pm-k strong{font-size:18px!important}
+html.pm .report-flow-card.pm-k{display:flex!important;align-items:center;gap:10px;padding:12px!important;min-height:0!important}
+html.pm .report-flow-card.pm-k b{margin-top:2px!important}
+/* Theme-safe surfaces: the agent's own light-only colours mapped to tokens so dark mode has no white boxes */
+html.pm .delivery-row,html.pm .order-row,html.pm .payment-convert,html.pm .camera-box,html.pm .wizard-location-state,html.pm .report-client-stat,html.pm .gps-map-empty{background:var(--soft)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm .report-trend,html.pm .report-client-card,html.pm .report-product,html.pm .report-stock-item{background:var(--card)!important;border-color:var(--line)!important;color:var(--tx)!important;box-shadow:var(--sh)!important}
+html.pm .report-trend-track,html.pm .report-client-bar,html.pm .report-product-bar{background:var(--soft)!important}
+html.pm .report-products-toggle,html.pm .mapinfo,html.pm .payment-rate-card,html.pm .report-product-stock,html.pm .report-stock-qty,html.pm #reportHeroBadge{background:var(--pri-soft)!important;border-color:transparent!important;color:var(--pri-tx)!important}
+html.pm .payment-rate-card b{color:var(--pri-tx)!important}
+html.pm .report-product-stock.red,html.pm .report-stock-qty.red,html.pm .payment-convert.warn,html.pm .delivery-warning{background:var(--bad-soft)!important;color:var(--bad)!important;border-color:transparent!important}
+html.pm .report-stock-qty.green,html.pm .wizard-location-state.ok{background:var(--ok-soft)!important;color:var(--ok)!important}
+html.pm .report-section-head b,html.pm #clientCount,html.pm .report-client-stat b,html.pm .payment-convert b{color:var(--tx)!important}
+html.pm .report-client-stat.debt b{color:var(--bad)!important}
+html.pm .report-section-head small,html.pm .report-client-stat small,html.pm .payment-convert small,html.pm .payment-rate-card small{color:var(--mu)!important}
+html.pm #notice{background:var(--tx)!important;color:var(--bg)!important}
+html.pm .delivery-warning{font-size:12px!important}
+html.pm .delivery-summary{background:var(--gl)!important;color:#fff!important;border:0!important;box-shadow:0 14px 28px -14px #1f6fd1cc!important}
+html.pm .delivery-summary *{color:#fff!important}
+html.pm .delivery-summary small{color:#ffffffd9!important;font-size:12px!important}
+html.pm .gps-stat,html.pm .gps-meta div,html.pm .report-product-grid div{background:var(--soft)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm .gps-stat small,html.pm .gps-meta small,html.pm .report-product-grid small{color:var(--mu)!important;font-size:11px!important}
+html.pm .gps-stat strong,html.pm .gps-meta b,html.pm .report-product-grid b{color:var(--tx)!important}
+html.pm .gps-period-tabs button,html.pm .report-trend-tabs button{background:var(--card)!important;color:var(--mu)!important;border:1px solid var(--line)!important}
+html.pm .gps-period-tabs button.active,html.pm .report-trend-tabs button.active{background:var(--gl)!important;color:#fff!important;border-color:transparent!important}
+html.pm .detail-section-title b{color:var(--tx)!important}
+html.pm .detail-section-title small{color:var(--mu)!important}
+html.pm .profile-stat,html.pm .profile-stat.good,html.pm .profile-stat.debt{background:var(--card)!important;border-color:var(--line)!important}
+html.pm .profile-stat.good b{color:var(--ok)!important}
+html.pm .profile-stat.debt b{color:var(--bad)!important}
+html.pm .pill:not(.green):not(.red):not(.yellow){background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important}

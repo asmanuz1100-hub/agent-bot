@@ -39,7 +39,7 @@ html.pm td,html.pm th{border-color:var(--line)!important}
 /* Buttons */
 html.pm button{font-family:inherit;background:var(--pri-soft);color:var(--pri-tx);border:0;border-radius:14px;font-weight:700;min-height:44px}
 html.pm button:active{filter:brightness(.94)}
-html.pm .primary,html.pm button[type=submit]{background:var(--pri)!important;color:#fff!important;box-shadow:none!important}
+html.pm .primary,html.pm button[type=submit]{background:var(--gl)!important;color:#fff!important;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66!important}
 html.pm .danger{background:var(--bad-soft)!important;color:var(--bad)!important}
 html.pm .pill{background:var(--warn-soft);color:var(--warn);font-weight:800;border-radius:20px}
 html.pm .notice{background:var(--warn-soft)!important;color:var(--tx)!important;border-radius:14px;border:0!important}
@@ -49,7 +49,7 @@ html.pm dialog::backdrop{background:#0b121bb3}
 /* Period segment (Hisobot) — Rahbar .seg */
 html.pm .pseg{display:flex!important;flex-wrap:nowrap!important;gap:0!important;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:4px}
 html.pm .pseg button{flex:1;min-width:0!important;border:0!important;background:none!important;color:var(--mu)!important;padding:10px 4px!important;border-radius:10px!important;font-size:14px;white-space:nowrap;box-shadow:none;min-height:40px}
-html.pm .pseg button.on{background:var(--pri)!important;color:#fff!important;font-weight:800}
+html.pm .pseg button.on{background:var(--gl)!important;color:#fff!important;font-weight:800;box-shadow:0 8px 18px -8px #1f6fd1cc}
 
 /* Tablet / desktop */
 @media (min-width:760px){
@@ -61,3 +61,11 @@ html.pm .pseg button.on{background:var(--pri)!important;color:#fff!important;fon
 /* Long lists: skip layout/paint of off-screen rows */
 html.pm #activityFeed>*,html.pm #agentWallets>*,html.pm #history .card>*,html.pm #debtors .debt-card{content-visibility:auto;contain-intrinsic-size:auto 64px}
 html.pm [hidden]{display:none!important}
+/* Activity / history rows: glossy icon tile like Rahbar (colour by money direction) */
+html.pm .activity .row{align-items:center}
+html.pm .activity .row>b:first-child{display:flex;align-items:center;gap:10px}
+html.pm .activity .row>b:first-child>ico:first-child{flex:none;display:grid;place-items:center;width:34px;height:34px;margin:0;border-radius:11px;color:#fff;background:linear-gradient(160deg,#ffffff4d,#fff0 60%),var(--q,#2a8bf2);box-shadow:0 8px 14px -8px var(--q,#2a8bf2)}
+html.pm .activity .row>b:first-child>ico:first-child svg{width:18px;height:18px}
+html.pm .activity .row:has(.positive){--q:#34c759}html.pm .activity .row:has(.negative){--q:#f0527a}html.pm .activity .row:has(.neutral){--q:#8b5cf6}
+html.pm .activity>p,html.pm .activity>small{padding-left:44px}
+html.pm .debt-meta ico{color:var(--mu)}

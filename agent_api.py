@@ -506,6 +506,74 @@ def _uzs_cash_state(db,agent):
     return on_hand,pending,cards
 
 
+def _period_totals(db,agent,lo,now):
+    row=db.execute("""SELECT
+      COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0)
+      FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
+    expense=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
+                WHERE agent=? AND kind='expense' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
+    accepted=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
+                WHERE agent=? AND status='accepted' AND accepted_ts>=? AND accepted_ts<=?""",(agent,lo,now)).fetchone()
+    return {"visits":int(db.execute("""SELECT COUNT(*) FROM client_visits
+                WHERE actor=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
+            "newClients":int(db.execute("""SELECT COUNT(*) FROM clients
+                WHERE agent=? AND created_ts>=? AND created_ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
+            "paymentsUsd":_usd(row[0]),"goods":int(row[1] or 0),
+            "deliveryQty":int(row[1] or 0),"deliveryUsd":_usd(row[2]),
+            "soldQty":int(row[3] or 0),"returnQty":int(row[4] or 0),
+            "returnUsd":_usd(row[5]),"expenseUsd":_usd(expense[0]),
+            "handoverAcceptedUsd":_usd(accepted[0])}
+
+
+def _period_products(db,agent,products,lo,now):
+    rows=db.execute("""SELECT pack,
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0) AS delivery_qty,
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivery_usd,
+        COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0) AS sold_qty,
+        COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0) AS return_qty,
+        COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS return_usd
+        FROM events WHERE agent=? AND ts>=? AND ts<=? AND pack>0
+        GROUP BY pack""",(agent,lo,now)).fetchall()
+    by_pack={int(r["pack"]):r for r in rows}
+    out=[]
+    for product in products:
+        r=by_pack.get(int(product["pack"]))
+        out.append({"pack":product["pack"],"name":product["name"],"weightKg":product["weightKg"],
+                    "stock":product["stock"],"priceUsd":product["priceUsd"],
+                    "deliveryQty":int(r["delivery_qty"] or 0) if r else 0,
+                    "deliveryUsd":_usd(r["delivery_usd"]) if r else 0,
+                    "soldQty":int(r["sold_qty"] or 0) if r else 0,
+                    "returnQty":int(r["return_qty"] or 0) if r else 0,
+                    "returnUsd":_usd(r["return_usd"]) if r else 0})
+    return out
+
+
+def period_report(db,agent,date_from,date_to,now=None):
+    """Agent report for a custom date range (YYYY-MM-DD, Tashkent days, inclusive)."""
+    _require_agent(db,agent)
+    now=int(time.time() if now is None else now)
+    try:
+        d1=datetime.strptime(str(date_from or "").strip(),"%Y-%m-%d").replace(tzinfo=TZ)
+        d2=datetime.strptime(str(date_to or "").strip(),"%Y-%m-%d").replace(tzinfo=TZ)
+    except ValueError:
+        raise ValueError("Sanani to‘g‘ri tanlang.")
+    if d2<d1:d1,d2=d2,d1
+    if (d2-d1).days>366:raise ValueError("Davr 1 yildan oshmasin.")
+    lo=int(d1.timestamp());hi=min(now,int((d2+timedelta(days=1)).timestamp())-1)
+    if lo>now:raise ValueError("Kelajakdagi sana tanlangan.")
+    products=[{"pack":x["pack"],"name":x["name"],"weightKg":x["weightKg"],"priceUsd":x["priceUsd"],
+               "stock":x["agentStock"]} for x in _products(db,agent)]
+    return {"from":d1.strftime("%Y-%m-%d"),"to":d2.strftime("%Y-%m-%d"),"start":lo,"end":hi,
+            "label":d1.strftime("%d.%m.%Y")+" – "+d2.strftime("%d.%m.%Y"),
+            "period":_period_totals(db,agent,lo,hi),
+            "products":_period_products(db,agent,products,lo,hi)}
+
+
 def snapshot(db,agent,now=None):
     """Compatibility shape consumed by the premium Agent Mini App UI."""
     now=int(time.time() if now is None else now)
@@ -546,27 +614,7 @@ def snapshot(db,agent,now=None):
                     "actor":x["actor_name"] or "","ts":int(x["ts"])} for x in fund_rows]
     }
     def p(lo):
-        row=db.execute("""SELECT
-          COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
-          COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
-          COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0),
-          COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0),
-          COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0),
-          COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0)
-          FROM events WHERE agent=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
-        expense=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds
-                    WHERE agent=? AND kind='expense' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
-        accepted=db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
-                    WHERE agent=? AND status='accepted' AND accepted_ts>=? AND accepted_ts<=?""",(agent,lo,now)).fetchone()
-        return {"visits":int(db.execute("""SELECT COUNT(*) FROM client_visits
-                    WHERE actor=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
-                "newClients":int(db.execute("""SELECT COUNT(*) FROM clients
-                    WHERE agent=? AND created_ts>=? AND created_ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
-                "paymentsUsd":_usd(row[0]),"goods":int(row[1] or 0),
-                "deliveryQty":int(row[1] or 0),"deliveryUsd":_usd(row[2]),
-                "soldQty":int(row[3] or 0),"returnQty":int(row[4] or 0),
-                "returnUsd":_usd(row[5]),"expenseUsd":_usd(expense[0]),
-                "handoverAcceptedUsd":_usd(accepted[0])}
+        return _period_totals(db,agent,lo,now)
     clients=[]
     for c in base["clients"]:
         item=dict(c)
@@ -585,26 +633,7 @@ def snapshot(db,agent,now=None):
     client_debt_usd=round(sum(float(c.get("debtUsd") or 0) for c in owned_clients),2)
 
     def product_report(lo):
-        rows=db.execute("""SELECT pack,
-            COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0) AS delivery_qty,
-            COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivery_usd,
-            COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0) AS sold_qty,
-            COALESCE(SUM(CASE WHEN kind='return' THEN qty ELSE 0 END),0) AS return_qty,
-            COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS return_usd
-            FROM events WHERE agent=? AND ts>=? AND ts<=? AND pack>0
-            GROUP BY pack""",(agent,lo,now)).fetchall()
-        by_pack={int(r["pack"]):r for r in rows}
-        out=[]
-        for product in products:
-            r=by_pack.get(int(product["pack"]))
-            out.append({"pack":product["pack"],"name":product["name"],"weightKg":product["weightKg"],
-                        "stock":product["stock"],"priceUsd":product["priceUsd"],
-                        "deliveryQty":int(r["delivery_qty"] or 0) if r else 0,
-                        "deliveryUsd":_usd(r["delivery_usd"]) if r else 0,
-                        "soldQty":int(r["sold_qty"] or 0) if r else 0,
-                        "returnQty":int(r["return_qty"] or 0) if r else 0,
-                        "returnUsd":_usd(r["return_usd"]) if r else 0})
-        return out
+        return _period_products(db,agent,products,lo,now)
 
     report_series=[]
     for k in range(6,-1,-1):
