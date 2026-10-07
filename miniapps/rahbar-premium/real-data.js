@@ -77,12 +77,12 @@ function updateHome(d){
   const title=plan.querySelector('div[style*="flex:1"] > b');if(title)setText(title,'Bugungi tushum / realizatsiya');
   const sub=plan.querySelector('div[style*="flex:1"] > small');if(sub)setText(sub,usd(today.paymentsUsd)+' $ / '+usd(today.deliveredUsd)+' $');
   const ring=plan.querySelector('.rg text');if(ring)setText(ring,Math.round(ratio)+'%');
-  const ringCircle=plan.querySelector('.rg .v');if(ringCircle)ringCircle.style.strokeDashoffset=226*(1-Math.min(100,ratio)/100);
+  const ringCircle=plan.querySelector('.rg .v');if(ringCircle){ringCircle.dataset.to=(226*(1-Math.min(100,ratio)/100)).toFixed(1);ringCircle.style.strokeDashoffset=ringCircle.dataset.to}
   const box=plan.querySelector('div[style*="flex:1"]');if(box){
    box.querySelectorAll('.pr').forEach(function(x){x.remove()});
    (today.agents||[]).slice().sort(function(a,b){return Number(b.deliveredUsd||0)-Number(a.deliveredUsd||0)}).slice(0,3).forEach(function(a){
     const r=Number(a.deliveredUsd||0)>0?Math.min(100,Number(a.paymentsUsd||0)/Number(a.deliveredUsd||0)*100):0;
-    box.insertAdjacentHTML('beforeend','<div class="pr"><span>'+esc(a.agent||'Agent')+'</span><div><u style="width:'+r.toFixed(0)+'%"></u></div><em>'+r.toFixed(0)+'%</em></div>');
+    box.insertAdjacentHTML('beforeend','<div class="pr"><span>'+esc(a.agent||'Agent')+'</span><div><u data-w="'+r.toFixed(0)+'" style="width:'+r.toFixed(0)+'%"></u></div><em>'+r.toFixed(0)+'%</em></div>');
    });
   }
  }
