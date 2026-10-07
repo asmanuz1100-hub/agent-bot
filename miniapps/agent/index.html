@@ -125,6 +125,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 "use strict";
 var API="/api/agent";
 var tg=window.Telegram&&window.Telegram.WebApp;
+window.pmRawProducts=function(){return (data&&data.products)||[]};
 var customReport=null,customBusy=false,data=null,current="home",selected=null,detailData=null,filter="all",mapFilter="all",period="day",reportTrend="deliveryUsd",reportProductsExpanded=false,reportStockExpanded=false,routePeriod="day",routeLoadedKey="",routeBusy=false,formAction="",backPage="home",detailBackPage="clients",busy=false,fullDataLoaded=false,cameraUploading=false,cameraStream=null,pendingPhotoData=null,clientWizardStep=1,clientProductMode="",nonce=null,reviewing=false,map=null,mapPins=null,mapTiles=null,mapPromise=null,routeLine=null,routeMap=null,adminAgentId=null,regionFilter="all",regionSelectOptionsKey="",activeVisit=null;
 var $=function(id){return document.getElementById(id)};
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(x){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]})}
