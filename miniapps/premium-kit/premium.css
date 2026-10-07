@@ -147,3 +147,4 @@ html.pm.pm-paused *,html.pm.pm-paused *:after{animation-play-state:paused!import
 html.pm.pm-lite nav:not(.tabs),html.pm.pm-lite .pm-nav{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--card)!important}
 html.pm.pm-lite .pm-in>*{animation-duration:.3s}
 @media (prefers-reduced-motion:reduce){html.pm *,html.pm *:before,html.pm *:after{animation:none!important;transition:none!important}}
+html.pm[data-pmt="dark"] .hero small.k,html.pm[data-pmt="dark"] .lg small{color:#7db6f5!important}

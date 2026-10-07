@@ -61,3 +61,11 @@ html.pm .pseg button.on{background:var(--gl)!important;color:#fff!important;font
 /* Long lists: skip layout/paint of off-screen rows */
 html.pm #activityFeed>*,html.pm #agentWallets>*,html.pm #history .card>*,html.pm #debtors .debt-card{content-visibility:auto;contain-intrinsic-size:auto 64px}
 html.pm [hidden]{display:none!important}
+/* Activity / history rows: glossy icon tile like Rahbar (colour by money direction) */
+html.pm .activity .row{align-items:center}
+html.pm .activity .row>b:first-child{display:flex;align-items:center;gap:10px}
+html.pm .activity .row>b:first-child>ico:first-child{flex:none;display:grid;place-items:center;width:34px;height:34px;margin:0;border-radius:11px;color:#fff;background:linear-gradient(160deg,#ffffff4d,#fff0 60%),var(--q,#2a8bf2);box-shadow:0 8px 14px -8px var(--q,#2a8bf2)}
+html.pm .activity .row>b:first-child>ico:first-child svg{width:18px;height:18px}
+html.pm .activity .row:has(.positive){--q:#34c759}html.pm .activity .row:has(.negative){--q:#f0527a}html.pm .activity .row:has(.neutral){--q:#8b5cf6}
+html.pm .activity>p,html.pm .activity>small{padding-left:44px}
+html.pm .debt-meta ico{color:var(--mu)}
