@@ -46,11 +46,11 @@ function loadLeaflet(){
  if(leafletPromise)return leafletPromise;
  leafletPromise=new Promise(function(resolve,reject){
   if(!document.querySelector('link[data-asman-leaflet]')){
-   const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';css.dataset.asmanLeaflet='1';document.head.appendChild(css);
+   const css=document.createElement('link');css.rel='stylesheet';css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';css.dataset.asmanLeaflet='1';document.head.appendChild(css);
   }
   const old=document.querySelector('script[data-asman-leaflet]');
   if(old){old.addEventListener('load',function(){window.L?resolve(window.L):reject(Error('Map kutubxonasi mavjud emas.'))},{once:true});old.addEventListener('error',function(){reject(Error('Map kutubxonasi yuklanmadi.'))},{once:true});return}
-  const sc=document.createElement('script');sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';sc.async=true;sc.dataset.asmanLeaflet='1';
+  const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';sc.async=true;sc.dataset.asmanLeaflet='1';
   sc.onload=function(){window.L?resolve(window.L):reject(Error('Map kutubxonasi mavjud emas.'))};sc.onerror=function(){reject(Error('Map kutubxonasi yuklanmadi.'))};document.body.appendChild(sc);
  }).catch(function(e){leafletPromise=null;throw e});
  return leafletPromise;
@@ -237,16 +237,17 @@ async function loadReal(silent){
   REAL_MODE=true;REAL_DASH=d;REAL_CLIENTS=Array.isArray(d.clients)?d.clients:[];REAL_AGENTS=Array.isArray(d.agents)?d.agents:[];REAL_TX=Array.isArray(d.transactions)?d.transactions:[];
   markReal();updateHome(d);refreshAgents(d);refreshClients(d);updateCash(d);renderReport('week');tog(rseg,function(i){reportSeg(i)});
   if(currentPage()===1)setTimeout(renderAgentMap,80);if(currentPage()===2)setTimeout(renderClientMap,80);
+  if(window.pmReady)window.pmReady();
   if(!silent)toast('✅ Haqiqiy ma’lumotlar yangilandi');
   PM_HOOKS.forEach(function(f){try{f(d)}catch(e){console.error(e)}});
- }catch(e){REAL_MODE=false;document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});toast('⚠️ Real data: '+e.message)}
+ }catch(e){REAL_MODE=false;document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});if(window.pmFail&&document.getElementById('sp'))window.pmFail(e.message);else toast('⚠️ Real data: '+e.message)}
 }
 
 sync=function(b){if(b){b.style.transition='transform .8s';b._r=(b._r||0)+360;b.style.transform='rotate('+b._r+'deg)'}loadReal(true).then(function(){toast('🔄 Haqiqiy ma’lumotlar yangilandi')})};
 
-if(tg&&tg.initData){setTimeout(function(){loadReal(false)},180)}
+if(tg&&tg.initData){loadReal(true)}
 else{
- document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});
+ document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});if(window.pmReady)window.pmReady();
  const a=$('ymap'),c=$('clientmap');if(a)a.innerHTML='<div id="ymap-ld">Real xarita Telegram botdagi 🧪 Rahbar Premium TEST ichida ochiladi.</div>';if(c)c.innerHTML='<div id="clientmap-ld">Real mijoz xaritasi Telegram botdagi test tugmasida ochiladi.</div>';
  setTimeout(function(){toast('ℹ️ Real data uchun Telegram botdagi 🧪 Rahbar Premium TEST tugmasidan oching')},1800);
 }
