@@ -548,3 +548,37 @@ class AgentApiTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class OffCatalogDeliveryTests(unittest.TestCase):
+    def test_agent_can_hand_over_product_not_in_catalog(self):
+        import time as _t
+        db=core.connect(':memory:')
+        db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',[(1,'admin','A'),(2,'agent','Ali')])
+        now=int(_t.time())-60
+        cid=agent_api.mutate(db,2,'add_client',{'shopName':'Baraka','name':'Vali','phone':'+998901234567','address':'Q',
+                             'lat':40.5,'lon':70.9,'status':'interested','note':'x'},'client_create_9',now)['clientId']
+        db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(5,2,?,1)',(now-600,))
+        out=agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'Emal PF-115 oq 2.7 kg','priceUsd':'4.50','qty':'3'}]},
+                             'req_custom_000001',now,admin_override=True)
+        self.assertIn('Katalogga qo‘shildi',out['message'])
+        pack=db.execute("SELECT pack FROM products WHERE name='Emal PF-115 oq 2.7 kg'").fetchone()[0]
+        self.assertGreaterEqual(pack,core.CUSTOM_PRODUCT_START)
+        self.assertEqual(core.client_debt_usd(db,cid),1350)
+        # same name again reuses the product instead of creating a duplicate
+        agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'emal pf-115 OQ 2.7 kg','priceUsd':'4.50','qty':'1'}]},
+                         'req_custom_000002',now,admin_override=True)
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM products WHERE pack>=?",(core.CUSTOM_PRODUCT_START,)).fetchone()[0],1)
+        with self.assertRaises(ValueError):
+            agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'Yangi','priceUsd':'0','qty':'1'}]},
+                             'req_custom_000003',now,admin_override=True)
+        db.close()
+
+    def test_client_photo_link_changes_with_new_photo(self):
+        from unittest.mock import patch
+        import bot
+        with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test','WEBHOOK_BASE_URL':''}):
+            a=bot.attach_client_photo_urls({'clients':[{'id':5,'hasPhoto':True,'photoV':core.photo_version('FILE_A')}]})['clients'][0]
+            b=bot.attach_client_photo_urls({'clients':[{'id':5,'hasPhoto':True,'photoV':core.photo_version('FILE_B')}]})['clients'][0]
+        self.assertNotEqual(a['photoUrl'],b['photoUrl'])
+        self.assertTrue(a['thumbUrl'].endswith('&t=1'))

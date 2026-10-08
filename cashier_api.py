@@ -59,9 +59,10 @@ def _cashier_summary(db):
     wallets = core.cashier_flows(db)
     today_flows = core.cashier_flows(db, start, end)
     return {
-        'wallets': {'cashUzs': wallets['cash_uzs'], 'cashUsd': wallets['cash_usd'],
+        # One general cashbox: the balance from before pockets were split is shown inside the dollar pocket.
+        'wallets': {'cashUzs': wallets['cash_uzs'], 'cashUsd': wallets['cash_usd'] + wallets.get('opening_usd', 0),
                     'cardUzs': wallets['card_uzs'], 'cardUsd': wallets['card_usd'],
-                    'openingUsd': wallets.get('opening_usd', 0), 'since': wallets.get('since', 0)},
+                    'openingUsd': 0, 'since': 0},
         'todayFlows': today_flows,
         'acceptedToday': accepted_today,
         'cashExpenseToday': expense_today,
@@ -95,12 +96,13 @@ def _cashier_activity(db):
                      'status':x['status'],'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount'] or 0),
                      'agent_name':x['agent_name'] or str(x['agent']),'actor_name':x['actor_name'] or '',
                      'note':''})
-    for x in db.execute("""SELECT e.id,e.amount_usd,e.amount_uzs,e.currency,e.category,e.recipient,e.note,e.ts,
+    for x in db.execute("""SELECT e.id,e.amount_usd,e.amount_uzs,e.currency,e.category,e.recipient,e.note,e.ts,e.pay_from,
             u.name AS actor_name FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
             ORDER BY e.ts DESC LIMIT 40""").fetchall():
         rows.append({'kind':'cash_expense','id':int(x['id']),'ts':int(x['ts'] or 0),
                      'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount_uzs'] or 0),
                      'currency':x['currency'],'category':x['category'],'recipient':x['recipient'],
+                     'payFrom':x['pay_from'] or 'cash',
                      'actor_name':x['actor_name'] or '','note':x['note'] or ''})
     for x in db.execute("""SELECT f.id,f.kind,f.amount_usd,f.amount_uzs,f.rate_uzs_per_usd,f.category,f.note,f.ts,
             a.name AS agent_name,u.name AS actor_name FROM agent_funds f
@@ -204,14 +206,15 @@ def period_report(db, actor, payload):
                      'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
                      'usd': 0 if uzs else int(x['amount_usd'] or 0),
                      'title': 'Карта / банк', 'who': x['source_name'] or '', 'actor': x['actor_name'] or ''})
-    for x in db.execute("""SELECT e.id,e.currency,e.amount_uzs,e.amount_usd,e.category,e.recipient,e.ts,
+    for x in db.execute("""SELECT e.id,e.currency,e.amount_uzs,e.amount_usd,e.category,e.recipient,e.ts,e.pay_from,
             u.name AS actor_name FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
             WHERE e.ts>=? AND e.ts<?""", (start, end)).fetchall():
         uzs = x['currency'] == 'UZS'
         rows.append({'kind': 'out_expense', 'id': int(x['id']), 'ts': int(x['ts'] or 0),
                      'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
                      'usd': 0 if uzs else int(x['amount_usd'] or 0),
-                     'title': x['category'] or 'Харажат', 'who': x['recipient'] or '', 'actor': x['actor_name'] or ''})
+                     'title': x['category'] or 'Харажат', 'who': x['recipient'] or '', 'actor': x['actor_name'] or '',
+                     'payFrom': x['pay_from'] or 'cash'})
     for x in db.execute("""SELECT f.id,f.amount_uzs,f.amount_usd,f.ts,a.name AS agent_name,u.name AS actor_name
             FROM agent_funds f LEFT JOIN users a ON a.id=f.agent LEFT JOIN users u ON u.id=f.actor
             WHERE f.kind='topup' AND f.ts>=? AND f.ts<?""", (start, end)).fetchall():
@@ -327,16 +330,20 @@ def mutate(db, actor, action, payload):
     elif action == 'expense':
         currency = payload.get('currency')
         args = (payload.get('category'), payload.get('recipient'), payload.get('note', ''), source)
+        pay_from = str(payload.get('payFrom') or 'cash').lower()
+        if pay_from not in ('cash', 'card'):
+            raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
         if currency == 'USD':
             amount = core.money(payload.get('amount'))
-            eid = core.add_cashier_expense(db, actor, amount, *args)
+            eid = core.add_cashier_expense(db, actor, amount, *args, pay_from=pay_from)
         elif currency == 'UZS':
             som = core.parse_whole_som(payload.get('amount'))
             rate = core.parse_whole_som(payload.get('expectedRate'), 'Курс')
-            eid, amount, _ = core.add_cashier_expense_uzs(db, actor, som, *args, expected_rate=rate)
+            eid, amount, _ = core.add_cashier_expense_uzs(db, actor, som, *args, expected_rate=rate, pay_from=pay_from)
         else:
             raise ValueError('Валютани танланг.')
-        notify['text'] = f"🧾 КАССА ХАРАЖАТИ #{eid}\n{cashier_pending.usd(amount)} USD · {payload.get('category')}\n{payload.get('recipient')}\nКассир: {require_cashier(db,actor)}"
+        src = '💳 Картадан' if pay_from == 'card' else '💵 Нақд'
+        notify['text'] = f"🧾 КАССА ХАРАЖАТИ #{eid} · {src}\n{cashier_pending.usd(amount)} USD · {payload.get('category')}\n{payload.get('recipient')}\nКассир: {require_cashier(db,actor)}"
     else:
         rate = core.parse_whole_som(payload.get('rate'), 'Курс')
         core.set_cashier_rate(db, actor, rate, source)

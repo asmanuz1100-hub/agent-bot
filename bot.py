@@ -90,7 +90,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261009-premium-v1').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261010-premium-v2').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -487,8 +487,11 @@ def attach_client_photo_urls(data):
     if not isinstance(data,dict):return data
     def attach(c):
         if isinstance(c,dict) and c.get('hasPhoto') and c.get('id'):
-            c['photoUrl']=stable_client_photo_link(int(c['id']))
-            if c['photoUrl']:c['thumbUrl']=c['photoUrl']+'?t=1'
+            url=stable_client_photo_link(int(c['id']))
+            # Version by file: a re-uploaded shop photo gets a new URL, so no browser cache shows the old one.
+            if url and c.get('photoV'):url+='?v='+str(c['photoV'])
+            c['photoUrl']=url
+            if url:c['thumbUrl']=url+('&' if '?' in url else '?')+'t=1'
         return c
     clients=data.get('clients')
     if isinstance(clients,list):

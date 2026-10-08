@@ -92,7 +92,7 @@ def _cash_transactions(db, since):
 
 def _cash_expenses(db, since):
     return db.execute("""SELECT e.id,e.cashier,e.amount_usd,e.category,e.recipient,e.note,
-               e.ts,e.currency,e.amount_uzs,e.rate_uzs_per_usd,u.name AS cashier_name
+               e.ts,e.currency,e.amount_uzs,e.rate_uzs_per_usd,e.pay_from,u.name AS cashier_name
         FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
         WHERE e.ts>=? ORDER BY e.ts DESC,e.id DESC LIMIT 800""",(since,)).fetchall()
 
@@ -276,8 +276,10 @@ def _flows_json(f):
     return {"inCashUzs":f["in_cash_uzs"],"inCashUsd":_usd(f["in_cash_usd"]),
             "inCardUzs":f["in_card_uzs"],"inCardUsd":_usd(f["in_card_usd"]),
             "outCashUzs":f["out_expense_uzs"]+f["out_fund_uzs"],"outCashUsd":_usd(f["out_expense_usd"]+f["out_fund_usd"]),
-            "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"]),
-            "openingUsd":_usd(f.get("opening_usd",0)),"since":int(f.get("since",0) or 0)}
+            "outCardUzs":f.get("out_card_uzs",0),"outCardUsd":_usd(f.get("out_card_usd",0)),
+            # One general cashbox: an older pre-split balance is shown inside the dollar pocket.
+            "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]+f.get("opening_usd",0)),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"]),
+            "openingUsd":0,"since":0}
 
 
 def period_report(db, period, date_from=None, date_to=None, now=None):
@@ -446,7 +448,7 @@ def dashboard(db, now=None):
             "agentId":int(c["agent"]),"lat":lat,"lon":lon,
             "status":status,"age":age,"days":days,"lastTs":last or None,
             "followup":followup or None,"note":(v["note"] if v else c["comment"]) or "",
-            "createdTs":int(c["created_ts"] or 0) or None,"hasPhoto":bool(c["photo"]),
+            "createdTs":int(c["created_ts"] or 0) or None,"hasPhoto":bool(c["photo"]),"photoV":core.photo_version(c["photo"]),
             "debtUsd":_usd(debt_by_client.get(cid,0))
         })
     agents = []
@@ -489,7 +491,7 @@ def dashboard(db, now=None):
             "currency":e["currency"] or "USD","rateUzsPerUsd":int(e["rate_uzs_per_usd"] or 0),
             "category":e["category"] or "Xarajat","recipient":e["recipient"] or "",
             "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None,
-            "sourceType":"cashier_expense"
+            "sourceType":"cashier_expense","payFrom":e["pay_from"] or "cash"
         })
     for f in _cash_agent_funds(db,since):
         amount_uzs=int(f["amount_uzs"] or 0)
@@ -635,7 +637,7 @@ def client_detail(db, client_id, limit=120):
         "comment":c["comment"] or "","paymentDue":c["payment_due"] or "",
         "agentId":int(c["agent"]),"agent":c["agent_name"] or str(c["agent"]),
         "createdTs":int(c["created_ts"] or 0),"mapOnly":bool(c["map_only"]),
-        "lat":lat,"lon":lon,"photo":c["photo"] or "","hasPhoto":bool(c["photo"]),
+        "lat":lat,"lon":lon,"photo":c["photo"] or "","hasPhoto":bool(c["photo"]),"photoV":core.photo_version(c["photo"]),
         "debtUsd":_usd(debt),"stocks":stocks,"events":events,"visits":visit_rows,"edits":edit_rows,
         "totals":{"deliveredUsd":_usd(totals[0]),"paidUsd":_usd(totals[1]),
                   "returnedUsd":_usd(totals[2]),"deliveredQty":int(totals[3] or 0),
