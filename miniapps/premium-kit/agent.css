@@ -137,3 +137,7 @@ html.pm .profile-stat,html.pm .profile-stat.good,html.pm .profile-stat.debt{back
 html.pm .profile-stat.good b{color:var(--ok)!important}
 html.pm .profile-stat.debt b{color:var(--bad)!important}
 html.pm .pill:not(.green):not(.red):not(.yellow){background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important}
+/* Payments: card waiting for the cashier stands out; flow card for pending card money */
+html.pm .pay-row.card-wait{border-color:#f5a52466!important;background:linear-gradient(180deg,var(--warn-soft),transparent 70%),var(--card)!important}
+html.pm .report-flow-card.yellow b{color:var(--warn)!important}
+html.pm .pay-row .tiny{font-size:12px!important;color:var(--mu)!important}
