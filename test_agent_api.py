@@ -528,5 +528,23 @@ class AgentApiTests(unittest.TestCase):
             agent_api.period_report(self.db,2,'2024-01-01','2026-09-21',self.now)
 
 
+    def test_payments_keep_currency_and_card_payments_are_visible(self):
+        self.add_client()
+        cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        core.record_client_payment(self.db,2,2,cid,'UZS',1_250_000,'cash',usd_cents=10000,source=9101,ts=self.now-60)
+        core.record_client_payment(self.db,2,2,cid,'USD',5000,'cash',source=9102,ts=self.now-50)
+        core.submit_card_payment(self.db,2,cid,'UZS',600_000,usd_cents=5000,source=9103,ts=self.now-40)
+        snap=agent_api.snapshot(self.db,2,self.now)
+        pays=[e for e in snap['events'] if e['kind']=='payment']
+        uzs=next(e for e in pays if e['paidUzs'])
+        self.assertEqual((uzs['paidUzs'],uzs['payMethod']),(1_250_000,'cash'))
+        day=snap['period']['day']
+        self.assertEqual((day['paymentsUzs'],day['paymentsUsdCash']),(1_250_000,50.0))
+        self.assertEqual((day['cardPendingCount'],day['cardPendingUzs']),(1,600_000))
+        self.assertEqual(len(snap['summary']['cardPending']),1)
+        detail=agent_api.client_detail(self.db,2,cid,self.now)
+        self.assertTrue(any(e.get('paidUzs')==1_250_000 for e in detail['events']))
+
+
 if __name__=='__main__':
     unittest.main()
