@@ -47,8 +47,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261009-v4e')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261009-premium-v1')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261010-v5')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261010-premium-v2')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -391,17 +391,55 @@ def photo_response(file_id,query='',db=None):
             try:db.rollback()
             except Exception:pass
     data=make_thumb(customer_photo_bytes(file_id))
-    _thumb_mem_put(file_id,data)
-    if db is not None:
-        try:
-            db.execute('INSERT INTO photo_thumbs(file_id,data,ts) VALUES(?,?,?) ON CONFLICT(file_id) DO NOTHING',
-                       (file_id,data,int(time.time())))
-            db.commit()
-        except Exception:
-            logging.warning('photo_thumbs write failed')
-            try:db.rollback()
-            except Exception:pass
+    store_thumb(db,file_id,data)
     return data
+
+def store_thumb(db,file_id,data):
+    """Keep a ready thumbnail in memory and (when a DB is given) in photo_thumbs."""
+    if not file_id or not data:return
+    _thumb_mem_put(file_id,data)
+    if db is None:return
+    try:
+        db.execute('INSERT INTO photo_thumbs(file_id,data,ts) VALUES(?,?,?) ON CONFLICT(file_id) DO NOTHING',
+                   (file_id,data,int(time.time())))
+        db.commit()
+    except Exception:
+        logging.warning('photo_thumbs write failed')
+        try:db.rollback()
+        except Exception:pass
+
+_STAFF_WARM_LOCK=threading.Lock()
+_STAFF_WARMING=set()
+
+def warm_staff_thumbs(db,uids,db_factory=None):
+    """Prepare staff avatar thumbnails in the background so map markers load on the first try."""
+    try:
+        rows=db.execute("SELECT user_id,photo FROM user_profiles WHERE photo<>''").fetchall()
+    except Exception:
+        logging.warning('Staff photo warm lookup failed');return []
+    want=set(int(u) for u in uids or [])
+    todo=[]
+    with _STAFF_WARM_LOCK:
+        for r in rows:
+            fid=r['photo']
+            if int(r['user_id']) in want and fid and _thumb_mem_get(fid) is None and fid not in _STAFF_WARMING:
+                _STAFF_WARMING.add(fid);todo.append(fid)
+    if not todo:return []
+    def run():
+        local=None
+        try:
+            local=db_factory() if db_factory else None
+            for fid in todo:
+                try:photo_response(fid,'t=1',local)
+                except Exception:logging.warning('Staff photo warm failed')
+        finally:
+            with _STAFF_WARM_LOCK:
+                for fid in todo:_STAFF_WARMING.discard(fid)
+            if local is not None and local is not db:
+                try:local.close()
+                except Exception:pass
+    threading.Thread(target=run,daemon=True,name='staff-thumb-warm').start()
+    return todo
 
 PHOTO_CACHE_HEADERS={'Cache-Control':'private, max-age=21600, stale-while-revalidate=86400'}
 
@@ -414,10 +452,15 @@ def profile_action(db,uid,action,payload):
     """Own profile for the Agent / Kassir Mini Apps: read, or save name / phone / photo."""
     if action=='profile_save':
         fid=None
+        raw=None
         if payload.get('imageData'):
-            fid=upload_agent_camera_photo(uid,decode_agent_camera_image(payload.get('imageData')))
+            raw=decode_agent_camera_image(payload.get('imageData'))
+            fid=upload_agent_camera_photo(uid,raw)
         profiles.save(db,uid,payload.get('profile') or {},photo_file=fid)
         db.commit()
+        if fid and raw:
+            # The avatar is ready immediately for every map/list, no Telegram round trip on first view.
+            store_thumb(db,fid,make_thumb(raw))
     return profile_payload(db,uid)
 
 def attach_staff_photos(db,data):
@@ -436,6 +479,7 @@ def attach_staff_photos(db,data):
         if isinstance(data.get(key),list):
             for x in data[key]:put(x)
     if isinstance(data.get('agent'),dict):put(data['agent'])
+    if isinstance(data.get('me'),dict):put(data['me'])
     return data
 
 def attach_client_photo_urls(data):
@@ -2493,6 +2537,12 @@ def serve_webhook(db,base_url):
                         data['adminMode']=True;data['readOnly']=False
                         data['agents']=admin_agents;data['selectedAgentId']=subject
                     attach_client_photo_urls(data)
+                    if isinstance(data,dict) and isinstance(data.get('me'),dict):
+                        try:
+                            v=profiles.photo_versions(local).get(int(data['me'].get('id') or 0))
+                            if v is not None:data['me']['photoUrl']=user_photo_link(int(data['me']['id']),version=v)
+                        except Exception:
+                            logging.warning('Own photo lookup failed')
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
@@ -2667,6 +2717,9 @@ def serve_webhook(db,base_url):
                         data.setdefault('primaryAdmin',actor in ADMINS)
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
+                    if action=='dashboard' and isinstance(data,dict) and isinstance(data.get('agents'),list):
+                        warm_staff_thumbs(local,[a.get('id') for a in data['agents'] if isinstance(a,dict) and a.get('photoUrl')],
+                                          request_db if postgres else None)
                     answer(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
