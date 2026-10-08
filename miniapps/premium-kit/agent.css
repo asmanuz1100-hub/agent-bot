@@ -92,7 +92,16 @@ html.pm .visit-card b{color:#fff!important}
 html.pm .visit-card .visit-main{background:#fff!important;color:#1f6fd1!important;box-shadow:0 8px 18px -10px #0006!important}
 html.pm .visit-card .visit-ghost{background:#ffffff26!important;color:#fff!important;border:1px solid #ffffff55!important}
 /* Report bars: gradient like Rahbar dynamics */
-html.pm .report-trend-col i,html.pm .report-client-bar i{background:var(--gl)!important;box-shadow:0 8px 14px -8px #1f6fd199}
+html.pm .report-trend-col i{background:var(--gl)!important;box-shadow:0 8px 14px -8px #1f6fd199}
+/* Client status bar: one colour per status (matches the legend dots) */
+html.pm .report-client-bar{gap:3px;height:14px!important}
+html.pm .report-client-bar i{border-radius:7px;background:linear-gradient(180deg,#ffffff40,#fff0 70%),var(--sc,#a9b8d6)!important}
+html.pm .report-client-bar i[style*="width:0%"]{display:none}
+html.pm .report-client-bar .fresh,html.pm .report-client-legend .fresh{--sc:#34c759}
+html.pm .report-client-bar .yellow,html.pm .report-client-legend .yellow{--sc:#f5a524}
+html.pm .report-client-bar .red,html.pm .report-client-legend .red{--sc:#f0527a}
+html.pm .report-client-bar .scheduled,html.pm .report-client-legend .scheduled{--sc:#8b5cf6}
+html.pm .report-client-legend span:before{background:var(--sc)!important}
 html.pm .report-trend-col em,html.pm .report-trend-col small{font-size:10px!important}
 html.pm .report-kpi small{font-size:12px!important;color:var(--mu)!important}
 html.pm .report-trend-tabs button{border-radius:20px!important}
