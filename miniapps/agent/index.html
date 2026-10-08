@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4f7fd">
-<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="./offline.js"></script><script>(function(){try{if(!/[?&]theme=premium(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261007-v4c');css('/app/premium-kit/agent.css?v=20261007-v4c');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261007-v4c';j.defer=true;document.head.appendChild(j);document.addEventListener('DOMContentLoaded',function(){var b=document.createElement('div');b.className='pm-testbadge';b.textContent='PREMIUM TEST';document.body.appendChild(b)})}catch(e){}})()</script>
+<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="./offline.js"></script><script>(function(){try{if(!/[?&]theme=premium(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261008-v4d');css('/app/premium-kit/agent.css?v=20261008-v4d');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261008-v4d';j.defer=true;document.head.appendChild(j);document.addEventListener('DOMContentLoaded',function(){var b=document.createElement('div');b.className='pm-testbadge';b.textContent='PREMIUM TEST';document.body.appendChild(b)})}catch(e){}})()</script>
 <style>
 :root{color-scheme:light}
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
@@ -347,7 +347,7 @@ function go(page){
 }
 function status(c){return c.age==="fresh"?"green":c.age==="yellow"?"yellow":c.age==="red"?"red":c.age==="scheduled"?"":"unknown"}
 function statusText(c){return c.age==="scheduled"?"Rejada: "+c.followup:c.age==="unknown"?"Sana yo‘q":c.days+" kun"}
-function shopRow(c,eager,withPhoto){if(withPhoto===undefined)withPhoto=true;var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=withPhoto&&c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-client-photo="'+c.id+'" src="'+esc(c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
+function shopRow(c,eager,withPhoto){if(withPhoto===undefined)withPhoto=true;var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=withPhoto&&c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-client-photo="'+c.id+'" src="'+esc(c.thumbUrl||c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+status(c)+'">'+esc(statusText(c))+'</span></button>'}
 function renderHome(){
  var urgent=data.clients.filter(function(c){return c.age==="yellow"||c.age==="red"}).sort(function(a,b){return (b.days||0)-(a.days||0)});
  var target=urgent.slice(0,4),next=urgent[0]||null,tasks=(data.collectionTasks||[]);
@@ -408,8 +408,8 @@ function dialPhone(c){
 function renderDetail(){
  var c=client();if(!c)return;
  $("detailName").textContent=c.name;
- var photoUrl=(detailData&&detailData.photoUrl)||c.photoUrl;
- var hero=photoUrl?'<div class="customer-hero"><img class="client-photo" data-client-photo="'+c.id+'" src="'+esc(photoUrl)+'" alt="'+esc(c.name)+' rasmi" loading="eager" decoding="async" fetchpriority="high"><div class="customer-hero-overlay"><b>'+esc(c.name)+'</b><small>'+esc(c.person||"Mijoz")+' · '+esc(c.status||"Holat")+'</small></div></div>':'<div class="customer-hero no-photo"><span class="fallback">▦</span><div class="customer-hero-overlay"><b>'+esc(c.name)+'</b><small>'+esc(c.person||"Mijoz")+' · '+esc(c.status||"Holat")+'</small></div></div>';
+ var photoUrl=(detailData&&detailData.photoUrl)||c.photoUrl,thumbUrl=(detailData&&detailData.thumbUrl)||c.thumbUrl||photoUrl;
+ var hero=photoUrl?'<div class="customer-hero"><img class="client-photo" data-client-photo="'+c.id+'" data-full="'+esc(photoUrl)+'" src="'+esc(thumbUrl)+'" alt="'+esc(c.name)+' rasmi" loading="eager" decoding="async" fetchpriority="high"><div class="customer-hero-overlay"><b>'+esc(c.name)+'</b><small>'+esc(c.person||"Mijoz")+' · '+esc(c.status||"Holat")+'</small></div></div>':'<div class="customer-hero no-photo"><span class="fallback">▦</span><div class="customer-hero-overlay"><b>'+esc(c.name)+'</b><small>'+esc(c.person||"Mijoz")+' · '+esc(c.status||"Holat")+'</small></div></div>';
  var debt=Number(c.debtUsd||0),visitLabel=c.lastTs?date(c.lastTs):"Tashrif yo‘q",nextLabel=c.followup||"Belgilanmagan";
  var body=hero+
   visitCardHtml(c)+
@@ -427,7 +427,7 @@ function renderDetail(){
  body+='<div class="detail-section-title"><b>Do‘kondagi mahsulot qoldig‘i</b><small>'+stockRows.length+' xil</small></div><div class="card"><div class="stock-list">'+(stockRows.join("")||'<p class="muted">Tovar qoldig‘i yo‘q.</p>')+'</div></div>';
  if(detailData){
   var visits=detailData.visits||[],events=detailData.events||[];
-  body+='<div class="detail-section-title"><b>Tashriflar tarixi</b><small>Oxirgi '+Math.min(visits.length,8)+'</small></div><div class="card">'+(visits.length?visits.slice(0,8).map(function(v){var meta=[];if(v.durationMin)meta.push("⏱ "+v.durationMin+" daq");if(v.distanceM!=null)meta.push("📍 "+v.distanceM+" m");if(v.hasPhoto)meta.push("📷 rasm");(v.stock||[]).forEach(function(x){var d=x.counted-x.expected;meta.push("📦 "+x.name+": "+x.counted+" dona"+(d?" ("+(d>0?"+":"")+d+")":""))});return '<div class="timeline-item"><small>'+date(v.ts)+' · '+esc(v.actor||"Agent")+'</small><b>'+esc((v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))+'</b>'+(meta.length?'<div class="visit-meta">'+meta.map(function(m){return '<span>'+esc(m)+'</span>'}).join("")+'</div>':'')+(v.photoUrl?'<img class="visit-thumb" loading="lazy" src="'+esc(v.photoUrl)+'" alt="Tashrif rasmi">':'')+'</div>'}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
+  body+='<div class="detail-section-title"><b>Tashriflar tarixi</b><small>Oxirgi '+Math.min(visits.length,8)+'</small></div><div class="card">'+(visits.length?visits.slice(0,8).map(function(v){var meta=[];if(v.durationMin)meta.push("⏱ "+v.durationMin+" daq");if(v.distanceM!=null)meta.push("📍 "+v.distanceM+" m");if(v.hasPhoto)meta.push("📷 rasm");(v.stock||[]).forEach(function(x){var d=x.counted-x.expected;meta.push("📦 "+x.name+": "+x.counted+" dona"+(d?" ("+(d>0?"+":"")+d+")":""))});return '<div class="timeline-item"><small>'+date(v.ts)+' · '+esc(v.actor||"Agent")+'</small><b>'+esc((v.statusLabel||v.status)+(v.note?" · "+v.note:"")+(v.followup?" · Keyingi: "+v.followup:""))+'</b>'+(meta.length?'<div class="visit-meta">'+meta.map(function(m){return '<span>'+esc(m)+'</span>'}).join("")+'</div>':'')+(v.photoUrl?'<img class="visit-thumb" loading="lazy" decoding="async" src="'+esc(v.thumbUrl||v.photoUrl)+'" alt="Tashrif rasmi">':'')+'</div>'}).join(""):'<p class="muted">Tashriflar tarixi hali yo‘q.</p>')+'</div>';
   var orders=detailData.orders||[];
   if(orders.length)body+='<div class="detail-section-title"><b>Buyurtmalar</b><small>Oxirgi '+orders.length+'</small></div><div class="card">'+orders.map(function(o){return '<div class="order-card"><div class="order-head"><b>#'+o.id+' · '+date(o.ts)+'</b><span class="order-pill '+esc(o.status)+'">'+esc(o.statusLabel)+'</span></div><ul>'+o.items.map(function(i){return '<li>'+esc(i.name)+' — '+i.qty+' dona'+(i.custom?' <span class="custom-tag">katalogda yo‘q</span>':'')+'</li>'}).join("")+'</ul>'+(o.adminNote?'<small class="muted">Rahbar: '+esc(o.adminNote)+'</small>':'')+(o.status==="loaded"?'<button type="button" class="primary" data-order-deliver="'+o.id+'">🚚 Mijozga topshirish</button>':'')+'</div>'}).join("")+'</div>';
   body+='<div class="detail-section-title"><b>So‘nggi operatsiyalar</b><small>Oxirgi '+Math.min(events.length,10)+'</small></div><div class="card">'+(events.length?events.slice(0,10).map(function(ev){
@@ -1156,39 +1156,38 @@ document.addEventListener("click",function(e){
  if(b.id==="myRoute"){routeLoadedKey="";showMyRoute(true);return}
  if(b.id==="offlineSync"){if(window.ASMANOffline){ASMANOffline.clearFailed().then(function(){return ASMANOffline.sync()})}return}
 });
-/* Retry a transient photo failure once; an unavailable file gets a bounded placeholder. */
+/* Photos: small cached thumbnail first, full image swapped in for the detail hero.
+   A failed image is retried twice with back-off (same link), then gets a placeholder.
+   No API call per failed thumbnail, so a slow network never floods the server. */
+function upgradeHeroPhoto(){var img=document.querySelector("img.client-photo[data-full]");if(!img||img.dataset.upgraded)return;var full=img.dataset.full;if(!full||full===img.getAttribute("src"))return;img.dataset.upgraded="1";var pre=new Image();pre.decoding="async";pre.onload=function(){if(img.isConnected)img.src=full};pre.src=full}
+document.addEventListener("load",function(e){var img=e.target;if(img instanceof HTMLImageElement&&img.classList.contains("client-photo"))upgradeHeroPhoto()},true);
 document.addEventListener("error",function(e){
  var img=e.target;if(!(img instanceof HTMLImageElement))return;
- if(!img.closest(".client-thumb")&&!img.classList.contains("client-photo"))return;
- if(!img.dataset.photoRetried){
-  img.dataset.photoRetried="1";
-  var clientId=Number(img.dataset.clientPhoto||0);
-  setTimeout(async function(){
-   if(!img.isConnected)return;
-   try{
-    if(clientId){
-     var fresh=await request("client_detail",{clientId:clientId});
-     var freshUrl=fresh&&fresh.photoUrl;
-     if(freshUrl){
-      var cached=data&&data.clients&&data.clients.find(function(c){return c.id===clientId});
-      if(cached)cached.photoUrl=freshUrl;
-      if(selected===clientId)detailData=fresh;
-      img.src=freshUrl+(freshUrl.includes("?")?"&":"?")+"photo_retry=1";
-      return;
-     }
-    }
-   }catch(_e){}
-   img.dispatchEvent(new Event("error"));
-  },350);
+ if(!img.closest(".client-thumb")&&!img.classList.contains("client-photo")&&!img.classList.contains("visit-thumb"))return;
+ if(!img.dataset.src)img.dataset.src=img.getAttribute("src")||"";
+ var n=Number(img.dataset.photoRetry||0),base=img.dataset.src;
+ if(n<2&&base&&navigator.onLine!==false){
+  img.dataset.photoRetry=String(n+1);
+  setTimeout(function(){if(img.isConnected)img.src=base+(base.indexOf("?")>=0?"&":"?")+"r="+(n+1)},n?3500:1200);
   return;
  }
+ var clientId=Number(img.dataset.clientPhoto||0);
+ if(img.classList.contains("client-photo")&&clientId&&!img.dataset.photoRefreshed){
+  img.dataset.photoRefreshed="1";
+  request("client_detail",{clientId:clientId}).then(function(fresh){
+   var u=fresh&&(fresh.thumbUrl||fresh.photoUrl);if(!u||!img.isConnected)throw 0;
+   if(selected===clientId)detailData=fresh;img.dataset.photoRefreshed="2";img.dataset.src=u;img.dataset.photoRetry="2";img.src=u+(u.indexOf("?")>=0?"&":"?")+"r=9";
+  }).catch(function(){img.dataset.photoRefreshed="2";img.dispatchEvent(new Event("error"))});
+  return;
+ }
+ if(img.dataset.photoRefreshed==="1")return;
  if(img.closest(".client-thumb")){
   var holder=img.parentElement;
   if(holder){holder.className="icon";holder.removeAttribute("style");holder.setAttribute("aria-label","Rasm ochilmadi");holder.textContent="▦";}
  }else if(img.classList.contains("client-photo")){
   var fallback=document.createElement("div");fallback.className="client-photo-fallback";fallback.textContent="▦";
   img.replaceWith(fallback);
- }
+ }else{img.style.display="none"}
 },true);
 $("search").addEventListener("input",renderClients);
 ["mapRegion","clientRegion"].forEach(function(id){$(id).addEventListener("change",function(){

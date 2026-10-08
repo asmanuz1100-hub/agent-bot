@@ -4,7 +4,7 @@ import threading
 from collections import OrderedDict
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from zoneinfo import ZoneInfo
 from core import *
 import reports
@@ -16,6 +16,7 @@ import manager_api
 import agent_api
 import cashier_api
 import full_backup
+import profiles
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -46,7 +47,7 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261007-v4c')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261008-v4d')
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261004-uzsusd-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
@@ -178,12 +179,15 @@ def map_link(scope,ttl=MAP_TTL_SECONDS):
     expires=int(time.time())+max(60,min(int(ttl),3600))
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
 
+# Photo links stay identical for 6 hours so the WebView can reuse cached images.
+PHOTO_LINK_BUCKET=21600
+
 def stable_client_photo_link(cid,now=None):
     """Stable signed URL within a 30-minute bucket so browsers can reuse cached photos."""
     base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
     if not base:return None
     now=int(time.time() if now is None else now)
-    bucket=1800
+    bucket=PHOTO_LINK_BUCKET
     expires=((now//bucket)+2)*bucket
     scope=f'client-photo/{int(cid)}'
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
@@ -192,9 +196,18 @@ def visit_photo_link(visit_id,now=None):
     base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
     if not base:return None
     now=int(time.time() if now is None else now)
-    expires=((now//1800)+2)*1800
+    expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
     scope=f'visit-photo/{int(visit_id)}'
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
+def user_photo_link(uid,now=None,version=0):
+    """Stable signed link to a staff member's profile photo (avatar size)."""
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    now=int(time.time() if now is None else now)
+    expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
+    scope=f'user-photo/{int(uid)}'
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}?t=1"+(f"&v={int(version)}" if version else '')
 
 # Bound image memory on the free instance, reduce repeated Telegram getFile calls.
 _PHOTO_CACHE=OrderedDict()
@@ -315,12 +328,117 @@ def customer_photo_bytes(file_id):
                 _PHOTO_CACHE_SIZE+=len(content)
         return content
 
+try:
+    from PIL import Image as _PILImage, ImageOps as _PILImageOps
+except Exception:  # Pillow missing: serve originals, everything still works
+    _PILImage=None;_PILImageOps=None
+THUMB_PX=320
+_THUMB_CACHE=OrderedDict()
+_THUMB_LOCK=threading.Lock()
+_THUMB_MAX_BYTES=16_000_000
+_THUMB_SIZE=0
+
+def make_thumb(content,px=THUMB_PX):
+    """Small progressive JPEG for lists and avatars (a few dozen KB instead of megabytes)."""
+    if _PILImage is None:return content
+    try:
+        im=_PILImage.open(io.BytesIO(content))
+        try:im.draft('RGB',(px*2,px*2))
+        except Exception:pass
+        im=_PILImageOps.exif_transpose(im).convert('RGB')
+        im.thumbnail((px,px))
+        out=io.BytesIO();im.save(out,'JPEG',quality=80,optimize=True,progressive=True)
+        data=out.getvalue()
+        return data if len(data)<len(content) else content
+    except Exception:
+        logging.warning('Thumbnail failed, serving original bytes=%s',len(content))
+        return content
+
+def _thumb_mem_get(key):
+    with _THUMB_LOCK:
+        v=_THUMB_CACHE.get(key)
+        if v is not None:_THUMB_CACHE.move_to_end(key)
+        return v
+
+def _thumb_mem_put(key,data):
+    global _THUMB_SIZE
+    with _THUMB_LOCK:
+        old=_THUMB_CACHE.pop(key,None)
+        if old is not None:_THUMB_SIZE-=len(old)
+        while _THUMB_CACHE and _THUMB_SIZE+len(data)>_THUMB_MAX_BYTES:
+            _,ev=_THUMB_CACHE.popitem(last=False);_THUMB_SIZE-=len(ev)
+        _THUMB_CACHE[key]=data;_THUMB_SIZE+=len(data)
+
+def photo_response(file_id,query='',db=None):
+    """Bytes for a photo request: `?t=1` returns a cached thumbnail (memory → database → Telegram)."""
+    if not parse_qs(query or '').get('t'):
+        return customer_photo_bytes(file_id)
+    hit=_thumb_mem_get(file_id)
+    if hit is not None:return hit
+    if db is not None:
+        try:
+            row=db.execute('SELECT data FROM photo_thumbs WHERE file_id=?',(file_id,)).fetchone()
+            if row and row[0]:
+                data=bytes(row[0]);_thumb_mem_put(file_id,data);return data
+        except Exception:
+            logging.warning('photo_thumbs read failed');
+            try:db.rollback()
+            except Exception:pass
+    data=make_thumb(customer_photo_bytes(file_id))
+    _thumb_mem_put(file_id,data)
+    if db is not None:
+        try:
+            db.execute('INSERT INTO photo_thumbs(file_id,data,ts) VALUES(?,?,?) ON CONFLICT(file_id) DO NOTHING',
+                       (file_id,data,int(time.time())))
+            db.commit()
+        except Exception:
+            logging.warning('photo_thumbs write failed')
+            try:db.rollback()
+            except Exception:pass
+    return data
+
+PHOTO_CACHE_HEADERS={'Cache-Control':'private, max-age=21600, stale-while-revalidate=86400'}
+
+def profile_payload(db,uid):
+    p=profiles.get(db,uid)
+    p['photoUrl']=user_photo_link(uid,version=p['updatedTs']) if p['hasPhoto'] else None
+    return {'ok':True,'profile':p}
+
+def profile_action(db,uid,action,payload):
+    """Own profile for the Agent / Kassir Mini Apps: read, or save name / phone / photo."""
+    if action=='profile_save':
+        fid=None
+        if payload.get('imageData'):
+            fid=upload_agent_camera_photo(uid,decode_agent_camera_image(payload.get('imageData')))
+        profiles.save(db,uid,payload.get('profile') or {},photo_file=fid)
+        db.commit()
+    return profile_payload(db,uid)
+
+def attach_staff_photos(db,data):
+    """Add photoUrl to every staff member (agents / cashiers) that has a profile photo."""
+    if not isinstance(data,dict):return data
+    try:vers=profiles.photo_versions(db)
+    except Exception:
+        logging.warning('Staff photo lookup failed');return data
+    if not vers:return data
+    def put(x):
+        if isinstance(x,dict):
+            try:uid=int(x.get('id') or x.get('agentId') or 0)
+            except (TypeError,ValueError):return
+            if uid in vers:x['photoUrl']=user_photo_link(uid,version=vers[uid])
+    for key in ('agents','cashiers','staff'):
+        if isinstance(data.get(key),list):
+            for x in data[key]:put(x)
+    if isinstance(data.get('agent'),dict):put(data['agent'])
+    return data
+
 def attach_client_photo_urls(data):
     """Attach short-lived signed photo URLs only to authenticated API responses."""
     if not isinstance(data,dict):return data
     def attach(c):
         if isinstance(c,dict) and c.get('hasPhoto') and c.get('id'):
             c['photoUrl']=stable_client_photo_link(int(c['id']))
+            if c['photoUrl']:c['thumbUrl']=c['photoUrl']+'?t=1'
         return c
     clients=data.get('clients')
     if isinstance(clients,list):
@@ -329,7 +447,9 @@ def attach_client_photo_urls(data):
     if not isinstance(clients,list) and 'hasPhoto' in data and 'visits' in data:
         attach(data)
         for v in data.get('visits') or []:
-            if isinstance(v,dict) and v.get('hasPhoto') and v.get('id'):v['photoUrl']=visit_photo_link(int(v['id']))
+            if isinstance(v,dict) and v.get('hasPhoto') and v.get('id'):
+                v['photoUrl']=visit_photo_link(int(v['id']))
+                if v['photoUrl']:v['thumbUrl']=v['photoUrl']+'?t=1'
     return data
 
 def agent_action_payload(verb,agent,client,ttl=8*3600):
@@ -2151,18 +2271,39 @@ def serve_webhook(db,base_url):
                     try:
                         row=local.execute('SELECT photo FROM client_visits WHERE id=?',(vid,)).fetchone()
                         local.commit()
+                        photo_data=photo_response(row['photo'],urlparse(self.path).query,local) if row and row['photo'] else None
                     finally:
                         if postgres:local.close()
-                    if not row or not row['photo']:
+                    if not photo_data:
                         self._reply(404,b'Photo not found');return
-                    photo_data=customer_photo_bytes(row['photo'])
-                    self._reply(200,photo_data,photo_content_type(photo_data),
-                                {'Cache-Control':'private, max-age=1800, stale-while-revalidate=300'})
+                    self._reply(200,photo_data,photo_content_type(photo_data),PHOTO_CACHE_HEADERS)
                 except ValueError as exc:
                     logging.warning('Visit photo unavailable visit=%s reason=%s',vid,str(exc))
                     self._reply(404,b'Photo not found')
                 except Exception:
                     logging.exception('Visit photo failed');self._reply(502,b'Photo temporarily unavailable')
+                return
+            m=re.fullmatch(r'/map/user-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                uid=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'user-photo/{uid}',expires,sig):
+                    self._reply(410,b'Profile photo link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        fid=profiles.photo_file_id(local,uid)
+                        local.commit()
+                        photo_data=photo_response(fid,'t=1',local) if fid else None
+                    finally:
+                        if postgres:local.close()
+                    if not photo_data:
+                        self._reply(404,b'Photo not found');return
+                    self._reply(200,photo_data,photo_content_type(photo_data),PHOTO_CACHE_HEADERS)
+                except ValueError as exc:
+                    logging.warning('Profile photo unavailable user=%s reason=%s',uid,str(exc))
+                    self._reply(404,b'Photo not found')
+                except Exception:
+                    logging.exception('Profile photo failed');self._reply(502,b'Photo temporarily unavailable')
                 return
             m=re.fullmatch(r'/map/client-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
@@ -2176,13 +2317,12 @@ def serve_webhook(db,base_url):
                         reports.admin_only(local,actor)
                         client=local.execute('SELECT photo FROM clients WHERE id=?',(cid,)).fetchone()
                         local.commit()
+                        photo_data=photo_response(client['photo'],urlparse(self.path).query,local) if client and client['photo'] else None
                     finally:
                         if postgres:local.close()
-                    if not client or not client['photo']:
+                    if not photo_data:
                         self._reply(404,b'Photo not found');return
-                    photo_data=customer_photo_bytes(client['photo'])
-                    self._reply(200,photo_data,photo_content_type(photo_data),
-                                {'Cache-Control':'private, max-age=1800, stale-while-revalidate=300'})
+                    self._reply(200,photo_data,photo_content_type(photo_data),PHOTO_CACHE_HEADERS)
                 except ValueError as exc:
                     logging.warning('Customer photo unavailable client=%s reason=%s',cid,str(exc))
                     self._reply(404,b'Photo not found')
@@ -2197,9 +2337,10 @@ def serve_webhook(db,base_url):
                                 'application/json; charset=utf-8')
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if not 2<=length<=20000:raise ValueError('Invalid length')
+                    if not 2<=length<=1_900_000:raise ValueError('Invalid length')
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
+                    if length>20000 and payload.get('action')!='profile_save':raise ValueError('Invalid length')
                     actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_cashier(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
@@ -2209,6 +2350,8 @@ def serve_webhook(db,base_url):
                     if role(local,actor) not in ('cashier','admin'):
                         answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
+                    if action in ('profile','profile_save'):
+                        answer_cashier(200,profile_action(local,actor,action,payload));return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
@@ -2247,7 +2390,7 @@ def serve_webhook(db,base_url):
                     if not isinstance(payload,dict):
                         answer_agent(400,{'error':'So‘rov noto‘g‘ri.'});return
                     action=str(payload.get('action') or 'dashboard')
-                    if action!='photo_upload' and length>100_000:
+                    if action not in ('photo_upload','profile_save') and length>100_000:
                         answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
@@ -2261,6 +2404,8 @@ def serve_webhook(db,base_url):
                     action=payload.get('action','dashboard')
                     subject=actor
                     admin_mode=actor_role=='admin'
+                    if action in ('profile','profile_save'):
+                        answer_agent(200,profile_action(local,actor,action,payload));return
                     admin_agents=[]
                     if admin_mode:
                         admin_agents=[{'id':int(x['id']),'name':x['name'] or str(x['id'])}
@@ -2285,7 +2430,9 @@ def serve_webhook(db,base_url):
                     elif action=='client_detail':
                         data=agent_api.client_detail(local,subject,payload.get('clientId'))
                         for v in data.get('visits') or []:
-                            if v.get('hasPhoto'):v['photoUrl']=visit_photo_link(int(v['id']))
+                            if v.get('hasPhoto'):
+                                v['photoUrl']=visit_photo_link(int(v['id']))
+                                if v['photoUrl']:v['thumbUrl']=v['photoUrl']+'?t=1'
                         local.commit()
                     elif action=='visit_check':
                         data=agent_api.visit_check(local,subject,payload.get('clientId'))
@@ -2520,6 +2667,7 @@ def serve_webhook(db,base_url):
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
                     attach_client_photo_urls(data)
+                    attach_staff_photos(local,data)
                     answer(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()

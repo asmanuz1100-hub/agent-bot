@@ -90,7 +90,7 @@ var tg=window.Telegram&&window.Telegram.WebApp;
 function savedTheme(){try{return localStorage.getItem('pmTheme')}catch(e){return null}}
 function applyTheme(t){H.setAttribute('data-pmt',t);try{tg&&tg.setHeaderColor&&tg.setHeaderColor('#030b24');tg&&tg.setBackgroundColor&&tg.setBackgroundColor(t==='dark'?'#0a1226':'#eef3fb')}catch(e){}var b=D.getElementById('pmTheme');if(b)b.innerHTML=svg(t==='dark'?'sun':'moon')}
 function toggleTheme(){var t=H.getAttribute('data-pmt')==='dark'?'light':'dark';try{localStorage.setItem('pmTheme',t)}catch(e){}applyTheme(t)}
-applyTheme(savedTheme()||((tg&&tg.colorScheme)==='dark'?'dark':'light'));
+applyTheme(themeOf(savedTheme()||'auto'));try{tg&&tg.onEvent&&tg.onEvent('themeChanged',function(){if((savedTheme()||'auto')==='auto')applyTheme(themeOf('auto'))})}catch(e){}
 /* Motion budget: lighter effects on weak devices / data saver; pause when the app is hidden */
 (function(){var n=navigator;if((n.deviceMemory&&n.deviceMemory<=2)||(n.hardwareConcurrency&&n.hardwareConcurrency<=4)||(n.connection&&n.connection.saveData))H.classList.add('pm-lite');D.addEventListener('visibilitychange',function(){H.classList.toggle('pm-paused',D.hidden)})})();
 var LOGO='<img class="lg-wm" src="/app/premium-kit/logo.png" alt="ASMAN">';
@@ -145,7 +145,7 @@ function agent(){
  splash('AGENT PANEL');var gate=D.getElementById('gate');function gw(){if(!gate||gate.classList.contains('hidden'))splashDone()}if(gate)new MutationObserver(gw).observe(gate,{attributes:true,attributeFilter:['class']});gw();
  ripple('.rowbtn,.quick-tile,.c.kp,.chip,.primary,.secondary,nav button,.rt i,.hb');
  D.getElementById('pmTheme').onclick=toggleTheme;
- var av=D.getElementById('pmAvatar');function ini(){var g=(greet&&greet.textContent||'').split(',').pop();av.textContent=initials(g.replace(/Assalomu alaykum/i,'').trim()||'A')}
+ var av=D.getElementById('pmAvatar');function ini(){if(av.dataset.photo)return;var g=(greet&&greet.textContent||'').split(',').pop();av.textContent=initials(g.replace(/Assalomu alaykum/i,'').trim()||'A')}
  if(greet)new MutationObserver(ini).observe(greet,{childList:true,characterData:true,subtree:true});ini();
 }
 
@@ -194,11 +194,61 @@ function cashier(){
  new MutationObserver(function(){var a=[].find.call(appS.querySelectorAll(':scope>section'),function(x){return !x.classList.contains('hidden')});if(a&&a!==cw.last){cw.last=a;if(sp&&sp._x){enter(a);countIn(a)}}}).observe(tabs,{subtree:true,attributes:true,attributeFilter:['class']});
  ripple('.c.kp,.card button,.pm-nav button,.rt i,#pmSh .row,.pseg button,.hb');
  D.getElementById('pmTheme').onclick=toggleTheme;
- var av=D.getElementById('pmAvatar');function ini(){av.textContent=initials(String(idt&&idt.textContent||'K').split(',').pop().trim())}if(idt)new MutationObserver(ini).observe(idt,{childList:true,characterData:true,subtree:true});ini();
+ var av=D.getElementById('pmAvatar');function ini(){if(av.dataset.photo)return;av.textContent=initials(String(idt&&idt.textContent||'K').split(',').pop().trim())}if(idt)new MutationObserver(ini).observe(idt,{childList:true,characterData:true,subtree:true});ini();
 }
+/* Profile & settings (Agent / Kassir): own photo, name, phone, theme / motion / text size, app info. */
+var PREF={get:function(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}},set:function(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+function themeOf(t){return t==='auto'?((tg&&tg.colorScheme)==='dark'?'dark':'light'):t}
+function applyPrefs(){var m=PREF.get('pmMotion','full'),f=PREF.get('pmFont','md');H.classList.toggle('pm-reduce',m==='reduced');H.classList.remove('pm-fs-sm','pm-fs-lg');if(f!=='md')H.classList.add('pm-fs-'+f);if(PREF.get('pmTheme','')==='auto')applyTheme(themeOf('auto'))}
+applyPrefs();
+var PROF=null,PROF_T0=Date.now();
+function papi(action,extra){var url=APP==='cashier'?'/api/cashier':'/api/agent',body={initData:(tg&&tg.initData)||'',action:action};Object.keys(extra||{}).forEach(function(k){body[k]=extra[k]});
+ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(body)}).then(function(r){return r.json().catch(function(){return {}}).then(function(j){if(!r.ok)throw Error(j.error||('Server xatosi ('+r.status+')'));return j})})}
+function paintAvatar(){var av=D.getElementById('pmAvatar');if(!av)return;var u=PROF&&PROF.photoUrl;
+ if(u){if(av.dataset.photo===u)return;av.dataset.photo=u;av.textContent='';var im=D.createElement('img');im.alt='';im.decoding='async';im.src=u;im.onerror=function(){delete av.dataset.photo;av.textContent=initials(PROF&&PROF.name)};av.appendChild(im)}
+ else if(av.dataset.photo){delete av.dataset.photo;av.textContent=initials(PROF&&PROF.name)}}
+function loadProfile(){if(!tg||!tg.initData)return;papi('profile').then(function(r){PROF=r.profile||null;paintAvatar()}).catch(function(){})}
+function shrink(file){return new Promise(function(ok,no){if(!file||!/^image\//.test(file.type||'image/'))return no(Error('Rasm faylini tanlang.'));var url=URL.createObjectURL(file),im=new Image();
+ im.onload=function(){var s=Math.min(1,720/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*s)),h=Math.max(1,Math.round(im.naturalHeight*s)),c=D.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
+  var q=.86,d=c.toDataURL('image/jpeg',q);while(d.length*.75>1100000&&q>.4){q-=.12;d=c.toDataURL('image/jpeg',q)}ok(d)};
+ im.onerror=function(){URL.revokeObjectURL(url);no(Error('Rasm ochilmadi.'))};im.src=url})}
+var pov=null,psh=null;
+function closeProfile(){if(psh)psh.classList.remove('on');if(pov)pov.classList.remove('on');try{tg&&tg.BackButton&&tg.BackButton.offClick&&tg.BackButton.offClick(closeProfile)}catch(e){}}
+function seg(name,cur,opts){return '<div class="pm-seg" data-pref="'+name+'">'+opts.map(function(o){return '<button type="button" data-v="'+o[0]+'" class="'+(cur===o[0]?'on':'')+'">'+o[1]+'</button>'}).join('')+'</div>'}
+function ver(){var s=[].find.call(D.scripts,function(x){return /premium\.js/.test(x.src)});var m=s&&s.src.match(/v=([^&]+)/);return m?m[1]:'—'}
+function lastSync(){if(APP!=='cashier'){var h=D.getElementById('headerDesc');var t=h&&h.textContent.match(/(\d{2}[./-]\d{2}[^\s]*,?\s*\d{1,2}:\d{2})/);if(t)return t[1]}return new Date(PROF_T0).toLocaleString('uz-UZ',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}
+function openProfile(){
+ if(!pov){pov=el('<div id="pmPOv"></div>');psh=el('<div id="pmProf" role="dialog" aria-modal="true" aria-label="Profil"></div>');D.body.append(pov,psh);pov.onclick=closeProfile}
+ var p=PROF||{name:'',phone:'',roleLabel:APP==='cashier'?'Kassir':'Agent',id:'',hasPhoto:false};
+ psh.innerHTML='<div class="pm-grab"></div><div class="pm-ph"><div class="pm-pav">'+(p.photoUrl?'<img src="'+p.photoUrl+'" alt="">':'<span>'+initials(p.name)+'</span>')+'</div><div><b>'+(p.name||'Profil').replace(/</g,'&lt;')+'</b><small>'+p.roleLabel+(p.id?' · ID '+p.id:'')+'</small></div><i class="pm-x" role="button" aria-label="Yopish">'+svg('xc')+'</i></div>'+
+  '<div class="pm-pbtns"><label class="pm-b">'+svg('camera')+'<span>Kamera</span><input type="file" accept="image/*" capture="user" hidden></label><label class="pm-b">'+svg('image')+'<span>Galereya</span><input type="file" accept="image/*" hidden></label>'+(p.hasPhoto?'<button type="button" class="pm-b pm-del">'+svg('xc')+'<span>O‘chirish</span></button>':'')+'</div>'+
+  '<h4>Shaxsiy ma’lumot</h4><label class="pm-fl">Ism<input id="pmPName" maxlength="60" autocomplete="name" value="'+String(p.name||'').replace(/"/g,'&quot;')+'"></label><label class="pm-fl">Telefon<input id="pmPPhone" type="tel" inputmode="tel" maxlength="24" placeholder="+998 90 123 45 67" value="'+String(p.phone||'').replace(/"/g,'&quot;')+'"></label>'+
+  '<button type="button" class="pm-save">Saqlash</button><p class="pm-pmsg" role="status"></p>'+
+  '<h4>Ko‘rinish</h4><div class="pm-set"><span>Mavzu</span>'+seg('pmTheme',PREF.get('pmTheme','auto'),[['light','Kunduzgi'],['dark','Tungi'],['auto','Avto']])+'</div>'+
+  '<div class="pm-set"><span>Animatsiyalar</span>'+seg('pmMotion',PREF.get('pmMotion','full'),[['full','To‘liq'],['reduced','Kamaytirilgan']])+'</div>'+
+  '<div class="pm-set"><span>Matn o‘lchami</span>'+seg('pmFont',PREF.get('pmFont','md'),[['sm','Kichik'],['md','O‘rta'],['lg','Katta']])+'</div>'+
+  '<h4>Ilova</h4><div class="pm-info"><div><span>Versiya</span><b>'+ver()+'</b></div><div><span>Oxirgi yangilanish</span><b>'+lastSync()+'</b></div><div><span>Internet</span><b>'+(navigator.onLine===false?'Yo‘q':'Bor')+'</b></div></div>'+
+  '<button type="button" class="pm-b pm-clear">'+svg('refresh')+'<span>Keshni tozalash va qayta yuklash</span></button>';
+ var msg=psh.querySelector('.pm-pmsg');function say(t,bad){msg.textContent=t;msg.className='pm-pmsg'+(bad?' bad':' ok')}
+ function busy(b){[].forEach.call(psh.querySelectorAll('button,input'),function(x){x.disabled=b})}
+ function save(extra,okText){busy(true);say('Saqlanmoqda…');return papi('profile_save',extra).then(function(r){PROF=r.profile;paintAvatar();openProfile();var m=psh.querySelector('.pm-pmsg');m.textContent=okText;m.className='pm-pmsg ok';try{tg&&tg.HapticFeedback&&tg.HapticFeedback.notificationOccurred('success')}catch(e){}}).catch(function(e){busy(false);say(e.message||'Saqlanmadi.',true)})}
+ psh.querySelector('.pm-x').onclick=closeProfile;
+ [].forEach.call(psh.querySelectorAll('input[type=file]'),function(f){f.onchange=function(){var file=f.files&&f.files[0];if(!file)return;say('Rasm tayyorlanmoqda…');shrink(file).then(function(d){var pv=psh.querySelector('.pm-pav');pv.innerHTML='<img src="'+d+'" alt="">';return save({imageData:d,profile:{}},'Profil rasmi saqlandi.')}).catch(function(e){say(e.message,true)})}});
+ var del=psh.querySelector('.pm-del');if(del)del.onclick=function(){save({profile:{removePhoto:true}},'Rasm o‘chirildi.')};
+ psh.querySelector('.pm-save').onclick=function(){save({profile:{name:psh.querySelector('#pmPName').value,phone:psh.querySelector('#pmPPhone').value}},'Ma’lumotlar saqlandi.')};
+ [].forEach.call(psh.querySelectorAll('.pm-seg'),function(sg){sg.onclick=function(e){var b=e.target.closest('button');if(!b)return;var k=sg.dataset.pref,v=b.dataset.v;PREF.set(k,v);[].forEach.call(sg.children,function(x){x.classList.toggle('on',x===b)});if(k==='pmTheme')applyTheme(themeOf(v));applyPrefs()}});
+ psh.querySelector('.pm-clear').onclick=function(){var keep={pmTheme:1,pmMotion:1,pmFont:1};say('Tozalanmoqda…');
+  var jobs=[];try{if(window.caches&&caches.keys)jobs.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}))}catch(e){}
+  try{Object.keys(sessionStorage).forEach(function(k){sessionStorage.removeItem(k)})}catch(e){}
+  try{Object.keys(localStorage).forEach(function(k){if(/^pm/.test(k)&&!keep[k])localStorage.removeItem(k)})}catch(e){}
+  Promise.all(jobs).catch(function(){}).then(function(){var u=new URL(location.href);u.searchParams.set('r',String(Date.now()));location.replace(u.toString())})};
+ requestAnimationFrame(function(){pov.classList.add('on');psh.classList.add('on')});
+ try{if(tg&&tg.BackButton){tg.BackButton.show();tg.BackButton.onClick(closeProfile)}}catch(e){}
+}
+function profileInit(){var av=D.getElementById('pmAvatar');if(av){av.setAttribute('role','button');av.setAttribute('aria-label','Profil va sozlamalar');av.tabIndex=0;av.onclick=openProfile;av.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();openProfile()}}}loadProfile()}
 /* cheap pre-check: most inserted subtrees have neither Cyrillic nor emoji, skip the tree walks */
 function fix(n){var t=n.nodeType===1||n.nodeType===3?n.textContent:'';if(n.nodeType===1&&!CY.test(t)&&!RT.test(t)&&!n.querySelector('[placeholder],[title],[aria-label]'))return;latin(n);if(n.nodeType===1)icons(n);else if(n.nodeType===3&&n.parentNode)icons(n.parentNode)}
-function start(){H.setAttribute('lang','uz-Latn');D.title=lat(D.title);try{if(APP==='cashier')cashier();else agent();iconBtns()}catch(e){console.error('premium',e)}latin(D.body);icons(D.body);
+function start(){H.setAttribute('lang','uz-Latn');D.title=lat(D.title);try{if(APP==='cashier')cashier();else agent();iconBtns();profileInit()}catch(e){console.error('premium',e)}latin(D.body);icons(D.body);
  new MutationObserver(function(ms){ms.forEach(function(m){if(m.type==='attributes'){var v=m.target.getAttribute(m.attributeName);if(v&&CY.test(v)){var w=lat(v);if(w!==v)m.target.setAttribute(m.attributeName,w)}return}
   if(m.type==='characterData'){if(CY.test(m.target.nodeValue))fix(m.target);return}
   [].forEach.call(m.addedNodes,fix)})}).observe(D.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']})}

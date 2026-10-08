@@ -838,7 +838,7 @@ class Tests(unittest.TestCase):
     self.assertTrue(path.startswith('/map/client/') or path.startswith('/map/client-photo/'))
    source=inspect.getsource(bot.serve_webhook)
    self.assertIn('reports.client_card_html(local,actor,cid,photo_url=photo_url)',source)
-   self.assertIn('photo_data=customer_photo_bytes',source)
+   self.assertIn('photo_data=photo_response(',source)
    self.assertIn('except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):',source)
 
  def test_customer_photo_proxy_validates_telegram_file(self):

@@ -75,6 +75,10 @@ section.on{animation:in .4s both}@keyframes in{from{opacity:0;transform:translat
 .ymap-pin b{transform:rotate(-45deg);color:#fff;font-size:13px;font-weight:800}
 .ymap-pin.on{background:linear-gradient(135deg,#6bb4ff,#f59e0b);animation:pin-pop .5s cubic-bezier(.3,1.6,.5,1)}
 @keyframes pin-pop{0%{transform:rotate(45deg) scale(.4)}60%{transform:rotate(45deg) scale(1.25)}100%{transform:rotate(45deg) scale(1)}}
+.ymap-ava{width:46px;height:46px;border-radius:50%;padding:3px;background:var(--c,#1f6bff);box-shadow:0 8px 18px -6px #0a1f5a99;position:relative;cursor:pointer;transition:transform .25s cubic-bezier(.3,1.5,.5,1)}.ymap-ava:after{content:'';position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:var(--c,#1f6bff);border-bottom:0}
+.ymap-ava>span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;font-weight:800;font-size:15px;border:2px solid #fff}.ymap-ava img{width:100%;height:100%;object-fit:cover;display:block}
+.ymap-ava.on{transform:scale(1.18);z-index:2}.ymap-ava.on>span{border-color:#f5b544}
+.av.pm-agph{padding:0;overflow:hidden}.av.pm-agph img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}
 .ymap-dot{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 4px 10px -2px #0006}
 .ymap-bln{font-family:Manrope,Inter,sans-serif;padding:2px 2px 4px;min-width:170px}.ymap-bln b{display:block;font-size:14px;margin-bottom:2px;color:#0b1f4d}.ymap-bln small{color:#6b7a99;font-size:12px}.ymap-bln button{margin-top:8px;width:100%;border:0;background:#1f6bff;color:#fff;padding:8px;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer}
 #ts{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translate(-50%,-160%);background:#0b1f4d;color:#fff;padding:11px 16px;border-radius:16px;font-size:13.5px;z-index:30;transition:.4s;box-shadow:0 8px 24px #0006;max-width:92%;border:1px solid #ffffff22}#ts.on{transform:translate(-50%,0)}
@@ -325,7 +329,7 @@ app.innerHTML=S.map((s,i)=>`<section>${s}</section>`).join('');
 nav.innerHTML=N.map((n,i)=>`<button onclick="go(${i})"><span>${n[0]}</span>${n[1]}</button>`).join('');
 function go(i){document.querySelectorAll('section').forEach((s,j)=>s.classList.toggle('on',i==j));document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('on',i==j));scrollTo(0,0);cnt(i);if(i==1&&ymapObj)setTimeout(()=>ymapObj.invalidateSize(),80)}
 function tog(el,cb){el.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>{el.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');cb&&cb(i,b)})}
-const al=q=>aglist.innerHTML=AG.filter(a=>!q||a[4]==q).map(agRow).join('');al();
+let agSorted=false;const al=q=>{const r=AG.filter(a=>!q||a[4]==q);if(agSorted)r.sort((x,y)=>(y[2]-x[2])||(y[3]-x[3]));aglist.innerHTML=r.map(agRow).join('');if(window.pmAgPhotos)window.pmAgPhotos()};al();
 tog(agch,i=>al(['',"Faol","Kechikkan",'Boshqaruv'][i]));
 const CH=[["Barchasi",91,""],["0–2 kun",28,"0–2 kun"],["3–4 kun",21,"3–4 kun"],["5+ kun",18,"5+ kun"],["Rejada",24,"Rejada"]];
 clch.innerHTML=CH.map((c,i)=>`<button class="${i?'':'on'}">${c[0]} <b>${c[1]}</b></button>`).join('');
@@ -372,7 +376,7 @@ function rc(){let r=CL.filter(c=>(!cf||c[4]==cf)&&(!qq||(c[0]+' '+(c[1]||'')+' '
   clsum.innerHTML=`<div class="kp"><div class="ic" style="--a:#1f6bff">👛</div><div style="flex:1"><small>Tanlangan bo'yicha jami qarz</small><b>${sum.toFixed(2)} $ <em style="font-size:12px;color:var(--mu);font-weight:600">· ${r.length} mijoz</em></b></div></div>${top?`<div style="margin-top:2px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--mu)">Eng katta qarzdor: <b style="color:var(--tx)">${top[0]}</b> — ${top[3].toFixed(2)} $</div>`:''}`}
 rc();tog(clch,i=>{cf=CH[i][2];rc()});
 sortf.onclick=()=>{clSort=clSort?0:1;sortl.textContent=clSort?"Qarz bo'yicha":"So'nggi faollik";rc()};
-function sortAg(){const z=AG.map((a,i)=>[a,AG_LL[i]]).sort((x,y)=>(y[0][2]-x[0][2])||(y[0][3]-x[0][3]));AG.splice(0,AG.length,...z.map(x=>x[0]));AG_LL.splice(0,AG_LL.length,...z.map(x=>x[1]));al();toast('Agentlar faollik bo‘yicha saralandi')}
+function sortAg(){agSorted=!agSorted;al();toast(agSorted?'Agentlar faollik bo‘yicha saralandi':'Asl tartib')}
 function goCl(i){go(2);const bs=clch.querySelectorAll('button');bs.forEach((b,k)=>b.classList.toggle('on',k==i));cf=CH[i][2];rc()}
 function renderK(){const r=KM.filter(k=>kf!=2||k[5]=='p-wa');kmlist.innerHTML=r.map((k,i)=>`<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">${k[6]}</div><div class="t"><b>${k[0]}</b><small>${k[1]}</small><small>Bugun · ${k[2]}</small>${k[5]=='p-wa'?'<button class="cf" onclick="confirmP()">✓ Tasdiqlash</button>':''}</div><div class="am"><b class="${k[3][0]=='-'?'bad':k[3][0]=='+'?'ok':''}">${k[3]} USD</b><span class="pill ${k[5]}">${k[4]}</span></div></div>`).join('')||'<div style="text-align:center;color:var(--mu);padding:16px">Tasdiqlanmagan operatsiya yo\'q ✅</div>'}
 function confirmP(){if(!pending)return;pending=false;Object.assign(KM[0],{3:'+37.80',4:'Qabul qilindi',5:'p-ok',6:'✅'});
@@ -519,4 +523,4 @@ if(tg){
   confirmP=function(){const was=pending;confirmP0();if(was)tg.HapticFeedback.notificationOccurred('success')};
 }
 go(0);
-</script><script src="./real-data.js?v=20261007-v4c"></script><script src="./manage.js?v=20261007-v4c"></script></body></html>
+</script><script src="./real-data.js?v=20261008-v4d"></script><script src="./manage.js?v=20261008-v4d"></script></body></html>

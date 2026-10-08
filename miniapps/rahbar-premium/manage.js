@@ -36,7 +36,7 @@ var css=document.createElement('style');css.textContent=
 '.pm-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.pm-kpis div{background:var(--soft);border-radius:14px;padding:10px}.pm-kpis small{display:block;color:var(--mu);font-size:11px}.pm-kpis b{display:block;font-size:16px;margin-top:3px}'+
 '.pm-per{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.pm-per button{border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:14px;padding:9px 7px;text-align:left;font-size:11px;line-height:1.5;cursor:pointer}.pm-per button b{display:block;font-size:12.5px;color:var(--pri)}'+
 '.pm-sw{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;border:0;background:none;color:var(--tx);padding:10px 0;border-top:1px solid var(--line);text-align:left;cursor:pointer}.pm-sw:first-of-type{border-top:0}.pm-sw i{font-style:normal;font-size:11px;font-weight:800;border-radius:20px;padding:4px 10px;background:#e4f8ee;color:#087b51}.pm-sw.off i{background:#eef1f5;color:#8a96a8}'+
-'.pm-hero{display:flex;gap:12px;align-items:center;margin-bottom:6px}.pm-av{width:54px;height:54px;border-radius:18px;display:grid;place-items:center;font-weight:800;font-size:20px;color:#fff;background:linear-gradient(135deg,#2f7bff,#0b3fae);flex:none}.pm-hero b{font-size:18px}'+
+'.pm-hero{display:flex;gap:12px;align-items:center;margin-bottom:6px}.pm-av{width:54px;height:54px;border-radius:18px;overflow:hidden;display:grid;place-items:center;font-weight:800;font-size:20px;color:#fff;background:linear-gradient(135deg,#2f7bff,#0b3fae);flex:none}.pm-hero b{font-size:18px}'+
 '#pm-map{height:260px;border-radius:16px;overflow:hidden;margin:10px 0;background:var(--soft)}'+
 '.pm-entry{display:flex;align-items:center;gap:12px;cursor:pointer}.pm-entry .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:var(--soft);flex:none}.pm-entry b{font-size:15px}.pm-entry small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.pm-entry em{margin-left:auto;font-style:normal;font-weight:800;color:var(--pri)}'+
 '.pm-badge{display:inline-block;min-width:20px;padding:2px 7px;border-radius:12px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;text-align:center;margin-left:6px}'+
@@ -151,14 +151,15 @@ function renderAgent(a){
  var stock=(a.stocks||[]).filter(function(s){return s.qty}).map(function(s){return '<div class="pm-row"><span>'+esc(s.name)+'</span><b style="color:'+(s.qty<0?'var(--bad)':'var(--tx)')+'">'+s.qty+' dona</b></div>'}).join('');
  var feats=(a.features||[]).map(function(f){return '<button class="pm-sw'+(f.enabled?'':' off')+'" data-pm="ag-feature" data-id="'+a.id+'" data-key="'+esc(f.key)+'" data-on="'+(f.enabled?1:0)+'"'+(a.active?'':' disabled')+'><span>'+(FEAT_ICON[f.key]||'•')+' '+esc(f.label)+'</span><i>'+(f.enabled?'ON':'OFF')+'</i></button>'}).join('');
  var manage=a.active?'<div class="pm-act"><div class="pm-b" data-pm="ag-rename" data-id="'+a.id+'" data-name="'+esc(a.name)+'">✏️ Nomini o‘zgartirish</div>'+(primaryAdmin?'<div class="pm-b" data-pm="ag-transfer" data-id="'+a.id+'">🔁 Akkaunt almashtirish</div><div class="pm-b r w" data-pm="ag-block" data-id="'+a.id+'">⛔ Kirishni bloklash</div>':'')+'</div>'+(primaryAdmin?'':'<div class="pm-note">Akkaunt almashtirish va bloklash faqat asosiy rahbarga ruxsat.</div>'):'<div class="pm-note">Bu agent bloklangan. Tarix va hisob ma’lumotlari saqlangan.</div>';
- sheet('Agent profili','<div class="pm-hero"><div class="pm-av">'+esc((a.name||'?')[0])+'</div><div style="flex:1"><b>'+esc(a.name)+'</b><small style="display:block;color:var(--mu);font-size:12px">ID '+a.id+' · '+esc(live)+'</small></div><span class="pm-tag '+(a.active?'ok':'bad')+'">'+(a.active?'FAOL':'BLOK')+'</span></div>'+
+ sheet('Agent profili','<div class="pm-hero"><div class="pm-av">'+(a.photoUrl?'<img alt="" src="'+esc(a.photoUrl)+'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" onclick="pmPhoto(this.src)">':esc((a.name||'?')[0]))+'</div><div style="flex:1"><b>'+esc(a.name)+'</b><small style="display:block;color:var(--mu);font-size:12px">ID '+a.id+' · '+esc(live)+'</small></div><span class="pm-tag '+(a.active?'ok':'bad')+'">'+(a.active?'FAOL':'BLOK')+'</span></div>'+
   '<div class="pm-kpis"><div><small>Mijozlar</small><b>'+a.clients+'</b></div><div><small>Qo‘ldagi pul</small><b>'+usd(a.cashUsd)+' $</b></div><div><small>Tasdiq kutilmoqda</small><b>'+usd(a.pendingHandoverUsd)+' $</b></div><div><small>Oxirgi GPS</small><b style="font-size:13px">'+(a.lastGpsTs?when(a.lastGpsTs):'Yo‘q')+'</b></div></div>'+
   '<div class="pm-card"><b>📊 Natijalar va marshrut</b><small>Davrni bosing — xaritada GPS yo‘li va tashriflar</small><div class="pm-per" style="margin-top:9px">'+periodBtn('Bugun',a.periods&&a.periods.today,'today',a.id)+periodBtn('7 kun',a.periods&&a.periods.week,'week',a.id)+periodBtn('30 kun',a.periods&&a.periods.month,'month',a.id)+'</div></div>'+
   '<div class="pm-card"><b>📦 Agentdagi tovar</b>'+(stock||'<small>Tovar yo‘q</small>')+'</div>'+
   '<div class="pm-card"><b>🔐 Huquqlar</b><small>Bosib yoqing yoki o‘chiring</small>'+feats+'</div>'+
   '<div class="pm-card"><b>⚙️ Boshqaruv</b>'+manage+'</div>',esc(a.name));
 }
-async function openAgent(id){loading('Agent profili');try{renderAgent(await api('agent_detail',{agentId:id}))}catch(e){sheet('Agent profili','<div class="pm-note">'+esc(e.message||'Yuklanmadi')+'</div>')}}
+window.pmOpenAgent=function(id){openAgent(id)};
+async function openAgent(id){loading('Agent profili');try{var ad=await api('agent_detail',{agentId:id});if(ad&&!ad.photoUrl){var ra=(P.agents()||[]).find(function(x){return Number(x.id)===Number(id)});if(ra&&ra.photoUrl)ad.photoUrl=ra.photoUrl}renderAgent(ad)}catch(e){sheet('Agent profili','<div class="pm-note">'+esc(e.message||'Yuklanmadi')+'</div>')}}
 var staffTab='agents',staff=null;
 function renderStaff(){
  var d=staff||{agents:[],cashiers:[]},act=function(x){return x.active!==false};
@@ -299,11 +300,14 @@ function ensureCash(d){
  if(cashPeriod!=='custom')loadCashPeriod();
  var home=sections()[0],hb=home&&home.querySelector('.hero .hb small:last-child');if(hb)hb.textContent='Naqd: '+som(w.cashUzs)+' so‘m · '+usd(w.cashUsd)+' $ · Karta: '+som(w.cardUzs)+' so‘m';
 }
+/* Kassa tiles (qabul / rasxod / sof) follow the selected period instead of a fixed 7 days */
+function setCashTiles(r){var s=sections()[3];if(!s||!r)return;var cs=s.querySelectorAll('.bd > .three .c');var lab={today:'Bugun',week:'7 kunda',month:'Shu oy',custom:'Davrda'}[cashPeriod]||'';var a=Number(r.acceptedCashUsd||0),e=Number(r.cashierExpensesUsd||0);
+ [[lab+' qabul',a],[lab+' rasxod',e],['Sof o‘zgarish',a-e]].forEach(function(x,i){var c=cs[i];if(!c)return;var sm=c.querySelector('small'),b=c.querySelector('b');if(sm)sm.textContent=x[0];if(b){b.textContent=usd(x[1]);b.classList.toggle('pm-neg',i===2&&x[1]<0);b.style.animation='none';void b.offsetWidth;b.style.animation='up .45s cubic-bezier(.2,.9,.3,1) both'}})}
 async function loadCashPeriod(){
  var box=$('pm-cash-flows');if(!box)return;var arg={period:cashPeriod};
  if(cashPeriod==='custom'){arg.from=($('pm-cf')||{}).value;arg.to=($('pm-ct')||{}).value;if(!arg.from||!arg.to){box.innerHTML='<small style="color:var(--mu)">Sanalarni tanlang</small>';return}}
  box.innerHTML='<small style="color:var(--mu)">Yuklanmoqda…</small>';
- try{var r=await api('period_report',arg);box.innerHTML='<small style="display:block;color:var(--mu);margin-bottom:6px">📅 '+esc(r.label)+'</small>'+flowsHtml(r.cash)}catch(e){box.innerHTML='<small style="color:var(--bad)">'+esc(e.message)+'</small>'}
+ try{var r=await api('period_report',arg);box.innerHTML='<small style="display:block;color:var(--mu);margin-bottom:6px">📅 '+esc(r.label)+'</small>'+flowsHtml(r.cash);setCashTiles(r)}catch(e){box.innerHTML='<small style="color:var(--bad)">'+esc(e.message)+'</small>'}
 }
 P.onLoad(function(d){ensureCash(d)});
 function decorateClientList(){
@@ -311,7 +315,7 @@ function decorateClientList(){
  list.querySelectorAll('.row > .av[onclick^="openC("]').forEach(function(av){
   var i=Number((av.getAttribute('onclick').match(/openC\((\d+)\)/)||[])[1]),c=cl[i];if(!c||!c.photoUrl||av.classList.contains('pm-hasph'))return;
   var letter=av.textContent;av.classList.add('pm-hasph');av.removeAttribute('onclick');av.dataset.photo=c.photoUrl;
-  var img=document.createElement('img');img.className='pm-lphoto';img.alt='';img.loading='lazy';img.src=c.photoUrl;
+  var img=document.createElement('img');img.className='pm-lphoto';img.alt='';img.loading='lazy';img.decoding='async';img.src=c.thumbUrl||c.photoUrl;
   img.onerror=function(){av.classList.remove('pm-hasph');delete av.dataset.photo;av.textContent=letter};
   av.textContent='';av.appendChild(img);
   av.addEventListener('click',function(ev){ev.stopPropagation();if(av.dataset.photo)window.pmPhoto(av.dataset.photo);else window.openC(i)});
@@ -369,6 +373,10 @@ document.addEventListener('click',function(ev){
  if(k==='all-export'){exportFile('all_clients_export',{format:b.dataset.f},'Barcha mijozlar '+(b.dataset.f==='pdf'?'PDF':'Excel'));return}
 },true);
 
+/* ---------- photos: retry a failed image twice (1.2s, 3.5s) before its fallback runs ---------- */
+document.addEventListener('error',function(e){var img=e.target;if(!(img instanceof HTMLImageElement)||!/\bpm-(cphoto|vphoto|lphoto|agph)\b/.test(img.className))return;
+ if(!img.dataset.src)img.dataset.src=img.getAttribute('src')||'';var n=Number(img.dataset.retry||0),base=img.dataset.src;
+ if(n<2&&base&&navigator.onLine!==false){e.stopImmediatePropagation();img.dataset.retry=String(n+1);setTimeout(function(){if(img.isConnected)img.src=base+(base.indexOf('?')>=0?'&':'?')+'r='+(n+1)},n?3500:1200)}},true);
 /* ---------- product rating (Hisobot → Mahsulotlar bo'yicha) ---------- */
 window.pmProducts=function(){
  var rep=window.__pmRep,d=P.data();

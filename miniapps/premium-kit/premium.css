@@ -148,3 +148,44 @@ html.pm.pm-lite nav:not(.tabs),html.pm.pm-lite .pm-nav{-webkit-backdrop-filter:n
 html.pm.pm-lite .pm-in>*{animation-duration:.3s}
 @media (prefers-reduced-motion:reduce){html.pm *,html.pm *:before,html.pm *:after{animation:none!important;transition:none!important}}
 html.pm[data-pmt="dark"] .hero small.k,html.pm[data-pmt="dark"] .lg small{color:#7db6f5!important}
+/* Profile & settings sheet */
+html.pm #pmAvatar img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
+html.pm #pmPOv{position:fixed;inset:0;background:#000a;opacity:0;pointer-events:none;transition:opacity .3s;z-index:2147482000}html.pm #pmPOv.on{opacity:1;pointer-events:auto}
+html.pm #pmProf{position:fixed;left:50%;bottom:0;width:min(480px,100%);max-height:92vh;overflow:auto;overscroll-behavior:contain;transform:translate(-50%,105%);transition:transform .42s var(--out);background:var(--bg);color:var(--tx);border-radius:26px 26px 0 0;padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));z-index:2147482001;box-shadow:0 -20px 50px -20px #0008}
+html.pm #pmProf.on{transform:translate(-50%,0)}
+html.pm #pmProf .pm-grab{width:44px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 14px}
+html.pm #pmProf h4{margin:20px 2px 10px;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--mu)}
+html.pm .pm-ph{display:flex;align-items:center;gap:14px}html.pm .pm-ph>div:nth-child(2){flex:1;min-width:0}
+html.pm .pm-ph b{display:block;font-size:19px;letter-spacing:-.3px}html.pm .pm-ph small{display:block;color:var(--mu);font-size:13px;margin-top:3px}
+html.pm .pm-pav{width:84px;height:84px;border-radius:50%;flex:none;overflow:hidden;background:var(--gl);display:grid;place-items:center;color:#fff;font-size:32px;font-weight:800;box-shadow:0 12px 26px -12px #1f6fd1cc;animation:pmpop .45s var(--spring) both}
+html.pm .pm-pav img{width:100%;height:100%;object-fit:cover}
+html.pm .pm-x{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--mu);cursor:pointer;flex:none}html.pm .pm-x svg{width:20px;height:20px}
+@keyframes pmpop{from{transform:scale(.7);opacity:0}}
+html.pm .pm-pbtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-top:16px}
+html.pm #pmProf .pm-b{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--pri-tx);font-family:inherit;font-weight:700;font-size:14px;line-height:1;cursor:pointer;width:100%}
+html.pm #pmProf .pm-b svg{width:18px;height:18px}html.pm #pmProf .pm-del{color:var(--bad)}
+html.pm #pmProf .pm-clear{margin-top:12px}
+html.pm .pm-fl{display:grid;gap:6px;margin-bottom:10px;font-size:13px;font-weight:700;color:var(--mu)}
+html.pm .pm-fl input{min-height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 14px;font-family:inherit;font-weight:600;font-size:16px;outline:0}
+html.pm .pm-fl input:focus{border-color:var(--pri);box-shadow:0 0 0 3px #2a8bf233}
+html.pm .pm-save{width:100%;min-height:50px;border:0;border-radius:14px;background:var(--gl);color:#fff;font-family:inherit;font-weight:800;font-size:16px;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66;cursor:pointer}
+html.pm .pm-save:disabled,html.pm #pmProf .pm-b:disabled{opacity:.6}
+html.pm .pm-pmsg{min-height:18px;margin:8px 2px 0;font-size:13px;font-weight:600}html.pm .pm-pmsg.ok{color:var(--ok)}html.pm .pm-pmsg.bad{color:var(--bad)}
+html.pm .pm-set{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:8px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+html.pm .pm-set>span{font-weight:700;font-size:14px}
+html.pm .pm-seg{display:flex;background:var(--soft);border-radius:12px;padding:3px;gap:2px}
+html.pm .pm-seg button{border:0;background:none;color:var(--mu);font-family:inherit;font-weight:700;font-size:12.5px;padding:8px 10px;border-radius:9px;min-height:34px;cursor:pointer;white-space:nowrap}
+html.pm .pm-seg button.on{background:var(--gl);color:#fff;box-shadow:0 6px 14px -8px #1f6fd1cc}
+html.pm .pm-info{display:grid;gap:1px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--line)}
+html.pm .pm-info div{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;background:var(--card);font-size:14px}html.pm .pm-info span{color:var(--mu)}
+/* User preferences from the profile sheet */
+html.pm.pm-reduce *,html.pm.pm-reduce *:before,html.pm.pm-reduce *:after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}
+html.pm.pm-fs-sm body{zoom:.93}html.pm.pm-fs-lg body{zoom:1.1}
+@media (max-width:360px){html.pm .pm-set{flex-direction:column;align-items:stretch}html.pm .pm-seg button{flex:1}}
+html.pm #pmProf .pm-pbtns .pm-b,html.pm #pmProf .pm-clear{height:46px!important;min-height:46px!important;margin:0!important;padding:0 10px!important;box-sizing:border-box;background:var(--card)!important;border:1px solid var(--line)!important;box-shadow:none!important;color:var(--pri-tx)!important;font-size:14px!important;font-weight:700!important}
+html.pm #pmProf .pm-pbtns .pm-del{color:var(--bad)!important}
+html.pm #pmProf .pm-clear{margin-top:12px!important}
+html.pm #pmProf .pm-seg button{min-height:34px!important;height:auto;box-shadow:none;background:none;color:var(--mu)}
+html.pm #pmProf .pm-seg button.on{background:var(--gl)!important;color:#fff!important}
+html.pm #pmProf .pm-save{min-height:50px!important}
+html.pm #pmProf .pm-b svg{width:18px!important;height:18px!important;flex:none}
