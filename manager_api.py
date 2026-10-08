@@ -518,7 +518,8 @@ def dashboard(db, now=None):
     pending_total = db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='pending'""").fetchone()[0]
     pending_count = db.execute("SELECT COUNT(*) FROM handovers WHERE status='pending'").fetchone()[0]
-    cash_balance=core.cashier_balance_usd(db)
+    # Same "umumiy kassa" as the Kassir app: cash (so'm + dollar) plus card/bank receipts, USD equivalent.
+    cash_balance=core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
