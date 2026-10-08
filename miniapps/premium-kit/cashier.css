@@ -69,3 +69,5 @@ html.pm .activity .row>b:first-child>ico:first-child svg{width:18px;height:18px}
 html.pm .activity .row:has(.positive){--q:#34c759}html.pm .activity .row:has(.negative){--q:#f0527a}html.pm .activity .row:has(.neutral){--q:#8b5cf6}
 html.pm .activity>p,html.pm .activity>small{padding-left:44px}
 html.pm .debt-meta ico{color:var(--mu)}
+
+html.pm .pm-gt{position:relative;margin:8px 0 12px;padding:0;background:none!important}html.pm .pm-gt small{font-size:12px;opacity:.85;display:flex;align-items:center;gap:6px}html.pm .pm-gt strong{display:block;font-size:30px;font-weight:800;letter-spacing:-.6px;margin-top:4px;line-height:1.1}html.pm .pm-gt span{display:block;font-size:12px;opacity:.8;margin-top:4px}

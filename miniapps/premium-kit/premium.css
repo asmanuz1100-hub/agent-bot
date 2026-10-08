@@ -77,9 +77,12 @@ html.pm nav:not(.tabs) button.active,html.pm .pm-nav button.on{color:#fff!import
 html.pm nav:not(.tabs) button span,html.pm .pm-nav button span{font-size:19px;line-height:1;display:block;background:none!important;width:auto!important;height:auto!important}
 html.pm nav:not(.tabs) ico,html.pm .pm-nav ico{margin:0}
 html.pm nav:not(.tabs) button span ico svg,html.pm .pm-nav button span ico svg{width:22px;height:22px}
-html.pm nav:not(.tabs) button.active span,html.pm .pm-nav button.on span{animation:pmpop .55s var(--spring)}
-@keyframes pmpop{0%{transform:scale(.6) translateY(4px)}100%{transform:none}}
-html.pm #ni{position:absolute;top:8px;bottom:8px;left:8px;width:60px;border-radius:22px;background:var(--gl);box-shadow:0 10px 24px -8px #1f6fd1cc,inset 0 1px 0 #ffffff88;transition:transform .5s var(--spring),opacity .2s}
+html.pm nav:not(.tabs) button.active span,html.pm .pm-nav button.on span{animation:pmpop .42s cubic-bezier(.22,1,.36,1)}
+@keyframes pmpop{0%{transform:scale(.82) translateY(3px)}100%{transform:none}}
+html.pm #ni{position:absolute;top:8px;bottom:8px;left:8px;width:60px;border-radius:22px;background:var(--gl);box-shadow:0 10px 24px -8px #1f6fd1cc,inset 0 1px 0 #ffffff88;transition:transform .42s cubic-bezier(.22,1,.36,1),width .3s ease,opacity .2s;will-change:transform}
+html.pm nav:not(.tabs),html.pm .pm-nav{overflow:hidden}
+html.pm nav:not(.tabs) button.active,html.pm .pm-nav button.on{transition:color .2s ease .16s}
+@media (prefers-reduced-motion:reduce){html.pm #ni{transition:none}html.pm nav:not(.tabs) button.active span{animation:none}}
 html.pm #ni.off{opacity:0}
 
 /* Ripple + press */
