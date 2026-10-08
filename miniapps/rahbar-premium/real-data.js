@@ -97,7 +97,7 @@ function refreshAgents(d){
   AG_LL.push(validCoord(a.lat,a.lon)?[Number(a.lat),Number(a.lon)]:[NaN,NaN]);
  });
  al();tog(agch,function(i){al(['','Faol','Kechikkan','Yopiq'][i])});
- if(AG.length)selA(Math.min(selAgent,AG.length-1));
+ if(AG.length){autoSel=true;try{selA(Math.min(selAgent,AG.length-1))}finally{autoSel=false}}
 }
 
 function refreshClients(d){
@@ -119,8 +119,9 @@ selA=function(i){
  sa_p.className='pill '+(a[4]==='Faol'?'p-ok':a[4]==='Kechikkan'?'p-wa':'p-pri');setText(sa_p,'● '+a[4]);selAgent=i;window.pmSelAgent=i;
  const count=document.querySelectorAll('section')[1].querySelector('.two .pill:nth-child(2)');if(count&&REAL_AGENTS[i]){setText(count,'👥 Mijozlar ('+Number(REAL_AGENTS[i].clients||0)+')');count.style.cursor='pointer';count.setAttribute('role','button');count.onclick=function(){goCl(0);const q=document.getElementById('qi');qq=a[0];if(q)q.value=a[0];rc()}}
  ymapPMs.forEach(function(m,k){if(!m)return;m.setIcon(agentIcon(L,REAL_AGENTS[k]||{name:AG[k]&&AG[k][0]},k===i))});
- const sav=document.getElementById('sa_av'),ra=REAL_AGENTS[i];if(sav){if(ra&&ra.photoUrl){sav.classList.add('pm-agph');sav.innerHTML='<img class="pm-agph" alt="" src="'+esc(ra.photoUrl)+'">';sav.firstChild.onerror=function(){sav.classList.remove('pm-agph');sav.textContent=(a[0]||'?')[0]}}else{sav.classList.remove('pm-agph')}}
+ setSelAvatar(i);
  const ll=AG_LL[i];if(ymapObj&&ll&&validCoord(ll[0],ll[1]))ymapObj.flyTo(ll,15,{duration:.45});
+ if(REAL_MODE&&ymapObj&&currentPage()===1){if(!autoSel)drawAgentTrack(i);else if(trackAgentId!=null&&REAL_AGENTS[i]&&REAL_AGENTS[i].id===trackAgentId)drawAgentTrack(i,true)}
  scrollTo({top:0,behavior:'smooth'});
 };
 
@@ -129,11 +130,49 @@ ymapRoute=function(i){
  const url='https://www.google.com/maps/dir/?api=1&destination='+ll[0]+','+ll[1];if(tg&&tg.openLink)tg.openLink(url);else window.open(url,'_blank');
 };
 
+/* Agent photos: preload with retries (a cold server may need a few seconds for the first thumbnail);
+   markers/list show the initial until the photo is really loaded, then switch without a reload. */
+const AGPH={};
+function agPhotoSrc(url){const x=url&&AGPH[url];return x&&x.ok?x.src:''}
+function agPhotoLoad(url,cb){
+ if(!url)return;let x=AGPH[url];if(x&&x.ok){if(cb)cb();return}
+ if(!x){x=AGPH[url]={ok:false,n:0,cbs:[]};}if(cb)x.cbs.push(cb);if(x.busy||x.dead)return;x.busy=true;
+ const waits=[0,1500,3500,7000,15000];
+ (function attempt(){const im=new Image(),src=x.n?url+(url.indexOf('?')<0?'?':'&')+'r='+x.n:url;
+  im.onload=function(){x.ok=true;x.busy=false;x.src=src;const cbs=x.cbs.splice(0);cbs.forEach(function(f){try{f()}catch(e){}})};
+  im.onerror=function(){x.n++;if(x.n>=waits.length){x.busy=false;x.dead=true;return}setTimeout(attempt,waits[x.n])};
+  im.src=src})();
+}
+window.pmPhotoSrc=agPhotoSrc;window.pmPhotoLoad=agPhotoLoad;
+function preloadAgentPhotos(){REAL_AGENTS.forEach(function(a){if(a&&a.photoUrl)agPhotoLoad(a.photoUrl,refreshAgentPhotos)})}
+let agPhotoTimer=0;
+function refreshAgentPhotos(){clearTimeout(agPhotoTimer);agPhotoTimer=setTimeout(function(){
+ if(window.L)ymapPMs.forEach(function(m,k){if(m)m.setIcon(agentIcon(window.L,REAL_AGENTS[k],k===selAgent))});
+ if(window.pmAgPhotos)window.pmAgPhotos();setSelAvatar(selAgent)},60)}
+function setSelAvatar(i){const sav=document.getElementById('sa_av'),ra=REAL_AGENTS[i],a=AG[i]||[];if(!sav)return;const src=ra&&agPhotoSrc(ra.photoUrl);
+ if(src){sav.classList.add('pm-agph');sav.innerHTML='<img class="pm-agph" alt="" src="'+esc(src)+'">'}else{sav.classList.remove('pm-agph');sav.textContent=(a[0]||'?')[0];if(ra&&ra.photoUrl)agPhotoLoad(ra.photoUrl,refreshAgentPhotos)}}
 /* Agent marker: round photo (or initial) in a status-coloured ring; tap opens the agent card */
 function agentIcon(L,a,on){a=a||{};const color=!a.shiftOpen||a.locationSource==='last'?'#7f8fa6':a.status==='active'?'#16b364':'#f59e0b';const ini=esc((a.name||'?')[0]);
- const inner=a.photoUrl?'<img class="pm-agph" alt="" src="'+esc(a.photoUrl)+'" onerror="this.outerHTML=\''+ini+'\'">':ini;
+ const src=agPhotoSrc(a.photoUrl);if(a.photoUrl&&!src)agPhotoLoad(a.photoUrl,refreshAgentPhotos);
+ const inner=src?'<img class="pm-agph" alt="" src="'+esc(src)+'">':ini;
  return L.divIcon({className:'',html:'<div class="ymap-ava'+(on?' on':'')+'" style="--c:'+color+'" role="button" aria-label="'+esc(a.name||'Agent')+'"><span>'+inner+'</span></div>',iconSize:[46,53],iconAnchor:[23,53]})}
-window.pmAgPhotos=function(){const list=document.getElementById('aglist');if(!list)return;list.querySelectorAll('.row[onclick^="selA("] > .av').forEach(function(av){const n=Number((av.parentNode.getAttribute('onclick').match(/selA\((\d+)\)/)||[])[1]),a=REAL_AGENTS[n];if(!a||!a.photoUrl||av.classList.contains('pm-agph'))return;const ini=av.textContent;av.classList.add('pm-agph');av.innerHTML='<img class="pm-agph" alt="" loading="lazy" src="'+esc(a.photoUrl)+'">';av.firstChild.onerror=function(){av.classList.remove('pm-agph');av.textContent=ini}})};
+window.pmAgPhotos=function(){const list=document.getElementById('aglist');if(!list)return;list.querySelectorAll('.row[onclick^="selA("] > .av').forEach(function(av){const n=Number((av.parentNode.getAttribute('onclick').match(/selA\((\d+)\)/)||[])[1]),a=REAL_AGENTS[n];if(!a||!a.photoUrl||av.classList.contains('pm-agph'))return;const src=agPhotoSrc(a.photoUrl);if(!src){agPhotoLoad(a.photoUrl,refreshAgentPhotos);return}av.classList.add('pm-agph');av.innerHTML='<img class="pm-agph" alt="" src="'+esc(src)+'">'})};
+/* Selected agent's latest-shift GPS trail on the main map */
+let trackLayer=null,trackSeq=0,trackAgentId=null,autoSel=false;
+function hm(ts){try{return new Date(Number(ts)*1000).toLocaleTimeString('uz-UZ',{timeZone:'Asia/Tashkent',hour:'2-digit',minute:'2-digit'})}catch(e){return '—'}}
+function kmOf(pts){let km=0;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k],r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r,h=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2,d=12742*Math.asin(Math.sqrt(h));if(d<25)km+=d}return km}
+async function drawAgentTrack(i,quiet){
+ const a=REAL_AGENTS[i],seq=++trackSeq;if(!a||!ymapObj||!window.L)return;const L=window.L;
+ if(!trackLayer)trackLayer=L.layerGroup().addTo(ymapObj);if(!quiet)trackLayer.clearLayers();trackAgentId=a.id;
+ let r;try{r=await req('route',{agentId:a.id})}catch(e){return}
+ if(seq!==trackSeq||!ymapObj)return;trackLayer.clearLayers();
+ const pts=(r&&r.points||[]).filter(function(p){return validCoord(p.lat,p.lon)});if(pts.length<2){trackLayer.clearLayers();if(!quiet)toast('🛣 '+(a.name||'Agent')+': bugun GPS yo‘l yozilmagan');return}
+ const segs=[];let cur=[];pts.forEach(function(p,k){const q=pts[k-1];if(q&&(p.ts-q.ts>1800||kmOf([q,p])>=25)){if(cur.length)segs.push(cur);cur=[]}cur.push(p)});if(cur.length)segs.push(cur);
+ segs.forEach(function(sg){if(sg.length>1){L.polyline(sg.map(function(p){return[p.lat,p.lon]}),{color:'#ffffff',weight:8,opacity:.9}).addTo(trackLayer);L.polyline(sg.map(function(p){return[p.lat,p.lon]}),{color:'#1f6bff',weight:4.5,opacity:.95}).addTo(trackLayer)}});
+ const f=pts[0];L.circleMarker([f.lat,f.lon],{radius:7,color:'#fff',weight:3,fillColor:'#16b364',fillOpacity:1}).bindTooltip('Boshlanish · '+hm(f.ts)).addTo(trackLayer);
+ if(quiet)return;const b=L.latLngBounds(pts.map(function(p){return[p.lat,p.lon]}));if(b.isValid())ymapObj.flyToBounds(b.pad(.2),{maxZoom:16,duration:.5});
+ toast('🛣 '+(a.name||'Agent')+' · '+(r.end?'oxirgi smena':'bugun')+': '+kmOf(pts).toFixed(1)+' km · '+hm(f.ts)+'–'+hm(pts[pts.length-1].ts));
+}
 async function renderAgentMap(){
  if(!REAL_MODE||currentPage()!==1)return;
  const box=$('ymap');if(!box)return;
@@ -189,8 +228,9 @@ function renderCash(){
  const start=Number(REAL_DASH.todayStart||0);let rows=REAL_TX.filter(function(t){if(kf===2)return t.type==='handover'&&t.state==='pending';const ts=Number(eventTs(t)||0);return kf===0?ts>=start:ts>=start-6*86400}).slice(0,100);
  kmlist.innerHTML=rows.map(function(t){
   if(t.type==='expense'){
-   const original=t.currency==='UZS'&&Number(t.amountUzs||0)?Number(t.amountUzs).toLocaleString('en-US')+' UZS · ':'';
-   return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">📦</div><div class="t"><b>'+esc(t.category||'Kassa rasxodi')+'</b><small>'+esc([t.recipient?('Kimga: '+t.recipient):'',t.cashier?('Kassir: '+t.cashier):''].filter(Boolean).join(' · '))+'</small><small>'+clock(t.ts)+'</small></div><div class="am"><b class="bad">−'+esc(original)+usd(t.amountUsd)+' USD</b><span class="pill p-bad">Rasxod</span></div></div>';
+   const som=t.currency==='UZS'&&Number(t.amountUzs||0)?Number(t.amountUzs).toLocaleString('en-US')+' UZS':'';
+   const cm=String(t.category||'Kassa rasxodi').match(/^([^\p{L}\p{N}]*)(.*)$/u),cic=(cm&&cm[1].trim())||'📦',ctitle=(cm&&cm[2].trim())||'Kassa rasxodi';
+   return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">'+esc(cic)+'</div><div class="t"><b>'+esc(ctitle)+(t.payFrom==='card'?' · 💳 karta':'')+'</b><small>'+esc([t.recipient?('Kimga: '+t.recipient):'',t.cashier?('Kassir: '+t.cashier):''].filter(Boolean).join(' · '))+'</small><small>'+clock(t.ts)+'</small></div><div class="am"><b class="bad">−'+(som?esc(som)+'</b><small class="muted" style="display:block;text-align:right">≈ '+usd(t.amountUsd)+' USD</small>':usd(t.amountUsd)+' USD</b>')+'<span class="pill p-bad">Rasxod</span></div></div>';
   }
   const accepted=t.state==='accepted',rejected=t.state==='rejected',label=accepted?'Qabul qilindi':rejected?'Rad etildi':'Kutilmoqda',pill=accepted?'p-ok':rejected?'p-bad':'p-wa',sign=accepted?'+':'';
   return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">🪙</div><div class="t"><b>'+esc(t.agent||'Agent')+'</b><small>'+(t.cashier?'Kassir: '+esc(t.cashier):'Kassa topshirig‘i')+'</small><small>'+clock(eventTs(t))+'</small></div><div class="am"><b class="'+(accepted?'ok':rejected?'bad':'')+'">'+sign+usd(t.amountUsd)+' USD</b><span class="pill '+pill+'">'+label+'</span></div></div>';
@@ -241,7 +281,7 @@ async function loadReal(silent){
  try{
   const d=await req('dashboard');if(!d||d.readOnly!==true)throw new Error('Manager API read-only javob bermadi.');
   REAL_MODE=true;REAL_DASH=d;REAL_CLIENTS=Array.isArray(d.clients)?d.clients:[];REAL_AGENTS=Array.isArray(d.agents)?d.agents:[];REAL_TX=Array.isArray(d.transactions)?d.transactions:[];
-  markReal();updateHome(d);refreshAgents(d);refreshClients(d);updateCash(d);renderReport('week');tog(rseg,function(i){reportSeg(i)});
+  markReal();preloadAgentPhotos();updateHome(d);refreshAgents(d);refreshClients(d);updateCash(d);renderReport('week');tog(rseg,function(i){reportSeg(i)});
   if(currentPage()===1)setTimeout(renderAgentMap,80);if(currentPage()===2)setTimeout(renderClientMap,80);
   if(window.pmReady)window.pmReady();
   if(!silent)toast('✅ Haqiqiy ma’lumotlar yangilandi');

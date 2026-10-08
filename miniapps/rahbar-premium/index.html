@@ -446,7 +446,7 @@ refresh:'<path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4
 sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
 moon:'<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>',
 spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'};
-const EM={"👥":"users","🏪":"store","📅":"cal","⚠":"alert","🪙":"coins","🧭":"nav","👛":"wallet","📊":"chart","📦":"box","💰":"bag","✅":"check","➕":"uplus","⏱":"clock","🔻":"tdown","📗":"chart","🏦":"bank","➡":"arr","↩":"undo","⬇":"down","⬆":"up","👤":"user","🏠":"home","⟳":"refresh","🔄":"refresh","📞":"phone","📍":"pin","🔍":"search","⚙":"sliders","🔔":"bell","☀":"sun","🌙":"moon","👋":"spark"};
+const EM={"👨‍💼":"user","👨":"user","🏢":"store","🚚":"nav","⛽":"nav","🧾":"chart","💵":"coins","💳":"wallet","👥":"users","🏪":"store","📅":"cal","⚠":"alert","🪙":"coins","🧭":"nav","👛":"wallet","📊":"chart","📦":"box","💰":"bag","✅":"check","➕":"uplus","⏱":"clock","🔻":"tdown","📗":"chart","🏦":"bank","➡":"arr","↩":"undo","⬇":"down","⬆":"up","👤":"user","🏠":"home","⟳":"refresh","🔄":"refresh","📞":"phone","📍":"pin","🔍":"search","⚙":"sliders","🔔":"bell","☀":"sun","🌙":"moon","👋":"spark"};
 const DC={"🟢":"#16b364","🟡":"#f59e0b","🟣":"#8b5cf6","🔵":"#3b82ff","🟠":"#f97316"};
 const RE=new RegExp('('+[...Object.keys(EM),...Object.keys(DC)].join('|')+')\uFE0F?','g'),RT=new RegExp(RE.source);
 const svg=n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
@@ -523,4 +523,4 @@ if(tg){
   confirmP=function(){const was=pending;confirmP0();if(was)tg.HapticFeedback.notificationOccurred('success')};
 }
 go(0);
-</script><script src="./real-data.js?v=20261009-v4e"></script><script src="./manage.js?v=20261009-v4e"></script></body></html>
+</script><script src="./real-data.js?v=20261010-v5"></script><script src="./manage.js?v=20261010-v5"></script></body></html>

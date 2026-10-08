@@ -278,6 +278,7 @@ def connect(path,initialize=True):
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
+        db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS pay_from TEXT NOT NULL DEFAULT 'cash'")
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,item in PRODUCT_CATALOG.items():
@@ -322,7 +323,7 @@ def connect(path,initialize=True):
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(handovers)')}:
         db.execute('ALTER TABLE handovers ADD COLUMN amount_usd INTEGER DEFAULT 0')
     expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
-    for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
+    for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0'),('pay_from',"TEXT NOT NULL DEFAULT 'cash'")):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
     for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
@@ -702,6 +703,13 @@ def correct_delivery(db,actor,event_id,new_pack,new_qty):
 
 CLIENT_EDIT_FIELDS=('name','shop_name','phone','address','region','comment','payment_due','photo','lat','lon')
 
+def photo_version(file_id):
+    """Short stable tag of a Telegram file_id for cache-busting photo links."""
+    if not file_id:return ''
+    import hashlib
+    return hashlib.sha1(str(file_id).encode()).hexdigest()[:10]
+
+
 def edit_client(db,actor,client_id,values):
     """Edit the chosen customer profile only; product/receivable history is immutable."""
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
@@ -1040,15 +1048,17 @@ def cashier_flows(db,start=None,end=None):
         'in_cash_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted' AND COALESCE(amount,0)=0"+hw,args),
         'in_card_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_incomes WHERE currency='UZS'"+cw,args),
         'in_card_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes WHERE currency<>'UZS'"+cw,args),
-        'out_expense_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_expenses WHERE currency='UZS'"+ew,args),
-        'out_expense_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE currency<>'UZS'"+ew,args),
+        'out_expense_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_expenses WHERE currency='UZS' AND pay_from<>'card'"+ew,args),
+        'out_expense_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE currency<>'UZS' AND pay_from<>'card'"+ew,args),
+        'out_card_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM cashier_expenses WHERE currency='UZS' AND pay_from='card'"+ew,args),
+        'out_card_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE currency<>'UZS' AND pay_from='card'"+ew,args),
         'out_fund_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)>0"+fw,args),
         'out_fund_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)=0"+fw,args),
     }
     out['cash_uzs']=out['in_cash_uzs']-out['out_expense_uzs']-out['out_fund_uzs']
     out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']
-    out['card_uzs']=out['in_card_uzs']
-    out['card_usd']=out['in_card_usd']
+    out['card_uzs']=out['in_card_uzs']-out['out_card_uzs']
+    out['card_usd']=out['in_card_usd']-out['out_card_usd']
     if balance:
         moved=(one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'"+hw,args)
                -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE 1=1"+ew,args)
@@ -1207,7 +1217,7 @@ def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
-def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD'):
+def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD',pay_from='cash'):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not identity or identity[0] not in ('cashier','admin'):
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
@@ -1227,9 +1237,15 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocke
         db.execute('SELECT pg_advisory_xact_lock(7806292501)').fetchone()
     if db.execute('SELECT 1 FROM cashier_expenses WHERE source=?',(source,)).fetchone():
         raise ValueError('Бу харажат аллақачон сақланган.')
-    if amount_usd>cashier_balance_usd(db):
+    if pay_from not in ('cash','card'):
+        raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
+    limit=cashier_balance_usd(db)
+    if pay_from=='card':
+        # A card expense is paid from card/bank receipts, so the whole cashbox counts.
+        limit+=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    if amount_usd>limit:
         raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
-    return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts) VALUES(?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()))).fetchone()[0])
+    return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts,pay_from) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()),pay_from)).fetchone()[0])
 
 
 # Manually maintained internal bookkeeping rate; never implies a live FX quote.
@@ -1281,7 +1297,7 @@ def som_to_usd_cents(som,rate):
 def add_cashier_income_uzs(db,actor,amount_uzs,category,source_name,note,source,expected_rate=None):
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
-def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,expected_rate=None):
+def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,expected_rate=None,pay_from='cash'):
     if isinstance(db,PostgresDB):
         db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
     rate=cashier_rate(db)
@@ -1289,7 +1305,7 @@ def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,e
     if expected_rate is not None and rate!=expected_rate:
         raise ValueError('Курс ўзгарган. Янги курсда харажатни қайта киритинг.')
     cents=som_to_usd_cents(amount_uzs,rate)
-    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source,pocket='UZS')
+    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source,pocket='UZS',pay_from=pay_from)
     db.execute("""UPDATE cashier_expenses SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
            WHERE id=?""",(amount_uzs,rate,expense_id))
     return expense_id,cents,rate
@@ -1509,6 +1525,27 @@ def add_product(db,actor,name,weight_kg,price_cents,block=0,ts=None):
     refresh_catalog(db)
     return pack
 
+
+def agent_custom_product(db,agent,name,price_cents,ts=None):
+    """An agent hands over a product that is not in the catalog yet: reuse a same-named product,
+    otherwise add it (marked custom) so stock, debt and reports work; the manager can edit it later."""
+    name=clean_product_name(name)
+    if isinstance(price_cents,bool) or not isinstance(price_cents,int) or price_cents<=0:
+        raise ValueError(f'{name}: 1 dona narxini USD da kiriting.')
+    key=_name_key(name)
+    for r in db.execute('SELECT pack,name,price,active FROM products').fetchall():
+        if _name_key(r['name'])==key:
+            pack=int(r['pack'])
+            if not int(r['price'] or 0):db.execute('UPDATE products SET price=? WHERE pack=?',(price_cents,pack))
+            if not int(r['active'] if r['active'] is not None else 1):db.execute('UPDATE products SET active=1 WHERE pack=?',(pack,))
+            refresh_catalog(db)
+            return pack,False
+    top=db.execute('SELECT COALESCE(MAX(pack),0) FROM products WHERE pack>=?',(CUSTOM_PRODUCT_START,)).fetchone()[0]
+    pack=max(CUSTOM_PRODUCT_START,int(top or 0)+1)
+    db.execute('INSERT INTO products(pack,name,price,weight_kg,block_units,active,custom,created_ts) VALUES(?,?,?,?,?,1,1,?)',
+               (pack,name,price_cents,0,0,int(time.time() if ts is None else ts)))
+    refresh_catalog(db)
+    return pack,True
 
 def update_product(db,actor,pack,name=None,price_cents=None,active=None,weight_kg=None):
     _require_admin(db,actor,'Mahsulotni faqat rahbar o‘zgartiradi.')

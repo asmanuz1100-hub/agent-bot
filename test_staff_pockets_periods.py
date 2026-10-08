@@ -105,6 +105,35 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
         rep = manager_api.period_report(self.db, 'custom', '2025-10-01', '2026-09-30')
         self.assertEqual((rep['seriesUnit'], len(rep['series'])), ('oylik', 12))
 
+    def test_card_expense_leaves_cash_and_reduces_card(self):
+        card = self.pay('ce_card', currency='UZS', amount='600000', usd='50', method='card')
+        core.decide_card_payment(self.db, 3, card['cardPaymentId'], True)
+        self.pay('ce_cash', currency='UZS', amount='1200000', usd='100', method='cash')
+        agent_api.mutate(self.db, 2, 'handover', {'currency': 'UZS', 'amount': '1200000'}, 'req_ceh_000000', self.now)
+        core.accept(self.db, 3, self.db.execute("SELECT id FROM handovers").fetchone()[0], True)
+        cashier_api.mutate(self.db, 3, 'expense', {'currency': 'UZS', 'amount': '100000', 'expectedRate': '12000',
+                                        'category': core.CASHIER_EXPENSE_CATEGORIES[0], 'recipient': 'Internet',
+                                        'payFrom': 'card', 'requestId': 'cardexp_000001'})
+        w = core.cashier_flows(self.db)
+        self.assertEqual((w['cash_uzs'], w['card_uzs']), (1200000, 500000))
+        self.assertEqual(self.db.execute('SELECT pay_from FROM cashier_expenses').fetchone()[0], 'card')
+        with self.assertRaises(ValueError):
+            cashier_api.mutate(self.db, 3, 'expense', {'currency': 'UZS', 'amount': '1000', 'expectedRate': '12000',
+                                            'category': core.CASHIER_EXPENSE_CATEGORIES[0], 'recipient': 'X',
+                                            'payFrom': 'bank', 'requestId': 'cardexp_000002'})
+
+    def test_opening_balance_is_folded_into_one_cashbox(self):
+        self.db.execute("DELETE FROM meta WHERE key='cashier_pockets_since'")
+        self.pay('fold_usd', currency='USD', amount='80', method='cash')
+        agent_api.mutate(self.db, 2, 'handover', {'currency': 'USD', 'amount': '80'}, 'req_fold_000000', self.now)
+        core.accept(self.db, 3, self.db.execute('SELECT id FROM handovers').fetchone()[0], True)
+        self.db.execute('UPDATE handovers SET accepted_ts=accepted_ts-100')
+        core.cashier_flows(self.db)
+        wallets = cashier_api.dashboard(self.db, 3)['summary']['wallets']
+        self.assertEqual((wallets['cashUsd'], wallets['openingUsd'], wallets['since']), (8000, 0, 0))
+        mw = manager_api.dashboard(self.db)['cash']['wallets']
+        self.assertEqual((mw['cashUsd'], mw['openingUsd']), (80.0, 0))
+
     # --- periods -----------------------------------------------------------------------
     def test_period_resolver_and_manager_report(self):
         now = int(time.time())

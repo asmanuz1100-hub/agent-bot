@@ -293,7 +293,7 @@ def _client_snapshot(db,now,client_id=None):
             "note":(v['note'] if v else c['comment']) or "",
             "profileComment":c['comment'] or "",
             "createdTs":int(c['created_ts'] or 0) or None,
-            "hasPhoto":bool(c['photo']),
+            "hasPhoto":bool(c['photo']),"photoV":core.photo_version(c['photo']),
             "debtUsd":_usd(debt.get(cid,0)),
             "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
         })
@@ -1006,9 +1006,17 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:
             raise ValueError("Kamida bitta tovar kiriting.")
         required={}
-        clean=[]
+        clean=[];new_products=[]
         for item in items:
             if not isinstance(item,dict):raise ValueError("Tovar noto‘g‘ri.")
+            if str(item.get("customName") or "").strip():
+                # Product not in the catalog: the agent writes its name and unit price.
+                try:qty=int(item.get("qty"))
+                except (TypeError,ValueError):raise ValueError("Tovar miqdori noto‘g‘ri.")
+                if qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
+                pack,created=core.agent_custom_product(db,agent,item.get("customName"),core.money(item.get("priceUsd")),ts=op_ts)
+                if created:new_products.append(core.product_name(pack))
+                required[pack]=required.get(pack,0)+qty;clean.append((pack,qty));continue
             try:pack=int(item.get("pack"));qty=int(item.get("qty"))
             except (TypeError,ValueError):raise ValueError("Tovar miqdori noto‘g‘ri.")
             if pack not in core.PRODUCTS or qty<=0 or qty>100000:raise ValueError("Tovar miqdori noto‘g‘ri.")
@@ -1023,9 +1031,10 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                         _source(agent,request_id,idx+1),currency='USD',ts=op_ts)
         cs.add_visit(db,agent,cid,'active','Tovar berildi: '+', '.join(
             f"{core.product_name(pack)} {qty} dona" for pack,qty in clean),ts=op_ts)
+        extra=(" Katalogga qo‘shildi: "+", ".join(new_products)+" — rahbar narxini tekshiradi.") if new_products else ""
         if oid:
-            return {"ok":True,"message":f"Buyurtma #{oid} mijozga topshirildi, qarz yangilandi."}
-        return {"ok":True,"message":"Tovar topshirildi va mijoz qarzi yangilandi."}
+            return {"ok":True,"message":f"Buyurtma #{oid} mijozga topshirildi, qarz yangilandi.{extra}"}
+        return {"ok":True,"message":"Tovar topshirildi va mijoz qarzi yangilandi."+extra}
     if action=="sold":
         items=payload.get("items")
         if not isinstance(items,list) or not items or len(items)>MAX_WRITE_ITEMS:

@@ -111,10 +111,14 @@ function enter(sec){if(!sec)return;sec.classList.remove('pm-in');void sec.offset
 var spT0=performance.now(),sp=null;function splash(sub){sp=el('<div id="pmSp" role="status" aria-label="Yuklanmoqda"><img src="/app/premium-kit/emblem.png" alt="ASMAN"><small>'+sub+'</small><div class="ldbar"><i></i></div></div>');D.body.append(sp);H.classList.remove('pm-boot');setTimeout(function(){splashDone()},12000)}
 function splashDone(){if(!sp||sp._x)return;sp._x=1;var w=Math.max(0,900-(performance.now()-spT0));setTimeout(function(){sp.classList.add('x');var s=D.querySelector('section.view.active')||D.getElementById('overview');enter(s);setTimeout(function(){countIn(D)},320);setTimeout(function(){sp.remove()},500)},w)}
 function ripple(sel){D.addEventListener('pointerdown',function(e){var t=e.target.closest&&e.target.closest(sel);if(!t)return;var r=t.getBoundingClientRect(),z=Math.max(r.width,r.height)*2,x=D.createElement('u');x.className='rp';x.style.cssText='width:'+z+'px;height:'+z+'px;left:'+(e.clientX-r.left-z/2)+'px;top:'+(e.clientY-r.top-z/2)+'px';t.appendChild(x);setTimeout(function(){x.remove()},700)})}
-function slider(nav,isOn){var ni=el('<i id="ni"></i>');nav.insertBefore(ni,nav.firstChild);var geo=null,raf=0;function measure(){geo=[].slice.call(nav.querySelectorAll('button')).map(function(b){return [b,b.offsetLeft,b.offsetWidth]})}
+function slider(nav,isOn){var ni=el('<i id="ni"></i>');nav.insertBefore(ni,nav.firstChild);var geo=null,raf=0;function measure(){geo=[].slice.call(nav.querySelectorAll('button')).map(function(b){return [b,b.offsetLeft,b.offsetWidth]});
+  /* measured while the nav was still hidden (login gate / splash): do not cache zeros, measure again once it is visible */
+  if(!nav.offsetWidth||geo.some(function(x){return !x[2]}))geo=null}
  /* geometry is read once (and on resize), never inside the click: no forced reflow during navigation */
- function mv(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;if(!geo)measure();var g=geo.find(function(x){return isOn(x[0])});ni.classList.toggle('off',!g);if(g){ni.style.width=g[2]+'px';ni.style.transform='translate3d('+(g[1]-8)+'px,0,0)'}})}
+ function mv(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;if(!geo)measure();var g=geo&&geo.find(function(x){return isOn(x[0])});ni.classList.toggle('off',!g);if(g){ni.style.width=g[2]+'px';ni.style.transform='translate3d('+(g[1]-8)+'px,0,0)'}})}
  addEventListener('resize',function(){geo=null;mv()});
+ if(window.ResizeObserver){var lastW=-1;new ResizeObserver(function(){var w=nav.offsetWidth;if(w!==lastW){lastW=w;geo=null;mv()}}).observe(nav)}
+ try{D.fonts&&D.fonts.ready.then(function(){geo=null;mv()})}catch(e){}
  new MutationObserver(mv).observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});setTimeout(mv,60);return mv}
 var MT='<svg class="mt" viewBox="0 0 320 130" preserveAspectRatio="xMaxYMax slice" aria-hidden="true"><defs><linearGradient id="pmg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a8bf2" stop-opacity=".9"/><stop offset="1" stop-color="#2a8bf2" stop-opacity=".08"/></linearGradient></defs><path d="M70 130L155 28 178 52 208 12 320 130Z" fill="url(#pmg)" opacity=".5"/><path d="M0 130L95 72 140 104 205 58 320 130Z" fill="#1f6fd1" opacity=".55"/></svg>';
 function initials(s){s=String(s||'').replace(/^[^A-Za-zА-Яа-яЎўҚқҒғҲҳЁё]+/,'');return (s.charAt(0)||'A').toUpperCase()}
@@ -142,7 +146,9 @@ function agent(){
  [].slice.call(D.querySelectorAll('section.view')).forEach(function(s){new MutationObserver(sync).observe(s,{attributes:true,attributeFilter:['class']})});sync();
  D.getElementById('pmSync').onclick=function(){this.classList.add('spin');location.reload()};
  var rp=D.getElementById('page-reports');if(rp){decorKpi(rp);new MutationObserver(function(){decorKpi(rp)}).observe(rp,{childList:true,subtree:true})}
- splash('AGENT PANEL');var gate=D.getElementById('gate');function gw(){if(!gate||gate.classList.contains('hidden'))splashDone()}if(gate)new MutationObserver(gw).observe(gate,{attributes:true,attributeFilter:['class']});gw();
+ splash('AGENT PANEL');var gate=D.getElementById('gate');function gw(){var m=D.getElementById('gateMessage');
+  /* the login check finished: app opened, or the gate now asks something (admin agent picker, retry) */
+  if(!gate||gate.classList.contains('hidden')||(m&&m.textContent&&!/tekshirilmoqda/i.test(m.textContent)))splashDone()}if(gate)new MutationObserver(gw).observe(gate,{attributes:true,attributeFilter:['class'],subtree:true,childList:true,characterData:true});gw();
  ripple('.rowbtn,.quick-tile,.c.kp,.chip,.primary,.secondary,nav button,.rt i,.hb');
  D.getElementById('pmTheme').onclick=toggleTheme;
  var av=D.getElementById('pmAvatar');function ini(){if(av.dataset.photo)return;var g=(greet&&greet.textContent||'').split(',').pop();av.textContent=initials(g.replace(/Assalomu alaykum/i,'').trim()||'A')}
@@ -156,6 +162,7 @@ function cashier(){
  var gr=nh.querySelector('#pmGr');if(idt)gr.append(idt);if(h1){var b=D.createElement('b');b.textContent='Kassa boshqaruvi';gr.append(b);h1.remove()}
  if(bal){var hero=el('<div class="hero" id="pmHero">'+MT+'</div>');var head=bal.querySelector('.balance-head'),st=bal.querySelector('.balance-status');if(st){st.classList.add('live');hero.append(st)}
   hero.append(el('<small class="k">ASMAN · KASSA NAZORATI</small>'));if(head){var k=head.querySelector('small');if(k){var pp=D.createElement('p');pp.append(k);hero.append(pp)}head.remove()}
+  var gt=bal.querySelector('.grand-total');if(gt){gt.classList.add('pm-gt');hero.append(gt)}
   var p3=bal.querySelector('.pocket3');if(p3){p3.classList.add('three');[].slice.call(p3.children).forEach(function(d){d.classList.add('hb')});hero.append(p3)}
   var gb=D.getElementById('grandBalance');if(gb){gb.removeAttribute('style');gb.classList.add('pm-gb');hero.append(gb)}
   nh.append(hero);bal.remove()}

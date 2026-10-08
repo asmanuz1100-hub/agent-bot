@@ -101,3 +101,54 @@ class ProfileApiTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class StaffPhotoWarmTests(unittest.TestCase):
+    def setUp(self):
+        import bot
+        self.bot=bot
+        self.db=core.connect(':memory:')
+        self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',[(2,'agent','Ali'),(4,'agent','Vali')])
+        profiles.save(self.db,2,{},photo_file='FILE_A',now=5)
+        profiles.save(self.db,4,{},photo_file='FILE_B',now=6)
+        bot._THUMB_CACHE.clear()
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_profile_save_stores_avatar_thumbnail_immediately(self):
+        import io
+        from unittest.mock import patch
+        from PIL import Image
+        buf=io.BytesIO();Image.new('RGB',(900,900),(200,60,60)).save(buf,'JPEG');raw=buf.getvalue()
+        with patch.object(self.bot,'decode_agent_camera_image',return_value=raw),\
+             patch.object(self.bot,'upload_agent_camera_photo',return_value='FILE_NEW'),\
+             patch.object(self.bot,'customer_photo_bytes',side_effect=AssertionError('no Telegram fetch')):
+            self.bot.profile_action(self.db,2,'profile_save',{'imageData':'x','profile':{}})
+            t=self.bot.photo_response('FILE_NEW','t=1',self.db)
+        self.assertEqual(self.bot.photo_content_type(t),'image/jpeg')
+        self.assertIsNotNone(self.db.execute("SELECT 1 FROM photo_thumbs WHERE file_id='FILE_NEW'").fetchone())
+
+    def test_warm_staff_thumbs_prefetches_only_missing_requested_agents(self):
+        import threading
+        from unittest.mock import patch
+        done=threading.Event();seen=[]
+        def fake(fid,query='',db=None):
+            seen.append(fid);self.bot._thumb_mem_put(fid,b'\xff\xd8\xffthumb')
+            if len(seen)==1:done.set()
+            return b'\xff\xd8\xffthumb'
+        with patch.object(self.bot,'photo_response',side_effect=fake):
+            todo=self.bot.warm_staff_thumbs(self.db,[2])
+            self.assertEqual(todo,['FILE_A'])
+            self.assertTrue(done.wait(3))
+            for _ in range(50):
+                if not self.bot._STAFF_WARMING:break
+                threading.Event().wait(.02)
+            self.assertEqual(self.bot.warm_staff_thumbs(self.db,[2]),[])
+        self.assertEqual(seen,['FILE_A'])
+
+    def test_staff_photo_attached_to_me(self):
+        from unittest.mock import patch
+        with patch.dict(self.bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test','WEBHOOK_BASE_URL':''}):
+            d=self.bot.attach_staff_photos(self.db,{'me':{'id':4}})
+        self.assertIn('/map/user-photo/4/',d['me']['photoUrl'])
