@@ -481,6 +481,8 @@ def quick_snapshot(db,agent,now=None):
         "cashierRateUzsPerUsd":core.cashier_rate(db),
         "summary":{"visitsToday":visit_today,"newClientsToday":new_today,
                    "paymentTodayUsd":_usd(payments_today),
+                   "paymentTodayUzs":_payments_split(db,agent,today,now)[0],
+                   "paymentTodayUsdCash":_usd(_payments_split(db,agent,today,now)[1]),
                    "goodsToday":int(delivery_today[0] or 0),
                    "cashOnHandUsd":_usd(cash_on_hand),
                    "cashAvailableUsd":_usd(max(0,cash_on_hand-pending)),
@@ -506,7 +508,22 @@ def _uzs_cash_state(db,agent):
     return on_hand,pending,cards
 
 
+def _payments_split(db,agent,lo,hi):
+    """Money taken from clients as it was received: so'm total, dollar-only total (cents)."""
+    r=db.execute("""SELECT COALESCE(SUM(CASE WHEN COALESCE(paid_uzs,0)>0 THEN paid_uzs ELSE 0 END),0),
+        COALESCE(SUM(CASE WHEN COALESCE(paid_uzs,0)=0 THEN amount_usd ELSE 0 END),0)
+        FROM events WHERE agent=? AND kind='payment' AND ts>=? AND ts<=?""",(agent,lo,hi)).fetchone()
+    return int(r[0] or 0),int(r[1] or 0)
+
+
 def _period_totals(db,agent,lo,now):
+    pay=db.execute("""SELECT
+      COALESCE(SUM(CASE WHEN COALESCE(paid_uzs,0)>0 THEN paid_uzs ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN COALESCE(paid_uzs,0)=0 THEN amount_usd ELSE 0 END),0),
+      COALESCE(SUM(CASE WHEN pay_method='card' THEN amount_usd ELSE 0 END),0)
+      FROM events WHERE agent=? AND kind='payment' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
+    card_wait=db.execute("""SELECT COALESCE(SUM(amount_uzs),0),COALESCE(SUM(CASE WHEN currency='USD' THEN amount_usd ELSE 0 END),0),COUNT(*)
+      FROM card_payments WHERE agent=? AND status='pending' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
     row=db.execute("""SELECT
       COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
       COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
@@ -523,7 +540,10 @@ def _period_totals(db,agent,lo,now):
                 WHERE actor=? AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
             "newClients":int(db.execute("""SELECT COUNT(*) FROM clients
                 WHERE agent=? AND created_ts>=? AND created_ts<=?""",(agent,lo,now)).fetchone()[0] or 0),
-            "paymentsUsd":_usd(row[0]),"goods":int(row[1] or 0),
+            "paymentsUsd":_usd(row[0]),"paymentsUzs":int(pay[0] or 0),"paymentsUsdCash":_usd(pay[1]),
+            "paymentsCardUsd":_usd(pay[2]),"cardPendingUzs":int(card_wait[0] or 0),
+            "cardPendingUsd":_usd(card_wait[1]),"cardPendingCount":int(card_wait[2] or 0),
+            "goods":int(row[1] or 0),
             "deliveryQty":int(row[1] or 0),"deliveryUsd":_usd(row[2]),
             "soldQty":int(row[3] or 0),"returnQty":int(row[4] or 0),
             "returnUsd":_usd(row[5]),"expenseUsd":_usd(expense[0]),
@@ -584,6 +604,7 @@ def snapshot(db,agent,now=None):
         WHERE agent=? AND status='pending' AND COALESCE(amount,0)=0""",(agent,)).fetchone()[0] or 0)
     cash_on_hand_uzs,pending_uzs,card_pending=_uzs_cash_state(db,agent)
     event_rows=db.execute("""SELECT e.id,e.kind,e.client,e.pack,e.qty,e.amount_usd,e.ts,
+        e.pay_method,e.paid_uzs,e.fx_rate,
         c.shop_name,c.name FROM events e LEFT JOIN clients c ON c.id=e.client
         WHERE e.agent=? AND e.ts>=? AND e.kind IN ('delivery','sold','return','payment','order','visit')
         ORDER BY e.ts DESC,e.id DESC LIMIT 500""",(agent,month)).fetchall()
@@ -591,7 +612,9 @@ def snapshot(db,agent,now=None):
              "clientId":int(e["client"]) if e["client"] is not None else None,
              "shop":e["shop_name"] or e["name"] or (f"Mijoz #{e['client']}" if e["client"] else ""),
              "pack":int(e["pack"] or 0),"qty":int(e["qty"] or 0),
-             "amountUsd":_usd(e["amount_usd"]),"ts":int(e["ts"])} for e in event_rows]
+             "amountUsd":_usd(e["amount_usd"]),"ts":int(e["ts"]),
+             "payMethod":e["pay_method"] or "","paidUzs":int(e["paid_uzs"] or 0),
+             "rate":int(e["fx_rate"] or 0)} for e in event_rows]
     hand_rows=db.execute("""SELECT id,amount,amount_usd,status,ts,accepted_ts FROM handovers
         WHERE agent=? AND (ts>=? OR status='pending') ORDER BY ts DESC,id DESC LIMIT 300""",
         (agent,month)).fetchall()
@@ -662,6 +685,8 @@ def snapshot(db,agent,now=None):
             "summary":{"visitsToday":base["summary"]["visitsToday"],
                        "newClientsToday":base["summary"]["newClientsToday"],
                        "paymentTodayUsd":base["summary"]["paymentsTodayUsd"],
+                       "paymentTodayUzs":_payments_split(db,agent,today,now)[0],
+                       "paymentTodayUsdCash":_usd(_payments_split(db,agent,today,now)[1]),
                        "goodsToday":base["summary"]["deliveryTodayQty"],
                        "cashOnHandUsd":_usd(cash_on_hand),
                        "cashAvailableUsd":_usd(max(0,cash_on_hand-pending)),
@@ -694,7 +719,7 @@ def client_detail(db,agent,cid,now=None):
         for r in db.execute(f"SELECT visit,pack,counted,expected FROM visit_stock WHERE visit IN ({','.join('?' for _ in ids)}) ORDER BY id",ids).fetchall():
             stock_by.setdefault(int(r['visit']),[]).append({"pack":int(r['pack']),"name":core.product_name(int(r['pack'])),
                 "counted":int(r['counted']),"expected":int(r['expected'])})
-    events=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount_usd,e.ts,u.name AS actor_name
+    events=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount_usd,e.ts,e.pay_method,e.paid_uzs,u.name AS actor_name
         FROM events e LEFT JOIN users u ON u.id=e.actor WHERE e.client=?
         AND e.kind IN ('delivery','sold','return','payment','order','visit')
         ORDER BY e.ts DESC,e.id DESC LIMIT 40""",(c['id'],)).fetchall()
@@ -712,6 +737,7 @@ def client_detail(db,agent,cid,now=None):
           "SELECT * FROM orders WHERE client=? ORDER BY ts DESC,id DESC LIMIT 10",(c['id'],)).fetchall()],
       "events":[{"id":int(e['id']),"kind":e['kind'],"pack":int(e['pack'] or 0),
                  "qty":int(e['qty'] or 0),"amountUsd":_usd(e['amount_usd']),
+                 "payMethod":e['pay_method'] or "","paidUzs":int(e['paid_uzs'] or 0),
                  "ts":int(e['ts']),"actor":e['actor_name'] or ""} for e in events]
     }
 

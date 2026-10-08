@@ -19,7 +19,8 @@ class AgentMiniAppButtonTests(unittest.TestCase):
 
         self.assertIn('📱 Agent Mini App',[b for row in agent_rows for b in row])
         self.assertIn('📱 Agent Mini App',[b for row in admin_rows for b in row])
-        self.assertIn('🧪 Rahbar Premium TEST',[b for row in admin_rows for b in row])
+        self.assertNotIn('🧪 Rahbar Premium TEST',[b for row in admin_rows for b in row])
+        self.assertIn('📱 Раҳбар Mini App',[b for row in admin_rows for b in row])
         self.assertNotIn('🧪 Agent V2 TEST',[b for row in agent_rows for b in row])
         self.assertNotIn('🧪 Agent V2 TEST',[b for row in admin_rows for b in row])
         self.assertNotIn('🧪 Rahbar V2 FUNCTION TEST',[b for row in admin_rows for b in row])

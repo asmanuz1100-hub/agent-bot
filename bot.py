@@ -47,8 +47,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261008-v4d')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261004-uzsusd-v1')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261009-v4e')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261009-premium-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -69,6 +69,12 @@ def miniapp_response(path,query=''):
     rel=rest[1:]
     if rel=='' or rel.endswith('/'):
         rel+='index.html'
+    if app=='rahbar' and rel=='index.html' and 'classic=1' not in (query or ''):
+        # The old Rahbar Mini App is retired: old buttons and links open Rahbar Premium (Telegram data in the hash is kept).
+        body=('<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+              '<title>ASMAN · Rahbar</title><style>html,body{margin:0;height:100%;background:#0e1621}</style></head><body>'
+              '<script>location.replace("/app/rahbar-premium/"+location.search+location.hash)</script></body></html>').encode()
+        return 200,body,'text/html; charset=utf-8',{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'}
     if '\x00' in rel or '\\' in rel or any(part in ('..','') or part.startswith('.') for part in rel.split('/')):
         return 404,b'Not found','text/plain; charset=utf-8',{}
     base=(MINIAPP_DIR/app).resolve()
@@ -84,7 +90,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261004-fix2').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261009-premium-v1').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -577,14 +583,11 @@ def menu(db,u):
     if r=='admin':
         if u in ADMINS:
             rows.append(['📦 Тўлиқ Backup'])
-        # Keep admin launchers independent: removing Rahbar tests must not hide Agent apps.
-        if MANAGER_MINIAPP_URL:
+        # Only the premium apps are offered: one launcher per role, no separate TEST buttons.
+        if MANAGER_PREMIUM_TEST_URL or MANAGER_MINIAPP_URL:
             rows.insert(0,['📱 Раҳбар Mini App'])
-        if MANAGER_PREMIUM_TEST_URL:
-            rows.insert(1,['🧪 Rahbar Premium TEST'])
         if AGENT_MINIAPP_URL:
             rows.insert(3,['📱 Agent Mini App'])
-            rows.insert(4,['🧪 Agent Premium TEST','🧪 Kassir Premium TEST'])
     elif r=='agent' and AGENT_MINIAPP_URL:
         # Real Agent Mini App uses signed Telegram initData. Reply-keyboard
         # launches can have empty initData, so the button asks the bot to send
@@ -1474,31 +1477,27 @@ def handle(db,update):
             reply_markup={'inline_keyboard':[[{'text':'📱 Кассир панелини очиш',
                 'web_app':{'url':CASHIER_MINIAPP_URL}}]]})
         return
-    if text=='📱 Раҳбар Mini App':
-        if r!='admin' or not MANAGER_MINIAPP_URL:
+    if text in ('📱 Раҳбар Mini App','🧪 Rahbar Premium TEST'):
+        # The premium Rahbar app is the only Rahbar app; the old TEST button text still works from old keyboards.
+        url=MANAGER_PREMIUM_TEST_URL or MANAGER_MINIAPP_URL
+        if r!='admin' or not url:
             raise ValueError('Фақат админ.')
         api('sendMessage',chat_id=u,
-            text='📱 Раҳбар панели · Реал маълумотлар. Қуйидаги тугмадан очинг (ҳавола бошқаларга рухсат бермайди).',
-            reply_markup={'inline_keyboard':[[{'text':'📱 Раҳбар панелини очиш',
-                                                  'web_app':{'url':MANAGER_MINIAPP_URL}}]]})
-        return
-    if text=='🧪 Rahbar Premium TEST':
-        if r!='admin' or not MANAGER_PREMIUM_TEST_URL:
-            raise ValueError('Фақат админ.')
-        api('sendMessage',chat_id=u,
-            text='🧪 Rahbar Premium TEST · Янги премиум дизайн синов режими. Реал маълумотлар фақат админ учун.',
-            reply_markup={'inline_keyboard':[[{'text':'🧪 Premium Rahbar Appни очиш',
-                                              'web_app':{'url':MANAGER_PREMIUM_TEST_URL}}]]})
+            text='📱 Rahbar paneli · real ma’lumotlar. Quyidagi tugmadan oching.',
+            reply_markup={'inline_keyboard':[[{'text':'📱 Rahbar panelini ochish',
+                                                  'web_app':{'url':url}}]]})
+        if text!='📱 Раҳбар Mini App':send(u,'Menyu yangilandi.',menu(db,u))
         return
     if text in ('🧪 Agent Premium TEST','🧪 Kassir Premium TEST'):
+        # Old keyboards: open the (now premium) app and refresh the menu without TEST buttons.
         if r!='admin':raise ValueError('Фақат админ.')
         agent_test=text.startswith('🧪 Agent')
         url=premium_test_url(AGENT_MINIAPP_URL if agent_test else CASHIER_MINIAPP_URL)
         if not url:raise ValueError('Mini App манзили созланмаган.')
         api('sendMessage',chat_id=u,
-            text=('🧪 Agent Premium TEST · янги дизайн, реал маълумотлар (админ назорат режими). Агентлар эски кўринишда ишлайверади.'
-                  if agent_test else '🧪 Kassir Premium TEST · янги дизайн, реал касса маълумотлари. Кассир эски кўринишда ишлайверади.'),
-            reply_markup={'inline_keyboard':[[{'text':'🧪 Очиш','web_app':{'url':url}}]]})
+            text=('📱 Agent Mini App · admin nazorat rejimi.' if agent_test else '📱 Kassir paneli.'),
+            reply_markup={'inline_keyboard':[[{'text':'📱 Ochish','web_app':{'url':url}}]]})
+        send(u,'Menyu yangilandi.',menu(db,u))
         return
     if text=='📱 Agent Mini App':
         if r not in ('agent','admin') or not AGENT_MINIAPP_URL:

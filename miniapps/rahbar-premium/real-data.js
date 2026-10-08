@@ -197,7 +197,7 @@ function renderCash(){
  }).join('')||'<div style="text-align:center;color:var(--mu);padding:16px">Operatsiya yo‘q</div>';
  const badge=document.querySelectorAll('section')[3].querySelector('.c h3 .pill');if(badge)setText(badge,rows.length+' ta');
 }
-renderK=renderCash;confirmP=function(){toast('🔒 Test real-data rejimi read-only. Tasdiqlash asosiy tizimda qoladi.')};
+renderK=renderCash;confirmP=function(){toast('🔒 Pul topshiriqlarini kassir Kassir ilovasida tasdiqlaydi.')};
 
 function updateCash(d){
  const c=d.cash||{},sec=document.querySelectorAll('section')[3];sec.querySelectorAll('.bal').forEach(function(x){setText(x,usd(c.balanceUsd))});
@@ -254,7 +254,7 @@ sync=function(b){if(b){b.style.transition='transform .8s';b._r=(b._r||0)+360;b.s
 if(tg&&tg.initData){loadReal(true)}
 else{
  document.querySelectorAll('.live').forEach(function(x){x.textContent='● DEMO'});if(window.pmReady)window.pmReady();
- const a=$('ymap'),c=$('clientmap');if(a)a.innerHTML='<div id="ymap-ld">Real xarita Telegram botdagi 🧪 Rahbar Premium TEST ichida ochiladi.</div>';if(c)c.innerHTML='<div id="clientmap-ld">Real mijoz xaritasi Telegram botdagi test tugmasida ochiladi.</div>';
+ const a=$('ymap'),c=$('clientmap');if(a)a.innerHTML='<div id="ymap-ld">Real xarita Telegram botdagi 📱 Rahbar Mini App ichida ochiladi.</div>';if(c)c.innerHTML='<div id="clientmap-ld">Real mijoz xaritasi Telegram botdagi 📱 Rahbar Mini App ichida ochiladi.</div>';
  setTimeout(function(){toast('ℹ️ Real data uchun Telegram botdagi 🧪 Rahbar Premium TEST tugmasidan oching')},1800);
 }
 })();
