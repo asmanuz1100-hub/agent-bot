@@ -1091,7 +1091,13 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         label="Karta" if method=="card" else "Naqd"
         note=f"Mini App · {label} · "+((f"{value} UZS = {_usd(usd_in):.2f} USD · kurs {rate}" if usd_in else f"{value} UZS · 1 USD = {rate} UZS") if currency=="UZS" else "USD")
         if method=="card":
-            pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts,usd_cents=usd_in)
+            # Card / bank transfer: the agent photographs the receipt (chek) so the cashier can check it.
+            receipt=str(payload.get("photoFileId") or "").strip()
+            if receipt and not re.fullmatch(r"[A-Za-z0-9_-]{10,512}",receipt):
+                raise ValueError("Chek rasmi noto‘g‘ri. Qayta suratga oling.")
+            if not receipt and not admin_override:
+                raise ValueError("Karta to‘lovi uchun chekni rasmga oling.")
+            pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts,usd_cents=usd_in,photo=receipt)
             if usd is None:
                 return {"ok":True,"duplicate":True,"cardPaymentId":pid}
             shown=f"{value:,} UZS → {_usd(usd):.2f} USD (kurs {rate:,})" if currency=="UZS" else f"{_usd(usd):.2f} USD"

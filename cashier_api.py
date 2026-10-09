@@ -93,7 +93,7 @@ def _cashier_activity(db):
             FROM handovers h LEFT JOIN users a ON a.id=h.agent LEFT JOIN users c ON c.id=h.cashier
             WHERE h.status!='pending' ORDER BY COALESCE(h.accepted_ts,h.ts) DESC LIMIT 40""").fetchall():
         rows.append({'kind':'handover','id':int(x['id']),'ts':int(x['accepted_ts'] or x['ts'] or 0),
-                     'status':x['status'],'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount'] or 0),
+                     'status':x['status'],'amount_usd':int(x['amount_usd'] or 0),'amount_uzs':int(x['amount'] or 0)//100,   # handovers.amount is stored in tiyin
                      'agent_name':x['agent_name'] or str(x['agent']),'actor_name':x['actor_name'] or '',
                      'note':''})
     for x in db.execute("""SELECT e.id,e.amount_usd,e.amount_uzs,e.currency,e.category,e.recipient,e.note,e.ts,e.pay_from,
@@ -170,7 +170,7 @@ def dashboard(db, actor):
         ORDER BY f.ts DESC,f.id DESC LIMIT 100""").fetchall()]
     debtors,total_debt=_cashier_debtors(db)
     card_pending = [dict(x) for x in db.execute("""SELECT p.id,p.agent,p.client,p.currency,p.amount_uzs,p.amount_usd,
-        p.rate_uzs_per_usd,p.note,p.ts,u.name AS agent_name,COALESCE(c.shop_name,c.name) AS client_name
+        p.rate_uzs_per_usd,p.note,p.ts,p.photo<>'' AS has_photo,u.name AS agent_name,COALESCE(c.shop_name,c.name) AS client_name
         FROM card_payments p LEFT JOIN users u ON u.id=p.agent LEFT JOIN clients c ON c.id=p.client
         WHERE p.status='pending' ORDER BY p.ts,p.id""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),

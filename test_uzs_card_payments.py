@@ -37,6 +37,8 @@ class UzsAndCardPaymentTests(unittest.TestCase):
 
     def pay(self, rid, **kw):
         payload = {'clientId': self.cid}
+        if kw.get('method') == 'card':
+            payload['photoFileId'] = 'AgACAgIAAxkBAAEreceipt01'   # card payments carry a receipt photo
         payload.update(kw)
         return agent_api.mutate(self.db, 2, 'payment', payload, 'req_' + rid + '_000000', self.now)
 
@@ -177,3 +179,25 @@ class UzsAndCardPaymentTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CardReceiptTests(unittest.TestCase):
+    def test_card_payment_needs_receipt_and_cashier_gets_link(self):
+        from unittest.mock import patch
+        import bot
+        t = UzsAndCardPaymentTests('test_card_payment_is_idempotent');t.setUp()
+        try:
+            with self.assertRaisesRegex(ValueError, 'chek'):
+                agent_api.mutate(t.db, 2, 'payment', {'clientId': t.cid, 'currency': 'USD', 'amount': '10', 'method': 'card'},
+                                 'req_norcpt_000000', t.now)
+            out = t.pay('rcpt_1', currency='USD', amount='10', method='card')
+            self.assertEqual(t.db.execute('SELECT photo FROM card_payments WHERE id=?', (out['cardPaymentId'],)).fetchone()[0],
+                             'AgACAgIAAxkBAAEreceipt01')
+            data = cashier_api.dashboard(t.db, 3)
+            with patch.dict(bot.os.environ, {'RENDER_EXTERNAL_URL': 'https://example.test', 'WEBHOOK_BASE_URL': ''}):
+                bot.attach_card_photo_urls(data)
+            p = data['cardPending'][0]
+            self.assertIn('/map/card-photo/%d/' % out['cardPaymentId'], p['photoUrl'])
+            self.assertTrue(p['thumbUrl'].endswith('?t=1'))
+        finally:
+            t.tearDown()
