@@ -122,7 +122,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 <section class="view" id="page-clients"><h2 class="screenhead">Mijozlar</h2><input id="search" placeholder="Do‘kon, ism, telefon yoki manzil..." autocomplete="off"><label for="clientRegion">Hudud</label><select id="clientRegion" aria-label="Mijozlarni hudud bo‘yicha filtrlash"></select><div class="tools" id="clientFilters"></div><div class="flex between"><b id="clientCount"></b><button class="secondary" data-action="client" type="button">＋ Yangi</button></div><div id="clientList" style="margin-top:12px"></div></section>
 <section class="view" id="page-detail"><div class="flex between"><h2 class="screenhead" id="detailName">Mijoz</h2><button class="secondary" id="detailBack" type="button">‹ Orqaga</button></div><div id="detailBody"></div><div class="grid2 client-actions"><button class="primary" data-action="delivery">▣ Tovar berish</button><button class="secondary" data-action="visit">📍 Tashrif</button><button class="secondary" data-action="payment">↓ Pul olish</button><button class="secondary" data-action="return">↩ Tovar qaytarish</button><button class="secondary" data-action="sold">💵 Sotildi</button><button class="secondary" data-action="order">🛒 Buyurtma</button><button class="secondary wide" data-action="client_edit">✎ Ma’lumotlarni tahrirlash</button></div></section>
 <section class="view" id="page-cash"><h2 class="screenhead">Pul va xarajat</h2><div class="card balance"><div class="muted">Mijozlardan yig‘ilgan · kassirga topshirish mumkin</div><div class="num" id="cashFree">—</div><div class="muted" id="cashHold"></div></div><div class="card expense-balance"><div class="muted">Xarajat hisobim</div><div class="num" id="expenseBalance">—</div><div class="muted">Bu pul kassir tomonidan xizmat xarajatlari uchun ajratilgan.</div></div><div class="grid2"><button class="primary" data-action="handover">↗ Kassirga topshirish</button><button class="secondary" data-action="agent_expense">🧾 Xarajat qilish</button></div><div class="title">Xarajat hisobi tarixi</div><div id="expenseList"></div><div class="title">So‘nggi mijoz to‘lovlari</div><div id="cashList"></div><div class="title">Kassirga topshirishlar</div><div id="handoverList"></div></section>
-<section class="view" id="page-reports"><h2 class="screenhead">Agent hisoboti</h2><div class="tools" id="reportFilters"><button class="chip active" data-period="day">Bugun</button><button class="chip" data-period="week">Hafta</button><button class="chip" data-period="month">Oy</button><button class="chip" data-period="custom">Davr</button></div><div class="report-custom" id="reportCustom" hidden><label>Boshlanish<input type="date" id="reportFrom"></label><label>Tugash<input type="date" id="reportTo"></label><button type="button" class="primary" id="reportCustomGo">Ko‘rsatish</button></div><div class="report-hero"><div class="report-hero-top"><div><span class="report-hero-label" id="reportPeriodLabel">Bugun</span><strong class="report-hero-value" id="reportDeliveryUsd">0.00 USD</strong><small>Berilgan tovar qiymati</small></div><span class="pill" id="reportHeroBadge">REAL</span></div><div class="report-hero-mini"><div><small>Mijozdan olindi</small><b id="reportHeroPaid">0.00 USD</b></div><div><small>Joriy qarz</small><b id="reportHeroDebt">0.00 USD</b></div><div><small>Qaytgan</small><b id="reportHeroReturn">0.00 USD</b></div></div></div><div class="report-kpis" id="reportCards"></div><div class="report-section-head"><b>Pul harakati</b><small>tanlangan davr</small></div><div class="report-flow" id="reportFlow"></div><div class="report-section-head"><b>7 kunlik dinamika</b><small id="reportTrendCaption">Berilgan tovar qiymati</small></div><div class="report-trend-tabs"><button class="active" data-report-trend="deliveryUsd">Realizatsiya $</button><button data-report-trend="paymentsUsd">Olingan pul $</button><button data-report-trend="visits">Tashrif</button></div><div class="report-trend" id="reportTrend"></div><div class="report-section-head"><b>Mahsulotlar kesimi</b><small>TOP 3 · berilgan · sotilgan · qaytgan</small></div><div id="reportProducts" class="report-products"></div><button type="button" id="reportProductsToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>Mijozlar holati</b><small>faqat shu agentniki</small></div><div class="report-client-card"><div class="report-client-top"><div class="report-client-stat"><small>Agent mijozlari</small><b id="reportClientTotal">0</b></div><div class="report-client-stat debt"><small>Joriy qarzdorlik</small><b id="reportClientDebt">0.00 USD</b></div></div><div id="reportClientBar" class="report-client-bar"></div><div id="reportClientLegend" class="report-client-legend"></div></div><div class="report-section-head"><b>Agent qoldig‘i</b><small>ombordagi real qoldiq</small></div><div class="report-summary"><div class="card"><small>Jami qoldiq</small><b id="reportStockTotal">—</b></div><div class="card"><small>Minus qoldiq</small><b id="reportNegativeCount">—</b></div></div><div id="productStock" class="report-stock-list"></div><button type="button" id="reportStockToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>GPS va ish vaqti</b><small>1 kun · 7 kun · 30 kun</small></div><div class="gps-period-tabs"><button class="active" data-route-period="day">1 kun</button><button data-route-period="week">7 kun</button><button data-route-period="month">1 oy</button></div><div class="gps-report-card"><div class="gps-report-title"><div><b id="routePeriodTitle">1 kunlik GPS hisobot</b><small id="routeSummary">Real GPS ma’lumoti yuklanmoqda</small></div><span class="pill" id="routeGpsStatus">GPS</span></div><div class="gps-report-grid"><div class="gps-stat"><small>Yurgan masofa</small><strong id="routeKm">— km</strong></div><div class="gps-stat"><small>Ish vaqti</small><strong id="routeHours">—</strong></div><div class="gps-stat"><small>GPS nuqtalar</small><strong id="routePoints">—</strong></div><div class="gps-stat"><small>Smenalar</small><strong id="routeShifts">—</strong></div></div></div><div class="gps-meta"><div><small>Birinchi GPS</small><b id="routeFirst">—</b></div><div><small>Oxirgi GPS</small><b id="routeLast">—</b></div><div><small>To‘xtashlar</small><b id="routeStops">—</b></div><div><small>GPS uzilishlar</small><b id="routeGaps">—</b></div></div><div class="gps-map-wrap"><div id="routeMap" class="gps-map"></div><div id="routeMapEmpty" class="gps-map-empty">GPS marshrut yuklanmoqda…</div></div><div class="gps-actions"><small>Masofa faqat saqlangan real GPS nuqtalaridan hisoblanadi.</small><button class="secondary" id="myRoute">↻ Yangilash</button></div></section>
+<section class="view" id="page-reports"><h2 class="screenhead">Agent hisoboti</h2><div id="kiAgent"></div><div class="tools" id="reportFilters"><button class="chip active" data-period="day">Bugun</button><button class="chip" data-period="week">Hafta</button><button class="chip" data-period="month">Oy</button><button class="chip" data-period="custom">Davr</button></div><div class="report-custom" id="reportCustom" hidden><label>Boshlanish<input type="date" id="reportFrom"></label><label>Tugash<input type="date" id="reportTo"></label><button type="button" class="primary" id="reportCustomGo">Ko‘rsatish</button></div><div class="report-hero"><div class="report-hero-top"><div><span class="report-hero-label" id="reportPeriodLabel">Bugun</span><strong class="report-hero-value" id="reportDeliveryUsd">0.00 USD</strong><small>Berilgan tovar qiymati</small></div><span class="pill" id="reportHeroBadge">REAL</span></div><div class="report-hero-mini"><div><small>Mijozdan olindi</small><b id="reportHeroPaid">0.00 USD</b></div><div><small>Joriy qarz</small><b id="reportHeroDebt">0.00 USD</b></div><div><small>Qaytgan</small><b id="reportHeroReturn">0.00 USD</b></div></div></div><div class="report-kpis" id="reportCards"></div><div class="report-section-head"><b>Pul harakati</b><small>tanlangan davr</small></div><div class="report-flow" id="reportFlow"></div><div class="report-section-head"><b>7 kunlik dinamika</b><small id="reportTrendCaption">Berilgan tovar qiymati</small></div><div class="report-trend-tabs"><button class="active" data-report-trend="deliveryUsd">Realizatsiya $</button><button data-report-trend="paymentsUsd">Olingan pul $</button><button data-report-trend="visits">Tashrif</button></div><div class="report-trend" id="reportTrend"></div><div class="report-section-head"><b>Mahsulotlar kesimi</b><small>TOP 3 · berilgan · sotilgan · qaytgan</small></div><div id="reportProducts" class="report-products"></div><button type="button" id="reportProductsToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>Mijozlar holati</b><small>faqat shu agentniki</small></div><div class="report-client-card"><div class="report-client-top"><div class="report-client-stat"><small>Agent mijozlari</small><b id="reportClientTotal">0</b></div><div class="report-client-stat debt"><small>Joriy qarzdorlik</small><b id="reportClientDebt">0.00 USD</b></div></div><div id="reportClientBar" class="report-client-bar"></div><div id="reportClientLegend" class="report-client-legend"></div></div><div class="report-section-head"><b>Agent qoldig‘i</b><small>ombordagi real qoldiq</small></div><div class="report-summary"><div class="card"><small>Jami qoldiq</small><b id="reportStockTotal">—</b></div><div class="card"><small>Minus qoldiq</small><b id="reportNegativeCount">—</b></div></div><div id="productStock" class="report-stock-list"></div><button type="button" id="reportStockToggle" class="report-products-toggle" style="display:none">Barchasi</button><div class="report-section-head"><b>GPS va ish vaqti</b><small>1 kun · 7 kun · 30 kun</small></div><div class="gps-period-tabs"><button class="active" data-route-period="day">1 kun</button><button data-route-period="week">7 kun</button><button data-route-period="month">1 oy</button></div><div class="gps-report-card"><div class="gps-report-title"><div><b id="routePeriodTitle">1 kunlik GPS hisobot</b><small id="routeSummary">Real GPS ma’lumoti yuklanmoqda</small></div><span class="pill" id="routeGpsStatus">GPS</span></div><div class="gps-report-grid"><div class="gps-stat"><small>Yurgan masofa</small><strong id="routeKm">— km</strong></div><div class="gps-stat"><small>Ish vaqti</small><strong id="routeHours">—</strong></div><div class="gps-stat"><small>GPS nuqtalar</small><strong id="routePoints">—</strong></div><div class="gps-stat"><small>Smenalar</small><strong id="routeShifts">—</strong></div></div></div><div class="gps-meta"><div><small>Birinchi GPS</small><b id="routeFirst">—</b></div><div><small>Oxirgi GPS</small><b id="routeLast">—</b></div><div><small>To‘xtashlar</small><b id="routeStops">—</b></div><div><small>GPS uzilishlar</small><b id="routeGaps">—</b></div></div><div class="gps-map-wrap"><div id="routeMap" class="gps-map"></div><div id="routeMapEmpty" class="gps-map-empty">GPS marshrut yuklanmoqda…</div></div><div class="gps-actions"><small>Masofa faqat saqlangan real GPS nuqtalaridan hisoblanadi.</small><button class="secondary" id="myRoute">↻ Yangilash</button></div></section>
 <section class="view" id="page-form"><div class="flex between"><h2 class="screenhead" id="formTitle">Amal</h2><button class="secondary" id="cancelForm">‹ Orqaga</button></div><form id="operationForm"><div id="formFields"></div><div class="card" id="review" style="display:none"></div><button type="submit" id="submitForm" class="primary" style="margin-top:13px">Davom etish · Tekshirish</button></form></section>
 </main><nav><button type="button" data-page="home" class="active"><span>⌂</span>Asosiy</button><button type="button" data-page="map"><span>⌖</span>Xarita</button><button type="button" data-page="clients"><span>▦</span>Mijozlar</button><button type="button" data-page="cash"><span>◫</span>Kassa</button><button type="button" data-page="reports"><span>◷</span>Hisobot</button></nav></div>
 <div id="notice" role="status" aria-live="polite"></div>
@@ -1379,7 +1379,105 @@ async function bootstrapAgentApp(){
  await refresh();
  if(window.ASMANOffline&&navigator.onLine!==false)await ASMANOffline.sync();
 }
+(function(){
+ var st={period:"month",tab:"todo",group:"",limit:20,res:null,key:"",at:0,busy:false,err:""};
+ function e(v){return esc(v)}
+ function usd(n){n=Number(n)||0;return (Math.abs(n)>=1000?Math.round(n).toLocaleString("en-US"):n.toFixed(2))+" $"}
+ function sc(s,g){return g==="sleeping"?"s":s>=70?"g":s>=40?"y":"r"}
+ function gr(p){if(p==null)return "";return p>=0?'<span class="kia-up">▲'+p+'%</span>':'<span class="kia-down">▼'+Math.abs(p)+'%</span>'}
+ function box(){return document.getElementById("kiAgent")}
+ async function load(force){
+  if(!data||!data.me)return;var key=String(data.me.id)+"|"+st.period;
+  if(!force&&st.key===key&&Date.now()-st.at<120000)return;
+  if(st.busy)return;st.busy=true;st.err="";paint();
+  try{st.res=await request("insights",{period:st.period});st.key=key;st.at=Date.now()}
+  catch(x){st.err=(x&&x.message)||"Tahlil yuklanmadi."}
+  finally{st.busy=false;paint()}
+ }
+ function row(c,showAdvice){
+  var why=(c.reasons||[]).slice(0,2).join(" · ");
+  return '<button type="button" class="kia-row" data-client="'+c.id+'"><span class="kia-sc '+sc(c.score,c.group)+'">'+c.score+'</span><span class="grow"><b>'+e(c.groupIcon+" "+c.name)+'</b><small>'+e(showAdvice?c.advice:why)+'</small>'+(showAdvice&&why?'<small>'+e(why)+'</small>':'')+'</span><span class="end">'+usd(c.salesUsd)+(c.debtUsd>0?'<small>qarz '+usd(c.debtUsd)+'</small>':'<small>'+(c.region?e(c.region):"")+'</small>')+'</span></button>';
+ }
+ function paint(){
+  var b=box();if(!b)return;var r=st.res;
+  var h='<div class="kia"><div class="kia-head"><div><b>Mijozlar reytingi</b><small>'+e(r?r.label:"Ball, hudud va bugungi reja")+'</small></div><div class="kia-per"><button type="button" data-ki-per="week" class="'+(st.period==="week"?"on":"")+'">7 kun</button><button type="button" data-ki-per="month" class="'+(st.period==="month"?"on":"")+'">Shu oy</button></div></div>';
+  h+='<div class="kia-tabs"><button type="button" data-ki-tab="todo" class="'+(st.tab==="todo"?"on":"")+'">🎯 Bugun kimga</button><button type="button" data-ki-tab="rating" class="'+(st.tab==="rating"?"on":"")+'">🏆 Reyting</button><button type="button" data-ki-tab="regions" class="'+(st.tab==="regions"?"on":"")+'">📍 Hududlar</button></div>';
+  if(!r){h+='<div class="kia-empty">'+(st.err?e(st.err)+'<br><button type="button" class="secondary" data-ki-retry="1" style="margin-top:8px">↻ Qayta urinish</button>':"Tahlil yuklanmoqda…")+'</div></div>';b.innerHTML=h;return}
+  var s=r.summary||{};
+  h+='<div class="kia-kpi"><div><small>O‘rtacha ball</small><b>'+(s.avgScore||0)+' / 100</b></div><div><small>Faol mijoz</small><b>'+(s.activeClients||0)+' / '+(s.totalClients||0)+'</b></div><div><small>Qarz</small><b>'+usd(s.debtUsd)+'</b></div></div>';
+  if(st.tab==="todo"){
+   var t=r.todo||[];
+   h+='<div class="kia-mut" style="margin-bottom:4px">Avval qarzi eskirganlar, keyin uzoq tovar olmaganlar.</div>';
+   h+=t.length?t.map(function(c){return row(c,true)}).join(""):'<div class="kia-empty">✅ Hammasi joyida — shoshilinch mijoz yo‘q.</div>';
+  }else if(st.tab==="rating"){
+   var gs=(r.groups||[]).filter(function(g){return g.count>0});
+   h+='<div class="kia-gr"><button type="button" data-ki-g="" class="'+(st.group?"":"on")+'">Hammasi '+(s.ratedClients||0)+'</button>'+gs.map(function(g){return '<button type="button" data-ki-g="'+g.key+'" class="'+(st.group===g.key?"on":"")+'">'+g.icon+' '+e(g.label)+' '+g.count+'</button>'}).join("")+'</div>';
+   var g0=(r.groups||[]).filter(function(g){return g.key===st.group})[0];
+   if(g0)h+='<div class="kia-adv">💡 '+e(g0.advice)+'</div>';
+   var list=(r.clients||[]).filter(function(c){return !st.group||c.group===st.group});
+   h+=list.length?list.slice(0,st.limit).map(function(c){return row(c,false)}).join(""):'<div class="kia-empty">Bu davrda mijoz yo‘q.</div>';
+   if(list.length>st.limit)h+='<button type="button" class="secondary kia-more" data-ki-more="1">Yana ko‘rsatish ('+(list.length-st.limit)+')</button>';
+  }else{
+   var rg=r.regions||[];
+   h+=rg.length?rg.map(function(x){return '<div class="kia-reg"><div class="t"><b>'+x.rank+'. '+e(x.name)+'</b><b>'+usd(x.salesUsd)+' '+gr(x.growthPct)+'</b></div><div class="kia-bar"><i style="width:'+Math.max(2,Math.min(100,x.sharePct||0))+'%"></i></div><div class="kia-mut">'+(x.sharePct||0)+'% · '+x.activeClients+'/'+x.clients+' faol'+(x.debtUsd>0?' · qarz '+usd(x.debtUsd):'')+(x.risky?' · 🔴 '+x.risky:'')+(x.sleeping?' · 💤 '+x.sleeping:'')+(x.topClient?'<br>Eng yaxshi: '+e(x.topClient.name)+' · '+usd(x.topClient.salesUsd):'')+'</div></div>'}).join(""):'<div class="kia-empty">Hudud ma’lumoti yo‘q.</div>';
+   if(s.noRegionClients)h+='<div class="kia-adv">ℹ️ '+s.noRegionClients+' ta mijozda hudud yozilmagan — “Belgilanmagan” deb ko‘rsatildi. Mijoz kartasida hududni kiriting.</div>';
+  }
+  h+='<details><summary>Ball qanday hisoblanadi?</summary><p>100 ball = Sotuv hajmi 40 + To‘lov intizomi 30 + Muntazamlik 15 + O‘sish 15.</p><p>🏆 70+ ball · 📈 sotuv o‘smoqda · ✅ barqaror · ⚠️ 40 balldan past yoki sotuv tushgan · 🔴 qarz '+((r.scoring&&r.scoring.riskDebtDays)||21)+'+ kun to‘lanmagan · 💤 '+((r.scoring&&r.scoring.sleepDays)||30)+'+ kun tovar olmagan.</p></details></div>';
+  b.innerHTML=h;
+ }
+ document.addEventListener("click",function(ev){
+  var t=ev.target.closest&&ev.target.closest("[data-ki-per],[data-ki-tab],[data-ki-g],[data-ki-more],[data-ki-retry]");if(!t||!box()||!box().contains(t))return;
+  ev.stopPropagation();
+  if(t.dataset.kiPer){if(st.period!==t.dataset.kiPer){st.period=t.dataset.kiPer;st.res=null;st.limit=20;load(true)}return}
+  if(t.dataset.kiTab){st.tab=t.dataset.kiTab;paint();return}
+  if(t.dataset.kiG!==undefined){st.group=t.dataset.kiG;st.limit=20;paint();return}
+  if(t.dataset.kiMore){st.limit+=20;paint();return}
+  if(t.dataset.kiRetry){load(true)}
+ },true);
+ var base=renderReports;
+ renderReports=function(){var out=base.apply(this,arguments);try{if(data&&data.me&&st.key&&st.key.split("|")[0]!==String(data.me.id)){st.res=null;st.key=""}paint();load(false)}catch(_e){}return out};
+})();
 bootstrapAgentApp();
 setInterval(function(){if(data&&!sessionExpired&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
 })();
-</script></body></html>
+
+</script><style>
+#kiAgent{margin:4px 0 18px}
+.kia{background:var(--card,var(--tg-section,#fff));color:var(--tx,var(--tg-text,#101e39));border:1px solid var(--line,#e5ecf5);border-radius:20px;padding:14px;box-shadow:0 10px 24px -18px #17212b55}
+.kia-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.kia-head b{font-size:16px;font-weight:800;display:block}
+.kia-head small,.kia-mut{color:var(--mu,var(--muted,#8190a7));font-size:12px}
+.kia-per{display:flex;gap:4px;flex:none}
+.kia-per button,.kia-tabs button,.kia-gr button{border:1px solid var(--line,#e5ecf5);background:var(--soft,#f3f5f9);color:var(--tx,var(--tg-text));border-radius:14px;padding:6px 10px;font:inherit;font-size:12px;font-weight:700;min-height:32px;cursor:pointer}
+.kia-per button.on,.kia-tabs button.on,.kia-gr button.on{background:var(--pri,var(--blue,#2367f5));border-color:transparent;color:#fff}
+.kia-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0 10px}
+.kia-tabs button{padding:8px 4px;font-size:12.5px}
+.kia-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.kia-kpi div{background:var(--soft,#f3f5f9);border-radius:14px;padding:8px 9px;min-width:0}
+.kia-kpi small{display:block;color:var(--mu,var(--muted));font-size:11px}
+.kia-kpi b{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.kia-gr{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none}
+.kia-gr button{flex:none}
+.kia-adv{background:var(--soft,#f3f5f9);border-radius:12px;padding:8px 10px;font-size:12.5px;margin:4px 0 8px}
+.kia-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-top:1px solid var(--line,#e5ecf5);padding:10px 2px;color:inherit;font:inherit;cursor:pointer}
+.kia-row:first-child{border-top:0}
+.kia-sc{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff}
+.kia-sc.g{background:#1c9b43}.kia-sc.y{background:#d18a00}.kia-sc.r{background:#e5484d}.kia-sc.s{background:#7a8794}
+.kia-row .grow{flex:1;min-width:0}
+.kia-row .grow b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kia-row .grow small{display:block;color:var(--mu,var(--muted));font-size:11.5px;line-height:1.35}
+.kia-row .end{flex:none;text-align:right;font-size:12px;font-weight:800}
+.kia-row .end small{display:block;font-weight:600;color:var(--mu,var(--muted));font-size:11px}
+.kia-reg{border-top:1px solid var(--line,#e5ecf5);padding:10px 2px}
+.kia-reg:first-child{border-top:0}
+.kia-reg .t{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.kia-bar{height:7px;border-radius:5px;background:var(--soft,#eef2f7);margin:6px 0 4px;overflow:hidden}
+.kia-bar i{display:block;height:100%;border-radius:5px;background:var(--pri,var(--blue,#2367f5))}
+.kia-up{color:var(--ok,#1c9b43)}.kia-down{color:var(--bad,#e5484d)}
+.kia-more{width:100%;margin-top:8px}
+.kia-empty{padding:16px 6px;text-align:center;color:var(--mu,var(--muted));font-size:13px}
+.kia details{margin-top:10px;font-size:12.5px}
+.kia summary{cursor:pointer;font-weight:700;color:var(--pri,var(--blue))}
+.kia details p{margin:6px 0;color:var(--mu,var(--muted))}
+</style>
+</body></html>
