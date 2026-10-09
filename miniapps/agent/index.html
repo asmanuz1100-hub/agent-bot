@@ -91,7 +91,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 .my-track{display:flex;align-items:center;gap:10px;margin:10px 0 0;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid #dfe6f3}.my-track>div{flex:1;min-width:0}.my-track b{display:block;font-size:13px}.my-track small{display:block;font-size:11px;color:#5b6b86;margin-top:2px}
 .my-track-dot{width:12px;height:12px;border-radius:50%;background:#2367f5;box-shadow:0 0 0 4px #2367f533;flex:none}.my-track.live .my-track-dot{background:#0daf79;box-shadow:0 0 0 4px #0daf7933;animation:mtpulse 1.6s infinite}@keyframes mtpulse{50%{box-shadow:0 0 0 8px #0daf7911}}
 .my-track-tg{border:1px solid #c9d6ef;background:#f3f6fc;color:#2367f5;border-radius:10px;padding:7px 10px;font-size:11px;font-weight:700;width:auto;min-height:0;margin:0}.my-track-tg.on{background:#2367f5;color:#fff;border-color:#2367f5}
-.me-map-icon{background:none;border:0}.me-pin{width:44px;height:44px;border-radius:50%;padding:3px;background:#2367f5;box-shadow:0 8px 18px -6px #0a1f5a99;position:relative}.me-pin.live{background:#0daf79}.me-pin:after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:inherit;border-top-color:var(--mp,#2367f5);border-bottom:0}.me-pin.live{--mp:#0daf79}.me-pin>span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;font-weight:800;font-size:14px;border:2px solid #fff}.me-pin img{width:100%;height:100%;object-fit:cover;display:block}
+.me-map-icon{background:none;border:0}.me-pin{width:44px;height:44px;border-radius:50%;padding:3px;background:#2367f5;box-shadow:0 8px 18px -6px #0a1f5a99;position:relative}.me-pin.live{background:#0daf79}.me-pin:after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:inherit;border-top-color:var(--mp,#2367f5);border-bottom:0}.me-pin.live{--mp:#0daf79}.me-pin>span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;font-weight:800;font-size:14px;border:2px solid #fff}.me-pin img,.leaflet-container .leaflet-marker-pane .me-pin img{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:cover;display:block}
 </style></head>
 <body>
 <div id="gate"><div class="card"><h1>ASMAN</h1><h2>Agent Mini App</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ochish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
@@ -974,6 +974,7 @@ function updatePaymentConversion(){
  var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),usdIn=$("paymentUsd"),rateBox=$("paymentRateBox"),method=$("paymentMethod"),hint=$("paymentMethodHint");
  if(!currency||!amount||!box)return;
  var cur=currency.value,card=method&&method.value==="card",usdv=Number(usdIn&&usdIn.value||0),value=Number(amount.value||0),base=Number(data&&data.cashierRateUzsPerUsd||0);
+ var rb=$("receiptBox");if(rb)rb.style.display=card?"":"none";
  if(hint)hint.innerHTML=card?"<small>Karta / o‘tkazma</small><b>Pul bankka tushadi. Kassir tasdiqlagach qarzdan ayriladi</b>":"<small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b>";
  if(cur==="UZS"){
   if(rateBox)rateBox.style.display="";if(usdIn){usdIn.required=true;usdIn.placeholder=value>0&&base?"≈ "+(value/base).toFixed(2):"0.00"}
@@ -1041,6 +1042,8 @@ function openForm(action){
    var rate=Number(data.cashierRateUzsPerUsd||0);
    h+='<label>To‘lov usuli</label><select name="method" id="paymentMethod"><option value="cash">💵 Naqd pul</option><option value="card">💳 Karta / bank o‘tkazmasi</option></select>'+
       '<div id="paymentMethodHint" class="payment-rate-card"><small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b></div>'+
+      '<div id="receiptBox" style="display:none"><div class="title">🧾 To‘lov cheki</div><div class="camera-box"><input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none"><input id="galleryInput" type="file" accept="image/*" style="display:none"><input id="photoFileId" name="photoFileId" type="hidden" value="">'+cameraLiveHtml+
+      '<img id="cameraPreview" class="camera-preview" alt="To‘lov cheki"><button class="primary wizard-big" type="button" id="takePhoto">📷 Chekni rasmga olish</button><button class="secondary camera-gallery" type="button" id="galleryPhoto">🖼 Galereyadan (skrinshot)</button><button class="secondary camera-fallback" type="button" id="fallbackCamera">Telefon kamerasi · zaxira</button><div class="camera-state"><small id="cameraStatus">Karta / o‘tkazma chekini suratga oling (majburiy) — kassir shu rasm bilan tasdiqlaydi.</small><span class="pill">CHEK</span></div></div></div>'+
       '<label>Valyuta</label><select name="currency" id="paymentCurrency"><option value="UZS">So‘m (UZS)</option><option value="USD">Dollar (USD)</option></select>'+
       '<label id="paymentAmountLabel" for="paymentAmount">Summa (UZS)</label><input id="paymentAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Masalan, 1185000" required>'+
       '<div id="paymentRateBox"><label for="paymentUsd">Dollar summasi (konvertatsiya, USD)</label><input id="paymentUsd" name="usd" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">'+
@@ -1100,8 +1103,9 @@ async function saveForm(e){
  e.preventDefault();if(busy)return;
  if(formAction==="client"&&clientWizardStep<5){advanceClientWizard();return}
  var payload=formPayload();
- if((formAction==="client"||formAction==="client_edit"||formAction==="visit")&&cameraUploading){notify("Foto hali tayyorlanmoqda.");return}
+ if((formAction==="client"||formAction==="client_edit"||formAction==="visit"||formAction==="payment")&&cameraUploading){notify("Foto hali tayyorlanmoqda.");return}
  if(formAction==="order"&&!payload.items.length){notify("Kamida bitta mahsulot va sonini kiriting.");return}
+ if(formAction==="payment"){if(payload.method==="card"){if(!payload.photoFileId&&!pendingPhotoData){notify("Karta to‘lovi uchun chekni rasmga oling.");var tb=$("takePhoto");if(tb)tb.scrollIntoView({block:"center"});return}}else{delete payload.photoFileId;pendingPhotoData=null}}
  if(formAction==="delivery"){var badC=(payload.items||[]).find(function(it){return it.customName!==undefined&&(it.customName.length<2||!(Number(it.priceUsd)>0))});if(badC){notify("Katalogda yo‘q mahsulot uchun nomi va 1 dona narxini (USD) kiriting.");return}}
  if(formAction==="visit"){
   if(!payload.photoFileId&&!pendingPhotoData){notify("Avval javon / vitrina rasmini oling.");return}
@@ -1115,7 +1119,7 @@ async function saveForm(e){
   if(formAction==="client"){detail=payload.shop+" · "+payload.person+" · "+payload.phone+" · Foto ✅ · "+(payload.items.length?payload.items.length+" xil mahsulot":"mahsulotsiz")}
   else if(payload.items&&formAction!=="order"){payload.items.forEach(function(it){if(it.customName!==undefined){total+=Number(it.priceUsd||0)*Number(it.qty);detail+="✏️ "+it.customName+" (katalogda yo‘q, "+fmt(it.priceUsd)+" USD) × "+it.qty+" dona; ";return}var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
   else if(formAction==="payment"){
-   var how=payload.method==="card"?"💳 Karta — kassir tasdiqlaydi":"💵 Naqd";
+   var how=payload.method==="card"?"💳 Karta — kassir chek bilan tasdiqlaydi · Chek ✅":"💵 Naqd";
    if(payload.currency==="UZS"){var som=Number(payload.amount||0),pu=Number(payload.usd||0);detail=how+" · "+som.toLocaleString("en-US")+" UZS = "+fmt(pu)+" USD · kurs "+(pu?Math.round(som/pu).toLocaleString("en-US"):"yo‘q")}
    else detail=how+" · "+fmt(payload.amount)+" USD";
   }else if(formAction==="handover")detail=payload.currency==="UZS"?Number(payload.amount||0).toLocaleString("en-US")+" so‘m":fmt(payload.amount)+" USD";
