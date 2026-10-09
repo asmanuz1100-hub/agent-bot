@@ -626,7 +626,7 @@ function mapStatus(message,show){
  var el=$("mapStatus");if(!el)return;el.textContent=message||"";el.classList.toggle("show",!!show);
 }
 function installManagerParityTiles(L,target){
- return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+ return L.tileLayer("/tiles/{z}/{x}/{y}.png",{
   maxZoom:17,updateWhenIdle:true,keepBuffer:1,attribution:"© OpenStreetMap contributors"
  }).addTo(target);
 }

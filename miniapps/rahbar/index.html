@@ -902,7 +902,7 @@ function initMap(){
  loadLeaflet().then(function(L){
   if(state.page!=="map")return;
   if(!map){map=L.map("map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);
-   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
+   L.tileLayer("/tiles/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(map);markers=L.layerGroup().addTo(map)}
   map.invalidateSize(false);markers.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
 
   var pinClients=prefs.showMapClients?customers.filter(function(c){return Number.isFinite(c.lat)&&Number.isFinite(c.lon)}):[];
@@ -1146,7 +1146,7 @@ function renderAnalysisMap(){
    if(state.page!=="report"||!$("analysis-map"))return;
    if(!analysisMap){
      analysisMap=L.map("analysis-map",{zoomControl:false,attributionControl:true,preferCanvas:true}).setView([40.55,70.94],9);
-     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(analysisMap);
+     L.tileLayer("/tiles/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(analysisMap);
    }
    if(analysisLayer)analysisLayer.clearLayers();else analysisLayer=L.layerGroup().addTo(analysisMap);
    var bounds=[],clientPins=0,agentPins=0;
@@ -1343,7 +1343,7 @@ function renderPeriodMap(data,token){
   if(token!==periodDetailToken||!$("period-detail-map")||!$("sheet-bg").classList.contains("open"))return;
   var base=[40.55,70.94];
   periodMap=L.map("period-detail-map",{zoomControl:true,attributionControl:true,preferCanvas:true}).setView(base,10);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(periodMap);
+  L.tileLayer("/tiles/{z}/{x}/{y}.png",{maxZoom:17,updateWhenIdle:true,keepBuffer:1}).addTo(periodMap);
   var bounds=[],segments=(data.route&&data.route.segments)||[];
   segments.forEach(function(segment){
    var latlngs=segment.map(function(p){return [p.lat,p.lon]});

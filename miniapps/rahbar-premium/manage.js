@@ -200,7 +200,7 @@ async function agentPeriod(id,period){
 function drawPeriod(d){
  var L=window.L,box=$('pm-map'),st=$('pm-map-st');if(!L||!box){if(st)st.textContent='Xarita kutubxonasi yuklanmadi.';return}
  periodMap=L.map(box,{zoomControl:true,attributionControl:false,preferCanvas:true}).setView([40.55,70.94],10);
- L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17}).addTo(periodMap);
+ L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:17}).addTo(periodMap);
  var bounds=[],segs=(d.route&&d.route.segments)||[];
  segs.forEach(function(s){var ll=s.map(function(p){return [p.lat,p.lon]});if(ll.length>1)L.polyline(ll,{color:'#1f6bff',weight:4,opacity:.88}).addTo(periodMap);ll.forEach(function(x){bounds.push(x)})});
  function pin(lat,lon,color,glyph,title){if(!Number.isFinite(lat)||!Number.isFinite(lon))return;L.marker([lat,lon],{icon:L.divIcon({className:'',html:'<div style="width:24px;height:24px;border-radius:50%;background:'+color+';color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid #fff;box-shadow:0 2px 8px #0005">'+glyph+'</div>',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(periodMap).bindPopup(esc(title));bounds.push([lat,lon])}
