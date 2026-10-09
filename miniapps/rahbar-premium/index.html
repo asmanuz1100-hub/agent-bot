@@ -469,7 +469,7 @@ function initYmap(){
   if(typeof L==='undefined'){ymap.innerHTML='<div id="ymap-ld">Xarita yuklanmadi (internet aloqasini tekshiring)</div>';return}
   document.getElementById('ymap-ld')?.remove();
   ymapObj=L.map('ymap',{zoomControl:true,attributionControl:true,scrollWheelZoom:false}).setView(AG_LL[0],14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(ymapObj);
+  L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(ymapObj);
   ymapPMs=AG.map((a,i)=>{
     const icon=L.divIcon({className:'',html:`<div class="ymap-pin${i==0?' on':''}"><b>${a[0][0]}</b></div>`,iconSize:[38,38],iconAnchor:[19,34]});
     const m=L.marker(AG_LL[i],{icon}).addTo(ymapObj);
@@ -527,4 +527,4 @@ if(tg){
   confirmP=function(){const was=pending;confirmP0();if(was)tg.HapticFeedback.notificationOccurred('success')};
 }
 go(0);
-</script><script src="./real-data.js?v=20261011-v6"></script><script src="./manage.js?v=20261011-v6"></script></body></html>
+</script><script src="./real-data.js?v=20261012-v7"></script><script src="./manage.js?v=20261012-v7"></script></body></html>

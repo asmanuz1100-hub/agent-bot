@@ -183,7 +183,7 @@ async function renderAgentMap(){
   if(!validAgents.length&&!validClients.length){box.innerHTML='<div id="ymap-ld">Agent yoki mijozlarda haqiqiy GPS koordinata yo‘q.</div>';return}
   if(!ymapObj){
    box.innerHTML='';ymapObj=L.map('ymap',{zoomControl:true,attributionControl:true,scrollWheelZoom:false,preferCanvas:true}).setView([40.55,70.94],9);
-   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:2}).addTo(ymapObj);agentLayer=L.layerGroup().addTo(ymapObj);
+   L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:2}).addTo(ymapObj);agentLayer=L.layerGroup().addTo(ymapObj);
   }
   if(!agentLayer)agentLayer=L.layerGroup().addTo(ymapObj);agentLayer.clearLayers();ymapPMs=[];ymapCPMs=[];const bounds=[];
   REAL_CLIENTS.forEach(function(c,i){if(!validCoord(c.lat,c.lon))return;const color=c.age==='fresh'?'#16b364':c.age==='yellow'?'#f59e0b':c.age==='red'?'#f0384f':c.age==='scheduled'?'#1f6bff':'#94a3b8';const icon=L.divIcon({className:'',html:'<div class="ymap-dot" style="background:'+color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});const m=L.marker([Number(c.lat),Number(c.lon)],{icon:icon,zIndexOffset:100,title:c.name||'Mijoz'}).addTo(agentLayer);m.bindPopup('<div class="ymap-bln"><b>'+esc(c.name||'Mijoz')+'</b><small>📍 '+esc(c.address||'Manzil yo‘q')+'</small><small>Agent: '+esc(c.agent||'—')+' · Qarz: '+usd(c.debtUsd)+' $</small><button onclick="openC('+i+')">Mijoz kartasi</button></div>');ymapCPMs[i]=m;bounds.push([Number(c.lat),Number(c.lon)])});
@@ -203,7 +203,7 @@ async function renderClientMap(){
   if(!pts.length){box.innerHTML='<div id="clientmap-ld">Mijozlarda haqiqiy GPS koordinata yo‘q.</div>';return}
   if(!clientMapObj){
    box.innerHTML='';clientMapObj=L.map('clientmap',{zoomControl:true,attributionControl:true,scrollWheelZoom:false,preferCanvas:true}).setView([40.55,70.94],9);
-   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:2}).addTo(clientMapObj);clientLayer=L.layerGroup().addTo(clientMapObj);
+   L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:2}).addTo(clientMapObj);clientLayer=L.layerGroup().addTo(clientMapObj);
   }
   if(!clientLayer)clientLayer=L.layerGroup().addTo(clientMapObj);clientLayer.clearLayers();const bounds=[];
   REAL_CLIENTS.forEach(function(c,i){if(!validCoord(c.lat,c.lon))return;const color=c.age==='fresh'?'#16b364':c.age==='yellow'?'#f59e0b':c.age==='red'?'#f0384f':c.age==='scheduled'?'#1f6bff':'#94a3b8';const glyph=c.age==='red'?'!':c.age==='scheduled'?'•':'';const icon=L.divIcon({className:'',html:'<div class="ymap-dot" style="width:22px;height:22px;background:'+color+';display:grid;place-items:center;color:white;font-size:10px;font-weight:800">'+glyph+'</div>',iconSize:[22,22],iconAnchor:[11,11]});L.marker([Number(c.lat),Number(c.lon)],{icon:icon,title:c.name||'Mijoz'}).addTo(clientLayer).bindPopup('<div class="ymap-bln"><b>'+esc(c.name||'Mijoz')+'</b><small>'+esc(c.address||'Manzil yo‘q')+'</small><small>Agent: '+esc(c.agent||'—')+' · '+(c.days==null?'Faollik noma’lum':c.days+' kun')+'</small><small>Qarz: '+usd(c.debtUsd)+' USD</small><button onclick="openC('+i+')">Kartochkani ochish</button></div>');bounds.push([Number(c.lat),Number(c.lon)])});
