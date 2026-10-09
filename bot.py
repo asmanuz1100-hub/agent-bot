@@ -47,8 +47,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261011-v6')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261011-premium-v3')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261012-v7')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261012-premium-v4')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -150,6 +150,48 @@ def request(url,payload=None,headers=None,timeout=50):
     raw=json.dumps(payload).encode() if payload is not None else None
     r=urllib.request.Request(url,data=raw,headers=headers or {'Content-Type':'application/json'})
     with urllib.request.urlopen(r,timeout=timeout) as res:return json.load(res)
+
+# Map tiles are served from our own domain. Telegram Desktop (Windows) web views do not send
+# a Referer, and tile.openstreetmap.org answers such requests with a "403 Access blocked" image.
+_TILE_CACHE=OrderedDict()
+_TILE_LOCK=threading.Lock()
+_TILE_SIZE=0
+_TILE_MAX_BYTES=40_000_000
+_TILE_TTL=7*86400
+_TILE_SOURCES=(
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+)
+
+def map_tile(z,x,y):
+    """PNG bytes of one map tile (memory cache, then OpenStreetMap, then CARTO as a fallback)."""
+    global _TILE_SIZE
+    z,x,y=int(z),int(x),int(y)
+    if not (0<=z<=19 and 0<=x<2**z and 0<=y<2**z):raise ValueError('tile_out_of_range')
+    key=(z,x,y);now=time.time()
+    with _TILE_LOCK:
+        hit=_TILE_CACHE.get(key)
+        if hit and now-hit[0]<_TILE_TTL:
+            _TILE_CACHE.move_to_end(key);return hit[1]
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')
+    headers={'User-Agent':'ASMAN-agent-bot/1.0 (+'+base+')','Referer':base+'/'}
+    data=None
+    for src in _TILE_SOURCES:
+        try:
+            req=urllib.request.Request(src.format(z=z,x=x,y=y),headers=headers)
+            with urllib.request.urlopen(req,timeout=12) as res:
+                body=res.read(600_000)
+                if res.status==200 and body.startswith(b'\x89PNG'):data=body;break
+        except Exception:
+            logging.warning('Tile source failed %s',src.split('/')[2])
+    if data is None:raise RuntimeError('tile_unavailable')
+    with _TILE_LOCK:
+        old=_TILE_CACHE.pop(key,None)
+        if old:_TILE_SIZE-=len(old[1])
+        while _TILE_CACHE and _TILE_SIZE+len(data)>_TILE_MAX_BYTES:
+            _,ev=_TILE_CACHE.popitem(last=False);_TILE_SIZE-=len(ev[1])
+        _TILE_CACHE[key]=(now,data);_TILE_SIZE+=len(data)
+    return data
 
 def api(method,**data):
     result=request(f'https://api.telegram.org/bot{TOKEN}/{method}',data)
@@ -2236,6 +2278,17 @@ def serve_webhook(db,base_url):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
+            m=re.fullmatch(r'/tiles/(\d{1,2})/(\d{1,7})/(\d{1,7})\.png',path)
+            if m:
+                try:
+                    self._reply(200,map_tile(*m.groups()),'image/png',
+                                {'Cache-Control':'public, max-age=604800, stale-while-revalidate=2592000',
+                                 'Access-Control-Allow-Origin':'*'})
+                except ValueError:
+                    self._reply(404,b'Tile not found')
+                except Exception:
+                    self._reply(502,b'Tile temporarily unavailable')
+                return
             m=re.fullmatch(r'/map/overall/(day|week|month)/(\d{10,})/([0-9a-f]{32})',path)
             old_m=re.fullmatch(r'/map/overall/(\d{10,})/([0-9a-f]{32})',path)
             if m or old_m:

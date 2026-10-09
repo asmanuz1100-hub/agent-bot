@@ -105,3 +105,27 @@ class SelfHostedMiniAppTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TileProxyTests(unittest.TestCase):
+    def test_tiles_are_cached_and_validated(self):
+        from unittest.mock import patch, MagicMock
+        import bot
+        bot._TILE_CACHE.clear()
+        png = b'\x89PNG\r\n\x1a\n' + b'0' * 50
+        res = MagicMock(); res.status = 200; res.read.return_value = png
+        res.__enter__ = lambda s: s; res.__exit__ = lambda *a: False
+        with patch.object(bot.urllib.request, 'urlopen', return_value=res) as op:
+            self.assertEqual(bot.map_tile(12, 2850, 1520), png)
+            self.assertEqual(bot.map_tile(12, 2850, 1520), png)
+            self.assertEqual(op.call_count, 1)
+            sent = op.call_args.args[0]
+            self.assertTrue(sent.get_header('Referer'))
+        with self.assertRaises(ValueError):
+            bot.map_tile(3, 9, 1)
+
+    def test_apps_use_same_origin_tiles(self):
+        for f in ('miniapps/agent/index.html', 'miniapps/rahbar-premium/real-data.js', 'miniapps/rahbar-premium/manage.js'):
+            src = open(f, encoding='utf-8').read()
+            self.assertIn('/tiles/{z}/{x}/{y}.png', src)
+            self.assertNotIn('tile.openstreetmap.org', src)
