@@ -233,21 +233,17 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
         work_seconds+=seconds
         if aid in by_agent:by_agent[aid]["workSeconds"]+=seconds
 
-    point_rows=db.execute("""SELECT p.shift,p.ts,p.lat,p.lon
+    point_rows=db.execute("""SELECT p.shift,p.ts,p.lat,p.lon,p.accuracy
         FROM points p JOIN shifts s ON s.id=p.shift
         WHERE p.ts>=? AND p.ts<? AND s.start<?
         ORDER BY p.shift,p.ts,p.id""",(start,end,end)).fetchall()
-    prev_by_shift={};distance_km=0.0
-    for p in point_rows:
-        sid=int(p["shift"]);aid=shift_agent.get(sid)
-        previous=prev_by_shift.get(sid)
-        if previous is not None:
-            km=_route_km(previous,p)
-            # Ignore impossible GPS jumps. This is a field-sales route, not air travel.
-            if 0<=km<=25:
-                distance_km+=km
-                if aid in by_agent:by_agent[aid]["distanceKm"]+=km
-        prev_by_shift[sid]=p
+    by_shift={};distance_km=0.0
+    for p in point_rows:by_shift.setdefault(int(p["shift"]),[]).append(p)
+    for sid,pts in by_shift.items():
+        # Same noise-filtered distance as the Agent app GPS report (no jitter, no jumps).
+        km=core.track_km(pts);aid=shift_agent.get(sid)
+        distance_km+=km
+        if aid in by_agent:by_agent[aid]["distanceKm"]+=km
 
     accepted=int(db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='accepted' AND COALESCE(accepted_ts,ts)>=?
@@ -518,7 +514,8 @@ def dashboard(db, now=None):
     pending_total = db.execute("""SELECT COALESCE(SUM(amount_usd),0) FROM handovers
         WHERE status='pending'""").fetchone()[0]
     pending_count = db.execute("SELECT COUNT(*) FROM handovers WHERE status='pending'").fetchone()[0]
-    cash_balance=core.cashier_balance_usd(db)
+    # Same "umumiy kassa" as the Kassir app: cash (so'm + dollar) plus card/bank receipts, USD equivalent.
+    cash_balance=core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
@@ -769,14 +766,9 @@ def _agent_period_stats(db,agent_id,start,end,now):
         work_seconds+=max(0,right-left);shift_ids.append(int(sh["id"]))
     distance=0.0
     for sid in shift_ids:
-        pts=db.execute("""SELECT lat,lon,ts FROM points WHERE shift=? AND ts>=? AND ts<?
+        pts=db.execute("""SELECT lat,lon,ts,accuracy FROM points WHERE shift=? AND ts>=? AND ts<?
             ORDER BY ts,id""",(sid,start,end)).fetchall()
-        previous=None
-        for p in pts:
-            if previous is not None:
-                km=_route_km(previous,p)
-                if 0<=km<=25:distance+=km
-            previous=p
+        distance+=core.track_km(pts)
     return {
         "deliveredUsd":_usd(row["delivered"]),"paymentsUsd":_usd(row["payments"]),
         "returnsUsd":_usd(row["returns"]),"deliveredQty":int(row["delivered_qty"] or 0),

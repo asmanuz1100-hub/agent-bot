@@ -76,7 +76,7 @@ section.on{animation:in .4s both}@keyframes in{from{opacity:0;transform:translat
 .ymap-pin.on{background:linear-gradient(135deg,#6bb4ff,#f59e0b);animation:pin-pop .5s cubic-bezier(.3,1.6,.5,1)}
 @keyframes pin-pop{0%{transform:rotate(45deg) scale(.4)}60%{transform:rotate(45deg) scale(1.25)}100%{transform:rotate(45deg) scale(1)}}
 .ymap-ava{width:46px;height:46px;border-radius:50%;padding:3px;background:var(--c,#1f6bff);box-shadow:0 8px 18px -6px #0a1f5a99;position:relative;cursor:pointer;transition:transform .25s cubic-bezier(.3,1.5,.5,1)}.ymap-ava:after{content:'';position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:var(--c,#1f6bff);border-bottom:0}
-.ymap-ava>span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;font-weight:800;font-size:15px;border:2px solid #fff}.ymap-ava img{width:100%;height:100%;object-fit:cover;display:block}
+.ymap-ava>span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#4f9bff,#1f56e0);color:#fff;font-weight:800;font-size:15px;border:2px solid #fff}.ymap-ava img,.leaflet-container .leaflet-marker-pane .ymap-ava img{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:cover;display:block}
 .ymap-ava.on{transform:scale(1.18);z-index:2}.ymap-ava.on>span{border-color:#f5b544}
 .av.pm-agph{padding:0;overflow:hidden}.av.pm-agph img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}
 .ymap-dot{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 4px 10px -2px #0006}
@@ -445,8 +445,12 @@ bell:'<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21h4"/>',
 refresh:'<path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/>',
 sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
 moon:'<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>',
-spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'};
-const EM={"👨‍💼":"user","👨":"user","🏢":"store","🚚":"nav","⛽":"nav","🧾":"chart","💵":"coins","💳":"wallet","👥":"users","🏪":"store","📅":"cal","⚠":"alert","🪙":"coins","🧭":"nav","👛":"wallet","📊":"chart","📦":"box","💰":"bag","✅":"check","➕":"uplus","⏱":"clock","🔻":"tdown","📗":"chart","🏦":"bank","➡":"arr","↩":"undo","⬇":"down","⬆":"up","👤":"user","🏠":"home","⟳":"refresh","🔄":"refresh","📞":"phone","📍":"pin","🔍":"search","⚙":"sliders","🔔":"bell","☀":"sun","🌙":"moon","👋":"spark"};
+spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+truck:'<path d="M2.5 6h11v10h-11zM13.5 9.5h4l3 3.5V16h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+fuel:'<path d="M5 20V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V20M3.5 20h12M5 10h9"/><path d="M14 8.5h2a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 0 3 0V8l-2.5-2.5"/>',
+food:'<path d="M7 3v8M4.5 3v5a2.5 2.5 0 0 0 5 0V3M7 11v10M17 3c-2 1.5-3 4-3 7h3v11"/>',
+worker:'<circle cx="12" cy="9" r="3.5"/><path d="M7.5 7.5c0-3 2-4.5 4.5-4.5s4.5 1.5 4.5 4.5M6.5 7.5h11M4.5 20.5c.5-3.7 3.5-5.8 7.5-5.8s7 2.1 7.5 5.8"/>'};
+const EM={"👨‍💼":"user","👨":"user","🏢":"store","🚚":"truck","⛽":"fuel","🍽":"food","👷":"worker","🧾":"chart","💵":"coins","💳":"wallet","👥":"users","🏪":"store","📅":"cal","⚠":"alert","🪙":"coins","🧭":"nav","👛":"wallet","📊":"chart","📦":"box","💰":"bag","✅":"check","➕":"uplus","⏱":"clock","🔻":"tdown","📗":"chart","🏦":"bank","➡":"arr","↩":"undo","⬇":"down","⬆":"up","👤":"user","🏠":"home","⟳":"refresh","🔄":"refresh","📞":"phone","📍":"pin","🔍":"search","⚙":"sliders","🔔":"bell","☀":"sun","🌙":"moon","👋":"spark"};
 const DC={"🟢":"#16b364","🟡":"#f59e0b","🟣":"#8b5cf6","🔵":"#3b82ff","🟠":"#f97316"};
 const RE=new RegExp('('+[...Object.keys(EM),...Object.keys(DC)].join('|')+')\uFE0F?','g'),RT=new RegExp(RE.source);
 const svg=n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
@@ -523,4 +527,4 @@ if(tg){
   confirmP=function(){const was=pending;confirmP0();if(was)tg.HapticFeedback.notificationOccurred('success')};
 }
 go(0);
-</script><script src="./real-data.js?v=20261010-v5"></script><script src="./manage.js?v=20261010-v5"></script></body></html>
+</script><script src="./real-data.js?v=20261011-v6"></script><script src="./manage.js?v=20261011-v6"></script></body></html>

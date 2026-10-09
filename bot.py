@@ -47,8 +47,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261010-v5')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261010-premium-v2')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261011-v6')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261011-premium-v3')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -90,7 +90,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261010-premium-v2').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261011-premium-v3').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -205,6 +205,24 @@ def visit_photo_link(visit_id,now=None):
     expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
     scope=f'visit-photo/{int(visit_id)}'
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
+def card_photo_link(payment_id,now=None):
+    """Signed link to the receipt photo of a card payment (cashier check)."""
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    now=int(time.time() if now is None else now)
+    expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
+    scope=f'card-photo/{int(payment_id)}'
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"
+
+def attach_card_photo_urls(data):
+    """Pending card payments in the Kassir app get a receipt photo link (thumb + full)."""
+    if not isinstance(data,dict):return data
+    for p in data.get('cardPending') or []:
+        if isinstance(p,dict) and p.get('has_photo') and p.get('id'):
+            url=card_photo_link(int(p['id']))
+            if url:p['photoUrl']=url;p['thumbUrl']=url+'?t=1'
+    return data
 
 def user_photo_link(uid,now=None,version=0):
     """Stable signed link to a staff member's profile photo (avatar size)."""
@@ -831,6 +849,15 @@ def notify_cashiers_card_payment(db,agent,client,payment_id,amount_usd,currency=
           f"Тасдиқлангандан кейин мижоз қарзидан айирилади.\n"
           f"🕐 {datetime.now(TZ).strftime('%d.%m.%Y %H:%M')}")
     _safe_send_many(cashier_ids(db),text)
+    try:
+        row=db.execute('SELECT photo FROM card_payments WHERE id=?',(payment_id,)).fetchone()
+        receipt=row['photo'] if row else ''
+    except Exception:
+        receipt=''
+    if receipt:
+        for cid in cashier_ids(db):
+            try:api('sendPhoto',chat_id=cid,photo=receipt,caption=f'🧾 Чек · карта тўлови #{payment_id}')
+            except Exception:logging.warning('Receipt photo to cashier failed')
 
 def _agent_free_cash(db,agent):
     """(so'm, USD cents) the agent can still hand over: cash on hand minus pending handovers."""
@@ -2329,6 +2356,28 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Visit photo failed');self._reply(502,b'Photo temporarily unavailable')
                 return
+            m=re.fullmatch(r'/map/card-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                pid=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'card-photo/{pid}',expires,sig):
+                    self._reply(410,b'Receipt photo link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        row=local.execute('SELECT photo FROM card_payments WHERE id=?',(pid,)).fetchone()
+                        local.commit()
+                        photo_data=photo_response(row['photo'],urlparse(self.path).query,local) if row and row['photo'] else None
+                    finally:
+                        if postgres:local.close()
+                    if not photo_data:
+                        self._reply(404,b'Photo not found');return
+                    self._reply(200,photo_data,photo_content_type(photo_data),PHOTO_CACHE_HEADERS)
+                except ValueError as exc:
+                    logging.warning('Receipt photo unavailable payment=%s reason=%s',pid,str(exc))
+                    self._reply(404,b'Photo not found')
+                except Exception:
+                    logging.exception('Receipt photo failed');self._reply(502,b'Photo temporarily unavailable')
+                return
             m=re.fullmatch(r'/map/user-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 uid=int(m.group(1));expires=m.group(2);sig=m.group(3)
@@ -2404,6 +2453,7 @@ def serve_webhook(db,base_url):
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
                     local.commit()
+                    attach_card_photo_urls(data)
                     if notify:
                         try:
                             recipients=set(admin_ids(local))

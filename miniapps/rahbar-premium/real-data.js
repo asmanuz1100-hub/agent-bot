@@ -233,7 +233,7 @@ function renderCash(){
    return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">'+esc(cic)+'</div><div class="t"><b>'+esc(ctitle)+(t.payFrom==='card'?' · 💳 karta':'')+'</b><small>'+esc([t.recipient?('Kimga: '+t.recipient):'',t.cashier?('Kassir: '+t.cashier):''].filter(Boolean).join(' · '))+'</small><small>'+clock(t.ts)+'</small></div><div class="am"><b class="bad">−'+(som?esc(som)+'</b><small class="muted" style="display:block;text-align:right">≈ '+usd(t.amountUsd)+' USD</small>':usd(t.amountUsd)+' USD</b>')+'<span class="pill p-bad">Rasxod</span></div></div>';
   }
   const accepted=t.state==='accepted',rejected=t.state==='rejected',label=accepted?'Qabul qilindi':rejected?'Rad etildi':'Kutilmoqda',pill=accepted?'p-ok':rejected?'p-bad':'p-wa',sign=accepted?'+':'';
-  return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">🪙</div><div class="t"><b>'+esc(t.agent||'Agent')+'</b><small>'+(t.cashier?'Kassir: '+esc(t.cashier):'Kassa topshirig‘i')+'</small><small>'+clock(eventTs(t))+'</small></div><div class="am"><b class="'+(accepted?'ok':rejected?'bad':'')+'">'+sign+usd(t.amountUsd)+' USD</b><span class="pill '+pill+'">'+label+'</span></div></div>';
+  return '<div class="row" style="margin:0 0 8px;cursor:default"><div class="ic">🪙</div><div class="t"><b>'+esc(t.agent||'Agent')+'</b><small>'+(t.cashier?'Kassir: '+esc(t.cashier):'Kassa topshirig‘i')+'</small><small>'+clock(eventTs(t))+'</small></div><div class="am">'+(Number(t.amountUzs||0)>0?'<b class="'+(accepted?'ok':rejected?'bad':'')+'">'+sign+Math.round(Number(t.amountUzs)).toLocaleString('en-US')+' so‘m</b><small class="muted" style="display:block;text-align:right">≈ '+usd(t.amountUsd)+' USD</small>':'<b class="'+(accepted?'ok':rejected?'bad':'')+'">'+sign+usd(t.amountUsd)+' USD</b>')+'<span class="pill '+pill+'">'+label+'</span></div></div>';
  }).join('')||'<div style="text-align:center;color:var(--mu);padding:16px">Operatsiya yo‘q</div>';
  const badge=document.querySelectorAll('section')[3].querySelector('.c h3 .pill');if(badge)setText(badge,rows.length+' ta');
 }
@@ -244,7 +244,7 @@ function updateCash(d){
  const cards=sec.querySelectorAll('.bd > .three .c'),vals=[c.acceptedWeekUsd,c.expensesWeekUsd,c.netWeekUsd];vals.forEach(function(v,i){if(cards[i])setText(cards[i].querySelector('b'),usd(v))});
  const start=Number(d.todayStart||0)-6*86400,agg={};REAL_TX.filter(function(t){return t.type==='expense'&&Number(t.ts||0)>=start}).forEach(function(t){const k=t.category||'Boshqa xarajat';agg[k]=(agg[k]||0)+Number(t.amountUsd||0)});
  const items=Object.keys(agg).map(function(k){return [k,agg[k]]}).sort(function(a,b){return b[1]-a[1]}).slice(0,4),mx=Math.max.apply(null,[1].concat(items.map(function(x){return x[1]})));
- xbrk.innerHTML=items.length?items.map(function(x){return '<div class="xr"><b>📦 '+esc(x[0])+'</b><div><u style="width:'+Math.max(8,x[1]/mx*100)+'%;background:#1f6bff"></u></div><em>'+usd(x[1])+' $</em></div>'}).join(''):'<div style="color:var(--mu);font-size:12px">7 kunda USD xarajat yo‘q.</div>';
+ xbrk.innerHTML=items.length?items.map(function(x){const cm=String(x[0]).match(/^([^\p{L}\p{N}]*)(.*)$/u);return '<div class="xr"><b>'+esc((cm&&cm[1].trim())||'📦')+' '+esc((cm&&cm[2].trim())||x[0])+'</b><div><u style="width:'+Math.max(8,x[1]/mx*100)+'%;background:#1f6bff"></u></div><em>'+usd(x[1])+' $</em></div>'}).join(''):'<div style="color:var(--mu);font-size:12px">7 kunda USD xarajat yo‘q.</div>';
  tog(kseg,function(i){kf=i;renderCash()});kf=1;renderCash();
 }
 

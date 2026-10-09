@@ -33,6 +33,8 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
 
     def pay(self, rid, **kw):
         payload = {'clientId': self.cid}
+        if kw.get('method') == 'card':
+            payload['photoFileId'] = 'AgACAgIAAxkBAAEreceipt01'   # card payments carry a receipt photo
         payload.update(kw)
         return agent_api.mutate(self.db, 2, 'payment', payload, 'req_' + rid + '_000000', self.now)
 
@@ -190,3 +192,16 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TrackKmTests(unittest.TestCase):
+    def test_standing_jitter_and_jumps_do_not_add_distance(self):
+        import random
+        random.seed(1)
+        pts = []
+        for i in range(600):   # 50 minutes standing, ±0.0001° noise every 5 s
+            pts.append({'lat': 40.5 + random.uniform(-1e-4, 1e-4), 'lon': 70.9 + random.uniform(-1e-4, 1e-4), 'ts': i * 5, 'accuracy': 12})
+        pts.insert(300, {'lat': 41.5, 'lon': 70.9, 'ts': 1501, 'accuracy': 10})   # one impossible jump
+        self.assertLess(core.track_km(pts), 0.1)
+        walk = [{'lat': 40.5 + i * 0.0009, 'lon': 70.9, 'ts': i * 60, 'accuracy': 10} for i in range(11)]   # ~1 km
+        self.assertAlmostEqual(core.track_km(walk), 1.0, delta=0.05)

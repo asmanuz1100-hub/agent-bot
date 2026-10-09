@@ -279,6 +279,7 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS pay_from TEXT NOT NULL DEFAULT 'cash'")
+        db.execute("ALTER TABLE card_payments ADD COLUMN IF NOT EXISTS photo TEXT NOT NULL DEFAULT ''")
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,item in PRODUCT_CATALOG.items():
@@ -325,6 +326,8 @@ def connect(path,initialize=True):
     expense_cols={r[1] for r in db.execute('PRAGMA table_info(cashier_expenses)')}
     for column,definition in (('currency',"TEXT NOT NULL DEFAULT 'USD'"),('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0'),('pay_from',"TEXT NOT NULL DEFAULT 'cash'")):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
+    if 'photo' not in {r[1] for r in db.execute('PRAGMA table_info(card_payments)')}:
+        db.execute("ALTER TABLE card_payments ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
     fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
     for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
@@ -1332,6 +1335,34 @@ def distance(a,b):
     x=math.sin((lb-la)/2)**2+math.cos(la)*math.cos(lb)*math.sin(math.radians(b['lon']-a['lon'])/2)**2
     return 6371000*2*math.asin(min(1,math.sqrt(x)))
 
+def track_km(points):
+    """Walked/driven distance from GPS points, robust to phone GPS noise.
+
+    A point is skipped when its accuracy is worse than 100 m, when it implies an
+    impossible speed (> 55 m/s), or when it is within the noise radius of the last
+    counted point (standing in a shop must not add kilometres). A silence longer
+    than 30 minutes restarts the trail instead of drawing a straight line.
+    """
+    km=0.0;ref=None
+    for p in points:
+        try:
+            lat,lon,ts=float(p['lat']),float(p['lon']),int(p['ts'])
+        except (TypeError,ValueError,KeyError):
+            continue
+        if not (-90<=lat<=90 and -180<=lon<=180):continue
+        acc=float((p['accuracy'] if 'accuracy' in p.keys() else 0) or 0) if hasattr(p,'keys') else 0.0
+        if acc>100:continue
+        cur={'lat':lat,'lon':lon,'ts':ts,'acc':acc}
+        if ref is None:ref=cur;continue
+        dt=ts-ref['ts']
+        if dt<=0:continue
+        if dt>1800:ref=cur;continue
+        d=distance(ref,cur)
+        if d/dt>55:continue
+        if d<max(15.0,ref['acc']+acc):continue
+        km+=d/1000;ref=cur
+    return km
+
 def route_stats(points,start,end):
     km=0; gaps=[]; stops=[]; anchor=None; last=None
     if not points:return {'km':0,'gaps':[(start,end)],'stops':[]}
@@ -1352,7 +1383,7 @@ def route_stats(points,start,end):
         last=p
     if anchor and last['ts']-anchor['ts']>=300:stops.append((anchor['ts'],last['ts'],anchor['lat'],anchor['lon']))
     if end-points[-1]['ts']>300:gaps.append((points[-1]['ts'],end))
-    return {'km':round(km,2),'gaps':gaps,'stops':stops}
+    return {'km':round(track_km(points),2),'gaps':gaps,'stops':stops}
 
 
 # ---------------------------------------------------------------------------
@@ -1407,7 +1438,7 @@ def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,
     return usd,value,rate
 
 
-def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None,usd_cents=None):
+def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None,usd_cents=None,photo=''):
     """Card / bank transfer: waits for the cashier; client debt is NOT reduced yet."""
     role=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
     if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
@@ -1424,9 +1455,9 @@ def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=
         if usd_cents is not None:rate=implied_rate(db,som,usd_cents);usd=usd_cents
         else:rate=validate_agent_rate(db,rate);usd=som_to_usd_cents(som,rate)
     else:raise ValueError('Valyutani USD yoki UZS qilib tanlang.')
-    row=db.execute("""INSERT INTO card_payments(agent,client,currency,amount_uzs,amount_usd,rate_uzs_per_usd,note,status,source,ts)
-        VALUES(?,?,?,?,?,?,?,'pending',?,?) RETURNING id""",
-        (agent,client,currency,som,usd,rate,str(note or '')[:500],source,int(time.time() if ts is None else ts))).fetchone()
+    row=db.execute("""INSERT INTO card_payments(agent,client,currency,amount_uzs,amount_usd,rate_uzs_per_usd,note,status,source,ts,photo)
+        VALUES(?,?,?,?,?,?,?,'pending',?,?,?) RETURNING id""",
+        (agent,client,currency,som,usd,rate,str(note or '')[:500],source,int(time.time() if ts is None else ts),str(photo or ''))).fetchone()
     return int(row[0]),usd,som,rate
 
 
