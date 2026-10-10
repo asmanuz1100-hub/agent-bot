@@ -29,7 +29,18 @@ function kindLabel(k){return ({delivery:'Tovar berildi',payment:'Qarz to‘lovi'
 
 toast=function(m){if(REAL_MODE&&String(m).indexOf('Abduvoxid: Nur savdo')>=0)return;baseToast(m)};
 
+// Faqat o'qish so'rovlari: tarmoq uzilsa (iOS "Load failed") 2 marta qayta urinadi. Yozish amallari qayta yuborilmaydi.
+var READ_ACTIONS={dashboard:1,client_detail:1,period_report:1,route:1,insights:1,agent_detail:1,agent_period_detail:1};
 async function req(action,arg){
+ for(var attempt=0;;attempt++){
+  try{return await req1(action,arg)}
+  catch(e){var net=e instanceof TypeError||/load failed|failed to fetch|network/i.test(e.message||'');
+   if(!net||!READ_ACTIONS[action])throw e;
+   if(attempt>=2)throw new Error('Internet aloqasi uzildi. Qayta urinib ko‘ring.');
+   await new Promise(function(r){setTimeout(r,1200*(attempt+1))})}
+ }
+}
+async function req1(action,arg){
  if(!tg||!tg.initData)throw new Error('Real ma’lumot faqat Telegram botdagi 🧪 Rahbar Premium TEST orqali ochiladi.');
  const payload={initData:tg.initData,action:action};if(arg&&typeof arg==='object')Object.assign(payload,arg);
  const ctl=new AbortController(),timer=setTimeout(function(){ctl.abort()},60000);
