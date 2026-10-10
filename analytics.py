@@ -34,7 +34,9 @@ KPI = {
     # O'sish bali (har biri 0–15). Oraliqlar kesishmaydi: [min, max) foizda.
     'growth_bands': [(20, None, 15), (5, 20, 12), (-5, 5, 8), (-20, -5, 4), (None, -20, 0)],
     'groups': [(70, 'active', 'Faol'), (40, 'low', 'Faolligi past'), (0, 'passive', 'Passiv')],
-    'new_days': 30,
+    # Yangi mijoz: birinchi tovardan shuncha kun o'tmaguncha ball berilmaydi.
+    # Hozircha 15 kun (Ali qarori); keyinroq 30 kunga qaytariladi.
+    'new_days': 15,
 }
 TODAY = {'visit_due_days': 5, 'prospect_days': 14}
 NO_NAME = {'йўқ', 'йук', 'йок', 'йўк', 'нет', 'yoq', "yo'q", 'yo‘q', 'yok', '-', '—', '–', '.', '0',
@@ -173,7 +175,14 @@ def client_kpi(x, b, ref):
     parts = {'activity': act, 'payment': round(float(pay), 1),
              'deliveryGrowth': gd, 'paymentGrowth': gp}
     if not x['prevKnown'] or gd is None or gp is None:
-        return {'status': 'insufficient', 'label': 'Baholash uchun ma’lumot yetarli emas', 'parts': parts}
+        # Dastlabki ball: o'tgan davr bilan solishtirib bo'lmaydi, shuning uchun o'sish qismi olinmaydi.
+        # Faollik (shu davrda tovar oldi — 30) + to'lov (0–40) = 70 dan, 100 ballga keltiriladi.
+        act0 = KPI['activity']['both'] if x['delCmp'] > 0 else 0
+        total = (act0 + pay) * Fraction(100, KPI['activity']['both'] + KPI['payment_max'])
+        key, label = kpi_group(total)
+        parts = {'activity': act0, 'payment': round(float(pay), 1), 'deliveryGrowth': None, 'paymentGrowth': None}
+        return {'status': 'rated', 'provisional': True, 'score': int(total + Fraction(1, 2)), 'group': key,
+                'label': label, 'parts': parts}
     total = act + pay + gd + gp
     key, label = kpi_group(total)
     return {'status': 'rated', 'score': int(total + Fraction(1, 2)), 'group': key, 'label': label, 'parts': parts}

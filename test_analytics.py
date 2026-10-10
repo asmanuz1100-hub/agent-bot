@@ -176,14 +176,17 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(self.row(self.month(agent=3), 11)['kpi'], k11)
         self.assertEqual(self.row(self.month(agent=2), 10)['kpi'], self.row(full, 10)['kpi'])
 
-    def test_previous_zero_is_insufficient_not_zero_points(self):
+    def test_previous_zero_gives_provisional_score_without_growth(self):
         self.client(10)
         self.ev(10, 'delivery', 10, T(2026, 7, 1))
         self.ev(10, 'delivery', 2, T(2026, 10, 3))
         self.ev(10, 'payment', ts=T(2026, 10, 4), value=10000)
         r = self.row(self.month(), 10)
-        self.assertEqual(r['kpi']['status'], 'insufficient')
-        self.assertNotIn('score', r['kpi'])
+        k = r['kpi']
+        # Faollik 30 + to'lov 40*100/1200=3.33 → 33.33 / 70 * 100 = 47.6 → 48, Faolligi past
+        self.assertEqual((k['status'], k['provisional'], k['score'], k['group']), ('rated', True, 48, 'low'))
+        self.assertIsNone(k['parts']['deliveryGrowth'])
+        self.assertEqual(r['rank'], 1)
         self.assertEqual(r['deliveryGrowth']['text'], 'Bu davrda tovar oldi')
         self.assertEqual(r['paymentGrowth']['text'], 'Bu davrda to‘lov qildi')
 
@@ -197,7 +200,7 @@ class InsightsTests(unittest.TestCase):
         self.client(10)
         self.client(11, map_only=1)
         self.client(12)
-        self.ev(10, 'delivery', 2, NOW - 10 * DAY)
+        self.ev(10, 'delivery', 2, NOW - 10 * DAY)   # 15 kundan yangi → "Yangi"
         self.ev(12, 'delivery', 10, T(2026, 7, 1))
         self.db.execute("UPDATE clients SET region='' WHERE id=12")
         out = self.month()
@@ -207,6 +210,16 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(out['summary']['clients'], 3)
         self.assertEqual(out['summary']['prospects'], 1)
         self.assertIn('Belgilanmagan', [r['name'] for r in out['regions']])
+
+    def test_new_client_threshold_is_15_days(self):
+        self.client(10)
+        self.client(11)
+        self.ev(10, 'delivery', 2, NOW - 14 * DAY)
+        self.ev(11, 'delivery', 2, NOW - 16 * DAY)
+        out = self.month()
+        self.assertEqual(analytics.KPI['new_days'], 15)
+        self.assertEqual(self.row(out, 10)['kpi']['status'], 'new')
+        self.assertEqual(self.row(out, 11)['kpi']['status'], 'rated')
 
     def test_no_base_when_everything_returned(self):
         self.client(10)
