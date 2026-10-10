@@ -263,6 +263,7 @@ def mutate(db, actor, action, payload):
         if not client_row:raise ValueError('Мижоз топилмади.')
         agent_row=db.execute("SELECT id,name FROM users WHERE id=? AND role='agent'",(agent,)).fetchone()
         if not agent_row:raise ValueError('Фаол агентни танланг.')
+        core.ensure_not_blacklisted(db,client)
         debt=core.client_debt_usd(db,client)
         if debt<=0:raise ValueError('Бу мижозда жорий қарз йўқ.')
         note=str(payload.get('note') or '').strip()

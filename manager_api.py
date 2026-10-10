@@ -397,6 +397,7 @@ def dashboard(db, now=None):
     all_clients = db.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
     rows = db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.phone,c.address,
          c.lat,c.lon,c.photo,c.comment,c.payment_due,c.created_ts,c.map_only,
+         c.region,c.blacklisted,c.blacklist_reason,
          u.name AS agent_name
          FROM clients c LEFT JOIN users u ON u.id=c.agent
          ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
@@ -405,7 +406,7 @@ def dashboard(db, now=None):
              FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
     latest_by_client = {int(v["client"]): v for v in latest}
     contacts = db.execute("""SELECT client,MAX(ts) AS ts FROM events
-        WHERE client IS NOT NULL AND kind IN ('visit','delivery','payment','return')
+        WHERE client IS NOT NULL AND kind IN ('visit','delivery','sold','return')
         GROUP BY client""").fetchall()
     contacts_by_client = {int(e["client"]):int(e["ts"]) for e in contacts if e["ts"] is not None}
     balances = db.execute("""SELECT client,
@@ -445,7 +446,9 @@ def dashboard(db, now=None):
             "status":status,"age":age,"days":days,"lastTs":last or None,
             "followup":followup or None,"note":(v["note"] if v else c["comment"]) or "",
             "createdTs":int(c["created_ts"] or 0) or None,"hasPhoto":bool(c["photo"]),"photoV":core.photo_version(c["photo"]),
-            "debtUsd":_usd(debt_by_client.get(cid,0))
+            "debtUsd":_usd(debt_by_client.get(cid,0)),
+            "region":(c["region"] or "").strip(),
+            "blacklisted":bool(int(c["blacklisted"] or 0)),"blacklistReason":c["blacklist_reason"] or ""
         })
     agents = []
     for u in staff:
@@ -634,6 +637,13 @@ def client_detail(db, client_id, limit=120):
         "comment":c["comment"] or "","paymentDue":c["payment_due"] or "",
         "agentId":int(c["agent"]),"agent":c["agent_name"] or str(c["agent"]),
         "createdTs":int(c["created_ts"] or 0),"mapOnly":bool(c["map_only"]),
+        "region":c["region"] or "",
+        "blacklisted":bool(int(c["blacklisted"] or 0)),"blacklistReason":c["blacklist_reason"] or "",
+        "blacklistTs":int(c["blacklist_ts"] or 0) or None,
+        "blacklistLog":[{"action":r["action"],"reason":r["reason"] or "","ts":int(r["ts"]),
+                         "actor":r["actor_name"] or str(r["actor"])} for r in db.execute(
+            """SELECT l.action,l.reason,l.ts,l.actor,u.name AS actor_name FROM client_blacklist_log l
+               LEFT JOIN users u ON u.id=l.actor WHERE l.client=? ORDER BY l.ts DESC,l.id DESC LIMIT 20""",(client_id,)).fetchall()],
         "lat":lat,"lon":lon,"photo":c["photo"] or "","hasPhoto":bool(c["photo"]),"photoV":core.photo_version(c["photo"]),
         "debtUsd":_usd(debt),"stocks":stocks,"events":events,"visits":visit_rows,"edits":edit_rows,
         "totals":{"deliveredUsd":_usd(totals[0]),"paidUsd":_usd(totals[1]),
