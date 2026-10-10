@@ -211,16 +211,18 @@ function drawPeriod(d){
 }
 
 /* =================== CLIENTS =================== */
-function clientActions(id){
- return '<div class="pm-card" style="margin-top:14px"><b>⚙️ Boshqaruv</b><div class="pm-act"><div class="pm-b" data-pm="cl-edit" data-id="'+id+'">✎ Tahrirlash</div><div class="pm-b r" data-pm="cl-delete" data-id="'+id+'">🗑 O‘chirish</div><div class="pm-b" data-pm="cl-export" data-id="'+id+'" data-f="pdf">📄 Akt sverka PDF</div><div class="pm-b" data-pm="cl-export" data-id="'+id+'" data-f="xlsx">📊 Akt sverka Excel</div></div></div>';
+function clientActions(id,c){
+ return '<div class="pm-card" style="margin-top:14px"><b>⚙️ Boshqaruv</b><div class="pm-act">'+
+  (c&&c.blacklisted?'<div class="pm-b w" data-pm="cl-unblack" data-id="'+id+'">✅ Qora ro‘yxatdan chiqarish</div>':'<div class="pm-b r w" data-pm="cl-black" data-id="'+id+'">⛔ Qora ro‘yxatga qo‘shish</div>')+'<div class="pm-b" data-pm="cl-edit" data-id="'+id+'">✎ Tahrirlash</div><div class="pm-b r" data-pm="cl-delete" data-id="'+id+'">🗑 O‘chirish</div><div class="pm-b" data-pm="cl-export" data-id="'+id+'" data-f="pdf">📄 Akt sverka PDF</div><div class="pm-b" data-pm="cl-export" data-id="'+id+'" data-f="xlsx">📊 Akt sverka Excel</div></div></div>';
 }
 var baseOpenC=window.openC;
 window.openC=async function(i){
  await baseOpenC(i);
  var c=(P.clients()||[])[i],sh=$('sh');if(!c||!sh||!sh.classList.contains('on'))return;
  var close=Array.prototype.slice.call(sh.querySelectorAll('.btn.g')).pop();
- var block=document.createElement('div');block.innerHTML=clientActions(c.id);
+ var block=document.createElement('div');block.innerHTML=clientActions(c.id,c);
  if(close)sh.insertBefore(block.firstChild,close);else sh.appendChild(block.firstChild);
+ if(c.blacklisted){var ban=document.createElement('div');ban.className='pm-blban';ban.innerHTML='<b>⛔ Qora ro‘yxatda</b><small>Sabab: '+esc(c.blacklistReason||'—')+'</small><small>Mijoz bazada va xaritada qoladi. Agentlar u bilan hech qanday amal bajara olmaydi.</small>';sh.insertBefore(ban,sh.children[1]||null)}
 };
 async function editClient(id){
  loading('Mijozni tahrirlash');
@@ -366,6 +368,11 @@ document.addEventListener('click',function(ev){
  if(k==='ag-transfer-prev'){api('agent_transfer_preview',{agentId:id,newId:$('pm-a-new').value}).then(function(p){var st=(p.stocks||[]).filter(function(x){return x.qty}).map(function(x){return esc(x.name)+': '+x.qty}).join('<br>')||'Tovar qoldig‘i yo‘q';confirmBox('Akkaunt almashtirish','Agent: <b>'+esc(p.agent)+'</b><br>Yangi ID: <b>'+p.newId+'</b><small>Mijozlar: '+p.clients+' · Qo‘ldagi pul: '+usd(p.cashUsd)+' $<br>'+st+'</small>','agent_transfer_commit',{agentId:id,newId:p.newId})}).catch(function(e){say('⚠️ '+e.message)});return}
  if(k==='ag-block'){api('agent_deactivate_preview',{agentId:id}).then(function(p){confirmBox('Kirishni bloklash','<b>'+esc(p.agent)+'</b><small>'+esc(p.warning)+'<br>Mijozlar: '+p.clients+' · Qo‘ldagi pul: '+usd(p.cashUsd)+' $ · Kutilmoqda: '+usd(p.pendingHandoverUsd)+' $</small>','agent_deactivate_commit',{agentId:id})}).catch(function(e){say('⚠️ '+e.message)});return}
  if(k==='cl-edit'){editClient(id);return}
+ if(k==='cl-black'){sheet('Qora ro‘yxatga qo‘shish','<div class="pm-f"><label>Sabab (majburiy)<textarea id="pm-bl-reason" maxlength="300" placeholder="Masalan: qarzini to‘lamaydi"></textarea></label></div><div class="pm-note">Mijoz o‘chirilmaydi: bazada, hisobotda va xaritada qoladi. Agentlar u bilan tovar, to‘lov, qaytarish, tashrif va buyurtma bajara olmaydi. Savdo va qarz tarixi o‘zgarmaydi.</div><div class="pm-act"><div class="pm-b r" data-pm="cl-black-save" data-id="'+id+'">⛔ Tasdiqlash</div><div class="pm-b" data-pm="close">Bekor qilish</div></div>');return}
+ if(k==='cl-black-save'){var reason=($('pm-bl-reason')||{}).value||'';if(reason.trim().length<3){say('⚠️ Sababini yozing');return}b.setAttribute('disabled','');
+  api('client_blacklist',{clientId:id,on:true,reason:reason.trim()}).then(async function(r){say(r.message||'⛔ Qora ro‘yxatga qo‘shildi');await P.reload(true);var idx=(P.clients()||[]).findIndex(function(c){return c.id===id});if(idx>=0)window.openC(idx);else window.closeS()}).catch(function(e){say('⚠️ '+(e.message||'Saqlanmadi'));b.removeAttribute('disabled')});return}
+ if(k==='cl-unblack'){pending={action:'client_blacklist',payload:{clientId:id,on:false},after:function(){var idx=(P.clients()||[]).findIndex(function(c){return c.id===id});if(idx>=0)window.openC(idx);else window.closeS()}};
+  sheet('Qora ro‘yxatdan chiqarish','<div class="pm-card"><b>Mijoz yana faol bo‘ladi</b><small>Agentlar u bilan yana tovar, to‘lov va tashrif amallarini bajara oladi. Qo‘shish/chiqarish tarixi saqlanadi.</small></div><div class="pm-act"><div class="pm-b p" data-pm="confirm">✅ Tasdiqlash</div><div class="pm-b" data-pm="close">Bekor qilish</div></div>');return}
  if(k==='cl-preview'){previewClient(id);return}
  if(k==='cl-commit'){commitClient(b);return}
  if(k==='cl-delete'){deleteClient(id);return}

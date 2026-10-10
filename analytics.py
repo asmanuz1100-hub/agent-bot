@@ -236,7 +236,7 @@ def insights(db, period='month', date_from=None, date_to=None, agent=None, now=N
     b = period_bounds(period, date_from, date_to, now)
     ref = min(b['end'] - 1, now)
     w, wa = _scope(agent)
-    clients = db.execute(f"""SELECT c.id,c.agent,c.name,c.shop_name,c.region,c.created_ts,c.map_only,
+    clients = db.execute(f"""SELECT c.id,c.agent,c.name,c.shop_name,c.region,c.created_ts,c.map_only,c.blacklisted,
         u.name AS agent_name FROM clients c LEFT JOIN users u ON u.id=c.agent WHERE 1=1{w} ORDER BY c.id""", wa).fetchall()
     sums = _client_sums(db, b, agent)
 
@@ -256,7 +256,8 @@ def insights(db, period='month', date_from=None, date_to=None, agent=None, now=N
             'debtCents': debt_end, 'debtNowCents': x['debtNow'],
             'deliveryGrowth': growth(x['delCmp'], x['delPrev'], x['prevKnown'], 'Bu davrda tovar oldi'),
             'paymentGrowth': growth(x['paidCmp'], x['paidPrev'], x['prevKnown'], 'Bu davrda to‘lov qildi'),
-            'kpi': client_kpi(x, b, ref), 'legacyEvents': x['legacy'], '_x': x})
+            'kpi': ({'status': 'blacklisted', 'label': 'Qora ro‘yxatda'} if _i(c['blacklisted'])
+                    else client_kpi(x, b, ref)), 'legacyEvents': x['legacy'], '_x': x})
 
     rated = sorted([r for r in rows if r['kpi']['status'] == 'rated'],
                    key=lambda r: (-r['kpi']['score'], -r['deliveredCents'], r['id']))
@@ -349,7 +350,7 @@ def insights(db, period='month', date_from=None, date_to=None, agent=None, now=N
     summary['legacyEvents'] = sum(r['legacyEvents'] for r in rows)
     for r in rows:
         r.pop('_x')
-    order = {'rated': 0, 'new': 1, 'insufficient': 2, 'nobase': 3, 'prospect': 4}
+    order = {'rated': 0, 'new': 1, 'insufficient': 2, 'nobase': 3, 'prospect': 4, 'blacklisted': 5}
     rows.sort(key=lambda r: (order[r['kpi']['status']], r.get('rank') or 0, -r['deliveredCents'], r['id']))
     return {'period': b['period'], 'label': b['label'], 'compareLabel': b['compareLabel'], 'trimmed': b['trimmed'],
             'start': b['start'], 'end': b['end'], 'cmpStart': b['cmpStart'], 'cmpEnd': b['cmpEnd'],
@@ -382,7 +383,7 @@ def today_plan(db, agent=None, now=None, limit=25):
     today = datetime.fromtimestamp(now, TZ).date()
     w, wa = _scope(agent)
     clients = db.execute(f"""SELECT c.id,c.agent,c.name,c.shop_name,c.region,c.created_ts,c.map_only,c.payment_due,
-        u.name AS agent_name FROM clients c LEFT JOIN users u ON u.id=c.agent WHERE 1=1{w}""", wa).fetchall()
+        u.name AS agent_name FROM clients c LEFT JOIN users u ON u.id=c.agent WHERE 1=1{w} AND COALESCE(c.blacklisted,0)=0""", wa).fetchall()
     ev = {}
     for r in db.execute(f"""SELECT e.client AS client,
             COALESCE(SUM(CASE WHEN e.kind='delivery' THEN e.amount_usd WHEN e.kind IN ('return','payment') THEN -e.amount_usd ELSE 0 END),0) AS debt,

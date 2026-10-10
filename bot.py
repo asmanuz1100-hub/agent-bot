@@ -48,8 +48,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v12')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v9')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v13')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v10')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -865,6 +865,12 @@ def notify_admins_order(db,agent,order_id):
           ("\n\n⚠️ Каталогда йўқ маҳсулот бор — Раҳбар Mini App → Омбор бўлимида қўшинг ёки боғланг." if v['unmapped'] else
            "\n\nРаҳбар Mini App → 📦 Омбор бўлимида кўриб чиқинг."))
     _safe_send_many(admin_ids(db),text)
+
+def notify_admins_blacklist(db,agent,client,reason):
+    c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
+    label=(c['shop_name'] or c['name']) if c else f"#{client}"
+    _safe_send_many(admin_ids(db),f"⛔ QORA RO‘YXAT\n👨‍💼 Agent: {_staff_name(db,agent)}\n🏪 Mijoz: {label}\n📝 Sabab: {reason}\n\n"
+                    "Mijoz bazada va xaritada qoladi, u bilan amallar bloklandi. Chiqarish: Rahbar Mini App → Mijozlar.")
 
 def notify_agent_order_status(db,order_id):
     row=db.execute('SELECT * FROM orders WHERE id=?',(order_id,)).fetchone()
@@ -2633,6 +2639,8 @@ def serve_webhook(db,base_url):
                                                         notify.get('rate'))
                             elif notify.get('kind')=='order':
                                 notify_admins_order(local,effective_agent,notify['orderId'])
+                            elif notify.get('kind')=='blacklist':
+                                notify_admins_blacklist(local,effective_agent,notify['client'],notify.get('reason') or '')
                             elif notify.get('kind')=='card_payment':
                                 notify_cashiers_card_payment(local,effective_agent,notify['client'],notify['paymentId'],
                                                              notify['amount'],notify.get('currency','UZS'),
@@ -2710,6 +2718,11 @@ def serve_webhook(db,base_url):
                         if payload.get('confirm') is not True:
                             raise ValueError('Mijozni o‘chirishni tasdiqlang.')
                         data=manager_api.client_delete_commit(local,actor,payload.get('clientId'))
+                    elif action=='client_blacklist':
+                        on=payload.get('on') is not False
+                        data=set_client_blacklist(local,actor,payload.get('clientId'),on,payload.get('reason') or '')
+                        data['message']=('⛔ Mijoz qora ro‘yxatga qo‘shildi. U bazada va xaritada qoladi.' if on
+                                         else '✅ Mijoz qora ro‘yxatdan chiqarildi.')
                     elif action=='client_export':
                         client_id=payload.get('clientId')
                         fmt=str(payload.get('format') or '').lower()

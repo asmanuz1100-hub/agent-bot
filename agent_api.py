@@ -241,7 +241,7 @@ def _client_snapshot(db,now,client_id=None):
             FROM client_visits v LEFT JOIN users u ON u.id=v.actor
             WHERE v.id=(SELECT MAX(v2.id) FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
         contacts_rows=db.execute("""SELECT client,MAX(ts) AS ts FROM events
-            WHERE client IS NOT NULL AND kind IN ('visit','delivery','payment','return')
+            WHERE client IS NOT NULL AND kind IN ('visit','delivery','sold','return')
             GROUP BY client""").fetchall()
         balances=db.execute("""SELECT client,
             COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
@@ -259,7 +259,7 @@ def _client_snapshot(db,now,client_id=None):
             FROM client_visits v LEFT JOIN users u ON u.id=v.actor
             WHERE v.client=? ORDER BY v.id DESC LIMIT 1""",(cid,)).fetchall()
         contacts_rows=db.execute("""SELECT client,MAX(ts) AS ts FROM events
-            WHERE client=? AND kind IN ('visit','delivery','payment','return') GROUP BY client""",(cid,)).fetchall()
+            WHERE client=? AND kind IN ('visit','delivery','sold','return') GROUP BY client""",(cid,)).fetchall()
         balances=db.execute("""SELECT client,
             COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
                               WHEN kind IN ('payment','return') THEN -amount_usd ELSE 0 END),0) AS debt
@@ -295,6 +295,8 @@ def _client_snapshot(db,now,client_id=None):
             "createdTs":int(c['created_ts'] or 0) or None,
             "hasPhoto":bool(c['photo']),"photoV":core.photo_version(c['photo']),
             "debtUsd":_usd(debt.get(cid,0)),
+            "blacklisted":bool(int(c['blacklisted'] or 0)),"blacklistReason":c['blacklist_reason'] or "",
+            "blacklistTs":int(c['blacklist_ts'] or 0) or None,
             "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
         })
     return result
@@ -941,6 +943,14 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                            "category":category,"note":note,"balanceUzs":balance_uzs}}
     cid=int(payload.get("clientId") or 0)
     current_client=_client(db,cid)
+    if action=="client_blacklist":
+        on=bool(payload.get("on",True))
+        core.set_client_blacklist(db,agent,cid,on,payload.get("reason") or "",ts=now)
+        return {"ok":True,"clientId":cid,"blacklisted":on,
+                "message":"⛔ Mijoz qora ro‘yxatga qo‘shildi. U bazada va xaritada qoladi." if on else "✅ Mijoz qora ro‘yxatdan chiqarildi.",
+                "_notify":{"kind":"blacklist","client":cid,"reason":str(payload.get("reason") or "").strip()} if on else None}
+    if int(current_client['blacklisted'] or 0):
+        raise ValueError(core.BLACKLIST_MSG)
     if action=="client_edit":
         shop=str(payload.get("shopName") or payload.get("shop") or "").strip()
         person=str(payload.get("name") or payload.get("person") or "").strip()

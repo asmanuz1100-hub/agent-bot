@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS photo_thumbs(file_id TEXT PRIMARY KEY, data BLOB NOT 
 CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, region TEXT NOT NULL DEFAULT '', lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts INTEGER, map_only INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS deleted_clients(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, name TEXT, phone TEXT, address TEXT, region TEXT NOT NULL DEFAULT '', lat REAL, lon REAL, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts INTEGER, map_only INTEGER NOT NULL DEFAULT 0, deleted_by INTEGER NOT NULL, deleted_ts INTEGER NOT NULL, debt_usd INTEGER NOT NULL DEFAULT 0, event_count INTEGER NOT NULL DEFAULT 0, visit_count INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(agent INTEGER PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS client_blacklist_log(id INTEGER PRIMARY KEY, client INTEGER NOT NULL, actor INTEGER NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', ts INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS shifts(id INTEGER PRIMARY KEY, agent INTEGER, start INTEGER, end INTEGER, live_id INTEGER);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, shift INTEGER, ts INTEGER, lat REAL, lon REAL, accuracy REAL, UNIQUE(shift,ts));
@@ -146,6 +147,7 @@ CREATE TABLE IF NOT EXISTS photo_thumbs(file_id TEXT PRIMARY KEY, data BYTEA NOT
 CREATE TABLE IF NOT EXISTS clients(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT UNIQUE, address TEXT, region TEXT NOT NULL DEFAULT '', lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts BIGINT, map_only INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS deleted_clients(id BIGINT PRIMARY KEY, agent BIGINT NOT NULL, name TEXT, phone TEXT, address TEXT, region TEXT NOT NULL DEFAULT '', lat DOUBLE PRECISION, lon DOUBLE PRECISION, photo TEXT, shop_name TEXT, comment TEXT DEFAULT '', payment_due TEXT, created_ts BIGINT, map_only INTEGER NOT NULL DEFAULT 0, deleted_by BIGINT NOT NULL, deleted_ts BIGINT NOT NULL, debt_usd BIGINT NOT NULL DEFAULT 0, event_count BIGINT NOT NULL DEFAULT 0, visit_count BIGINT NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(agent BIGINT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS client_blacklist_log(id BIGSERIAL PRIMARY KEY, client BIGINT NOT NULL, actor BIGINT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', ts BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS shifts(id BIGSERIAL PRIMARY KEY, agent BIGINT, start BIGINT, end BIGINT, live_id BIGINT);
 CREATE UNIQUE INDEX IF NOT EXISTS one_shift ON shifts(agent) WHERE end IS NULL;
 CREATE TABLE IF NOT EXISTS points(id BIGSERIAL PRIMARY KEY, shift BIGINT, ts BIGINT, lat DOUBLE PRECISION, lon DOUBLE PRECISION, accuracy DOUBLE PRECISION, UNIQUE(shift,ts));
@@ -264,6 +266,10 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_ts BIGINT')
         db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS map_only INTEGER NOT NULL DEFAULT 0')
         db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT ''")
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS blacklisted INTEGER NOT NULL DEFAULT 0')
+        db.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS blacklist_reason TEXT NOT NULL DEFAULT ''")
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS blacklist_ts BIGINT')
+        db.execute('ALTER TABLE clients ADD COLUMN IF NOT EXISTS blacklist_by BIGINT')
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         db.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS pay_method TEXT NOT NULL DEFAULT ''")
         db.execute('ALTER TABLE events ADD COLUMN IF NOT EXISTS paid_uzs BIGINT NOT NULL DEFAULT 0')
@@ -312,6 +318,9 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE clients ADD COLUMN map_only INTEGER NOT NULL DEFAULT 0')
     if 'region' not in client_cols:
         db.execute("ALTER TABLE clients ADD COLUMN region TEXT NOT NULL DEFAULT ''")
+    for column,definition in (('blacklisted','INTEGER NOT NULL DEFAULT 0'),('blacklist_reason',"TEXT NOT NULL DEFAULT ''"),
+                              ('blacklist_ts','INTEGER'),('blacklist_by','INTEGER')):
+        if column not in client_cols:db.execute(f'ALTER TABLE clients ADD COLUMN {column} {definition}')
     if 'amount_usd' not in {r[1] for r in db.execute('PRAGMA table_info(events)')}:
         db.execute('ALTER TABLE events ADD COLUMN amount_usd INTEGER DEFAULT 0')
     event_cols={r[1] for r in db.execute('PRAGMA table_info(events)')}
@@ -342,6 +351,7 @@ def connect(path,initialize=True):
     _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
+    db.commit()
     db.execute('PRAGMA journal_mode=WAL')
     return db
 
@@ -719,6 +729,7 @@ def edit_client(db,actor,client_id,values):
     current=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
     if not identity or not current or identity[0] not in ('admin','agent'):
         raise ValueError('Бу мижоз маълумотини ўзгартиришга рухсат йўқ.')
+    if identity[0]!='admin' and int(current['blacklisted'] or 0):raise ValueError(BLACKLIST_MSG)
     if not values or any(field not in CLIENT_EDIT_FIELDS for field in values):
         raise ValueError('Таҳрирланадиган маълумот нотўғри.')
     if isinstance(db,PostgresDB):
@@ -882,6 +893,45 @@ def handover_value_text(row):
         return f"{_som_text(amount_tiyin)} сўм"+(f" (≈ {usd/100:,.2f} USD)".replace(',',' ') if usd else '')
     return f"{usd/100:,.2f} USD".replace(',',' ')
 
+BLACKLIST_MSG='⛔ Mijoz qora ro‘yxatda — u bilan hech qanday amal bajarib bo‘lmaydi.'
+
+
+def client_blacklisted(db,client):
+    try:client=int(client)
+    except (TypeError,ValueError):return False
+    row=db.execute('SELECT blacklisted FROM clients WHERE id=?',(client,)).fetchone()
+    return bool(row and int(row[0] or 0))
+
+
+def ensure_not_blacklisted(db,client):
+    if client_blacklisted(db,client):raise ValueError(BLACKLIST_MSG)
+
+
+def set_client_blacklist(db,actor,client,on,reason='',ts=None):
+    """Mijoz o'chirilmaydi: faqat belgi qo'yiladi va tarix (client_blacklist_log) yoziladi.
+    Qo'shish: rahbar yoki agent (sabab majburiy). Chiqarish: faqat rahbar."""
+    role=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not role or role[0] not in ('admin','agent'):raise ValueError('Ruxsat yo‘q.')
+    try:client=int(client)
+    except (TypeError,ValueError):raise ValueError('Mijoz noto‘g‘ri.')
+    row=db.execute('SELECT id,blacklisted FROM clients WHERE id=?',(client,)).fetchone()
+    if not row:raise ValueError('Mijoz topilmadi.')
+    ts=int(time.time() if ts is None else ts)
+    reason=str(reason or '').strip()
+    if on:
+        if len(reason)<3:raise ValueError('Qora ro‘yxatga qo‘shish sababini yozing.')
+        if len(reason)>300:raise ValueError('Sabab juda uzun.')
+        if int(row[1] or 0):raise ValueError('Mijoz allaqachon qora ro‘yxatda.')
+        db.execute('UPDATE clients SET blacklisted=1,blacklist_reason=?,blacklist_ts=?,blacklist_by=? WHERE id=?',(reason,ts,actor,client))
+    else:
+        if role[0]!='admin':raise ValueError('Qora ro‘yxatdan faqat rahbar chiqara oladi.')
+        if not int(row[1] or 0):raise ValueError('Mijoz qora ro‘yxatda emas.')
+        db.execute("UPDATE clients SET blacklisted=0,blacklist_reason='',blacklist_ts=NULL,blacklist_by=NULL WHERE id=?",(client,))
+    db.execute('INSERT INTO client_blacklist_log(client,actor,action,reason,ts) VALUES(?,?,?,?,?)',
+               (client,actor,'add' if on else 'remove',reason,ts))
+    return {'clientId':client,'blacklisted':bool(on)}
+
+
 def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', source=None, currency='UZS', ts=None):
     role=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not role or role[0] not in ('admin','agent'): raise ValueError('Рухсат йўқ.')
@@ -892,8 +942,9 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
     lock_agent(db,agent)
     if kind=='load' and role[0]!='admin': raise ValueError('Товарни фақат админ беради.')
     if kind!='load':
-        c=db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone()
+        c=db.execute('SELECT id,blacklisted FROM clients WHERE id=?',(client,)).fetchone()
         if not c: raise ValueError('Мижоз топилмади.')
+        if int(c[1] or 0): raise ValueError(BLACKLIST_MSG)
     if kind in ('load','delivery','sold','return','order'):
         if pack not in PRODUCTS or not isinstance(qty,int) or qty<=0: raise ValueError('Товар ёки миқдор нотўғри.')
     # Delivery is allowed even when the accounting stock is zero or negative.
@@ -1440,6 +1491,7 @@ def record_client_payment(db,actor,agent,client,currency,value,method,rate=None,
 
 def submit_card_payment(db,agent,client,currency,value,rate=None,note='',source=None,ts=None,usd_cents=None,photo=''):
     """Card / bank transfer: waits for the cashier; client debt is NOT reduced yet."""
+    ensure_not_blacklisted(db,client)
     role=db.execute('SELECT role FROM users WHERE id=?',(agent,)).fetchone()
     if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
     if not db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone():raise ValueError('Мижоз топилмади.')
@@ -1626,6 +1678,7 @@ def create_order(db,agent,client,items,note='',source=None,ts=None):
     if not role or role[0]!='agent':raise ValueError('Агент топилмади.')
     if not db.execute('SELECT id FROM clients WHERE id=?',(client,)).fetchone():raise ValueError('Мижоз топилмади.')
     if not isinstance(source,int):raise ValueError('Операция ID нотўғри.')
+    ensure_not_blacklisted(db,client)
     old=db.execute('SELECT id FROM orders WHERE source=?',(source,)).fetchone()
     if old:return int(old[0]),True
     if not isinstance(items,list) or not items or len(items)>30:raise ValueError('Buyurtmaga 1–30 qator mahsulot kiriting.')

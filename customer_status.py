@@ -30,6 +30,8 @@ def add_visit(db,actor,client,status,note,followup=None,ts=None):
     who=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not person or not who or who[0] not in ('admin','agent'):
         raise ValueError('Бу дўконнинг ташрифини қайд этишга рухсат йўқ.')
+    if int((db.execute('SELECT blacklisted FROM clients WHERE id=?',(client,)).fetchone() or [0])[0] or 0):
+        raise ValueError('⛔ Mijoz qora ro‘yxatda — u bilan hech qanday amal bajarib bo‘lmaydi.')
     note=str(note or '').strip()
     if not note or len(note)>1000:
         raise ValueError('Суҳбат ҳақида 1–1000 белги ёзинг.')
@@ -60,7 +62,7 @@ def last_contact_ts(db,client):
     row=db.execute('SELECT MAX(ts) FROM client_visits WHERE client=?',(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
     row=db.execute("""SELECT MAX(ts) FROM events WHERE client=?
-        AND kind IN ('visit','delivery','payment','return')""",(client,)).fetchone()
+        AND kind IN ('visit','delivery','sold','return')""",(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
     row=db.execute('SELECT created_ts FROM clients WHERE id=?',(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
