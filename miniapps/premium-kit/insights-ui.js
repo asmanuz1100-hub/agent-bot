@@ -72,7 +72,7 @@ function mount(el,o){
    return '<button type="button" data-ai-grp="'+g[0]+'" class="'+(st.grp===g[0]?'on':'')+'">'+g[1]+' '+n+'</button>'}).join('')+'</div>';
   var list=rated.filter(function(c){return st.grp==='all'||c.kpi.group===st.grp});
   h+=list.length?top3('c:'+st.grp,list,clientRow):'<div class="ai-empty">Reytingda mijoz yo‘q.</div>';
-  [['new','Yangi mijozlar'],['insufficient','Baholash uchun ma’lumot yetarli emas'],['nobase','Baholash uchun asos yo‘q'],['prospect','Istiqbolli mijozlar'],['blacklisted','⛔ Qora ro‘yxat']].forEach(function(s){
+  [['new','Yangi mijozlar'],['insufficient','Baholash uchun ma’lumot yetarli emas'],['nobase','Baholash uchun asos yo‘q'],['incomplete','Hisob to‘liq emas — eski so‘m/narxsiz yozuv'],['prospect','Istiqbolli mijozlar'],['blacklisted','⛔ Qora ro‘yxat']].forEach(function(s){
    var xs=all.filter(function(c){return c.kpi.status===s[0]});if(!xs.length)return;var open=st.open['s:'+s[0]];
    h+='<button type="button" class="ai-it ai-sec" data-ai-region="s:'+s[0]+'">'+(open?'▾ ':'▸ ')+esc(s[1])+' — '+xs.length+'</button>'+(open?'<div class="ai-sub">'+top3('s:'+s[0],xs,clientRow)+'</div>':'')});
   return h}

@@ -7,6 +7,7 @@ inventory/cash rules and customer_status visit rules.
 import hashlib
 import os
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -233,7 +234,36 @@ def _visit_age(last,followup,now):
     return ("red" if days>=5 else "yellow" if days>=3 else "fresh"),int(days)
 
 
+_SNAPSHOT_CACHE={}
+_SNAPSHOT_LOCK=threading.Lock()
+
+
+def _snapshot_fingerprint(db):
+    """Arzon (indeksli MAX/COUNT) belgi: mijozlar ro'yxatiga ta'sir qiladigan har qanday yozuv uni o'zgartiradi."""
+    row=db.execute("""SELECT (SELECT COALESCE(MAX(id),0) FROM events),(SELECT COALESCE(MAX(id),0) FROM client_visits),
+        (SELECT COALESCE(MAX(id),0) FROM client_edits),(SELECT COALESCE(MAX(id),0) FROM client_blacklist_log),
+        (SELECT COALESCE(MAX(id),0) FROM delivery_edits),(SELECT COUNT(*) FROM clients),(SELECT COALESCE(MAX(id),0) FROM clients),
+        (SELECT COUNT(*) FROM users)""").fetchone()
+    return tuple(int(x or 0) for x in row)
+
+
 def _client_snapshot(db,now,client_id=None):
+    """Barcha mijozlar ro'yxati bir xil (umumiy ko'rinish), shuning uchun natija ma'lumot o'zgarmaguncha
+    va shu daqiqa ichida qayta ishlatiladi. Har so'rovda yangi belgi tekshiriladi — eski raqam ko'rsatilmaydi."""
+    if client_id is not None or not isinstance(db,core.PostgresDB):
+        return _client_snapshot_build(db,now,client_id)
+    key=(os.getenv('DB_SCHEMA','agentbot'),_snapshot_fingerprint(db),int(now)//60)
+    with _SNAPSHOT_LOCK:
+        hit=_SNAPSHOT_CACHE.get('all')
+    if hit and hit[0]==key:
+        return [dict(x) for x in hit[1]]
+    result=_client_snapshot_build(db,now,None)
+    with _SNAPSHOT_LOCK:
+        _SNAPSHOT_CACHE['all']=(key,result)
+    return [dict(x) for x in result]
+
+
+def _client_snapshot_build(db,now,client_id=None):
     if client_id is None:
         rows=db.execute("""SELECT c.*,u.name AS agent_name FROM clients c
             LEFT JOIN users u ON u.id=c.agent ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
@@ -297,7 +327,8 @@ def _client_snapshot(db,now,client_id=None):
             "debtUsd":_usd(debt.get(cid,0)),
             "blacklisted":bool(int(c['blacklisted'] or 0)),"blacklistReason":c['blacklist_reason'] or "",
             "blacklistTs":int(c['blacklist_ts'] or 0) or None,
-            "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
+            # Faqat noldan farqli qoldiqlar: ilova yo‘q mahsulotni 0 deb oladi; 1000 mijozda javob ~3 marta kichrayadi.
+            "stock":{str(pack):q for pack,q in stocks.get(cid,{}).items() if q}
         })
     return result
 
