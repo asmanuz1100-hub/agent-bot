@@ -48,8 +48,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261013-v8')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261013-premium-v5')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261014-v9')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261014-premium-v6')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -2611,8 +2611,10 @@ def serve_webhook(db,base_url):
                         data=agent_api.period_report(local,subject,payload.get('from'),payload.get('to'))
                         local.commit()
                     elif action=='insights':
-                        # Hududlar va mijozlar reytingi: agent faqat o'z mijozlarini ko'radi.
+                        # Agent faqat o'z portfelini ko'radi: subject serverda aniqlanadi,
+                        # agentId faqat admin uchun qabul qilinadi.
                         data=analytics.insights(local,payload.get('period') or 'month',payload.get('from'),payload.get('to'),agent=subject)
+                        data['today']=analytics.today_plan(local,agent=subject)
                         local.commit()
                     else:
                         # Admin temporarily operates the selected agent workspace.
@@ -2765,6 +2767,7 @@ def serve_webhook(db,base_url):
                         try:aid=int(payload.get('agentId') or 0) or None
                         except (TypeError,ValueError):raise ValueError('Agent noto‘g‘ri.')
                         data=analytics.insights(local,payload.get('period') or 'month',payload.get('from'),payload.get('to'),agent=aid)
+                        data['today']=analytics.today_plan(local,agent=aid)
                     elif action=='agent_add_preview':
                         data=manager_api.agent_add_preview(local,payload.get('id'),payload.get('name'))
                     elif action=='agent_add_commit':
