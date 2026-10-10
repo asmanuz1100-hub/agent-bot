@@ -292,13 +292,14 @@ function updateCash(d){
 function reportSeg(i){
  const box=$('rcustom'),lab=$('rlabel');if(box)box.style.display=i===3?'grid':'none';
  if(i===4){go(1);return}
- if(i===0||i===1){if(lab)setText(lab,'');renderReport(i===0?'today':'week');return}
+ if(i===0||i===1){if(lab)setText(lab,'');renderReport(i===0?'today':'week');if(window.pmInsightsPeriod)window.pmInsightsPeriod(i===0?'today':'week');return}
  if(i===3){const f=$('rFrom'),t=$('rTo');if(f&&!f.value){const n=new Date(),p=function(x){return String(x).padStart(2,'0')};t.value=n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate());f.value=n.getFullYear()+'-'+p(n.getMonth()+1)+'-01'}if($('rGo'))$('rGo').onclick=function(){loadPeriod('custom')};return}
  loadPeriod('month');
 }
 async function loadPeriod(period){
  const lab=$('rlabel'),arg={period:period};if(period==='custom'){arg.from=$('rFrom').value;arg.to=$('rTo').value;if(!arg.from||!arg.to){toast('Sanalarni tanlang');return}}
  if(lab)setText(lab,'Yuklanmoqda…');
+ if(window.pmInsightsPeriod)window.pmInsightsPeriod(period,arg.from,arg.to);
  try{const rep=await req('period_report',arg);if(lab)setText(lab,'📅 '+rep.label);renderReport(rep)}catch(e){if(lab)setText(lab,'');toast('⚠️ '+e.message)}
 }
 function renderReport(period){
