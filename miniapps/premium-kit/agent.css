@@ -53,7 +53,7 @@ html.pm .primary{background:var(--gl)!important;color:#fff!important;border:0!im
 html.pm .primary:active{filter:brightness(.92)}
 html.pm .secondary{background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important;border-radius:14px!important;font-weight:700!important;min-height:44px;white-space:nowrap}
 html.pm .tools{gap:8px}
-html.pm .chip{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;font-weight:700!important;box-shadow:none!important;min-height:40px}
+html.pm .chip{flex:0 0 auto!important;max-width:none!important;background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;font-weight:700!important;box-shadow:none!important;min-height:40px}
 html.pm .chip.active{background:var(--gl)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 8px 18px -8px #1f6fd1cc!important}
 html.pm .pill{border-radius:20px!important;font-weight:700!important}
 html.pm .pill.green,html.pm .green .pill{background:var(--ok-soft)!important;color:var(--ok)!important}
@@ -154,3 +154,4 @@ html.pm[data-pmt="dark"] .leaflet-control-zoom a,html.pm[data-pmt="dark"] .leafl
 /* While the login gate / admin agent picker is open, the floating nav must not be tappable. */
 html.pm body:has(#gate:not(.hidden)) nav:not(.tabs){display:none!important}
 html.pm[data-pmt="dark"] #gate{background:var(--bg)!important}html.pm[data-pmt="dark"] #gate .card{background:var(--card)!important;color:var(--tx)!important}
+html.pm .quick-tile small{white-space:normal!important;overflow-wrap:anywhere}

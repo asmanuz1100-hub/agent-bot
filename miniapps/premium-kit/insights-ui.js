@@ -30,12 +30,12 @@ function gtxt(g){if(!g)return '';var c=g.kind==='pct'?(g.pct>0?'ai-up':g.pct<0?'
 
 function mount(el,o){
  css();var mgr=o.mode==='manager';
- var st={period:'month',from:'',to:'',agent:'',tab:mgr?'regions':'today',grp:'all',limit:30,open:{},all:{},why:false,data:null,key:'',at:0,err:''};
+ var st={period:o.period||'month',from:'',to:'',agent:'',tab:mgr?'regions':'today',grp:'all',limit:30,open:{},all:{},why:false,data:null,key:'',at:0,err:''};
  el.classList.add('ai');
  function key(){return st.period+'|'+st.from+'|'+st.to+'|'+st.agent}
  function money(c){return 'Olgan '+usd(c.deliveredCents)+' · Bergan '+usd(c.paidCents)+' · '+(c.debtCents<0?'Avans '+usd(-c.debtCents):'Qarz '+usd(c.debtCents))}
  function clientRow(c){var k=c.kpi,head,right='';
-  if(k.status==='rated'){head=(c.rank?c.rank+'. ':'')+esc(c.name);right='<span class="ai-sc ai-sc-'+k.group+'">'+k.score+'</span><span class="ai-g-'+k.group+'">'+esc(k.label)+'</span>'}
+  if(k.status==='rated'){head=(c.rank?c.rank+'. ':'')+esc(c.name);right='<span class="ai-sc ai-sc-'+k.group+'">'+k.score+'</span><span class="ai-g-'+k.group+'">'+esc(k.label)+'</span>'+(k.provisional?'<small style="display:block;text-align:right;font-weight:600">dastlabki</small>':'')}
   else head=esc(c.name)+' · <small style="display:inline">'+esc(k.label)+'</small>';
   var h='<button type="button" class="ai-it" data-ai-open="'+c.id+'"><div class="ai-top"><b>'+head+'</b><span>'+right+'</span></div>'+
    '<small>'+money(c)+(mgr?' · '+esc(c.agent):'')+'</small>'+
@@ -50,6 +50,7 @@ function mount(el,o){
   (st.why?'<div class="ai-parts">100 ball = <b>faollik 30</b> + <b>to‘lov 40</b> + <b>tovar o‘sishi 15</b> + <b>to‘lov o‘sishi 15</b>.<br>'+
   'Faollik: ikkala davrda tovar olgan 30, faqat shu davrda 20, faqat oldingi davrda 10.<br>To‘lov: to‘langan ÷ (olingan − qaytgan) × 40.<br>'+
   'O‘sish: ≥20% → 15, 5–20% → 12, −5…5% → 8, −20…−5% → 4, undan past → 0.<br>'+
+  '<b>Dastlabki ball</b>: o‘tgan davr bilan solishtirib bo‘lmasa, o‘sish olinmaydi — faollik (30) + to‘lov (40) 100 ballga keltiriladi. 15 kundan yangi mijoz — “Yangi”, ball berilmaydi.<br>'+
   '<span class="ai-sc ai-sc-active">70+</span>Faol <span class="ai-sc ai-sc-low">40–69</span>Faolligi past <span class="ai-sc ai-sc-passive">0–39</span>Passiv</div>':'')}
  function summary(d){var s=d.summary;return '<div class="ai-sum"><div><small>Berilgan tovar</small><b>'+usd(s.deliveredCents)+'</b></div><div><small>Olingan pul</small><b>'+usd(s.paidCents)+'</b></div>'+
   '<div><small>Qaytgan tovar</small><b>'+usd(s.returnedCents)+'</b></div><div><small>Qolgan qarz</small><b>'+usd(s.debtCents)+'</b>'+(s.advanceCents?'<small>Avans '+usd(s.advanceCents)+'</small>':'')+'</div></div>'+
@@ -89,8 +90,10 @@ function mount(el,o){
  function paint(){var d=st.key===key()?st.data:(st.tab==='today'?st.data:null);
   var tabs=mgr?[['regions','Hududlar'],['products','Mahsulotlar'],['clients','Mijozlar'],['agents','Agentlar'],['today','Bugun kimga']]:[['today','Bugun kimga'],['regions','Hududlar'],['products','Mahsulotlar'],['clients','Mijozlar']];
   var h='<div class="ai-h">📊 Hisobot</div><div class="ai-row">'+tabs.map(function(x){return '<button type="button" data-ai-tab="'+x[0]+'" class="'+(st.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>';
-  if(st.tab!=='today'){h+='<div class="ai-row">'+[['today','Bugun'],['week','7 kun'],['month','Shu oy'],['custom','Davr']].map(function(x){return '<button type="button" data-ai-per="'+x[0]+'" class="'+(st.period===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>';
+  if(st.tab!=='today'&&!o.externalPeriod){h+='<div class="ai-row">'+[['today','Bugun'],['week','7 kun'],['month','Shu oy'],['custom','Davr']].map(function(x){return '<button type="button" data-ai-per="'+x[0]+'" class="'+(st.period===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>';
    if(st.period==='custom')h+='<div class="ai-dates"><input type="date" data-ai-from value="'+esc(st.from)+'"><input type="date" data-ai-to value="'+esc(st.to)+'"><button type="button" data-ai-go>OK</button></div>';
+  }
+  if(st.tab!=='today'){
    if(mgr){var ags=(o.agents&&o.agents())||[];h+='<select data-ai-agent aria-label="Agent"><option value="">Barcha agentlar</option>'+ags.map(function(a){return '<option value="'+esc(a.id)+'"'+(String(a.id)===st.agent?' selected':'')+'>'+esc(a.name||a.id)+'</option>'}).join('')+'</select>'}}
   if(st.err){el.innerHTML=h+'<div class="ai-empty">'+esc(st.err)+'<button type="button" class="ai-more" data-ai-retry>↻ Qayta urinish</button></div>';return}
   if(!d){el.innerHTML=h+'<div class="ai-empty">'+(st.period==='custom'&&(!st.from||!st.to)?'Sanalarni tanlang.':'Yuklanmoqda…')+'</div>';return}
@@ -110,7 +113,7 @@ function mount(el,o){
   else hit=false;
   if(hit)e.stopPropagation()});
  el.addEventListener('change',function(e){if(e.target.matches('[data-ai-agent]')){st.agent=e.target.value;load()}});
- return {show:function(){load(false)},reset:function(){st.data=null;st.key='';st.err='';load(true)},state:st};
+ return {setPeriod:function(p,f,t){p=p||'month';f=f||'';t=t||'';if(p==='custom'&&(!f||!t))return;if(st.period===p&&st.from===f&&st.to===t&&st.data)return;st.period=p;st.from=f;st.to=t;st.limit=30;load()},show:function(){load(false)},reset:function(){st.data=null;st.key='';st.err='';load(true)},state:st};
 }
 window.AsmanInsights={mount:mount,usd:usd};
 })();
