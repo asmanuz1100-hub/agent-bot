@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4f7fd">
-<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="./offline.js"></script><script>(function(){try{if(/[?&]theme=classic(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261010-v5');css('/app/premium-kit/agent.css?v=20261010-v5');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261010-v5';j.defer=true;document.head.appendChild(j)}catch(e){}})()</script>
+<title>ASMAN · Agent Mini App</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="./offline.js"></script><script src="/app/premium-kit/insights-ui.js?v=20261014-v1"></script><script>(function(){try{if(/[?&]theme=classic(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261010-v5');css('/app/premium-kit/agent.css?v=20261010-v5');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261010-v5';j.defer=true;document.head.appendChild(j)}catch(e){}})()</script>
 <style>
 :root{color-scheme:light}
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
@@ -1379,105 +1379,14 @@ async function bootstrapAgentApp(){
  await refresh();
  if(window.ASMANOffline&&navigator.onLine!==false)await ASMANOffline.sync();
 }
-(function(){
- var st={period:"month",tab:"todo",group:"",limit:20,res:null,key:"",at:0,busy:false,err:""};
- function e(v){return esc(v)}
- function usd(n){n=Number(n)||0;return (Math.abs(n)>=1000?Math.round(n).toLocaleString("en-US"):n.toFixed(2))+" $"}
- function sc(s,g){return g==="sleeping"?"s":s>=70?"g":s>=40?"y":"r"}
- function gr(p){if(p==null)return "";return p>=0?'<span class="kia-up">▲'+p+'%</span>':'<span class="kia-down">▼'+Math.abs(p)+'%</span>'}
- function box(){return document.getElementById("kiAgent")}
- async function load(force){
-  if(!data||!data.me)return;var key=String(data.me.id)+"|"+st.period;
-  if(!force&&st.key===key&&Date.now()-st.at<120000)return;
-  if(st.busy)return;st.busy=true;st.err="";paint();
-  try{st.res=await request("insights",{period:st.period});st.key=key;st.at=Date.now()}
-  catch(x){st.err=(x&&x.message)||"Tahlil yuklanmadi."}
-  finally{st.busy=false;paint()}
- }
- function row(c,showAdvice){
-  var why=(c.reasons||[]).slice(0,2).join(" · ");
-  return '<button type="button" class="kia-row" data-client="'+c.id+'"><span class="kia-sc '+sc(c.score,c.group)+'">'+c.score+'</span><span class="grow"><b>'+e(c.groupIcon+" "+c.name)+'</b><small>'+e(showAdvice?c.advice:why)+'</small>'+(showAdvice&&why?'<small>'+e(why)+'</small>':'')+'</span><span class="end">'+usd(c.salesUsd)+(c.debtUsd>0?'<small>qarz '+usd(c.debtUsd)+'</small>':'<small>'+(c.region?e(c.region):"")+'</small>')+'</span></button>';
- }
- function paint(){
-  var b=box();if(!b)return;var r=st.res;
-  var h='<div class="kia"><div class="kia-head"><div><b>Mijozlar reytingi</b><small>'+e(r?r.label:"Ball, hudud va bugungi reja")+'</small></div><div class="kia-per"><button type="button" data-ki-per="week" class="'+(st.period==="week"?"on":"")+'">7 kun</button><button type="button" data-ki-per="month" class="'+(st.period==="month"?"on":"")+'">Shu oy</button></div></div>';
-  h+='<div class="kia-tabs"><button type="button" data-ki-tab="todo" class="'+(st.tab==="todo"?"on":"")+'">🎯 Bugun kimga</button><button type="button" data-ki-tab="rating" class="'+(st.tab==="rating"?"on":"")+'">🏆 Reyting</button><button type="button" data-ki-tab="regions" class="'+(st.tab==="regions"?"on":"")+'">📍 Hududlar</button></div>';
-  if(!r){h+='<div class="kia-empty">'+(st.err?e(st.err)+'<br><button type="button" class="secondary" data-ki-retry="1" style="margin-top:8px">↻ Qayta urinish</button>':"Tahlil yuklanmoqda…")+'</div></div>';b.innerHTML=h;return}
-  var s=r.summary||{};
-  h+='<div class="kia-kpi"><div><small>O‘rtacha ball</small><b>'+(s.avgScore||0)+' / 100</b></div><div><small>Faol mijoz</small><b>'+(s.activeClients||0)+' / '+(s.totalClients||0)+'</b></div><div><small>Qarz</small><b>'+usd(s.debtUsd)+'</b></div></div>';
-  if(st.tab==="todo"){
-   var t=r.todo||[];
-   h+='<div class="kia-mut" style="margin-bottom:4px">Avval qarzi eskirganlar, keyin uzoq tovar olmaganlar.</div>';
-   h+=t.length?t.map(function(c){return row(c,true)}).join(""):'<div class="kia-empty">✅ Hammasi joyida — shoshilinch mijoz yo‘q.</div>';
-  }else if(st.tab==="rating"){
-   var gs=(r.groups||[]).filter(function(g){return g.count>0});
-   h+='<div class="kia-gr"><button type="button" data-ki-g="" class="'+(st.group?"":"on")+'">Hammasi '+(s.ratedClients||0)+'</button>'+gs.map(function(g){return '<button type="button" data-ki-g="'+g.key+'" class="'+(st.group===g.key?"on":"")+'">'+g.icon+' '+e(g.label)+' '+g.count+'</button>'}).join("")+'</div>';
-   var g0=(r.groups||[]).filter(function(g){return g.key===st.group})[0];
-   if(g0)h+='<div class="kia-adv">💡 '+e(g0.advice)+'</div>';
-   var list=(r.clients||[]).filter(function(c){return !st.group||c.group===st.group});
-   h+=list.length?list.slice(0,st.limit).map(function(c){return row(c,false)}).join(""):'<div class="kia-empty">Bu davrda mijoz yo‘q.</div>';
-   if(list.length>st.limit)h+='<button type="button" class="secondary kia-more" data-ki-more="1">Yana ko‘rsatish ('+(list.length-st.limit)+')</button>';
-  }else{
-   var rg=r.regions||[];
-   h+=rg.length?rg.map(function(x){return '<div class="kia-reg"><div class="t"><b>'+x.rank+'. '+e(x.name)+'</b><b>'+usd(x.salesUsd)+' '+gr(x.growthPct)+'</b></div><div class="kia-bar"><i style="width:'+Math.max(2,Math.min(100,x.sharePct||0))+'%"></i></div><div class="kia-mut">'+(x.sharePct||0)+'% · '+x.activeClients+'/'+x.clients+' faol'+(x.debtUsd>0?' · qarz '+usd(x.debtUsd):'')+(x.risky?' · 🔴 '+x.risky:'')+(x.sleeping?' · 💤 '+x.sleeping:'')+(x.topClient?'<br>Eng yaxshi: '+e(x.topClient.name)+' · '+usd(x.topClient.salesUsd):'')+'</div></div>'}).join(""):'<div class="kia-empty">Hudud ma’lumoti yo‘q.</div>';
-   if(s.noRegionClients)h+='<div class="kia-adv">ℹ️ '+s.noRegionClients+' ta mijozda hudud yozilmagan — “Belgilanmagan” deb ko‘rsatildi. Mijoz kartasida hududni kiriting.</div>';
-  }
-  h+='<details><summary>Ball qanday hisoblanadi?</summary><p>100 ball = Sotuv hajmi 40 + To‘lov intizomi 30 + Muntazamlik 15 + O‘sish 15.</p><p>🏆 70+ ball · 📈 sotuv o‘smoqda · ✅ barqaror · ⚠️ 40 balldan past yoki sotuv tushgan · 🔴 qarz '+((r.scoring&&r.scoring.riskDebtDays)||21)+'+ kun to‘lanmagan · 💤 '+((r.scoring&&r.scoring.sleepDays)||30)+'+ kun tovar olmagan.</p></details></div>';
-  b.innerHTML=h;
- }
- document.addEventListener("click",function(ev){
-  var t=ev.target.closest&&ev.target.closest("[data-ki-per],[data-ki-tab],[data-ki-g],[data-ki-more],[data-ki-retry]");if(!t||!box()||!box().contains(t))return;
-  ev.stopPropagation();
-  if(t.dataset.kiPer){if(st.period!==t.dataset.kiPer){st.period=t.dataset.kiPer;st.res=null;st.limit=20;load(true)}return}
-  if(t.dataset.kiTab){st.tab=t.dataset.kiTab;paint();return}
-  if(t.dataset.kiG!==undefined){st.group=t.dataset.kiG;st.limit=20;paint();return}
-  if(t.dataset.kiMore){st.limit+=20;paint();return}
-  if(t.dataset.kiRetry){load(true)}
- },true);
- var base=renderReports;
- renderReports=function(){var out=base.apply(this,arguments);try{if(data&&data.me&&st.key&&st.key.split("|")[0]!==String(data.me.id)){st.res=null;st.key=""}paint();load(false)}catch(_e){}return out};
-})();
+ // Hudud va mijozlar tahlili: umumiy UI /app/premium-kit/insights-ui.js, hisob serverda.
+ var kiView=null,kiBase=renderReports;
+ renderReports=function(){var out=kiBase.apply(this,arguments);try{var el=document.getElementById("kiAgent");if(el&&window.AsmanInsights&&data&&data.me){var id=String(data.me.id);
+  if(!kiView){kiView=window.AsmanInsights.mount(el,{mode:"agent",req:function(p){return request("insights",p)},
+   openClient:function(cid){selected=Number(cid);if(current!=="detail")detailBackPage=current;go("detail");loadClientDetail(selected)}});kiView.agent=id;kiView.show()}
+  else if(kiView.agent!==id){kiView.agent=id;kiView.reset()}else kiView.show()}}catch(_e){}return out};
 bootstrapAgentApp();
 setInterval(function(){if(data&&!sessionExpired&&document.visibilityState==="visible"&&!busy&&current!=="form"&&navigator.onLine!==false)refresh()},60000);
 })();
 
-</script><style>
-#kiAgent{margin:4px 0 18px}
-.kia{background:var(--card,var(--tg-section,#fff));color:var(--tx,var(--tg-text,#101e39));border:1px solid var(--line,#e5ecf5);border-radius:20px;padding:14px;box-shadow:0 10px 24px -18px #17212b55}
-.kia-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-.kia-head b{font-size:16px;font-weight:800;display:block}
-.kia-head small,.kia-mut{color:var(--mu,var(--muted,#8190a7));font-size:12px}
-.kia-per{display:flex;gap:4px;flex:none}
-.kia-per button,.kia-tabs button,.kia-gr button{border:1px solid var(--line,#e5ecf5);background:var(--soft,#f3f5f9);color:var(--tx,var(--tg-text));border-radius:14px;padding:6px 10px;font:inherit;font-size:12px;font-weight:700;min-height:32px;cursor:pointer}
-.kia-per button.on,.kia-tabs button.on,.kia-gr button.on{background:var(--pri,var(--blue,#2367f5));border-color:transparent;color:#fff}
-.kia-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0 10px}
-.kia-tabs button{padding:8px 4px;font-size:12.5px}
-.kia-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
-.kia-kpi div{background:var(--soft,#f3f5f9);border-radius:14px;padding:8px 9px;min-width:0}
-.kia-kpi small{display:block;color:var(--mu,var(--muted));font-size:11px}
-.kia-kpi b{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.kia-gr{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px;scrollbar-width:none}
-.kia-gr button{flex:none}
-.kia-adv{background:var(--soft,#f3f5f9);border-radius:12px;padding:8px 10px;font-size:12.5px;margin:4px 0 8px}
-.kia-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-top:1px solid var(--line,#e5ecf5);padding:10px 2px;color:inherit;font:inherit;cursor:pointer}
-.kia-row:first-child{border-top:0}
-.kia-sc{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff}
-.kia-sc.g{background:#1c9b43}.kia-sc.y{background:#d18a00}.kia-sc.r{background:#e5484d}.kia-sc.s{background:#7a8794}
-.kia-row .grow{flex:1;min-width:0}
-.kia-row .grow b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kia-row .grow small{display:block;color:var(--mu,var(--muted));font-size:11.5px;line-height:1.35}
-.kia-row .end{flex:none;text-align:right;font-size:12px;font-weight:800}
-.kia-row .end small{display:block;font-weight:600;color:var(--mu,var(--muted));font-size:11px}
-.kia-reg{border-top:1px solid var(--line,#e5ecf5);padding:10px 2px}
-.kia-reg:first-child{border-top:0}
-.kia-reg .t{display:flex;justify-content:space-between;gap:8px;font-size:14px}
-.kia-bar{height:7px;border-radius:5px;background:var(--soft,#eef2f7);margin:6px 0 4px;overflow:hidden}
-.kia-bar i{display:block;height:100%;border-radius:5px;background:var(--pri,var(--blue,#2367f5))}
-.kia-up{color:var(--ok,#1c9b43)}.kia-down{color:var(--bad,#e5484d)}
-.kia-more{width:100%;margin-top:8px}
-.kia-empty{padding:16px 6px;text-align:center;color:var(--mu,var(--muted));font-size:13px}
-.kia details{margin-top:10px;font-size:12.5px}
-.kia summary{cursor:pointer;font-weight:700;color:var(--pri,var(--blue))}
-.kia details p{margin:6px 0;color:var(--mu,var(--muted))}
-</style>
-</body></html>
+</script></body></html>
