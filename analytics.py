@@ -165,6 +165,9 @@ def client_kpi(x, b, ref):
         return {'status': 'prospect', 'label': 'Istiqbolli'}
     if ref - first < KPI['new_days'] * DAY:
         return {'status': 'new', 'label': 'Yangi', 'firstDeliveryTs': first}
+    if x.get('legacy'):
+        # Eski so'm yoki narxsiz yozuv dollar hisobiga kirmagan: aniq ball berib bo'lmaydi.
+        return {'status': 'incomplete', 'label': 'Hisob to‘liq emas (eski so‘m yoki narxsiz yozuv)'}
     base = x['delEnd'] - x['retEnd']
     if base <= 0:
         return {'status': 'nobase', 'label': 'Baholash uchun asos yo‘q'}
@@ -211,7 +214,8 @@ def _client_sums(db, b, agent):
         {win('delivery', ps, pe)} AS del_prev, {win('payment', ps, pe)} AS paid_prev,
         MIN(CASE WHEN e.kind='delivery' AND e.ts<{e} THEN e.ts END) AS first_delivery,
         MIN(e.ts) AS first_event,
-        COALESCE(SUM(CASE WHEN e.kind IN ('payment','sold','delivery') AND e.amount_usd=0 AND e.amount>0 THEN 1 ELSE 0 END),0) AS legacy
+        COALESCE(SUM(CASE WHEN e.kind IN ('payment','sold','delivery') AND e.amount_usd=0 AND e.amount>0 THEN 1
+            WHEN e.kind='delivery' AND e.amount_usd=0 AND e.qty>0 THEN 1 ELSE 0 END),0) AS legacy
         FROM events e JOIN clients c ON c.id=e.client
         WHERE e.client IS NOT NULL AND e.kind IN ('delivery','return','payment','sold'){w}
         GROUP BY e.client"""
@@ -359,7 +363,7 @@ def insights(db, period='month', date_from=None, date_to=None, agent=None, now=N
     summary['legacyEvents'] = sum(r['legacyEvents'] for r in rows)
     for r in rows:
         r.pop('_x')
-    order = {'rated': 0, 'new': 1, 'insufficient': 2, 'nobase': 3, 'prospect': 4, 'blacklisted': 5}
+    order = {'rated': 0, 'new': 1, 'insufficient': 2, 'nobase': 3, 'incomplete': 4, 'prospect': 5, 'blacklisted': 6}
     rows.sort(key=lambda r: (order[r['kpi']['status']], r.get('rank') or 0, -r['deliveredCents'], r['id']))
     return {'period': b['period'], 'label': b['label'], 'compareLabel': b['compareLabel'], 'trimmed': b['trimmed'],
             'start': b['start'], 'end': b['end'], 'cmpStart': b['cmpStart'], 'cmpEnd': b['cmpEnd'],

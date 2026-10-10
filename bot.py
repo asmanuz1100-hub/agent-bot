@@ -1,6 +1,7 @@
 """Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
 import threading
+import gzip
 from collections import OrderedDict
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
@@ -34,6 +35,7 @@ DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 PUBLIC_BASE_URL=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')
 SELF_HOSTED_MINIAPPS=os.getenv('SELF_HOSTED_MINIAPPS','1').strip().lower() not in ('0','false','no','off')
 MINIAPP_DIR=Path(__file__).resolve().with_name('miniapps')
+GZIP_TYPES={'application/json','application/javascript','text/javascript','text/css','text/html','text/plain','image/svg+xml'}
 LEGACY_MINIAPP_HOSTS={'asman-manager-miniapp-test.onrender.com','asman-rahbar-uploaded-test.onrender.com',
                       'asman-agent-miniapp-v2-test.onrender.com'}
 def _url_origin(value):
@@ -48,8 +50,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v15')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v11')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v16')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v12')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -2263,6 +2265,12 @@ def serve_webhook(db,base_url):
                 self.send_header('Referrer-Policy','no-referrer')
                 self.send_header('X-Content-Type-Options','nosniff')
                 for k,v in extra_headers.items():self.send_header(k,v)
+                # Katta JSON/JS/HTML javoblar gzip bilan: mobil internetda ~10 marta kam trafik.
+                if (len(body)>2048 and 'gzip' in (self.headers.get('Accept-Encoding') or '')
+                        and ctype.split(';')[0] in GZIP_TYPES and 'Content-Encoding' not in extra_headers):
+                    body=gzip.compress(body,compresslevel=5)
+                    self.send_header('Content-Encoding','gzip')
+                    self.send_header('Vary','Accept-Encoding')
                 self.send_header('Content-Length',str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -2930,7 +2938,10 @@ def serve_webhook(db,base_url):
             logging.info('HTTP %s',format_access_log(format,*args))
     # SQLite remains single-threaded; Render/PostgreSQL uses one connection per
     # request and per-agent database row locks for ledger consistency.
-    server=(ThreadingHTTPServer if postgres else HTTPServer)(('0.0.0.0',port),Handler)
+    server_cls=ThreadingHTTPServer if postgres else HTTPServer
+    # Standart navbat 5 ta ulanish: ko'p agent bir vaqtda kelganda ulanish uzilardi (ConnectionReset).
+    server_cls.request_queue_size=128
+    server=server_cls(('0.0.0.0',port),Handler)
     if postgres:server.daemon_threads=True
     logging.info('Webhook active on %s; HTTP port %s',base_url,port)
     try:server.serve_forever(poll_interval=.5)
