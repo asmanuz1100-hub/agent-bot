@@ -20,53 +20,60 @@ var CSS='.ai{--c:var(--card,var(--tg-section,#fff));--t:var(--tx,var(--tg-text,#
 '.ai-it small{display:block;font-size:12.5px;margin-top:3px}.ai-sub{margin-left:8px;border-left:2px solid var(--l);padding-left:8px}'+
 '.ai-up{color:var(--aok);font-weight:700}.ai-down{color:var(--abad);font-weight:700}'+
 '.ai-g-active{color:var(--aok)}.ai-g-low{color:var(--awarn)}.ai-g-passive{color:var(--abad)}'+
+'.ai-sc{display:inline-block;min-width:30px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:800;font-size:13px;text-align:center;margin-right:4px}.ai-sc-active{background:var(--aok)}.ai-sc-low{background:var(--awarn)}.ai-sc-passive{background:var(--abad)}'+
 '.ai-sec{margin-top:12px;font-weight:800;font-size:13.5px}.ai-why{display:inline-block;margin-top:5px;border:1px solid var(--l);background:var(--s);color:var(--p);border-radius:10px;padding:3px 8px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer}'+
 '.ai-parts{background:var(--s);border-radius:12px;padding:8px 10px;font-size:12px;margin-top:6px;line-height:1.6}'+
 '.ai-more{width:100%;margin-top:8px;border:1px dashed var(--l);background:none;color:var(--p);border-radius:12px;padding:10px;font:inherit;font-weight:800;cursor:pointer}'+
 '.ai-note{font-size:12px;color:var(--awarn);margin:4px 0 8px}.ai-empty{text-align:center;color:var(--m);font-size:13px;padding:16px 6px}';
 function css(){if(document.getElementById('ai-css'))return;var s=document.createElement('style');s.id='ai-css';s.textContent=CSS;document.head.appendChild(s)}
-function gtxt(g){if(!g)return '';var c=g.kind==='pct'?(g.pct>=0?'ai-up':'ai-down'):'';return '<span class="'+c+'">'+esc(g.text)+'</span>'}
+function gtxt(g){if(!g)return '';var c=g.kind==='pct'?(g.pct>0?'ai-up':g.pct<0?'ai-down':''):'';return '<span class="'+c+'">'+esc(g.text)+'</span>'}
 
 function mount(el,o){
  css();var mgr=o.mode==='manager';
- var st={period:'month',from:'',to:'',agent:'',tab:mgr?'regions':'today',grp:'all',limit:30,open:{},why:{},data:null,key:'',at:0,err:''};
+ var st={period:'month',from:'',to:'',agent:'',tab:mgr?'regions':'today',grp:'all',limit:30,open:{},all:{},why:false,data:null,key:'',at:0,err:''};
  el.classList.add('ai');
  function key(){return st.period+'|'+st.from+'|'+st.to+'|'+st.agent}
  function money(c){return 'Olgan '+usd(c.deliveredCents)+' · Bergan '+usd(c.paidCents)+' · '+(c.debtCents<0?'Avans '+usd(-c.debtCents):'Qarz '+usd(c.debtCents))}
- function clientRow(c){var k=c.kpi,head;
-  if(k.status==='rated')head=(c.rank?c.rank+'. ':'')+esc(c.name)+' · '+k.score+' ball · <span class="ai-g-'+k.group+'">'+esc(k.label)+'</span>';
+ function clientRow(c){var k=c.kpi,head,right='';
+  if(k.status==='rated'){head=(c.rank?c.rank+'. ':'')+esc(c.name);right='<span class="ai-sc ai-sc-'+k.group+'">'+k.score+'</span><span class="ai-g-'+k.group+'">'+esc(k.label)+'</span>'}
   else head=esc(c.name)+' · <small style="display:inline">'+esc(k.label)+'</small>';
-  var h='<div class="ai-it"><button type="button" class="ai-it" style="border:0;padding:0" data-ai-open="'+c.id+'"><div class="ai-top"><b>'+head+'</b></div>'+
+  var h='<button type="button" class="ai-it" data-ai-open="'+c.id+'"><div class="ai-top"><b>'+head+'</b><span>'+right+'</span></div>'+
    '<small>'+money(c)+(mgr?' · '+esc(c.agent):'')+'</small>'+
-   (k.status==='prospect'?'':'<small>Tovar olish '+gtxt(c.deliveryGrowth)+' · To‘lov '+gtxt(c.paymentGrowth)+'</small>')+'</button>';
-  if(k.parts){h+='<button type="button" class="ai-why" data-ai-why="'+c.id+'">Ball qanday hisoblandi?</button>';
-   if(st.why[c.id]){var p=k.parts;h+='<div class="ai-parts">Tovar olish faolligi: <b>'+p.activity+'</b> / 30<br>To‘lov holati: <b>'+p.payment+'</b> / 40<br>'+
-    'Tovar olish o‘sishi: <b>'+(p.deliveryGrowth==null?'—':p.deliveryGrowth)+'</b> / 15<br>To‘lov o‘sishi: <b>'+(p.paymentGrowth==null?'—':p.paymentGrowth)+'</b> / 15</div>'}}
-  return h+'</div>'}
+   (k.status==='prospect'?'':'<small>Tovar olish '+gtxt(c.deliveryGrowth)+' · To‘lov '+gtxt(c.paymentGrowth)+'</small>');
+  if(k.parts&&st.why){var p=k.parts;h+='<small>Ball: faollik '+p.activity+' + to‘lov '+p.payment+' + tovar o‘sishi '+(p.deliveryGrowth==null?'—':p.deliveryGrowth)+' + to‘lov o‘sishi '+(p.paymentGrowth==null?'—':p.paymentGrowth)+'</small>'}
+  return h+'</button>'}
+ function top3(key,list,render){var n=st.all[key]?Math.min(list.length,st.limit):3,h=list.slice(0,n).map(render).join('');
+  if(list.length>3){if(n<list.length)h+='<button type="button" class="ai-more" data-ai-all="'+esc(key)+'">'+(st.all[key]?'Yana ko‘rsatish ('+(list.length-n)+')':'Barchasini ko‘rsatish ('+list.length+')')+'</button>';
+   else h+='<button type="button" class="ai-more" data-ai-all="'+esc(key)+'" data-ai-less>Faqat eng yuqori 3 tasi</button>'}
+  return h}
+ function whyBox(){return '<button type="button" class="ai-why" data-ai-why>'+(st.why?'▾ ':'▸ ')+'Ball qanday hisoblanadi?</button>'+
+  (st.why?'<div class="ai-parts">100 ball = <b>faollik 30</b> + <b>to‘lov 40</b> + <b>tovar o‘sishi 15</b> + <b>to‘lov o‘sishi 15</b>.<br>'+
+  'Faollik: ikkala davrda tovar olgan 30, faqat shu davrda 20, faqat oldingi davrda 10.<br>To‘lov: to‘langan ÷ (olingan − qaytgan) × 40.<br>'+
+  'O‘sish: ≥20% → 15, 5–20% → 12, −5…5% → 8, −20…−5% → 4, undan past → 0.<br>'+
+  '<span class="ai-sc ai-sc-active">70+</span>Faol <span class="ai-sc ai-sc-low">40–69</span>Faolligi past <span class="ai-sc ai-sc-passive">0–39</span>Passiv</div>':'')}
  function summary(d){var s=d.summary;return '<div class="ai-sum"><div><small>Berilgan tovar</small><b>'+usd(s.deliveredCents)+'</b></div><div><small>Olingan pul</small><b>'+usd(s.paidCents)+'</b></div>'+
   '<div><small>Qaytgan tovar</small><b>'+usd(s.returnedCents)+'</b></div><div><small>Qolgan qarz</small><b>'+usd(s.debtCents)+'</b>'+(s.advanceCents?'<small>Avans '+usd(s.advanceCents)+'</small>':'')+'</div></div>'+
   '<div class="ai-cmp">Tovar olish '+gtxt(s.deliveryGrowth)+' · To‘lov '+gtxt(s.paymentGrowth)+'<br>Taqqoslash: '+esc(d.compareLabel)+(d.trimmed?' (oy qisqa — teng kunlar)':'')+'</div>'+
   (s.legacyEvents?'<div class="ai-note">⚠ '+s.legacyEvents+' ta eski so‘mdagi yozuv dollar hisobiga kirmagan.</div>':'')}
  function regions(d){var by={};(d.clients||[]).forEach(function(c){by[c.id]=c});var list=d.regions||[];if(!list.length)return '<div class="ai-empty">Ma’lumot yo‘q.</div>';
-  return list.map(function(r){var open=st.open[r.key];
+  return top3('reg',list,function(r){var open=st.open[r.key];
    return '<div><button type="button" class="ai-it" data-ai-region="'+esc(r.key)+'"><div class="ai-top"><b>'+(open?'▾ ':'▸ ')+esc(r.name)+'</b><span>'+usd(r.deliveredCents)+'</span></div>'+
     '<small>Pul '+usd(r.paidCents)+' · Qarz '+usd(r.debtCents)+(r.advanceCents?' · Avans '+usd(r.advanceCents):'')+' · '+r.clients+' mijoz</small>'+
     '<small>Tovar olish '+gtxt(r.deliveryGrowth)+' · To‘lov '+gtxt(r.paymentGrowth)+'</small></button>'+
-    (open?'<div class="ai-sub">'+r.clientIds.map(function(id){return by[id]?clientRow(by[id]):''}).join('')+'</div>':'')+'</div>'}).join('')}
+    (open?'<div class="ai-sub">'+top3('r:'+r.key,r.clientIds.filter(function(id){return by[id]}).map(function(id){return by[id]}),clientRow)+'</div>':'')+'</div>'})}
  function products(d){var list=d.products||[];if(!list.length)return '<div class="ai-empty">Bu davrda tovar harakati yo‘q.</div>';
-  return list.map(function(p){return '<div class="ai-it"><div class="ai-top"><b>'+esc(p.name)+'</b><span>'+usd(p.deliveredCents)+'</span></div>'+
+  return top3('prod',list,function(p){return '<div class="ai-it"><div class="ai-top"><b>'+esc(p.name)+'</b><span>'+usd(p.deliveredCents)+'</span></div>'+
    '<small>Berilgan '+p.deliveredQty+' dona · Qaytgan '+p.returnedQty+' dona ('+usd(p.returnedCents)+')</small>'+
-   '<small>Summa '+gtxt(p.amountGrowth)+' · Miqdor '+gtxt(p.qtyGrowth)+'</small></div>'}).join('')}
+   '<small>Summa '+gtxt(p.amountGrowth)+' · Miqdor '+gtxt(p.qtyGrowth)+'</small></div>'})}
  function clients(d){var all=d.clients||[];var rated=all.filter(function(c){return c.kpi.status==='rated'});
   var groups=[['all','Hammasi'],['active','Faol'],['low','Faolligi past'],['passive','Passiv']];
-  var h='<div class="ai-row">'+groups.map(function(g){var n=g[0]==='all'?rated.length:rated.filter(function(c){return c.kpi.group===g[0]}).length;
+  var h=whyBox()+'<div class="ai-row" style="margin-top:8px">'+groups.map(function(g){var n=g[0]==='all'?rated.length:rated.filter(function(c){return c.kpi.group===g[0]}).length;
    return '<button type="button" data-ai-grp="'+g[0]+'" class="'+(st.grp===g[0]?'on':'')+'">'+g[1]+' '+n+'</button>'}).join('')+'</div>';
   var list=rated.filter(function(c){return st.grp==='all'||c.kpi.group===st.grp});
-  h+=list.length?list.slice(0,st.limit).map(clientRow).join(''):'<div class="ai-empty">Reytingda mijoz yo‘q.</div>';
-  if(list.length>st.limit)h+='<button type="button" class="ai-more" data-ai-more>Yana ko‘rsatish ('+(list.length-st.limit)+')</button>';
+  h+=list.length?top3('c:'+st.grp,list,clientRow):'<div class="ai-empty">Reytingda mijoz yo‘q.</div>';
   [['new','Yangi mijozlar'],['insufficient','Baholash uchun ma’lumot yetarli emas'],['nobase','Baholash uchun asos yo‘q'],['prospect','Istiqbolli mijozlar']].forEach(function(s){
    var xs=all.filter(function(c){return c.kpi.status===s[0]});if(!xs.length)return;var open=st.open['s:'+s[0]];
-   h+='<button type="button" class="ai-it ai-sec" data-ai-region="s:'+s[0]+'">'+(open?'▾ ':'▸ ')+esc(s[1])+' — '+xs.length+'</button>'+(open?'<div class="ai-sub">'+xs.map(clientRow).join('')+'</div>':'')});
+   h+='<button type="button" class="ai-it ai-sec" data-ai-region="s:'+s[0]+'">'+(open?'▾ ':'▸ ')+esc(s[1])+' — '+xs.length+'</button>'+(open?'<div class="ai-sub">'+top3('s:'+s[0],xs,clientRow)+'</div>':'')});
   return h}
  function agents(d){var list=d.agents||[];if(!list.length)return '<div class="ai-empty">Ma’lumot yo‘q.</div>';
   return list.map(function(a){var op=a.operations;return '<div class="ai-it"><div class="ai-top"><b>'+esc(a.agent)+'</b><span>'+usd(op.deliveredCents)+'</span></div>'+
@@ -95,9 +102,9 @@ function mount(el,o){
   else if(ds.aiPer){st.period=ds.aiPer;st.limit=30;load()}
   else if(ds.aiGo!==undefined){st.from=(el.querySelector('[data-ai-from]')||{}).value||'';st.to=(el.querySelector('[data-ai-to]')||{}).value||'';load(true)}
   else if(ds.aiGrp){st.grp=ds.aiGrp;st.limit=30;paint()}
-  else if(ds.aiMore!==undefined){st.limit+=30;paint()}
+  else if(ds.aiAll!==undefined){if(ds.aiLess!==undefined){st.all[ds.aiAll]=false;st.limit=30}else if(st.all[ds.aiAll])st.limit+=30;else st.all[ds.aiAll]=true;paint()}
   else if(ds.aiRegion!==undefined){st.open[ds.aiRegion]=!st.open[ds.aiRegion];paint()}
-  else if(ds.aiWhy){st.why[ds.aiWhy]=!st.why[ds.aiWhy];paint()}
+  else if(ds.aiWhy!==undefined){st.why=!st.why;paint()}
   else if(ds.aiOpen){o.openClient(Number(ds.aiOpen))}
   else if(ds.aiRetry!==undefined){load(true)}
   else hit=false;
