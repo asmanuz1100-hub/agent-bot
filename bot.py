@@ -48,7 +48,7 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v13')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v14')
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v10')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
@@ -2208,6 +2208,35 @@ def run_polling(db):
                 logging.exception('Update %s will retry: %s',update_id,type(e).__name__)
                 time.sleep(2);break
 
+def menu_button_for(role):
+    """Chat pastidagi doimiy tugma: agent/admin — Agent ilovasi, kassir — Kassir ilovasi."""
+    if role=='cashier' and CASHIER_MINIAPP_URL:
+        return {'type':'web_app','text':'Kassir app','web_app':{'url':CASHIER_MINIAPP_URL}}
+    if role in ('agent','admin') and AGENT_MINIAPP_URL:
+        return {'type':'web_app','text':'Agent app','web_app':{'url':AGENT_MINIAPP_URL}}
+    return {'type':'commands'}
+
+def menu_button_users(db):
+    try:
+        rows=[(int(r[0]),r[1]) for r in db.execute("SELECT id,role FROM users WHERE role IN ('admin','agent','cashier')").fetchall()]
+        db.commit()
+        return rows
+    except Exception as e:
+        logging.warning('Menu button users read failed: %r',e)
+        try:db.rollback()
+        except Exception:pass
+        return []
+
+def sync_menu_buttons(rows):
+    """Eski (o'chirilgan) servisga olib boradigan menyu tugmasini har deployda joriy URLga yangilaydi."""
+    try:
+        api('setChatMenuButton',menu_button=menu_button_for('agent'))
+    except Exception as e:
+        logging.warning('Default menu button update failed: %r',e)
+    for uid,role in rows:
+        try:api('setChatMenuButton',chat_id=uid,menu_button=menu_button_for(role))
+        except Exception as e:logging.warning('Menu button update failed chat=%s: %r',uid,e)
+
 def serve_webhook(db,base_url):
     secret=(os.getenv('WEBHOOK_SECRET') or hashlib.sha256(TOKEN.encode()).hexdigest()[:40]).strip()
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,256}',secret):
@@ -2215,6 +2244,7 @@ def serve_webhook(db,base_url):
     path='/telegram/'+secret
     webhook=base_url.rstrip('/')+path
     api('setWebhook',url=webhook,secret_token=secret,allowed_updates=['message','edited_message'],drop_pending_updates=False)
+    threading.Thread(target=sync_menu_buttons,args=(menu_button_users(db),),daemon=True).start()
     port=int(os.getenv('PORT','10000'))
     postgres=isinstance(db,PostgresDB)
     database_url=os.getenv('DATABASE_URL') or DB_PATH
