@@ -73,7 +73,7 @@ def _cashier_summary(db):
         'pendingCount': int(pending['count'] or 0),
         'pendingUsd': int(pending['usd'] or 0),
         'pendingUzs': int(pending['uzs'] or 0),
-        'cardPendingCount': int(db.execute("SELECT COUNT(*) FROM card_payments WHERE status='pending'").fetchone()[0] or 0),
+        'cardPendingCount': int(db.execute("SELECT COUNT(*) FROM card_payments WHERE status='pending' AND agent_held=0").fetchone()[0] or 0),
         'cashUzsFromAgents': int(db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE status='accepted'").fetchone()[0] or 0)//100,
         'agentWalletTotal': wallet_total,
         'agentWalletTotalUzs': wallet_total_uzs,
@@ -172,7 +172,7 @@ def dashboard(db, actor):
     card_pending = [dict(x) for x in db.execute("""SELECT p.id,p.agent,p.client,p.currency,p.amount_uzs,p.amount_usd,
         p.rate_uzs_per_usd,p.note,p.ts,p.photo<>'' AS has_photo,u.name AS agent_name,COALESCE(c.shop_name,c.name) AS client_name
         FROM card_payments p LEFT JOIN users u ON u.id=p.agent LEFT JOIN clients c ON c.id=p.client
-        WHERE p.status='pending' ORDER BY p.ts,p.id""").fetchall()]
+        WHERE p.status='pending' AND p.agent_held=0 ORDER BY p.ts,p.id""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),
             'pending': pending, 'cardPending': card_pending, 'history': history, 'expenses': expenses,
             'agents': agents, 'agentFunds': agent_funds, 'summary': _cashier_summary(db),
@@ -239,13 +239,21 @@ def period_report(db, actor, payload):
             'flows': flows, 'rows': rows[:400], 'truncated': len(rows) > 400}
 
 
+def handover_detail(db, actor, hid):
+    require_cashier(db, actor)
+    row = db.execute("SELECT * FROM handovers WHERE id=?", (int(hid),)).fetchone()
+    if not row:raise ValueError('Topshirish topilmadi.')
+    return {'context': cashier_pending.handover_context(db,row), 'handover':dict(row)}
+
+
 def review(db, actor, hid):
     require_cashier(db, actor)
     row = db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'", (int(hid),)).fetchone()
     if not row:
         raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
-    db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-               (f'cashier_review:{actor}:{row["id"]}', str(int(time.time()))))
+    if row['status']=='pending':
+        db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                   (f'cashier_review:{actor}:{row["id"]}', str(int(time.time()))))
     return {'context': cashier_pending.handover_context(db, row), 'handover': dict(row)}
 
 

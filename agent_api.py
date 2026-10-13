@@ -34,6 +34,7 @@ FEATURE_ACTION={
     "visit":"visit",
     "delivery":"delivery",
     "payment":"payment",
+    "card_handover":"handover",
     "return":"return",
     "handover":"handover",
     "sold":"sold",
@@ -478,7 +479,7 @@ def quick_snapshot(db,agent,now=None):
               "liveAttached":bool(shift and shift['live_id'] is not None),
               "gps":{"ts":int(point["ts"]) if point else None,"lat":lat,"lon":lon}},
         "features":features,"clients":clients,"products":products,
-        "collectionTasks":_collection_tasks(db,agent),
+        "collectionTasks":_collection_tasks(db,agent),"orders":_my_orders(db,agent),
         "events":[],"handovers":[],"expenseWallet":wallet,
         "cashierRateUzsPerUsd":core.cashier_rate(db),
         "summary":{"visitsToday":visit_today,"newClientsToday":new_today,
@@ -497,16 +498,21 @@ def quick_snapshot(db,agent,now=None):
         "truncated":int(db.execute("SELECT COUNT(*) FROM clients").fetchone()[0] or 0)>MAX_CLIENTS
     }
 
+def _my_orders(db,agent):
+    return [core.order_view(db,row) for row in db.execute(
+        'SELECT * FROM orders WHERE agent=? ORDER BY ts DESC,id DESC LIMIT 100',(agent,)).fetchall()]
+
+
 def _uzs_cash_state(db,agent):
     on_hand=int(core.cash_som(db,agent))
     pending=int(db.execute("""SELECT COALESCE(SUM(amount),0) FROM handovers
         WHERE agent=? AND status='pending' AND COALESCE(amount,0)>0""",(agent,)).fetchone()[0] or 0)//100
-    rows=db.execute("""SELECT p.id,p.client,p.currency,p.amount_uzs,p.amount_usd,p.rate_uzs_per_usd,p.ts,
+    rows=db.execute("""SELECT p.id,p.client,p.currency,p.amount_uzs,p.amount_usd,p.rate_uzs_per_usd,p.ts,p.agent_held,
         c.shop_name,c.name FROM card_payments p LEFT JOIN clients c ON c.id=p.client
         WHERE p.agent=? AND p.status='pending' ORDER BY p.ts DESC,p.id DESC LIMIT 50""",(agent,)).fetchall()
     cards=[{"id":int(r["id"]),"clientId":int(r["client"]),"client":r["shop_name"] or r["name"] or f"#{r['client']}",
             "currency":r["currency"],"amountUzs":int(r["amount_uzs"] or 0),"amountUsd":_usd(r["amount_usd"]),
-            "rate":int(r["rate_uzs_per_usd"] or 0),"ts":int(r["ts"])} for r in rows]
+            "rate":int(r["rate_uzs_per_usd"] or 0),"ts":int(r["ts"]),"heldByAgent":bool(r['agent_held'])} for r in rows]
     return on_hand,pending,cards
 
 
@@ -681,7 +687,7 @@ def snapshot(db,agent,now=None):
                   "liveAttached":shift["liveConnected"],
                   "gps":{"ts":shift["lastGpsTs"],"lat":shift["lat"],"lon":shift["lon"]}},
             "features":base["features"],"clients":clients,"products":products,
-            "collectionTasks":_collection_tasks(db,agent),
+            "collectionTasks":_collection_tasks(db,agent),"orders":_my_orders(db,agent),
             "events":events,"handovers":handovers,"expenseWallet":expense_wallet,
             "cashierRateUzsPerUsd":core.cashier_rate(db),
             "summary":{"visitsToday":base["summary"]["visitsToday"],
@@ -837,6 +843,34 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
     if not _reserve(db,agent,request_id,action):
         return {"ok":True,"duplicate":True,"message":"Bu so‘rov avval saqlangan."}
     source=_source(agent,request_id)
+    if action=="card_handover":
+        row=db.execute("SELECT * FROM card_payments WHERE id=? AND agent=? AND status='pending'",
+                       (int(payload.get('paymentId') or 0),agent)).fetchone()
+        if not row:raise ValueError('Karta to‘lovi topilmadi.')
+        if not row['agent_held']:return {'ok':True,'message':'Bu pul allaqachon kassirga yuborilgan.'}
+        db.execute('UPDATE card_payments SET agent_held=0 WHERE id=?',(row['id'],))
+        return {'ok':True,'message':'Karta puli kassir tasdig‘iga yuborildi.',
+                '_notify':{'kind':'card_payment','client':row['client'],'paymentId':row['id'],
+                           'amount':row['amount_usd'],'currency':row['currency'],
+                           'amountUzs':row['amount_uzs'],'rate':row['rate_uzs_per_usd']}}
+    if action=='payment' and 'parts' in payload:
+        parts=payload['parts']
+        if not isinstance(parts,list) or not 1<=len(parts)<=10:
+            raise ValueError('1 tadan 10 tagacha to‘lov kiriting.')
+        db.execute('SAVEPOINT mixed_payment')
+        try:
+            results=[]
+            for i,part in enumerate(parts):
+                if not isinstance(part,dict):raise ValueError('To‘lov qatori noto‘g‘ri.')
+                one={k:payload[k] for k in ('clientId','offlineTs','photoFileId') if k in payload}
+                one.update({k:part[k] for k in ('currency','method','amount','usd','rate','expectedRate','photoFileId') if k in part})
+                results.append(mutate(db,agent,'payment',one,str(_source(agent,request_id,i+1)),now,admin_override))
+            db.execute('RELEASE SAVEPOINT mixed_payment')
+        except Exception:
+            db.execute('ROLLBACK TO SAVEPOINT mixed_payment')
+            db.execute('RELEASE SAVEPOINT mixed_payment')
+            raise
+        return {'ok':True,'message':f'{len(results)} ta to‘lov saqlandi.', '_notify':{'kind':'payments','items':[r['_notify'] for r in results if r.get('_notify')]}}
     if action=="shift_start":
         if db.execute("SELECT 1 FROM shifts WHERE agent=? AND end IS NULL",(agent,)).fetchone():
             raise ValueError("Ish allaqachon boshlangan.")
@@ -1110,11 +1144,10 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
             pid,usd,som_saved,rate_saved=core.submit_card_payment(db,agent,cid,currency,value,rate=rate,note=note,source=source,ts=op_ts,usd_cents=usd_in,photo=receipt)
             if usd is None:
                 return {"ok":True,"duplicate":True,"cardPaymentId":pid}
+            db.execute('UPDATE card_payments SET agent_held=1 WHERE id=?',(pid,))
             shown=f"{value:,} UZS → {_usd(usd):.2f} USD (kurs {rate:,})" if currency=="UZS" else f"{_usd(usd):.2f} USD"
-            return {"ok":True,"cardPaymentId":pid,"pendingConfirmation":True,
-                    "message":f"Karta to‘lovi yuborildi: {shown}. Kassir bankdan tasdiqlagach mijoz qarzidan ayriladi.",
-                    "_notify":{"kind":"card_payment","client":cid,"paymentId":pid,"amount":usd,"currency":currency,
-                               "amountUzs":value if currency=="UZS" else None,"rate":rate}}
+            return {"ok":True,"cardPaymentId":pid,"heldByAgent":True,
+                    "message":f"Karta puli sizda saqlandi: {shown}. Pul bo‘limidan kassirga yuboring. Kassir tasdiqlagach qarzdan ayriladi."}
         usd,som_saved,rate_saved=core.record_client_payment(db,agent,agent,cid,currency,value,'cash',rate=rate,
                                                             note=note,source=source,ts=op_ts,usd_cents=usd_in)
         if core.client_debt_usd(db,cid)<=0:
@@ -1156,3 +1189,4 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
                        (op_ts,cid))
         return {"ok":True,"message":"Tovar qaytarildi va qarz yangilandi."}
     raise ValueError("Amal noto‘g‘ri.")
+

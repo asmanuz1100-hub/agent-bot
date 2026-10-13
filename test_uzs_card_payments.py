@@ -125,7 +125,11 @@ class UzsAndCardPaymentTests(unittest.TestCase):
     # --- card / bank transfer --------------------------------------------------------------
     def test_card_payment_waits_for_cashier_then_goes_to_bank(self):
         out = self.pay('card_1', currency='UZS', amount='2400000', rate='12000', method='card')
-        self.assertTrue(out['pendingConfirmation'])
+        self.assertTrue(out['heldByAgent'])
+        self.assertEqual(cashier_api.dashboard(self.db,3)['cardPending'],[])
+        with self.assertRaisesRegex(ValueError,'hali'):
+            core.decide_card_payment(self.db,3,out['cardPaymentId'],True)
+        agent_api.mutate(self.db,2,'card_handover',{'paymentId':out['cardPaymentId']},'send_card_first',self.now)
         self.assertEqual(core.client_debt_usd(self.db, self.cid), 100000)      # not yet
         self.assertEqual((core.cash_som(self.db, 2), core.cash_usd(self.db, 2)), (0, 0))  # never agent cash
         dash = cashier_api.dashboard(self.db, 3)
@@ -143,6 +147,7 @@ class UzsAndCardPaymentTests(unittest.TestCase):
 
     def test_rejected_card_payment_changes_nothing(self):
         out = self.pay('card_2', currency='USD', amount='200', method='card')
+        agent_api.mutate(self.db,2,'card_handover',{'paymentId':out['cardPaymentId']},'send_card_reject',self.now)
         cashier_api.mutate(self.db, 3, 'card_reject', {'paymentId': out['cardPaymentId'], 'requestId': 'cashier_card_2'})
         self.assertEqual(core.client_debt_usd(self.db, self.cid), 100000)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM cashier_incomes').fetchone()[0], 0)
@@ -163,6 +168,7 @@ class UzsAndCardPaymentTests(unittest.TestCase):
     def test_act_sverka_shows_som_rate_and_method(self):
         self.pay('p1', currency='UZS', amount='1185000', rate='11850', method='cash')
         out = self.pay('card_4', currency='UZS', amount='600000', rate='12000', method='card')
+        agent_api.mutate(self.db,2,'card_handover',{'paymentId':out['cardPaymentId']},'send_card_ledger',self.now)
         core.decide_card_payment(self.db, 3, out['cardPaymentId'], True)
         r = reports.reconciliation(self.db, 1, self.cid)
         pays = [x for x in r['rows'] if x['usd_credit']]
@@ -193,7 +199,8 @@ class CardReceiptTests(unittest.TestCase):
             out = t.pay('rcpt_1', currency='USD', amount='10', method='card')
             self.assertEqual(t.db.execute('SELECT photo FROM card_payments WHERE id=?', (out['cardPaymentId'],)).fetchone()[0],
                              'AgACAgIAAxkBAAEreceipt01')
-            data = cashier_api.dashboard(t.db, 3)
+            agent_api.mutate(t.db,2,'card_handover',{'paymentId':out['cardPaymentId']},'send_card_photo',t.now)
+            data = cashier_api.dashboard(t.db,3)
             with patch.dict(bot.os.environ, {'RENDER_EXTERNAL_URL': 'https://example.test', 'WEBHOOK_BASE_URL': ''}):
                 bot.attach_card_photo_urls(data)
             p = data['cardPending'][0]
@@ -201,3 +208,4 @@ class CardReceiptTests(unittest.TestCase):
             self.assertTrue(p['thumbUrl'].endswith('?t=1'))
         finally:
             t.tearDown()
+

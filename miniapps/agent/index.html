@@ -234,6 +234,7 @@ function optimisticOffline(action,payload,tempId,photoData){
   if(action==="delivery"&&data.summary)data.summary.goodsToday=Number(data.summary.goodsToday||0)+totalQty;
   return;
  }
+ if(action==="payment"&&payload.parts){payload.parts.forEach(function(part){optimisticOffline('payment',Object.assign({},payload,part,{parts:undefined}),tempId,photoData)});return}
  if(action==="payment"&&c){
   var amount=Number(payload.amount||0),payRate=Number(payload.rate||data.cashierRateUzsPerUsd||0),usd=payload.currency==="UZS"?(Number(payload.usd||0)||(payRate?amount/payRate:0)):amount;
   c.lastTs=ts;c.age="fresh";c.days=0;c._offlinePending=true;
@@ -359,6 +360,9 @@ function status(c){return c.age==="fresh"?"green":c.age==="yellow"?"yellow":c.ag
 function statusText(c){return c.age==="scheduled"?"Rejada: "+c.followup:c.age==="unknown"?"Sana yo‘q":c.days+" kun"}
 function shopRow(c,eager,withPhoto){if(withPhoto===undefined)withPhoto=true;var load=eager?' loading="eager" fetchpriority="high"':' loading="lazy"';var media=withPhoto&&c.photoUrl?'<span class="client-thumb" style="display:block;position:relative;width:56px;min-width:56px;max-width:56px;height:56px;min-height:56px;max-height:56px;flex:0 0 56px;overflow:hidden;border-radius:13px"><img data-client-photo="'+c.id+'" src="'+esc(c.thumbUrl||c.photoUrl)+'" alt=""'+load+' decoding="async" style="position:absolute;inset:0;width:56px;height:56px;max-width:56px;max-height:56px;object-fit:cover;object-position:center;display:block"></span>':'<span class="icon">▦</span>';return '<button type="button" class="rowbtn" data-client="'+c.id+'">'+media+'<span class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.address)+' · '+esc(c.agent)+'</small></span><span class="pill '+(c.blacklisted?'black':status(c))+'">'+(c.blacklisted?'⛔ Qora ro‘yxat':esc(statusText(c)))+'</span></button>'}
 function renderHome(){
+ var holder=$("myOrders");if(!holder){holder=document.createElement("div");holder.id="myOrders";$("page-home").appendChild(holder)}
+ holder.innerHTML='<div class="title">Buyurtmalarim · oxirgi 100 ta</div>'+((data.orders||[]).map(function(o){var c=(data.clients||[]).find(function(c){return c.id===o.clientId});return '<div class="card"><div class="flex between"><b>#'+o.id+' · '+esc(c?(c.shop||c.name):('Mijoz #'+o.clientId))+'</b><span class="pill">'+esc(o.statusLabel)+'</span></div><p>'+o.items.map(function(i){return esc(i.name)+' × '+i.qty}).join('; ')+'</p><small>'+date(o.ts)+'</small>'+(o.note?'<p>'+esc(o.note)+'</p>':'')+(o.adminNote?'<p>Rahbar: '+esc(o.adminNote)+'</p>':'')+'</div>'}).join('')||'<div class="card muted">Hali buyurtma yo‘q.</div>');
+
  var urgent=data.clients.filter(function(c){return c.age==="yellow"||c.age==="red"}).sort(function(a,b){return (b.days||0)-(a.days||0)});
  var target=urgent.slice(0,4),next=urgent[0]||null,tasks=(data.collectionTasks||[]);
  var taskSection=$("collectionTaskSection"),taskList=$("collectionTaskList");
@@ -479,7 +483,7 @@ function renderCash(){
  $("cashFree").innerHTML=fmtSom(data.summary.cashAvailableUzs||0)+" so‘m<br>"+fmt(data.summary.cashAvailableUsd||0)+" USD";
  var cards=data.summary.cardPending||[];
  $("cashHold").innerHTML="Qo‘ldagi jami: "+fmtSom(data.summary.cashOnHandUzs||0)+" so‘m · "+fmt(data.summary.cashOnHandUsd)+" USD. Kutilayotgan topshirishlar chegirilgan."+
-   (cards.length?"<br>💳 Kassir tasdig‘ini kutayotgan karta to‘lovlari: "+cards.map(function(x){return esc(x.client)+" — "+(x.amountUzs?fmtSom(x.amountUzs)+" so‘m":fmt(x.amountUsd)+" USD")}).join("; "):"");
+   (cards.length?"<br>💳 Karta pullari (sizda / kassir tasdig‘ida): "+cards.map(function(x){return esc(x.client)+" — "+(x.amountUzs?fmtSom(x.amountUzs)+" so‘m":fmt(x.amountUsd)+" USD")}).join("; "):"");
  $("expenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
  $("homeExpenseBalance").textContent=fmtSom(wallet.balanceUzs||0)+" UZS";
  $("expenseList").innerHTML=(wallet.history||[]).map(function(x){
@@ -489,7 +493,7 @@ function renderCash(){
    return '<div class="card expense-row"><div class="copy"><b>'+esc(label)+'</b><small>'+date(x.ts)+(x.actor?" · "+esc(x.actor):"")+(x.note?"<br>"+esc(x.note):"")+fx+'</small></div><span class="amount '+(top?"plus":"minus")+'">'+(top?"+":"−")+amount+'</span></div>';
  }).join("")||'<div class="card muted">Xarajat hisobida hali harakat yo‘q.</div>';
  var payments=data.events.filter(function(e){return e.kind==="payment"});
- var waiting=cards.map(function(x){return '<div class="card pay-row card-wait"><div class="flex between"><b>'+esc(x.client)+'</b><span class="pill yellow">+'+(x.amountUzs?fmtSom(x.amountUzs)+' so‘m':fmt(x.amountUsd)+' USD')+'</span></div><p class="tiny">💳 Karta · kassir tasdig‘ini kutmoqda · '+date(x.ts)+(x.amountUzs&&x.amountUsd?' · ≈ '+fmt(x.amountUsd)+' USD':'')+'</p></div>'});
+ var waiting=cards.map(function(x){return '<div class="card pay-row card-wait"><div class="flex between"><b>'+esc(x.client)+'</b><span class="pill yellow">+'+(x.amountUzs?fmtSom(x.amountUzs)+' so‘m':fmt(x.amountUsd)+' USD')+'</span></div>'+(x.heldByAgent?'<button type="button" class="primary" data-card-handover="'+x.id+'">Kassirga yuborish</button>':'')+'<p class="tiny">💳 Karta · '+(x.heldByAgent?'Sizda':'Kassir tasdig‘ida')+' · '+date(x.ts)+(x.amountUzs&&x.amountUsd?' · ≈ '+fmt(x.amountUsd)+' USD':'')+'</p></div>'});
  $("cashList").innerHTML=waiting.concat(payments.slice(0,60).map(function(e){var card=e.payMethod==="card";return '<div class="card pay-row"><div class="flex between"><b>'+esc(e.shop)+'</b><span class="pill green">+'+payAmount(e)+'</span></div><p class="tiny">'+(card?'💳 Karta · tasdiqlangan':'💵 Naqd')+' · '+date(e.ts)+(Number(e.paidUzs||0)>0?' · ≈ '+fmt(e.amountUsd)+' USD'+(e.rate?' · kurs '+fmtSom(e.rate):''):'')+'</p></div>'})).join("")||'<div class="card muted">To‘lovlar hozircha yo‘q.</div>';
  $("handoverList").innerHTML=data.handovers.map(function(h){var label=h.status==="accepted"?"Qabul qilindi":h.status==="rejected"?"Rad etildi":"Kassir tasdig‘ida";return '<div class="card"><div class="flex between"><b>'+(h.currency==="UZS"&&h.amountUzs?fmtSom(h.amountUzs)+' so‘m':fmt(h.amountUsd)+' USD')+'</b><span class="pill '+(h.status==="accepted"?"green":h.status==="pending"?"yellow":"red")+'">'+label+'</span></div><p class="tiny">'+date(h.ts)+'</p></div>'}).join("")||'<div class="card muted">Kassirga topshirishlar yo‘q.</div>';
 }
@@ -984,11 +988,12 @@ async function uploadCameraFile(file){
 }
 function updatePaymentConversion(){
  if(formAction!=="payment")return;
+ document.querySelectorAll('.extra-payment').forEach(function(row){var uzs=row.querySelector('[data-extra-currency]').value==='UZS',a=row.querySelector('[data-extra-amount]'),u=row.querySelector('[data-extra-usd]');a.step=uzs?'1':'0.01';a.min=a.step;u.required=uzs;row.querySelector('[data-extra-fx]').style.display=uzs?'':'none'});
  var currency=$("paymentCurrency"),amount=$("paymentAmount"),box=$("paymentConversion"),label=$("paymentAmountLabel"),usdIn=$("paymentUsd"),rateBox=$("paymentRateBox"),method=$("paymentMethod"),hint=$("paymentMethodHint");
  if(!currency||!amount||!box)return;
  var cur=currency.value,card=method&&method.value==="card",usdv=Number(usdIn&&usdIn.value||0),value=Number(amount.value||0),base=Number(data&&data.cashierRateUzsPerUsd||0);
  var rb=$("receiptBox");if(rb)rb.style.display=card?"":"none";
- if(hint)hint.innerHTML=card?"<small>Karta / o‘tkazma</small><b>Pul bankka tushadi. Kassir tasdiqlagach qarzdan ayriladi</b>":"<small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b>";
+ if(hint)hint.innerHTML=card?"<small>Karta / o‘tkazma</small><b>Pul avval sizda turadi. Alohida kassirga yuborasiz; tasdiqlangach qarzdan ayriladi</b>":"<small>Naqd</small><b>Pul sizda qoladi va kassirga topshirasiz</b>";
  if(cur==="UZS"){
   if(rateBox)rateBox.style.display="";if(usdIn){usdIn.required=true;usdIn.placeholder=value>0&&base?"≈ "+(value/base).toFixed(2):"0.00"}
   label.textContent="Summa (UZS)";amount.step="1";amount.min="1";amount.inputMode="numeric";amount.placeholder="Masalan, 1185000";
@@ -1061,7 +1066,7 @@ function openForm(action){
       '<label id="paymentAmountLabel" for="paymentAmount">Summa (UZS)</label><input id="paymentAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Masalan, 1185000" required>'+
       '<div id="paymentRateBox"><label for="paymentUsd">Dollar summasi (konvertatsiya, USD)</label><input id="paymentUsd" name="usd" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">'+
       '<small class="muted">Mijoz bilan kelishgan dollar summasini yozing — kurs avtomatik hisoblanadi'+(rate?(" · kassa kursi 1 USD = "+rate.toLocaleString("en-US")+" so‘m"):"")+'</small></div>'+
-      '<div id="paymentConversion" class="payment-convert"><small>Hisob</small><b>Summani kiriting</b></div>';
+      '<div id="paymentConversion" class="payment-convert"><small>Hisob</small><b>Summani kiriting</b></div><div id="extraPayments"></div><button type="button" class="secondary" id="addPayment">＋ Yana pul qo‘shish</button>';
   }
   if(action==="handover"){
    var sm=data.summary||{};
@@ -1083,9 +1088,14 @@ function openForm(action){
  }
  $("operationForm").noValidate=action==="client";$("formFields").innerHTML=h;$("review").style.display="none";$("submitForm").type=action==="client"?"button":"submit";$("submitForm").textContent=action==="client"?"Keyingi →":"Davom etish · Tekshirish";go("form");if(action==="client")renderClientWizardStep();if(action==="delivery"||action==="return"||action==="sold")updateDeliveryCart();if(action==="payment")updatePaymentConversion();
 }
+function extraPaymentRow(){return '<div class="card extra-payment"><label>Qo‘shimcha pul valyutasi</label><select data-extra-currency><option value="USD">Dollar (USD)</option><option value="UZS">So‘m (UZS)</option></select><label>Summa</label><input data-extra-amount type="number" min="0.01" step="0.01" required inputmode="decimal"><div data-extra-fx style="display:none"><label>So‘mning dollar ekvivalenti</label><input data-extra-usd type="number" min="0.01" step="0.01" inputmode="decimal"></div><button type="button" class="secondary" data-remove-payment="1">Olib tashlash</button></div>'}
 function formPayload(){
  var fd=new FormData($("operationForm")),payload={};
  for(var pair of fd.entries())payload[pair[0]]=pair[1];
+ if(formAction==="payment"&&document.querySelector('.extra-payment')){
+  payload.parts=[{currency:payload.currency,amount:payload.amount,usd:payload.usd,method:payload.method}];
+  document.querySelectorAll('.extra-payment').forEach(function(row){payload.parts.push({currency:row.querySelector('[data-extra-currency]').value,amount:row.querySelector('[data-extra-amount]').value,usd:row.querySelector('[data-extra-usd]').value,method:payload.method})});
+ }
  if(formAction==="order"){
   payload.items=[];
   document.querySelectorAll(".order-row").forEach(function(row){var sel=row.querySelector("[data-order-pack]"),q=Math.floor(Number((row.querySelector("[data-order-qty]")||{}).value||0)),nm=String((row.querySelector("[data-order-name]")||{}).value||"").trim();if(!sel||!(q>0))return;if(sel.value==="custom"){if(nm)payload.items.push({name:nm,qty:q})}else payload.items.push({pack:Number(sel.value),qty:q})});
@@ -1132,7 +1142,7 @@ async function saveForm(e){
   if(formAction==="client"){detail=payload.shop+" · "+payload.person+" · "+payload.phone+" · Foto ✅ · "+(payload.items.length?payload.items.length+" xil mahsulot":"mahsulotsiz")}
   else if(payload.items&&formAction!=="order"){payload.items.forEach(function(it){if(it.customName!==undefined){total+=Number(it.priceUsd||0)*Number(it.qty);detail+="✏️ "+it.customName+" (katalogda yo‘q, "+fmt(it.priceUsd)+" USD) × "+it.qty+" dona; ";return}var p=data.products.find(function(x){return x.pack===it.pack});total+=(p?p.priceUsd:0)*Number(it.qty);detail+=(p?p.name:("SKU "+it.pack))+" × "+it.qty+" dona; "})}
   else if(formAction==="payment"){
-   var how=payload.method==="card"?"💳 Karta — kassir chek bilan tasdiqlaydi · Chek ✅":"💵 Naqd";
+   var how=payload.method==="card"?"💳 Karta — avval sizda saqlanadi · Chek ✅":"💵 Naqd";
    if(payload.currency==="UZS"){var som=Number(payload.amount||0),pu=Number(payload.usd||0);detail=how+" · "+som.toLocaleString("en-US")+" UZS = "+fmt(pu)+" USD · kurs "+(pu?Math.round(som/pu).toLocaleString("en-US"):"yo‘q")}
    else detail=how+" · "+fmt(payload.amount)+" USD";
   }else if(formAction==="handover")detail=payload.currency==="UZS"?Number(payload.amount||0).toLocaleString("en-US")+" so‘m":fmt(payload.amount)+" USD";
@@ -1141,6 +1151,7 @@ async function saveForm(e){
   else if(formAction==="order"){detail="Buyurtma: "+payload.items.map(function(it){var p=it.pack?(data.products||[]).find(function(x){return x.pack===it.pack}):null;return (p?p.name:("✏️ "+it.name))+" × "+it.qty}).join("; ")+(payload.note?" · "+payload.note:"")}
   else if(formAction==="visit"){var sl={interested:"Taklif berildi",waiting:"Kutilmoqda",declined:"Hozircha olmaydi",active:"Tovar olgan"};detail=(sl[payload.status]||payload.status)+" · "+payload.note+" · Rasm ✅ · "+(payload.stock.length?payload.stock.length+" xil qoldiq sanaldi":"qoldiq sanalmadi")+" · "+visitMinutes(activeVisit||{ts:payload.checkinTs})+" daqiqa"}
   else detail=payload.status;
+  if(formAction==="payment"&&payload.parts)detail=payload.parts.map(function(p){return (p.method==='card'?'Karta':'Naqd')+' · '+p.amount+' '+p.currency+(p.currency==='UZS'?' = '+p.usd+' USD':'')}).join(' + ');
   $("review").textContent="Tasdiqlashdan oldin tekshiring: "+(formAction==="sold"?"Sotildi · ":"")+detail+(payload.items&&formAction==="delivery"?" · Taxminiy hisob: "+fmt(total)+" USD":"");
   $("review").style.display="block";$("submitForm").textContent="✓ Tasdiqlash va saqlash";reviewing=true;nonce=crypto.randomUUID().replace(/-/g,"");return;
  }
@@ -1197,8 +1208,11 @@ async function deleteAdminClient(id){
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){if(!data){notify("Avval agentni tanlang yoki ma’lumot yuklanishini kuting.");return}go(b.dataset.page);return}
+ if(b.dataset.cardHandover){if(busy)return;if(!window.confirm("Karta pulini kassirga yuborasizmi?"))return;busy=true;b.disabled=true;request("card_handover",{paymentId:Number(b.dataset.cardHandover),nonce:crypto.randomUUID().replace(/-/g,"")}).then(async function(out){notify(out.message);await refreshAfterWrite();go("cash")}).catch(function(err){notify(err.message)}).finally(function(){busy=false;b.disabled=false});return}
  if(b.id==="detailBack"){go(detailBackPage||"clients");return}
  if(b.id==="visitStart"){startVisit();return}
+ if(b.id==="addPayment"){if(document.querySelectorAll('.extra-payment').length>=9){notify('10 tagacha to‘lov.');return}$("extraPayments").insertAdjacentHTML('beforeend',extraPaymentRow());updatePaymentConversion();return}
+ if(b.dataset.removePayment){b.closest('.extra-payment').remove();updatePaymentConversion();return}
  if(b.id==="addOrderItem"){var oi=$("orderItems").querySelectorAll(".order-row").length;if(oi>=30){notify("30 tagacha qator.");return}$("orderItems").insertAdjacentHTML("beforeend",orderLine(Date.now()%100000));return}
  if(b.dataset.removeOrder){var orow=b.closest(".order-row");if(orow)orow.remove();return}
  if(b.dataset.orderDeliver){deliverOrder(Number(b.dataset.orderDeliver));return}
@@ -1405,3 +1419,4 @@ setInterval(function(){if(data&&!sessionExpired&&document.visibilityState==="vis
 })();
 
 </script></body></html>
+

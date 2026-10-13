@@ -290,6 +290,7 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS pay_from TEXT NOT NULL DEFAULT 'cash'")
         db.execute("ALTER TABLE card_payments ADD COLUMN IF NOT EXISTS photo TEXT NOT NULL DEFAULT ''")
+        db.execute("ALTER TABLE card_payments ADD COLUMN IF NOT EXISTS agent_held INTEGER NOT NULL DEFAULT 0")
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,item in PRODUCT_CATALOG.items():
@@ -341,6 +342,8 @@ def connect(path,initialize=True):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     if 'photo' not in {r[1] for r in db.execute('PRAGMA table_info(card_payments)')}:
         db.execute("ALTER TABLE card_payments ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
+    if 'agent_held' not in {r[1] for r in db.execute('PRAGMA table_info(card_payments)')}:
+        db.execute("ALTER TABLE card_payments ADD COLUMN agent_held INTEGER NOT NULL DEFAULT 0")
     fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
     for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
@@ -1631,6 +1634,7 @@ def decide_card_payment(db,actor,payment_id,confirm=True):
     lock_agent(db,row['agent'])
     row=db.execute("SELECT * FROM card_payments WHERE id=? AND status='pending'",(payment_id,)).fetchone()
     if not row:raise ValueError('Bu karta to‘lovi avval ko‘rib chiqilgan.')
+    if row['agent_held']:raise ValueError('Agent bu karta pulini hali kassirga yubormagan.')
     now=int(time.time())
     if not confirm:
         db.execute("UPDATE card_payments SET status='rejected',cashier=?,decided_ts=? WHERE id=?",(actor,now,payment_id))
