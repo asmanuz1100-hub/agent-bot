@@ -13,8 +13,8 @@ fs.mkdirSync(out,{recursive:true});
     pending:[],history:[],expenses:[],agents:[],daily:'',conversions:[],
     summary:{wallets:{cashUsd:10000,cashUzs:0,cardUsd:5000,cardUzs:0},grandTotalUsd:15000}};
    page.on('pageerror',e=>errors.push(e.message));
-   await page.addInitScript(()=>{window.Telegram={WebApp:{initData:'test-only',ready(){},expand(){},
-    onEvent(){},setHeaderColor(){},setBackgroundColor(){},initDataUnsafe:{user:{id:3,first_name:'Test'}}}}});
+   await page.addInitScript(scheme=>{localStorage.setItem('pmTheme',scheme);window.Telegram={WebApp:{colorScheme:scheme,initData:'test-only',ready(){},expand(){},
+    onEvent(){},setHeaderColor(){},setBackgroundColor(){},initDataUnsafe:{user:{id:3,first_name:'Test'}}}}},colorScheme);
    await page.route('**/*',async route=>{
     const u=new URL(route.request().url());
     if(u.pathname==='/api/cashier'){
@@ -46,6 +46,10 @@ fs.mkdirSync(out,{recursive:true});
    await page.locator('[data-pm-tab="more"]').click();
    await page.locator('[data-pm-more="conversion"]').click();
    await page.waitForSelector('#conversion:not(.hidden)');
+   assert.equal(await page.locator('html').getAttribute('data-pmt'),colorScheme);
+   await page.locator('#conversionAmount').fill('1.234');
+   await page.locator('#conversionForm button').click();
+   assert.equal(await page.locator('#review[open]').count(),0);
    await page.locator('#conversionAmount').fill('25');
    await page.locator('#conversionRate').fill('12500');
    assert.ok((await page.locator('#conversionPreview').innerText()).includes('312,500'));

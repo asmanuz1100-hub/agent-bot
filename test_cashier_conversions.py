@@ -99,6 +99,40 @@ class CashierConversionTests(unittest.TestCase):
         self.assertEqual(w['cash_usd']+w['opening_usd'],0)
         self.assertEqual(w['cash_uzs'],1250000)
 
+    def test_converted_money_cannot_be_spent_again_in_original_currency(self):
+        self.convert()
+        with self.assertRaises(ValueError):
+            core.add_cashier_expense(self.db,3,100,core.CASHIER_EXPENSE_CATEGORIES[0],'Test','',90)
+        core.add_cashier_expense_uzs(self.db,3,1250000,core.CASHIER_EXPENSE_CATEGORIES[0],
+                                    'Test','',91,expected_rate=12500)
+        w=core.cashier_flows(self.db)
+        self.assertEqual((w['cash_usd'],w['cash_uzs']),(0,0))
+        self.assertEqual(core.cashier_balance_usd(self.db),0)
+
+    def test_custom_rate_can_be_fully_spent_without_phantom_balance(self):
+        core.add_cashier_conversion(self.db,3,'cash','USD','100','13000','',80)
+        w=core.cashier_flows(self.db)
+        self.assertEqual((w['cash_usd'],w['cash_uzs']),(0,1300000))
+        core.add_cashier_expense_uzs(self.db,3,1300000,core.CASHIER_EXPENSE_CATEGORIES[0],
+                                    'Test','',81,expected_rate=12500)
+        self.assertEqual(core.cashier_balance_usd(self.db),0)
+        self.assertEqual(core.cashier_flows(self.db)['opening_usd'],0)
+
+    def test_converted_source_funding_uses_native_currency(self):
+        self.convert()
+        with self.assertRaises(ValueError):
+            core.fund_agent_expense(self.db,3,2,100,'',101)
+        core.fund_agent_expense_uzs(self.db,3,2,1250000,'',102,expected_rate=12500)
+        self.assertEqual(core.cashier_flows(self.db)['cash_uzs'],0)
+        with self.assertRaises(ValueError):
+            core.fund_agent_expense_uzs(self.db,3,2,125,'',103,expected_rate=12500)
+
+    def test_conversion_amounts_are_bounded(self):
+        for currency,amount,rate in [('USD','1000000000000','10000000'),
+                                      ('USD','10000000000','12500')]:
+            with self.assertRaisesRegex(ValueError,'катта'):
+                core.cashier_conversion_quote(currency,amount,rate)
+
 
 class PgCashierConversionTests(CashierConversionTests):
     @classmethod
