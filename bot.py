@@ -2541,6 +2541,7 @@ def serve_webhook(db,base_url):
                         answer_cashier(200,profile_action(local,actor,action,payload));return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
+                    elif action=='handover_detail':data=cashier_api.handover_detail(local,actor,payload.get('handoverId'))
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
@@ -2665,7 +2666,10 @@ def serve_webhook(db,base_url):
                         notify=data.pop('_notify',None)
                         local.commit()
                         if notify and not data.get('duplicate'):
-                            if notify.get('kind')=='payment':
+                            if notify.get('kind')=='payments':
+                                for item in notify['items']:
+                                    notify_cashiers_payment(local,effective_agent,item['client'],item['amount'],item.get('currency','USD'),item.get('amountUzs'),item.get('rate'))
+                            elif notify.get('kind')=='payment':
                                 notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'],
                                                         notify.get('currency','USD'),notify.get('amountUzs'),
                                                         notify.get('rate'))

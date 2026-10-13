@@ -13,9 +13,12 @@ jobs:
       - run: node tests/browser/webview.cjs
       - run: node tests/browser/cashier-category.cjs
       - run: node tests/browser/cashier-conversion.cjs
+      - run: node tests/browser/agent-payment-flow.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cashier-conversion-ui
-          path: test-results/cashier-conversion
+          path: |
+            test-results/cashier-conversion
+            test-results/agent-payment-flow
           retention-days: 3
