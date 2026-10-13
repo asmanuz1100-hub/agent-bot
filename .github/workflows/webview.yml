@@ -12,3 +12,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node tests/browser/webview.cjs
       - run: node tests/browser/cashier-category.cjs
+      - run: node tests/browser/cashier-conversion.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cashier-conversion-ui
+          path: test-results/cashier-conversion
+          retention-days: 3

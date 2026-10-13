@@ -180,7 +180,7 @@ function cashier(){
  var tabs=appS.querySelector('nav.tabs');if(!tabs)return;
  tabs.classList.add('pm-hidden-tabs');
  var MAIN=[['overview','home','Asosiy'],['pending','clock','Kutilmoqda'],['debtors','users','Qarzdorlar'],['report','chart','Hisobot']];
- var MORE=[['agentFund','wallet'],['expense','tdown'],['history','clock'],['daily','doc'],['rate','rate']];
+ var MORE=[['agentFund','wallet'],['expense','tdown'],['conversion','rate'],['history','clock'],['daily','doc'],['rate','rate']];
  var bn=el('<nav class="pm-nav" aria-label="Bo‘limlar"></nav>');
  function tabBtn(id){return tabs.querySelector('[data-tab="'+id+'"]')}
  MAIN.forEach(function(m){var b=el('<button type="button" data-pm-tab="'+m[0]+'"><span><ico>'+svg(m[1])+'</ico></span>'+m[2]+'</button>');b.onclick=function(){var t=tabBtn(m[0]);if(t)t.click();scrollTo({top:0,behavior:'smooth'})};bn.append(b)});
@@ -261,3 +261,4 @@ function start(){H.setAttribute('lang','uz-Latn');D.title=lat(D.title);try{if(AP
   [].forEach.call(m.addedNodes,fix)})}).observe(D.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']})}
 if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',start);else start();
 })();
+

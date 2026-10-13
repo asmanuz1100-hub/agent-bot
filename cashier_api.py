@@ -179,6 +179,7 @@ def dashboard(db, actor):
             'activity': _cashier_activity(db),'debtors':debtors,
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
                            'assignedCount':sum(1 for x in debtors if x['task'])},
+            'conversions': [dict(x) for x in db.execute("SELECT * FROM cashier_conversions ORDER BY ts DESC,id DESC LIMIT 100").fetchall()],
             'categories': list(core.cashier_expense_categories()), 'daily': cashier_daily.report(db)}
 
 
@@ -223,6 +224,16 @@ def period_report(db, actor, payload):
                      'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
                      'usd': 0 if uzs else int(x['amount_usd'] or 0),
                      'title': 'Агентга харажат пули', 'who': x['agent_name'] or '', 'actor': x['actor_name'] or ''})
+    for x in db.execute("""SELECT f.*,u.name AS actor_name FROM cashier_conversions f
+            LEFT JOIN users u ON u.id=f.cashier WHERE f.ts>=? AND f.ts<?""",(start,end)).fetchall():
+        cur=x['from_currency'];other='UZS' if cur=='USD' else 'USD'
+        shown=(f"{int(x['amount_from'])/100:,.2f} USD → {int(x['amount_to']):,} сўм" if cur=='USD' else
+               f"{int(x['amount_from']):,} сўм → {int(x['amount_to'])/100:,.2f} USD")
+        rows.append({'kind':'conversion','id':int(x['id']),'ts':int(x['ts']),
+                     'currency':cur,'uzs':0,'usd':0,'title':'Конвертация','who':shown,
+                     'actor':x['actor_name'] or '', 'payFrom':x['pay_from'],
+                     'fromCurrency':cur,'toCurrency':other,'amountFrom':int(x['amount_from']),
+                     'amountTo':int(x['amount_to']),'rate':int(x['rate_uzs_per_usd'])})
     rows.sort(key=lambda r: (r['ts'], r['id']), reverse=True)
     return {'period': payload.get('period') or 'today', 'label': label, 'start': start, 'end': end,
             'flows': flows, 'rows': rows[:400], 'truncated': len(rows) > 400}
@@ -240,7 +251,7 @@ def review(db, actor, hid):
 
 def mutate(db, actor, action, payload):
     require_cashier(db, actor)
-    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject'):
+    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject', 'convert'):
         raise ValueError('Амал нотўғри.')
     rid = payload.get('requestId', '')
     if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,96}', rid):
@@ -328,6 +339,11 @@ def mutate(db, actor, action, payload):
                   f"Умумий ҳисоб: {cashier_pending.usd(amount)} USD\n"
                   f"Янги харажат баланси: {balance_uzs:,} сўм\n"
                   f"Кассир: {require_cashier(db,actor)}"}
+    elif action == 'convert':
+        currency=payload.get('fromCurrency')
+        cid,amount,target,rate=core.add_cashier_conversion(db,actor,str(payload.get('payFrom') or 'cash'),
+            currency,payload.get('amount'),payload.get('rate'),payload.get('note',''),source)
+        notify['text']=f"💱 КОНВЕРТАЦИЯ #{cid} · {currency} → {'UZS' if currency=='USD' else 'USD'}\nКурс: {rate:,} сўм\nКассир: {require_cashier(db,actor)}"
     elif action == 'expense':
         currency = payload.get('currency')
         args = (payload.get('category'), payload.get('recipient'), payload.get('note', ''), source)
