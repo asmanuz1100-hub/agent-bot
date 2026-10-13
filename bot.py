@@ -1107,7 +1107,9 @@ def prompt(db,u,s):
     if s['action']=='cashier_rate':msg+=f"\nЖорий курс: {cashier_rate(db):,} сўм / USD" if cashier_rate(db) else '\nҲали курс белгиланмаган.'
     if s['action']=='cashier_expense_uzs' and key=='amount':msg+=f"\n💱 1 USD = {cashier_rate(db):,} сўм. Сўмдаги сумма USDга автомат ҳисобланади."
     if key=='pack':keys=[[product_name(p)] for p in product_ids()]
-    if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs','agent_expense'):keys=[[c] for c in CASHIER_EXPENSE_CATEGORIES]
+    if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs','agent_expense'):
+        categories=cashier_expense_categories() if s['action']!='agent_expense' else CASHIER_EXPENSE_CATEGORIES
+        keys=[[c] for c in categories]
     if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
         block=block_units(s["values"]["pack"])
@@ -2053,7 +2055,7 @@ def handle(db,update):
     elif key=='followup':
         v=cs.normalize(s['values']['status'],text)
     elif key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs'):
-        if text not in CASHIER_EXPENSE_CATEGORIES:raise ValueError('Харажат турини тугмадан танланг.')
+        if text not in cashier_expense_categories():raise ValueError('Харажат турини тугмадан танланг.')
         v=text
     elif key=='rate' and s['action']=='cashier_rate':
         v=parse_whole_som(text,'1 USD курси')
@@ -2987,3 +2989,4 @@ def run():
 if __name__=='__main__':run()
 
 # Prospective-customer map flow: implementation forthcoming.
+

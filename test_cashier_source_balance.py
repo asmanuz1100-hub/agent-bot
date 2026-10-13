@@ -2,6 +2,7 @@
 import unittest
 
 import core
+import cashier_api
 
 
 class CashierSourceBalanceTests(unittest.TestCase):
@@ -73,6 +74,19 @@ class CashierSourceBalanceTests(unittest.TestCase):
         wallets = core.cashier_flows(self.db)
         self.assertEqual(wallets['opening_usd'], 10000)
         self.assertEqual(wallets['cash_usd'], 0)
+
+    def test_dividend_is_available_to_cashier_and_saved_once(self):
+        self.receipts(cash=10000)
+        category = '💰 Дивиденд'
+        self.assertIn(category, cashier_api.dashboard(self.db, 3)['categories'])
+        self.assertNotIn(category, core.CASHIER_EXPENSE_CATEGORIES)
+        payload = dict(action='expense', requestId='dividend-test-01', payFrom='cash',
+                       currency='USD', amount='10.00', category=category, recipient='Test owner')
+        cashier_api.mutate(self.db, 3, 'expense', payload)
+        self.assertTrue(cashier_api.mutate(self.db, 3, 'expense', payload)['duplicate'])
+        row = self.db.execute('SELECT category,amount_usd FROM cashier_expenses').fetchone()
+        self.assertEqual(tuple(row), (category, 1000))
+        self.assertEqual(core.cashier_source_balance_usd(self.db, 'cash'), 9000)
 
 
 if __name__ == '__main__':

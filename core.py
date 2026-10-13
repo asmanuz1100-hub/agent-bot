@@ -1278,6 +1278,11 @@ CASHIER_EXPENSE_CATEGORIES=(
 )
 
 
+def cashier_expense_categories():
+    # Dividend is a cashier category, not an agent expense category.
+    return CASHIER_EXPENSE_CATEGORIES + ('💰 Дивиденд',)
+
+
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """Manual cashier income is intentionally disabled.
 
@@ -1292,7 +1297,7 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocke
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
     if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
         raise ValueError('Харажат суммаси нотўғри.')
-    if category not in CASHIER_EXPENSE_CATEGORIES:
+    if category not in cashier_expense_categories():
         raise ValueError('Харажат турини рўйхатдан танланг.')
     if not isinstance(recipient,str) or not recipient.strip() or len(recipient)>200:
         raise ValueError('Кимга ёки нима учун берилганини киритинг (1–200 белги).')
