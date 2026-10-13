@@ -16,6 +16,7 @@ class AgentPaymentFlowTests(unittest.TestCase):
         self.assertNotIn('_notify',out)
         self.assertEqual(cashier_api.dashboard(self.db,3)['cardPending'],[])
         self.assertTrue(agent_api._uzs_cash_state(self.db,2)[2][0]['heldByAgent'])
+        self.assertEqual(agent_api._period_totals(self.db,2,0,self.now)['cardPendingCount'],0)
         with self.assertRaises(ValueError):
             agent_api.mutate(self.db,4,'card_handover',{'paymentId':pid},'wrong_owner_01',self.now)
         with self.assertRaises(ValueError):core.decide_card_payment(self.db,3,pid)

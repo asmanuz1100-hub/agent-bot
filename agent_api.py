@@ -509,7 +509,7 @@ def _uzs_cash_state(db,agent):
         WHERE agent=? AND status='pending' AND COALESCE(amount,0)>0""",(agent,)).fetchone()[0] or 0)//100
     rows=db.execute("""SELECT p.id,p.client,p.currency,p.amount_uzs,p.amount_usd,p.rate_uzs_per_usd,p.ts,p.agent_held,
         c.shop_name,c.name FROM card_payments p LEFT JOIN clients c ON c.id=p.client
-        WHERE p.agent=? AND p.status='pending' ORDER BY p.ts DESC,p.id DESC LIMIT 50""",(agent,)).fetchall()
+        WHERE p.agent=? AND p.status='pending' ORDER BY p.agent_held DESC,p.ts,p.id LIMIT 50""",(agent,)).fetchall()
     cards=[{"id":int(r["id"]),"clientId":int(r["client"]),"client":r["shop_name"] or r["name"] or f"#{r['client']}",
             "currency":r["currency"],"amountUzs":int(r["amount_uzs"] or 0),"amountUsd":_usd(r["amount_usd"]),
             "rate":int(r["rate_uzs_per_usd"] or 0),"ts":int(r["ts"]),"heldByAgent":bool(r['agent_held'])} for r in rows]
@@ -531,7 +531,7 @@ def _period_totals(db,agent,lo,now):
       COALESCE(SUM(CASE WHEN pay_method='card' THEN amount_usd ELSE 0 END),0)
       FROM events WHERE agent=? AND kind='payment' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
     card_wait=db.execute("""SELECT COALESCE(SUM(amount_uzs),0),COALESCE(SUM(CASE WHEN currency='USD' THEN amount_usd ELSE 0 END),0),COUNT(*)
-      FROM card_payments WHERE agent=? AND status='pending' AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
+      FROM card_payments WHERE agent=? AND status='pending' AND agent_held=0 AND ts>=? AND ts<=?""",(agent,lo,now)).fetchone()
     row=db.execute("""SELECT
       COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0),
       COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0),
