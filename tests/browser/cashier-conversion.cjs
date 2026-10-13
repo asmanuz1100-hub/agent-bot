@@ -47,6 +47,7 @@ fs.mkdirSync(out,{recursive:true});
    await page.locator('[data-pm-more="conversion"]').click();
    await page.waitForSelector('#conversion:not(.hidden)');
    assert.equal(await page.locator('html').getAttribute('data-pmt'),colorScheme);
+   assert.equal(await page.locator('#pmSh').isVisible(),false);
    await page.locator('#conversionAmount').fill('1.234');
    await page.locator('#conversionForm button').click();
    assert.equal(await page.locator('#review[open]').count(),0);
