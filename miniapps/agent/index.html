@@ -1208,7 +1208,7 @@ async function deleteAdminClient(id){
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){if(!data){notify("Avval agentni tanlang yoki ma’lumot yuklanishini kuting.");return}go(b.dataset.page);return}
- if(b.dataset.cardHandover){if(busy)return;if(!window.confirm("Karta pulini kassirga yuborasizmi?"))return;busy=true;b.disabled=true;request("card_handover",{paymentId:Number(b.dataset.cardHandover),nonce:crypto.randomUUID().replace(/-/g,"")}).then(async function(out){notify(out.message);await refreshAfterWrite();go("cash")}).catch(function(err){notify(err.message)}).finally(function(){busy=false;b.disabled=false});return}
+ if(b.dataset.cardHandover){if(busy)return;if(!window.confirm("Karta pulini kassirga yuborasizmi?"))return;busy=true;b.disabled=true;request("card_handover",{paymentId:Number(b.dataset.cardHandover),nonce:crypto.randomUUID().replace(/-/g,"")}).then(async function(out){notify(out.message);data=await request("snapshot");fullDataLoaded=true;applySnapshotUi();go("cash")}).catch(function(err){notify(err.message)}).finally(function(){busy=false;b.disabled=false});return}
  if(b.id==="detailBack"){go(detailBackPage||"clients");return}
  if(b.id==="visitStart"){startVisit();return}
  if(b.id==="addPayment"){if(document.querySelectorAll('.extra-payment').length>=9){notify('10 tagacha to‘lov.');return}$("extraPayments").insertAdjacentHTML('beforeend',extraPaymentRow());updatePaymentConversion();return}

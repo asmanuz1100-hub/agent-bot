@@ -18,5 +18,7 @@ jobs:
         if: always()
         with:
           name: cashier-conversion-ui
-          path: test-results/cashier-conversion
+          path: |
+            test-results/cashier-conversion
+            test-results/agent-payment-flow
           retention-days: 3

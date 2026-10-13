@@ -1,6 +1,7 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'../..');
+const out=path.join(root,'test-results','agent-payment-flow');fs.mkdirSync(out,{recursive:true});
 const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'agent-flow-fixture.json')));
 (async()=>{const browser=await chromium.launch({headless:true});try{
 for(const theme of ['light','dark']){
@@ -25,6 +26,7 @@ await page.locator('[data-action="payment"]:visible').first().click();
 await page.locator('#paymentAmount').fill('120000');await page.locator('#paymentUsd').fill('10');
 await page.locator('#addPayment').click();await page.locator('[data-extra-amount]').fill('50');
 await page.locator('#submitForm').click();assert.match(await page.locator('#review').innerText(),/120000 UZS.*50 USD/);
+await page.screenshot({path:path.join(out,theme+'-mixed.png')});
 await page.locator('#submitForm').click();await page.waitForFunction(()=>document.querySelector('#page-form:not(.active)'));
 assert.equal(payments.length,1);assert.deepEqual(payments[0].parts.map(p=>[p.currency,p.amount]),[['UZS','120000'],['USD','50']]);
 await page.locator('[data-page="cash"]:visible').first().click();await page.locator('[data-card-handover]').waitFor();
@@ -35,6 +37,7 @@ await page.goto('https://asman.test/cashier/');await page.locator('[data-history
 await page.locator('[data-pm-tab="more"]').click();await page.locator('[data-pm-more="history"]').click();
 await page.locator('[data-history]').first().click();await page.locator('dialog[open]').waitFor();
 assert.match(await page.locator('#reviewText').innerText(),/25.00/);assert.equal(await page.locator('#confirm').isVisible(),false);
+await page.screenshot({path:path.join(out,theme+'-history.png')});
 assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
 await page.close();console.log(theme+' agent mixed payment, card custody, orders and cashier history OK');
 }
