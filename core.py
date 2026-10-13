@@ -1032,6 +1032,21 @@ def cashier_balance_usd(db):
     return int(accepted or 0)-int(spent or 0)-int(funded or 0)
 
 
+def cashier_source_balance_usd(db,pay_from):
+    """Spendable balance of one source, in historical USD equivalents.
+
+    cashier_balance_usd retains its legacy reporting meaning. Card expenses
+    must neither consume cash spending capacity nor borrow from cash receipts.
+    """
+    if pay_from not in ('cash','card'):
+        raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
+    card_spent=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE pay_from='card'").fetchone()[0] or 0)
+    if pay_from=='cash':
+        return cashier_balance_usd(db)+card_spent
+    card_received=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    return card_received-card_spent
+
+
 PERIOD_NAMES={'today':'Bugun','week':'7 kun','month':'Shu oy','custom':'Davr'}
 
 
@@ -1115,10 +1130,10 @@ def cashier_flows(db,start=None,end=None):
     out['card_usd']=out['in_card_usd']-out['out_card_usd']
     if balance:
         moved=(one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'"+hw,args)
-               -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE 1=1"+ew,args)
+               -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE pay_from<>'card'"+ew,args)
                -one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'"+fw,args))
         out['since']=since
-        out['opening_usd']=cashier_balance_usd(db)-moved if since else 0
+        out['opening_usd']=cashier_source_balance_usd(db,'cash')-moved if since else 0
     return out
 
 
@@ -1263,6 +1278,11 @@ CASHIER_EXPENSE_CATEGORIES=(
 )
 
 
+def cashier_expense_categories():
+    # Dividend is a cashier category, not an agent expense category.
+    return CASHIER_EXPENSE_CATEGORIES + ('💰 Дивиденд',)
+
+
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """Manual cashier income is intentionally disabled.
 
@@ -1277,7 +1297,7 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocke
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
     if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
         raise ValueError('Харажат суммаси нотўғри.')
-    if category not in CASHIER_EXPENSE_CATEGORIES:
+    if category not in cashier_expense_categories():
         raise ValueError('Харажат турини рўйхатдан танланг.')
     if not isinstance(recipient,str) or not recipient.strip() or len(recipient)>200:
         raise ValueError('Кимга ёки нима учун берилганини киритинг (1–200 белги).')
@@ -1293,10 +1313,7 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocke
         raise ValueError('Бу харажат аллақачон сақланган.')
     if pay_from not in ('cash','card'):
         raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
-    limit=cashier_balance_usd(db)
-    if pay_from=='card':
-        # A card expense is paid from card/bank receipts, so the whole cashbox counts.
-        limit+=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    limit=cashier_source_balance_usd(db,pay_from)
     if amount_usd>limit:
         raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
     return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts,pay_from) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()),pay_from)).fetchone()[0])
@@ -1805,3 +1822,4 @@ def custom_demand(db):
           'clients':len(g['clients']),'agents':len(g['agents']),'firstTs':g['firstTs']} for g in groups.values()]
     out.sort(key=lambda x:(-x['clients'],-x['qty']))
     return out
+

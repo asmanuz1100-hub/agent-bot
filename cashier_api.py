@@ -179,7 +179,7 @@ def dashboard(db, actor):
             'activity': _cashier_activity(db),'debtors':debtors,
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
                            'assignedCount':sum(1 for x in debtors if x['task'])},
-            'categories': list(core.CASHIER_EXPENSE_CATEGORIES), 'daily': cashier_daily.report(db)}
+            'categories': list(core.cashier_expense_categories()), 'daily': cashier_daily.report(db)}
 
 
 def period_report(db, actor, payload):
@@ -351,3 +351,4 @@ def mutate(db, actor, action, payload):
         notify['text'] = f'💱 Касса курси: 1 USD = {rate:,} сўм\nКассир: {require_cashier(db,actor)}'
     db.execute('INSERT INTO meta(key,value) VALUES(?,?)', (key, fingerprint))
     return {'ok': True, '_notify': notify}
+
