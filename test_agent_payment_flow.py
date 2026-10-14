@@ -55,6 +55,25 @@ class AgentPaymentFlowTests(unittest.TestCase):
         self.assertTrue(all(r['agent_held'] and r['photo']==p['photoFileId'] for r in rows))
         self.assertEqual(cashier_api.dashboard(self.db,3)['cardPending'],[])
 
+    def test_som_equivalent_and_dollars_are_not_double_booked(self):
+        self.pay('som_review',currency='UZS',amount='3249000',usd='275.40',method='cash')
+        self.pay('usd_review',currency='USD',amount='200',method='cash')
+        som=agent_api.mutate(self.db,2,'handover',{'currency':'UZS','amount':'3249000'},'som_review_handover',self.now)
+        dollars=agent_api.mutate(self.db,2,'handover',{'currency':'USD','amount':'200'},'usd_review_handover',self.now)
+        self.assertEqual(core.cashier_balance_usd(self.db),0)
+        for out in (som,dollars):
+            hid=out['handoverId']
+            cashier_api.review(self.db,3,hid)
+            cashier_api.review(self.db,3,hid)
+            core.accept(self.db,3,hid)
+            with self.assertRaises(ValueError):core.accept(self.db,3,hid)
+        flows=core.cashier_flows(self.db)
+        self.assertEqual(flows['in_cash_uzs'],3249000)
+        self.assertEqual(flows['in_cash_usd'],20000)
+        self.assertEqual(core.cashier_balance_usd(self.db),47540)
+        self.assertEqual((core.cash_som(self.db,2),core.cash_usd(self.db,2)),(0,0))
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM cashier_incomes').fetchone()[0],0)
+
     def test_orders_are_visible_to_the_creator_only(self):
         core.create_order(self.db,2,self.cid,[{'pack':1,'qty':2}],source=777001)
         self.assertEqual(len(agent_api._my_orders(self.db,2)),1)
