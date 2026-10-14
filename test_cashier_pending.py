@@ -103,6 +103,49 @@ class CashierUnconfirmedTests(unittest.TestCase):
         self.assertEqual(core.cashier_balance_usd(self.db),16940)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0],8)
 
+    def test_review_separates_currencies_and_keeps_dollar_window(self):
+        self.db.execute('DELETE FROM events')
+        self.db.execute('DELETE FROM handovers')
+        # Two genuine dollar receipts, a so'm receipt and a bank receipt.
+        for cid, cents, som, method in [(1,10000,0,'cash'),(2,10000,0,'cash'),
+                                        (3,27540,3249000,'cash'),(4,9900,0,'card')]:
+            self.db.execute("""INSERT INTO events(agent,client,kind,amount,amount_usd,paid_uzs,pay_method,ts)
+                VALUES(2,?,'payment',0,?,?,?,?)""",(cid,cents,som,method,self.base+100))
+        for hid, som, cents in [(31,324900000,27540),(32,0,20000)]:
+            self.db.execute("""INSERT INTO handovers(id,agent,amount,amount_usd,ts)
+                VALUES(?,2,?,?,?)""",(hid,som,cents,self.base+hid*10))
+        before=self.db.total_changes
+        uzs=cashier_pending.handover_context(self.db,self.db.execute('SELECT * FROM handovers WHERE id=31').fetchone())
+        dollars=cashier_pending.handover_context(self.db,self.db.execute('SELECT * FROM handovers WHERE id=32').fetchone())
+        self.assertIn('Shop 3',uzs)
+        self.assertIn('3,249,000 сўм (≈ 275.40 USD)',uzs)
+        self.assertNotIn('Shop 1',uzs)
+        self.assertNotIn('Shop 2',uzs)
+        self.assertIn('Shop 1',dollars)
+        self.assertIn('Shop 2',dollars)
+        self.assertIn('200.00 USD',dollars)
+        self.assertNotIn('Shop 3',dollars)
+        for context in (uzs,dollars):
+            self.assertNotIn('Shop 4',context)
+            self.assertIn('боғланмаган',context)
+        self.assertEqual(self.db.total_changes,before)
+        self.assertEqual(core.cashier_balance_usd(self.db),0)
+        # A later dollar review starts after the previous dollar handover.
+        self.db.execute("INSERT INTO handovers(id,agent,amount,amount_usd,ts) VALUES(33,2,0,1000,?)",(self.base+500,))
+        self.db.execute("""INSERT INTO events(agent,client,kind,amount_usd,paid_uzs,pay_method,ts)
+            VALUES(2,5,'payment',1000,0,'cash',?)""",(self.base+400,))
+        context=cashier_pending.handover_context(self.db,self.db.execute('SELECT * FROM handovers WHERE id=33').fetchone())
+        self.assertIn('Shop 5',context)
+        self.assertNotIn('Shop 1',context)
+        self.assertNotIn('Shop 2',context)
+
+    def test_currency_filter_precedes_limit_and_supports_legacy_som(self):
+        self.db.execute("""INSERT INTO events(agent,client,kind,amount,amount_usd,paid_uzs,ts)
+            VALUES(2,7,'payment',12000000,0,0,?)""",(self.base+50,))
+        rows=cashier_pending.customer_payments(self.db,2,0,self.base+1000,limit=1,currency='UZS')
+        self.assertEqual(len(rows),1)
+        self.assertIn('120,000 сўм',cashier_pending.payment_line(rows[0]))
+
     def test_cashier_menu_contains_pending_button(self):
         self.assertIn('⏳ Тасдиқланмаган пуллар',str(bot.menu(self.db,3)))
         self.assertNotIn('⏳ Тасдиқланмаган пуллар',str(bot.menu(self.db,2)))
