@@ -21,13 +21,20 @@ def date_of(ts):
     return datetime.fromtimestamp(int(ts), TZ).strftime("%d.%m.%Y %H:%M")
 
 
-def customer_payments(db, agent, since=0, until=None, limit=12):
+def customer_payments(db, agent, since=0, until=None, limit=12, currency=None):
     upper = int(until) if until is not None else 9999999999
-    return db.execute("""SELECT e.id,e.ts,e.amount_usd,e.client,
+    currency_filter = ""
+    if currency == "UZS":
+        currency_filter = " AND (COALESCE(e.paid_uzs,0)>0 OR COALESCE(e.amount,0)>0) AND COALESCE(e.pay_method,'')<>'card'"
+    elif currency == "USD":
+        currency_filter = " AND COALESCE(e.paid_uzs,0)=0 AND COALESCE(e.amount,0)=0 AND COALESCE(e.pay_method,'')<>'card'"
+    elif currency is not None:
+        raise ValueError("Unknown payment currency")
+    return db.execute(f"""SELECT e.id,e.ts,e.amount_usd,e.amount,e.paid_uzs,e.client,
           c.name AS customer_name,c.shop_name
         FROM events e LEFT JOIN clients c ON c.id=e.client
-        WHERE e.agent=? AND e.kind='payment' AND e.amount_usd>0
-          AND e.ts>? AND e.ts<=?
+        WHERE e.agent=? AND e.kind='payment' AND (e.amount_usd>0 OR e.amount>0)
+          AND e.ts>? AND e.ts<=? {currency_filter}
         ORDER BY e.ts DESC,e.id DESC LIMIT ?""",
         (agent, int(since), upper, max(1, min(int(limit), 50)))).fetchall()
 
@@ -37,18 +44,28 @@ def payment_line(row):
     if not customer or customer == "Йўқ":
         customer = row["customer_name"]
     customer = customer or f"Мижоз #{row['client']}"
-    return f"• {date_of(row['ts'])} · {customer} (#{row['client']}) · {usd(row['amount_usd'])} USD"
+    som = int(row["paid_uzs"] or 0) or int(row["amount"] or 0) // 100
+    value = f"{usd(row['amount_usd'])} USD"
+    if som:
+        value = f"{som:,} сўм"
+        if row['amount_usd']:
+            value += f" (≈ {usd(row['amount_usd'])} USD)"
+    return f"• {date_of(row['ts'])} · {customer} (#{row['client']}) · {value}"
 
 
 def handover_context(db, row, limit=12):
     """Recent payments before submission for verification, NOT allocated receipts."""
+    # A so'm submission must not consume the contextual window for dollars,
+    # or vice versa. This remains a time window, not a receipt allocation.
+    currency = "UZS" if int(row["amount"] or 0) > 0 else "USD"
     previous = db.execute(
-        "SELECT COALESCE(MAX(ts),0) FROM handovers WHERE agent=? AND id<?",
-        (row["agent"], row["id"])).fetchone()
+        """SELECT COALESCE(MAX(ts),0) FROM handovers WHERE agent=? AND id<?
+           AND (CASE WHEN COALESCE(amount,0)>0 THEN 'UZS' ELSE 'USD' END)=?""",
+        (row["agent"], row["id"], currency)).fetchone()
     since = int(previous[0] or 0)
-    payments = customer_payments(db, row["agent"], since, row["ts"], limit + 1)
+    payments = customer_payments(db, row["agent"], since, row["ts"], limit + 1, currency=currency)
     chosen = payments[:limit]
-    heading = "🧾 Агентнинг ушбу топшириқдан олдинги мижоз тўловлари:"
+    heading = "🧾 Ушбу топшириқдан олдинги " + ("нақд сўм" if currency == "UZS" else "нақд доллар") + " тўловлари:"
     lines = [heading]
     lines.extend(payment_line(p) for p in chosen)
     if not chosen:
@@ -57,7 +74,12 @@ def handover_context(db, row, limit=12):
         lines.append(f"… Сўнгги {limit} та тўлов кўрсатилди.")
     elif chosen:
         total = sum(int(p["amount_usd"] or 0) for p in chosen)
-        lines.append(f"Ушбу оралиқда қайд этилган тўловлар: {usd(total)} USD.")
+        if currency == "UZS":
+            som = sum(int(p["paid_uzs"] or 0) or int(p["amount"] or 0) // 100 for p in chosen)
+            equivalent = f" (≈ {usd(total)} USD)" if total else ""
+            lines.append(f"Ушбу оралиқда қайд этилган тўловлар: {som:,} сўм{equivalent}.")
+        else:
+            lines.append(f"Ушбу оралиқда қайд этилган тўловлар: {usd(total)} USD.")
     lines.append(
         "⚠️ Мижоз тўловлари топшириш IDсига алоҳида боғланмаган. "
         "Бу рўйхат текшириш учун; пул ҳақиқатан кассирга берилганини тасдиқламайди."
