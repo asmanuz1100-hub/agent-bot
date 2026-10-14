@@ -14,6 +14,7 @@ jobs:
       - run: node tests/browser/cashier-category.cjs
       - run: node tests/browser/cashier-conversion.cjs
       - run: node tests/browser/agent-payment-flow.cjs
+      - run: node tests/browser/manager-filters.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -21,4 +22,5 @@ jobs:
           path: |
             test-results/cashier-conversion
             test-results/agent-payment-flow
+            test-results/manager-filters
           retention-days: 3
