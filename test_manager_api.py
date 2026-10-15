@@ -335,6 +335,34 @@ class ManagerApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'topilmadi'):
             manager_api.client_delete_preview(self.db,450)
 
+    def test_manager_debt_matches_agent_and_cashier_after_customer_archived(self):
+        # Historical debt must remain in the audit ledger, but archived
+        # customers must not inflate active-customer balances.
+        import agent_api
+        import cashier_api
+        self.db.executemany(
+            "INSERT INTO clients(id,agent,name,created_ts,map_only) VALUES(?,?,?, ?,0)",
+            [(451,2,'Active buyer',self.today),(452,2,'Archived buyer',self.today)])
+        self.db.executemany(
+            "INSERT INTO events(actor,agent,client,kind,amount_usd,ts) VALUES(2,2,?,?,?,?)",
+            [(451,'delivery',10000,self.now-30),
+             (451,'payment',2000,self.now-20),
+             (452,'delivery',800,self.now-10)])
+        before=manager_api.dashboard(self.db,self.now)
+        self.assertEqual(before['summary']['debtUsd'],88.0)
+
+        manager_api.client_delete_commit(self.db,1,452,self.now)
+        self.assertEqual(core.client_debt_usd(self.db,452),800)
+        after=manager_api.dashboard(self.db,self.now)
+        cashier=cashier_api.dashboard(self.db,3)
+        agent_clients=agent_api._client_snapshot(self.db,self.now)
+        self.assertEqual(after['summary']['debtUsd'],80.0)
+        self.assertEqual(sum(c['debtUsd'] for c in after['clients']),80.0)
+        self.assertEqual(cashier['debtSummary']['totalUsd'],8000)  # cents
+        self.assertEqual(cashier['debtSummary']['count'],1)
+        self.assertEqual(len(agent_clients),1)
+        self.assertEqual(agent_clients[0]['debtUsd'],80.0)
+
     def test_agent_detail_combines_gps_stock_cash_permissions_and_periods(self):
         self.db.execute("""INSERT INTO clients(id,agent,name,phone,created_ts,map_only)
                          VALUES(501,2,'Agent buyer','+998905010000',?,0)""",(self.today+100,))
