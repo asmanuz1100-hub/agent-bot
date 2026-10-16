@@ -115,6 +115,8 @@ CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, client INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs INTEGER NOT NULL DEFAULT 0, amount_usd INTEGER NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL, cashier INTEGER, decided_ts INTEGER, event_id INTEGER);
 CREATE TABLE IF NOT EXISTS agent_funds(id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, actor INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd INTEGER NOT NULL CHECK(amount_usd>0), amount_uzs INTEGER NOT NULL DEFAULT 0, rate_uzs_per_usd INTEGER NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
+CREATE TABLE IF NOT EXISTS cashier_conversions(id INTEGER PRIMARY KEY, cashier INTEGER NOT NULL, pay_from TEXT NOT NULL CHECK(pay_from IN ('cash','card')), from_currency TEXT NOT NULL CHECK(from_currency IN ('USD','UZS')), amount_from INTEGER NOT NULL CHECK(amount_from>0), amount_to INTEGER NOT NULL CHECK(amount_to>0), rate_uzs_per_usd INTEGER NOT NULL CHECK(rate_uzs_per_usd>=100), valuation_rate INTEGER NOT NULL, usd_delta INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', source INTEGER NOT NULL UNIQUE, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_cashier_conversions_ts ON cashier_conversions(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event INTEGER NOT NULL, delivery_event INTEGER NOT NULL, qty INTEGER NOT NULL, amount_usd INTEGER NOT NULL, PRIMARY KEY(return_event,delivery_event));
@@ -169,6 +171,8 @@ CREATE INDEX IF NOT EXISTS idx_visit_stock_visit ON visit_stock(visit);
 CREATE TABLE IF NOT EXISTS card_payments(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, client BIGINT NOT NULL, currency TEXT NOT NULL DEFAULT 'UZS', amount_uzs BIGINT NOT NULL DEFAULT 0, amount_usd BIGINT NOT NULL CHECK(amount_usd>0), rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','rejected')), source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL, cashier BIGINT, decided_ts BIGINT, event_id BIGINT);
 CREATE TABLE IF NOT EXISTS agent_funds(id BIGSERIAL PRIMARY KEY, agent BIGINT NOT NULL, actor BIGINT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('topup','expense')), amount_usd BIGINT NOT NULL CHECK(amount_usd>0), amount_uzs BIGINT NOT NULL DEFAULT 0, rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0, category TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_agent_funds_agent_ts ON agent_funds(agent,ts);
+CREATE TABLE IF NOT EXISTS cashier_conversions(id BIGSERIAL PRIMARY KEY, cashier BIGINT NOT NULL, pay_from TEXT NOT NULL CHECK(pay_from IN ('cash','card')), from_currency TEXT NOT NULL CHECK(from_currency IN ('USD','UZS')), amount_from BIGINT NOT NULL CHECK(amount_from>0), amount_to BIGINT NOT NULL CHECK(amount_to>0), rate_uzs_per_usd BIGINT NOT NULL CHECK(rate_uzs_per_usd>=100), valuation_rate BIGINT NOT NULL, usd_delta BIGINT NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', source BIGINT NOT NULL UNIQUE, ts BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_cashier_conversions_ts ON cashier_conversions(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_expenses_ts ON cashier_expenses(ts);
 CREATE INDEX IF NOT EXISTS idx_cashier_incomes_ts ON cashier_incomes(ts);
 CREATE TABLE IF NOT EXISTS return_allocations(return_event BIGINT NOT NULL, delivery_event BIGINT NOT NULL, qty BIGINT NOT NULL, amount_usd BIGINT NOT NULL, PRIMARY KEY(return_event,delivery_event));
@@ -453,6 +457,7 @@ def connect(path,initialize=True):
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS pay_from TEXT NOT NULL DEFAULT 'cash'")
         db.execute("ALTER TABLE card_payments ADD COLUMN IF NOT EXISTS photo TEXT NOT NULL DEFAULT ''")
+        db.execute("ALTER TABLE card_payments ADD COLUMN IF NOT EXISTS agent_held INTEGER NOT NULL DEFAULT 0")
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
         db.execute('ALTER TABLE agent_funds ADD COLUMN IF NOT EXISTS rate_uzs_per_usd BIGINT NOT NULL DEFAULT 0')
         for pack,item in PRODUCT_CATALOG.items():
@@ -514,6 +519,8 @@ def connect(path,initialize=True):
         if column not in expense_cols:db.execute(f'ALTER TABLE cashier_expenses ADD COLUMN {column} {definition}')
     if 'photo' not in {r[1] for r in db.execute('PRAGMA table_info(card_payments)')}:
         db.execute("ALTER TABLE card_payments ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
+    if 'agent_held' not in {r[1] for r in db.execute('PRAGMA table_info(card_payments)')}:
+        db.execute("ALTER TABLE card_payments ADD COLUMN agent_held INTEGER NOT NULL DEFAULT 0")
     fund_cols={r[1] for r in db.execute('PRAGMA table_info(agent_funds)')}
     for column,definition in (('amount_uzs','INTEGER NOT NULL DEFAULT 0'),('rate_uzs_per_usd','INTEGER NOT NULL DEFAULT 0')):
         if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
@@ -1206,7 +1213,24 @@ def cashier_balance_usd(db):
     accepted=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'").fetchone()[0]
     spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
     funded=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'").fetchone()[0]
-    return int(accepted or 0)-int(spent or 0)-int(funded or 0)
+    converted=int(db.execute('SELECT COALESCE(SUM(usd_delta),0) FROM cashier_conversions').fetchone()[0] or 0)
+    return int(accepted or 0)-int(spent or 0)-int(funded or 0)+converted
+
+
+def cashier_source_balance_usd(db,pay_from):
+    """Spendable balance of one source, in historical USD equivalents.
+
+    cashier_balance_usd retains its legacy reporting meaning. Card expenses
+    must neither consume cash spending capacity nor borrow from cash receipts.
+    """
+    if pay_from not in ('cash','card'):
+        raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
+    card_spent=int(db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE pay_from='card'").fetchone()[0] or 0)
+    card_delta=int(db.execute("SELECT COALESCE(SUM(usd_delta),0) FROM cashier_conversions WHERE pay_from='card'").fetchone()[0] or 0)
+    if pay_from=='cash':
+        return cashier_balance_usd(db)+card_spent-card_delta
+    card_received=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    return card_received-card_spent+card_delta
 
 
 PERIOD_NAMES={'today':'Bugun','week':'7 kun','month':'Shu oy','custom':'Davr'}
@@ -1286,16 +1310,25 @@ def cashier_flows(db,start=None,end=None):
         'out_fund_uzs':one("SELECT COALESCE(SUM(amount_uzs),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)>0"+fw,args),
         'out_fund_usd':one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup' AND COALESCE(amount_uzs,0)=0"+fw,args),
     }
-    out['cash_uzs']=out['in_cash_uzs']-out['out_expense_uzs']-out['out_fund_uzs']
-    out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']
-    out['card_uzs']=out['in_card_uzs']-out['out_card_uzs']
-    out['card_usd']=out['in_card_usd']-out['out_card_usd']
+    # Conversion moves money inside one source; it is not income or expense.
+    for source in ('cash','card'):
+        for currency in ('uzs','usd'):
+            out['conversion_'+source+'_'+currency]=0
+    for row in db.execute("SELECT pay_from,from_currency,amount_from,amount_to FROM cashier_conversions WHERE ts>=? AND ts<?",args).fetchall():
+        src=row['pay_from'];cur=row['from_currency'].lower()
+        other='uzs' if cur=='usd' else 'usd'
+        out['conversion_'+src+'_'+cur]-=int(row['amount_from'])
+        out['conversion_'+src+'_'+other]+=int(row['amount_to'])
+    out['cash_uzs']=out['in_cash_uzs']-out['out_expense_uzs']-out['out_fund_uzs']+out['conversion_cash_uzs']
+    out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']+out['conversion_cash_usd']
+    out['card_uzs']=out['in_card_uzs']-out['out_card_uzs']+out['conversion_card_uzs']
+    out['card_usd']=out['in_card_usd']-out['out_card_usd']+out['conversion_card_usd']
     if balance:
         moved=(one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'"+hw,args)
-               -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE 1=1"+ew,args)
+               -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE pay_from<>'card'"+ew,args)
                -one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'"+fw,args))
         out['since']=since
-        out['opening_usd']=cashier_balance_usd(db)-moved if since else 0
+        out['opening_usd']=cashier_source_balance_usd(db,'cash')-moved-one("SELECT COALESCE(SUM(usd_delta),0) FROM cashier_conversions WHERE pay_from='cash'",()) if since else 0
     return out
 
 
@@ -1367,6 +1400,11 @@ def fund_agent_expense_uzs(db,actor,agent,amount_uzs,note,source,expected_rate=N
     if expected_rate is not None and int(expected_rate)!=rate:
         raise ValueError('Курс ўзгарган. Янги курсда агент балансини қайта киритинг.')
     amount_usd=som_to_usd_cents(amount_uzs,rate)
+    if db.execute("SELECT 1 FROM cashier_conversions WHERE pay_from='cash' LIMIT 1").fetchone():
+        wallet=cashier_flows(db)
+        available=wallet['cash_uzs']
+        if amount_uzs>available:
+            raise ValueError('Агентга бериш учун танланган валютада нақд пул етарли эмас.')
     if amount_usd>cashier_balance_usd(db):
         raise ValueError('Кассада агентга бериш учун етарли пул йўқ.')
     row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,amount_uzs,rate_uzs_per_usd,category,note,source,ts)
@@ -1418,6 +1456,11 @@ def fund_agent_expense(db,actor,agent,amount_usd,note,source):
     lock_agent(db,agent)
     if db.execute('SELECT 1 FROM agent_funds WHERE source=?',(source,)).fetchone():
         raise ValueError('Бу операция аллақачон сақланган.')
+    if db.execute("SELECT 1 FROM cashier_conversions WHERE pay_from='cash' LIMIT 1").fetchone():
+        wallet=cashier_flows(db)
+        available=wallet['cash_usd']+wallet.get('opening_usd',0)
+        if amount_usd>available:
+            raise ValueError('Агентга бериш учун танланган валютада нақд пул етарли эмас.')
     if amount_usd>cashier_balance_usd(db):
         raise ValueError('Кассада агентга бериш учун етарли пул йўқ.')
     row=db.execute("""INSERT INTO agent_funds(agent,actor,kind,amount_usd,category,note,source,ts)
@@ -1459,6 +1502,11 @@ CASHIER_EXPENSE_CATEGORIES=(
 )
 
 
+def cashier_expense_categories():
+    # Dividend is a cashier category, not an agent expense category.
+    return CASHIER_EXPENSE_CATEGORIES + ('💰 Дивиденд',)
+
+
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """Manual cashier income is intentionally disabled.
 
@@ -1467,13 +1515,13 @@ def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
-def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD',pay_from='cash'):
+def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD',pay_from='cash',amount_uzs=None):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not identity or identity[0] not in ('cashier','admin'):
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
     if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
         raise ValueError('Харажат суммаси нотўғри.')
-    if category not in CASHIER_EXPENSE_CATEGORIES:
+    if category not in cashier_expense_categories():
         raise ValueError('Харажат турини рўйхатдан танланг.')
     if not isinstance(recipient,str) or not recipient.strip() or len(recipient)>200:
         raise ValueError('Кимга ёки нима учун берилганини киритинг (1–200 белги).')
@@ -1489,12 +1537,25 @@ def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocke
         raise ValueError('Бу харажат аллақачон сақланган.')
     if pay_from not in ('cash','card'):
         raise ValueError('Харажат манбаини танланг: нақд ёки карта.')
-    limit=cashier_balance_usd(db)
-    if pay_from=='card':
-        # A card expense is paid from card/bank receipts, so the whole cashbox counts.
-        limit+=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
-    if amount_usd>limit:
-        raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
+    converted=db.execute('SELECT 1 FROM cashier_conversions WHERE pay_from=? LIMIT 1',(pay_from,)).fetchone()
+    if converted:
+        # New conversions must not leave money spendable in the old currency.
+        wallet=cashier_flows(db)
+        if pocket=='UZS':
+            available=wallet[pay_from+'_uzs']
+            required=amount_uzs
+        else:
+            available=wallet[pay_from+'_usd']+(wallet.get('opening_usd',0) if pay_from=='cash' else 0)
+            required=amount_usd
+        if not isinstance(required,int) or required<=0:
+            raise ValueError('Харажат суммаси нотўғри.')
+        if required>available:
+            raise ValueError('Танланган манба ва валютада пул етарли эмас.')
+    else:
+        # Preserve the mixed historical ledger until this source is explicitly converted.
+        limit=cashier_source_balance_usd(db,pay_from)
+        if amount_usd>limit:
+            raise ValueError('Кассада етарли қабул қилинган пул йўқ.')
     return int(db.execute('INSERT INTO cashier_expenses(cashier,amount_usd,category,recipient,note,source,ts,pay_from) VALUES(?,?,?,?,?,?,?,?) RETURNING id',(actor,amount_usd,category,recipient.strip(),note.strip(),source,int(time.time()),pay_from)).fetchone()[0])
 
 
@@ -1544,6 +1605,56 @@ def som_to_usd_cents(som,rate):
     return cents
 
 
+def cashier_conversion_quote(currency,raw_amount,raw_rate):
+    if currency not in ('USD','UZS'):
+        raise ValueError('Алмаштириладиган валютани танланг.')
+    rate=parse_whole_som(raw_rate,'Курс')
+    if not 100<=rate<=10**7:
+        raise ValueError('Курс: 100–10 000 000 сўм киритинг.')
+    amount=money(raw_amount) if currency=='USD' else parse_whole_som(raw_amount)
+    if amount<=0:
+        raise ValueError('Сумма нолдан катта бўлсин.')
+    if currency=='USD':
+        target=int((Decimal(amount)*rate/100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    else:
+        target=int((Decimal(amount)*100/Decimal(rate)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    if target<=0:
+        raise ValueError('Олинадиган сумма жуда кичик. Сумма ёки курсни текширинг.')
+    if amount>10**12 or target>10**12:
+        raise ValueError('Конвертация суммаси жуда катта. Кичикроқ сумма киритинг.')
+    return amount,target,rate
+
+
+def add_cashier_conversion(db,actor,pay_from,currency,raw_amount,raw_rate,note,source):
+    identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not identity or identity[0] not in ('cashier','admin'):
+        raise ValueError('Конвертацияни фақат кассир ёки админ бажаради.')
+    if pay_from not in ('cash','card'):
+        raise ValueError('Манбани танланг: нақд ёки карта / банк.')
+    if not isinstance(note,str) or len(note)>1000:
+        raise ValueError('Изоҳ 1000 белгидан ошмасин.')
+    if not isinstance(source,int) or isinstance(source,bool) or source<=0:
+        raise ValueError('Операция ID нотўғри.')
+    amount,target,rate=cashier_conversion_quote(currency,raw_amount,raw_rate)
+    if isinstance(db,PostgresDB):
+        db.execute('SELECT pg_advisory_xact_lock(?)',(_CASHBOX_LOCK,)).fetchone()
+    if db.execute('SELECT 1 FROM cashier_conversions WHERE source=?',(source,)).fetchone():
+        raise ValueError('Бу конвертация аллақачон сақланган.')
+    wallet=cashier_flows(db)
+    available=wallet[pay_from+'_'+currency.lower()]
+    if pay_from=='cash' and currency=='USD':
+        available+=wallet.get('opening_usd',0)
+    if amount>available:
+        raise ValueError('Танланган манба ва валютада пул етарли эмас.')
+    valuation=cashier_rate(db) or rate
+    def equivalent(som):
+        return int((Decimal(som)*100/valuation).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    delta=equivalent(target)-amount if currency=='USD' else target-equivalent(amount)
+    row=db.execute("""INSERT INTO cashier_conversions(cashier,pay_from,from_currency,amount_from,amount_to,rate_uzs_per_usd,valuation_rate,usd_delta,note,source,ts)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",(actor,pay_from,currency,amount,target,rate,valuation,delta,note.strip(),source,int(time.time()))).fetchone()
+    return int(row[0]),amount,target,rate
+
+
 def add_cashier_income_uzs(db,actor,amount_uzs,category,source_name,note,source,expected_rate=None):
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
@@ -1555,7 +1666,7 @@ def add_cashier_expense_uzs(db,actor,amount_uzs,category,recipient,note,source,e
     if expected_rate is not None and rate!=expected_rate:
         raise ValueError('Курс ўзгарган. Янги курсда харажатни қайта киритинг.')
     cents=som_to_usd_cents(amount_uzs,rate)
-    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source,pocket='UZS',pay_from=pay_from)
+    expense_id=add_cashier_expense(db,actor,cents,category,recipient,note,source,pocket='UZS',pay_from=pay_from,amount_uzs=amount_uzs)
     db.execute("""UPDATE cashier_expenses SET currency='UZS',amount_uzs=?,rate_uzs_per_usd=?
            WHERE id=?""",(amount_uzs,rate,expense_id))
     return expense_id,cents,rate
@@ -1719,6 +1830,7 @@ def decide_card_payment(db,actor,payment_id,confirm=True):
     lock_agent(db,row['agent'])
     row=db.execute("SELECT * FROM card_payments WHERE id=? AND status='pending'",(payment_id,)).fetchone()
     if not row:raise ValueError('Bu karta to‘lovi avval ko‘rib chiqilgan.')
+    if row['agent_held']:raise ValueError('Agent bu karta pulini hali kassirga yubormagan.')
     now=int(time.time())
     if not confirm:
         db.execute("UPDATE card_payments SET status='rejected',cashier=?,decided_ts=? WHERE id=?",(actor,now,payment_id))
@@ -2001,3 +2113,4 @@ def custom_demand(db):
           'clients':len(g['clients']),'agents':len(g['agents']),'firstTs':g['firstTs']} for g in groups.values()]
     out.sort(key=lambda x:(-x['clients'],-x['qty']))
     return out
+

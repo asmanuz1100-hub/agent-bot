@@ -73,7 +73,7 @@ def _cashier_summary(db):
         'pendingCount': int(pending['count'] or 0),
         'pendingUsd': int(pending['usd'] or 0),
         'pendingUzs': int(pending['uzs'] or 0),
-        'cardPendingCount': int(db.execute("SELECT COUNT(*) FROM card_payments WHERE status='pending'").fetchone()[0] or 0),
+        'cardPendingCount': int(db.execute("SELECT COUNT(*) FROM card_payments WHERE status='pending' AND agent_held=0").fetchone()[0] or 0),
         'cashUzsFromAgents': int(db.execute("SELECT COALESCE(SUM(amount),0) FROM handovers WHERE status='accepted'").fetchone()[0] or 0)//100,
         'agentWalletTotal': wallet_total,
         'agentWalletTotalUzs': wallet_total_uzs,
@@ -173,14 +173,15 @@ def dashboard(db, actor):
     card_pending = [dict(x) for x in db.execute("""SELECT p.id,p.agent,p.client,p.currency,p.amount_uzs,p.amount_usd,
         p.rate_uzs_per_usd,p.note,p.ts,p.photo<>'' AS has_photo,u.name AS agent_name,COALESCE(c.shop_name,c.name) AS client_name
         FROM card_payments p LEFT JOIN users u ON u.id=p.agent LEFT JOIN clients c ON c.id=p.client
-        WHERE p.status='pending' ORDER BY p.ts,p.id""").fetchall()]
+        WHERE p.status='pending' AND p.agent_held=0 ORDER BY p.ts,p.id""").fetchall()]
     return {'name': name, 'balance': core.cashier_balance_usd(db), 'rate': core.cashier_rate(db),
             'pending': pending, 'cardPending': card_pending, 'history': history, 'expenses': expenses,
             'agents': agents, 'agentFunds': agent_funds, 'summary': _cashier_summary(db),
             'activity': _cashier_activity(db),'debtors':debtors,
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
                            'assignedCount':sum(1 for x in debtors if x['task'])},
-            'categories': list(core.CASHIER_EXPENSE_CATEGORIES), 'daily': cashier_daily.report(db)}
+            'conversions': [dict(x) for x in db.execute("SELECT * FROM cashier_conversions ORDER BY ts DESC,id DESC LIMIT 100").fetchall()],
+            'categories': list(core.cashier_expense_categories()), 'daily': cashier_daily.report(db)}
 
 
 def period_report(db, actor, payload):
@@ -224,9 +225,26 @@ def period_report(db, actor, payload):
                      'currency': 'UZS' if uzs else 'USD', 'uzs': int(x['amount_uzs'] or 0) if uzs else 0,
                      'usd': 0 if uzs else int(x['amount_usd'] or 0),
                      'title': 'Агентга харажат пули', 'who': x['agent_name'] or '', 'actor': x['actor_name'] or ''})
+    for x in db.execute("""SELECT f.*,u.name AS actor_name FROM cashier_conversions f
+            LEFT JOIN users u ON u.id=f.cashier WHERE f.ts>=? AND f.ts<?""",(start,end)).fetchall():
+        cur=x['from_currency'];other='UZS' if cur=='USD' else 'USD'
+        shown=(f"{int(x['amount_from'])/100:,.2f} USD → {int(x['amount_to']):,} сўм" if cur=='USD' else
+               f"{int(x['amount_from']):,} сўм → {int(x['amount_to'])/100:,.2f} USD")
+        rows.append({'kind':'conversion','id':int(x['id']),'ts':int(x['ts']),
+                     'currency':cur,'uzs':0,'usd':0,'title':'Конвертация','who':shown,
+                     'actor':x['actor_name'] or '', 'payFrom':x['pay_from'],
+                     'fromCurrency':cur,'toCurrency':other,'amountFrom':int(x['amount_from']),
+                     'amountTo':int(x['amount_to']),'rate':int(x['rate_uzs_per_usd'])})
     rows.sort(key=lambda r: (r['ts'], r['id']), reverse=True)
     return {'period': payload.get('period') or 'today', 'label': label, 'start': start, 'end': end,
             'flows': flows, 'rows': rows[:400], 'truncated': len(rows) > 400}
+
+
+def handover_detail(db, actor, hid):
+    require_cashier(db, actor)
+    row = db.execute("SELECT * FROM handovers WHERE id=?", (int(hid),)).fetchone()
+    if not row:raise ValueError('Topshirish topilmadi.')
+    return {'context': cashier_pending.handover_context(db,row), 'handover':dict(row)}
 
 
 def review(db, actor, hid):
@@ -234,14 +252,15 @@ def review(db, actor, hid):
     row = db.execute("SELECT * FROM handovers WHERE id=? AND status='pending'", (int(hid),)).fetchone()
     if not row:
         raise ValueError('Топшириқ топилмади ёки аввал ҳал қилинган.')
-    db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-               (f'cashier_review:{actor}:{row["id"]}', str(int(time.time()))))
+    if row['status']=='pending':
+        db.execute('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                   (f'cashier_review:{actor}:{row["id"]}', str(int(time.time()))))
     return {'context': cashier_pending.handover_context(db, row), 'handover': dict(row)}
 
 
 def mutate(db, actor, action, payload):
     require_cashier(db, actor)
-    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject'):
+    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject', 'convert'):
         raise ValueError('Амал нотўғри.')
     rid = payload.get('requestId', '')
     if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,96}', rid):
@@ -329,6 +348,11 @@ def mutate(db, actor, action, payload):
                   f"Умумий ҳисоб: {cashier_pending.usd(amount)} USD\n"
                   f"Янги харажат баланси: {balance_uzs:,} сўм\n"
                   f"Кассир: {require_cashier(db,actor)}"}
+    elif action == 'convert':
+        currency=payload.get('fromCurrency')
+        cid,amount,target,rate=core.add_cashier_conversion(db,actor,str(payload.get('payFrom') or 'cash'),
+            currency,payload.get('amount'),payload.get('rate'),payload.get('note',''),source)
+        notify['text']=f"💱 КОНВЕРТАЦИЯ #{cid} · {currency} → {'UZS' if currency=='USD' else 'USD'}\nКурс: {rate:,} сўм\nКассир: {require_cashier(db,actor)}"
     elif action == 'expense':
         currency = payload.get('currency')
         args = (payload.get('category'), payload.get('recipient'), payload.get('note', ''), source)
@@ -352,3 +376,4 @@ def mutate(db, actor, action, payload):
         notify['text'] = f'💱 Касса курси: 1 USD = {rate:,} сўм\nКассир: {require_cashier(db,actor)}'
     db.execute('INSERT INTO meta(key,value) VALUES(?,?)', (key, fingerprint))
     return {'ok': True, '_notify': notify}
+

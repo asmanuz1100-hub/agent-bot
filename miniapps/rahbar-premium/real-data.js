@@ -111,10 +111,30 @@ function refreshAgents(d){
  if(AG.length){autoSel=true;try{selA(Math.min(selAgent,AG.length-1))}finally{autoSel=false}}
 }
 
-let clAg='',clReg='';
+let clAg='',clReg='',clDebt='',clStatus='';
 function clRegion(x){return String((x&&x.region)||'').trim()||'Belgilanmagan'}
 function clKeyMatch(c,x,key){if(!key)return true;if(key==='black')return !!x.blacklisted;if(key==='debt')return Number(x.debtUsd||0)>0&&!x.blacklisted;return !x.blacklisted&&c[4]===key}
 function clScopeMatch(x){return (!clAg||String(x.agentId)===clAg)&&(!clReg||clRegion(x)===clReg)}
+function filteredClientEntries(){
+ const q=String(qq||'').toLowerCase().trim();
+ return CL.map(function(c,i){return {row:c,client:REAL_CLIENTS[i]||{},index:i}}).filter(function(e){
+  const c=e.row,x=e.client;
+  if(!clKeyMatch(c,x,cf)||!clScopeMatch(x))return false;
+  if(clDebt==='debt'&&Number(x.debtUsd||0)<=0)return false;
+  if(clDebt==='clear'&&Number(x.debtUsd||0)>0)return false;
+  if(clStatus&&x.status!==clStatus)return false;
+  return !q||(c[0]+' '+(c[1]||'')+' '+(c[2]||'')+' '+(x.phone||'')+' '+(x.region||'')+' '+(x.person||'')).toLowerCase().includes(q);
+ }).sort(function(a,b){return clSort?b.row[3]-a.row[3]:Number(b.client.lastTs||0)-Number(a.client.lastTs||0)});
+}
+function renderAdvancedClientFilters(){
+ const agent=$('clAdvancedAgent');if(!agent)return;
+ agent.innerHTML=$('clAg').innerHTML;agent.value=clAg;
+ $('clDebt').value=clDebt;$('clStatus').value=clStatus;
+ agent.onchange=function(){clAg=this.value;$('clAg').value=clAg;renderClientChips();rc()};
+ $('clDebt').onchange=function(){clDebt=this.value;rc()};
+ $('clStatus').onchange=function(){clStatus=this.value;rc()};
+ $('clReset').onclick=function(){clAg='';clReg='';clDebt='';clStatus='';cf='';qq='';clSort=0;$('qi').value='';sortl.textContent="So'nggi faollik";renderClientSelects();renderClientChips();rc()};
+}
 function renderClientChips(){
  const scoped=[];CL.forEach(function(c,i){const x=REAL_CLIENTS[i]||{};if(clScopeMatch(x))scoped.push([c,x])});
  const n=function(key){return scoped.filter(function(p){return clKeyMatch(p[0],p[1],key)}).length};
@@ -128,18 +148,18 @@ function renderClientChips(){
 function renderClientSelects(){
  const bd=clch&&clch.parentNode;if(!bd)return;let box=$('clsel');
  if(!box){box=document.createElement('div');box.id='clsel';box.className='clsel';bd.insertBefore(box,clch);
-  box.addEventListener('change',function(e){if(e.target.id==='clAg')clAg=e.target.value;if(e.target.id==='clReg')clReg=e.target.value;renderClientChips();rc()})}
+  box.addEventListener('change',function(e){if(e.target.id==='clAg')clAg=e.target.value;if(e.target.id==='clReg')clReg=e.target.value;renderAdvancedClientFilters();renderClientChips();rc()})}
  const ags={},regs={};REAL_CLIENTS.forEach(function(x){ags[String(x.agentId)]=x.agent||String(x.agentId);regs[clRegion(x)]=(regs[clRegion(x)]||0)+1});
  if(clAg&&!ags[clAg])clAg='';if(clReg&&!regs[clReg])clReg='';
  const agOpts=Object.keys(ags).sort(function(a,b){return ags[a].localeCompare(ags[b])}).map(function(k){return '<option value="'+esc(k)+'"'+(k===clAg?' selected':'')+'>'+esc(ags[k])+'</option>'}).join('');
  const regOpts=Object.keys(regs).sort(function(a,b){return a==='Belgilanmagan'?1:b==='Belgilanmagan'?-1:a.localeCompare(b)}).map(function(k){return '<option value="'+esc(k)+'"'+(k===clReg?' selected':'')+'>'+esc(k)+' ('+regs[k]+')</option>'}).join('');
  box.innerHTML='<select id="clAg" aria-label="Agent bo‘yicha"><option value="">👤 Barcha agentlar</option>'+agOpts+'</select><select id="clReg" aria-label="Hudud bo‘yicha"><option value="">📍 Barcha hududlar</option>'+regOpts+'</select>';
+ renderAdvancedClientFilters();
 }
 rc=function(){
- const q=String(qq||'').toLowerCase().trim();let r=[];
- CL.forEach(function(c,i){const x=REAL_CLIENTS[i]||{};if(!clKeyMatch(c,x,cf)||!clScopeMatch(x))return;
-  if(q&&!(c[0]+' '+(c[1]||'')+' '+(c[2]||'')+' '+(x.phone||'')+' '+(x.region||'')+' '+(x.person||'')).toLowerCase().includes(q))return;r.push(c)});
- if(clSort)r=r.slice().sort(function(a,b){return b[3]-a[3]});
+ const r=filteredClientEntries().map(function(e){return e.row});
+ const count=$('clResultCount');if(count)setText(count,r.length+' mijoz');
+ renderClientMap();
  cllist.innerHTML=r.map(clRow).join('')||'<div class="c" style="text-align:center;color:var(--mu)">Hech narsa topilmadi</div>';
  const sum=r.reduce(function(s,c){return s+c[3]},0),top=r.length?r.slice().sort(function(a,b){return b[3]-a[3]})[0]:null;
  clsum.innerHTML='<div class="kp"><div class="ic" style="--a:#1f6bff">👛</div><div style="flex:1"><small>Tanlangan bo\'yicha jami qarz</small><b>'+sum.toFixed(2)+' $ <em style="font-size:12px;color:var(--mu);font-weight:600">· '+r.length+' mijoz</em></b></div></div>'+(top&&top[3]>0?'<div style="margin-top:2px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:var(--mu)">Eng katta qarzdor: <b style="color:var(--tx)">'+esc(top[0])+'</b> — '+top[3].toFixed(2)+' $</div>':'');
@@ -152,7 +172,7 @@ function refreshClients(d){
   CL_LL.push(validCoord(c.lat,c.lon)?[Number(c.lat),Number(c.lon)]:[NaN,NaN]);
  });
  renderClientSelects();renderClientChips();rc();
- const countSpan=document.querySelectorAll('section')[2].querySelector('.c h3 span:last-child');if(countSpan)setText(countSpan,(d.clientCount||CL.length)+' mijoz');
+
 }
 
 selA=function(i){
@@ -239,15 +259,19 @@ async function renderClientMap(){
  const box=$('clientmap'),count=$('clientmap-count');if(!box)return;
  try{
   const L=await loadLeaflet();if(currentPage()!==2)return;
-  const pts=REAL_CLIENTS.filter(function(c){return validCoord(c.lat,c.lon)});
-  if(count)setText(count,pts.length+' / '+REAL_CLIENTS.length+' ta GPS nuqta');
-  if(!pts.length){box.innerHTML='<div id="clientmap-ld">Mijozlarda haqiqiy GPS koordinata yo‘q.</div>';return}
+  const selected=filteredClientEntries(),pts=selected.filter(function(e){const c=e.client;return c.lat!=null&&c.lon!=null&&validCoord(c.lat,c.lon)});
+  if(count)setText(count,pts.length+' / '+selected.length+' ta GPS nuqta');
+  if(!pts.length){
+   if(clientLayer)clientLayer.clearLayers();
+   if(clientMapObj){clientMapObj.remove();clientMapObj=null;clientLayer=null}
+   box.innerHTML='<div id="clientmap-ld">'+(selected.length?'Tanlangan mijozlarda GPS koordinata yo‘q.':'Filtr bo‘yicha mijoz topilmadi.')+'</div>';return;
+  }
   if(!clientMapObj){
    box.innerHTML='';clientMapObj=L.map('clientmap',{zoomControl:true,attributionControl:true,scrollWheelZoom:false,preferCanvas:true}).setView([40.55,70.94],9);
    L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:17,updateWhenIdle:true,keepBuffer:2}).addTo(clientMapObj);clientLayer=L.layerGroup().addTo(clientMapObj);
   }
   if(!clientLayer)clientLayer=L.layerGroup().addTo(clientMapObj);clientLayer.clearLayers();const bounds=[];
-  REAL_CLIENTS.forEach(function(c,i){if(!validCoord(c.lat,c.lon))return;const color=c.blacklisted?'#111':c.age==='fresh'?'#16b364':c.age==='yellow'?'#f59e0b':c.age==='red'?'#f0384f':c.age==='scheduled'?'#1f6bff':'#94a3b8';const glyph=c.blacklisted?'✕':c.age==='red'?'!':c.age==='scheduled'?'•':'';const icon=L.divIcon({className:'',html:'<div class="ymap-dot" style="width:22px;height:22px;background:'+color+';display:grid;place-items:center;color:white;font-size:10px;font-weight:800">'+glyph+'</div>',iconSize:[22,22],iconAnchor:[11,11]});L.marker([Number(c.lat),Number(c.lon)],{icon:icon,title:c.name||'Mijoz'}).addTo(clientLayer).bindPopup('<div class="ymap-bln"><b>'+esc(c.name||'Mijoz')+'</b>'+(c.blacklisted?'<small style="color:#f0384f;font-weight:800">⛔ Qora ro‘yxat'+(c.blacklistReason?': '+esc(c.blacklistReason):'')+'</small>':'')+'<small>'+esc(c.address||'Manzil yo‘q')+'</small><small>Agent: '+esc(c.agent||'—')+' · '+(c.days==null?'Faollik noma’lum':c.days+' kun')+'</small><small>Qarz: '+usd(c.debtUsd)+' USD</small><button onclick="openC('+i+')">Kartochkani ochish</button></div>');bounds.push([Number(c.lat),Number(c.lon)])});
+  pts.forEach(function(e){const c=e.client,i=e.index;const color=c.blacklisted?'#111':c.age==='fresh'?'#16b364':c.age==='yellow'?'#f59e0b':c.age==='red'?'#f0384f':c.age==='scheduled'?'#1f6bff':'#94a3b8';const glyph=c.blacklisted?'✕':c.age==='red'?'!':c.age==='scheduled'?'•':'';const icon=L.divIcon({className:'',html:'<div class="ymap-dot" style="width:22px;height:22px;background:'+color+';display:grid;place-items:center;color:white;font-size:10px;font-weight:800">'+glyph+'</div>',iconSize:[22,22],iconAnchor:[11,11]});L.marker([Number(c.lat),Number(c.lon)],{icon:icon,title:c.name||'Mijoz'}).addTo(clientLayer).bindPopup('<div class="ymap-bln"><b>'+esc(c.name||'Mijoz')+'</b>'+(c.blacklisted?'<small style="color:#f0384f;font-weight:800">⛔ Qora ro‘yxat'+(c.blacklistReason?': '+esc(c.blacklistReason):'')+'</small>':'')+'<small>'+esc(c.address||'Manzil yo‘q')+'</small><small>Agent: '+esc(c.agent||'—')+' · '+(c.days==null?'Faollik noma’lum':c.days+' kun')+'</small><small>Qarz: '+usd(c.debtUsd)+' USD</small><button onclick="openC('+i+')">Kartochkani ochish</button></div>');bounds.push([Number(c.lat),Number(c.lon)])});
   const b=L.latLngBounds(bounds);if(b.isValid())clientMapObj.fitBounds(b.pad(.15),{maxZoom:13,animate:false});clientMapObj.invalidateSize(false);setTimeout(function(){if(clientMapObj&&currentPage()===2)clientMapObj.invalidateSize(false)},250);
  }catch(e){box.innerHTML='<div id="clientmap-ld">Xarita yuklanmadi: '+esc(e.message||'Internetni tekshiring')+'</div>'}
 }
@@ -314,6 +338,8 @@ function renderReport(period){
  const dh=bars.parentNode&&bars.parentNode.querySelector('h3');if(dh){const unit=typeof period==='object'?(rep.seriesUnit||'kunlik'):'kunlik';dh.textContent=typeof period==='object'?('Dinamika · '+unit+' · '+(rep.label||'')):period==='today'?'Bugungi realizatsiya':'7 kunlik dinamika'}
  const ranks=(rep.agents||[]).slice().sort(function(a,b){return Number(b.deliveredUsd||0)-Number(a.deliveredUsd||0)}).slice(0,8),rmax=Math.max.apply(null,[1].concat(ranks.map(function(x){return Number(x.deliveredUsd||0)})));rblist.innerHTML=ranks.map(function(r,i){const score=Math.round(Number(r.deliveredUsd||0)/rmax*100);return '<div class="row" style="margin:0 0 8px"><div class="rk g'+Math.min(i+1,3)+'">'+(i+1)+'</div><div class="t"><b>'+esc(r.agent||'Agent')+'</b><small>'+Number(r.visits||0)+' tashrif · '+Number(r.newClients||0)+' yangi mijoz</small><div class="bar"><u style="width:'+score+'%"></u></div></div><div class="am"><b>'+usd(r.deliveredUsd)+' $</b><span class="ok" style="font-size:11px">'+usd(r.paymentsUsd)+' $ olindi</span></div></div>'}).join('')||'<div style="color:var(--mu);padding:12px">Agent statistikasi yo‘q.</div>';
 }
+
+goCl=function(i){cf=['','0–2 kun','3–4 kun','5+ kun','Rejada'][i]||'';clAg='';clReg='';clDebt='';clStatus='';qq='';$('qi').value='';renderClientSelects();renderClientChips();go(2);rc()};
 
 go=function(i){baseGo(i);if(!REAL_MODE)return;if(i===1)setTimeout(renderAgentMap,90);if(i===2)setTimeout(renderClientMap,90)};
 

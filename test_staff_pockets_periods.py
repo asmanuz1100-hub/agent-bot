@@ -67,6 +67,7 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
         agent_api.mutate(self.db, 2, 'handover', {'currency': 'USD', 'amount': '50'}, 'req_h2_000000', self.now)
         for hid, in self.db.execute("SELECT id FROM handovers").fetchall():
             core.accept(self.db, 3, hid, True)
+        agent_api.mutate(self.db,2,'card_handover',{'paymentId':card['cardPaymentId']},'card_send_00001',self.now)
         core.decide_card_payment(self.db, 3, card['cardPaymentId'], True)
         core.add_cashier_expense_uzs(self.db, 3, 200000, core.CASHIER_EXPENSE_CATEGORIES[0], 'Yo‘l', '', 5551)
         w = core.cashier_flows(self.db)
@@ -109,6 +110,7 @@ class StaffPocketsPeriodsTests(unittest.TestCase):
 
     def test_card_expense_leaves_cash_and_reduces_card(self):
         card = self.pay('ce_card', currency='UZS', amount='600000', usd='50', method='card')
+        agent_api.mutate(self.db,2,'card_handover',{'paymentId':card['cardPaymentId']},'card_send_00001',self.now)
         core.decide_card_payment(self.db, 3, card['cardPaymentId'], True)
         self.pay('ce_cash', currency='UZS', amount='1200000', usd='100', method='cash')
         agent_api.mutate(self.db, 2, 'handover', {'currency': 'UZS', 'amount': '1200000'}, 'req_ceh_000000', self.now)
@@ -205,3 +207,4 @@ class TrackKmTests(unittest.TestCase):
         self.assertLess(core.track_km(pts), 0.1)
         walk = [{'lat': 40.5 + i * 0.0009, 'lon': 70.9, 'ts': i * 60, 'accuracy': 10} for i in range(11)]   # ~1 km
         self.assertAlmostEqual(core.track_km(walk), 1.0, delta=0.05)
+

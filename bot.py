@@ -1109,7 +1109,9 @@ def prompt(db,u,s):
     if s['action']=='cashier_rate':msg+=f"\nЖорий курс: {cashier_rate(db):,} сўм / USD" if cashier_rate(db) else '\nҲали курс белгиланмаган.'
     if s['action']=='cashier_expense_uzs' and key=='amount':msg+=f"\n💱 1 USD = {cashier_rate(db):,} сўм. Сўмдаги сумма USDга автомат ҳисобланади."
     if key=='pack':keys=[[product_name(p)] for p in product_ids()]
-    if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs','agent_expense'):keys=[[c] for c in CASHIER_EXPENSE_CATEGORIES]
+    if key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs','agent_expense'):
+        categories=cashier_expense_categories() if s['action']!='agent_expense' else CASHIER_EXPENSE_CATEGORIES
+        keys=[[c] for c in categories]
     if key=='pack' and s['action']=='client':keys.append(['🗺 Товарсиз харитага сақлаш'])
     if key=='unit':
         block=block_units(s["values"]["pack"])
@@ -2055,7 +2057,7 @@ def handle(db,update):
     elif key=='followup':
         v=cs.normalize(s['values']['status'],text)
     elif key=='category' and s['action'] in ('cashier_expense','cashier_expense_uzs'):
-        if text not in CASHIER_EXPENSE_CATEGORIES:raise ValueError('Харажат турини тугмадан танланг.')
+        if text not in cashier_expense_categories():raise ValueError('Харажат турини тугмадан танланг.')
         v=text
     elif key=='rate' and s['action']=='cashier_rate':
         v=parse_whole_som(text,'1 USD курси')
@@ -2549,6 +2551,7 @@ def serve_webhook(db,base_url):
                         answer_cashier(200,profile_action(local,actor,action,payload));return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
+                    elif action=='handover_detail':data=cashier_api.handover_detail(local,actor,payload.get('handoverId'))
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
@@ -2673,7 +2676,10 @@ def serve_webhook(db,base_url):
                         notify=data.pop('_notify',None)
                         local.commit()
                         if notify and not data.get('duplicate'):
-                            if notify.get('kind')=='payment':
+                            if notify.get('kind')=='payments':
+                                for item in notify['items']:
+                                    notify_cashiers_payment(local,effective_agent,item['client'],item['amount'],item.get('currency','USD'),item.get('amountUzs'),item.get('rate'))
+                            elif notify.get('kind')=='payment':
                                 notify_cashiers_payment(local,effective_agent,notify['client'],notify['amount'],
                                                         notify.get('currency','USD'),notify.get('amountUzs'),
                                                         notify.get('rate'))
@@ -3000,3 +3006,4 @@ def run():
 if __name__=='__main__':run()
 
 # Prospective-customer map flow: implementation forthcoming.
+

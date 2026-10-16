@@ -427,11 +427,15 @@ def dashboard(db, now=None):
         WHERE client IS NOT NULL AND kind IN ('visit','delivery','sold','return')
         GROUP BY client""").fetchall()
     contacts_by_client = {int(e["client"]):int(e["ts"]) for e in contacts if e["ts"] is not None}
-    balances = db.execute("""SELECT client,
-        COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
-                          WHEN kind IN ('payment','return') THEN -amount_usd
+    # Keep archived clients' events for the audit trail, but do not include
+    # them in active-customer debt totals. Agent and Cashier already limit
+    # their displayed debt to clients that still exist in the clients table.
+    balances = db.execute("""SELECT e.client,
+        COALESCE(SUM(CASE WHEN e.kind='delivery' THEN e.amount_usd
+                          WHEN e.kind IN ('payment','return') THEN -e.amount_usd
                           ELSE 0 END),0) AS debt
-        FROM events WHERE client IS NOT NULL GROUP BY client""").fetchall()
+        FROM events e JOIN clients c ON c.id=e.client
+        GROUP BY e.client""").fetchall()
     debt_by_client = {int(e["client"]):int(e["debt"] or 0) for e in balances}
     clients = []
     red_count = 0
