@@ -1,15 +1,42 @@
-import unittest, time
+import unittest, time, base64, io, json
 from unittest.mock import patch
 import core, bot
 
 class Tests(unittest.TestCase):
  def setUp(self):
+  self._mini_only=patch.object(bot,'BOT_MINIAPP_ONLY',set());self._mini_only.start();self.addCleanup(self._mini_only.stop)
   self.db=core.connect(':memory:')
   self.db.executemany('INSERT INTO users VALUES(?,?,?)',[(1,'admin','A'),(2,'agent','B'),(3,'cashier','C'),(4,'agent','D')])
   self.db.execute("INSERT INTO clients(id,agent,name,phone,address,lat,lon,photo,shop_name) VALUES(1,2,'Мижоз','+998900000001','Тест манзил',40,71,NULL,'Тест дўкон')")
  def tearDown(self):self.db.close()
  def rec(self,k,q=0,value=0,actor=2,source=None):
   core.record(self.db,actor,2,None if k=='load' else 1,k,1,q,value,source=source)
+ def test_manager_photo_helper_accepts_numeric_agent_client_count(self):
+  data={'id':2,'clients':68,'name':'Agent'}
+  self.assertIs(bot.attach_client_photo_urls(data),data)
+  self.assertEqual(data['clients'],68)
+
+ def test_customer_photo_content_types(self):
+  self.assertEqual(bot.photo_content_type(b'\xff\xd8\xff\x00'),'image/jpeg')
+  self.assertEqual(bot.photo_content_type(b'\x89PNG\r\n\x1a\n\x00'),'image/png')
+  self.assertEqual(bot.photo_content_type(b'RIFF\x08\x00\x00\x00WEBP'),'image/webp')
+  with self.assertRaises(ValueError):
+   bot.photo_content_type(b'not_an_image')
+
+ def test_agent_camera_image_decoder_and_upload_file_id(self):
+  raw=bytes([255,216,255])+b'x'*300
+  data='data:image/jpeg;base64,'+base64.b64encode(raw).decode()
+  self.assertEqual(bot.decode_agent_camera_image(data),raw)
+  with self.assertRaises(ValueError):
+   bot.decode_agent_camera_image('data:text/plain;base64,SGVsbG8=')
+  response={'ok':True,'result':{'message_id':77,'photo':[{'file_id':'small'},{'file_id':'camera-file-id'}]}}
+  fake=io.BytesIO(json.dumps(response).encode())
+  with patch.object(bot,'TOKEN','local-token'),patch.object(bot.urllib.request,'urlopen',return_value=fake) as opening,patch.object(bot,'api',return_value=True) as api:
+   self.assertEqual(bot.upload_agent_camera_photo(2,raw),'camera-file-id')
+   req=opening.call_args.args[0]
+   self.assertIn('/botlocal-token/sendPhoto',req.full_url)
+   api.assert_called_once_with('deleteMessage',chat_id=2,message_id=77)
+
  def test_consignment_not_debt(self):
   self.rec('load',12,actor=1);self.rec('delivery',4)
   self.assertEqual(core.agent_stock(self.db,2,1),8)
@@ -20,10 +47,15 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.client_stock(self.db,2,1,1),2)
   self.assertEqual(core.cash(self.db,2),700000)
   self.assertEqual(core.amount(self.db,2,['sold'],1,field='amount')-core.amount(self.db,2,['payment'],1,field='amount'),300000)
- def test_insufficient_stock(self):
-  with self.assertRaises(ValueError):self.rec('delivery',1)
-  self.rec('load',1,actor=1);self.rec('delivery',1)
-  with self.assertRaises(ValueError):self.rec('sold',2,100)
+ def test_agent_delivery_can_make_stock_negative_but_customer_stock_still_limits_sale(self):
+  self.rec('delivery',2)
+  self.assertEqual(core.agent_stock(self.db,2,1),-2)
+  self.assertEqual(core.client_stock(self.db,2,1,1),2)
+  self.rec('load',1,actor=1)
+  self.rec('delivery',3)
+  self.assertEqual(core.agent_stock(self.db,2,1),-4)
+  self.assertEqual(core.client_stock(self.db,2,1,1),5)
+  with self.assertRaises(ValueError):self.rec('sold',6,100)
  def test_stock_permissions(self):
   with self.assertRaises(ValueError):self.rec('load',1)
   with self.assertRaises(ValueError):self.rec('delivery',1,actor=4)
@@ -269,8 +301,10 @@ class Tests(unittest.TestCase):
   self.assertIsNot(HTTPServer,ThreadingHTTPServer)
   self.assertIn('ThreadingHTTPServer if postgres else HTTPServer',
                 __import__('inspect').getsource(bot.serve_webhook))
-  self.assertIn('return connect(database_url,initialize=False) if postgres else db',
-                __import__('inspect').getsource(bot.serve_webhook))
+  # Each request thread gets its own PostgreSQL connection (from the bounded pool), never the bootstrap one.
+  src=__import__('inspect').getsource(bot.serve_webhook)
+  self.assertIn('pool=PgPool(database_url) if postgres else None',src)
+  self.assertIn('return pool.get() if postgres else db',src)
 
  def test_admin_can_open_all_customer_map_and_agent_link_routes_match(self):
   import ast,inspect,re
@@ -327,7 +361,7 @@ class Tests(unittest.TestCase):
    bot.handle(self.db,msg(99706,2,'/start '+payload))
    self.assertEqual(bot.state(self.db,2)['values']['client'],1)
    self.assertEqual(bot.state(self.db,2)['action'],'payment')
-   for i,t in enumerate(['3.00','✅ Тасдиқлаш'],99707):bot.handle(self.db,msg(i,2,t))
+   for i,t in enumerate(['💵 Доллар','3.00','✅ Тасдиқлаш'],99740):bot.handle(self.db,msg(i,2,t))
    self.assertEqual(core.client_debt_usd(self.db,1),core.money('5.00'))
    self.assertEqual(core.cash_usd(self.db,2),core.money('3.00'))
    bot.handle(self.db,msg(99709,2,'/start '+bot.agent_action_payload('r',2,1)))
@@ -352,6 +386,7 @@ class Tests(unittest.TestCase):
            'from':{'id':2},'chat':{'id':2,'type':'private'},'text':txt}}
   with patch.object(bot,'send'):
    bot.handle(self.db,msg(99721,'/start '+bot.agent_action_payload('p',2,1)))
+   bot.handle(self.db,msg(99730,'💵 Доллар'))
    bot.handle(self.db,msg(99722,'1.00'))
    self.db.execute('UPDATE shifts SET end=? WHERE agent=2 AND end IS NULL',(now,))
    with self.assertRaises(ValueError):bot.handle(self.db,msg(99723,'✅ Тасдиқлаш'))
@@ -516,7 +551,7 @@ class Tests(unittest.TestCase):
    self.assertNotIn(sig,bot.redact_access_log_arg('GET '+url+' HTTP/1.1'))
 
 
- def test_all_agents_see_every_customer_in_clients_section_only(self):
+ def test_all_agents_see_every_customer_and_can_edit_profile(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name,address) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон','Фарғона')")
   now=int(time.time())
   def msg(i,t,uid=2):
@@ -528,11 +563,13 @@ class Tests(unittest.TestCase):
    self.assertIn('42 ·',choices)
    bot.handle(self.db,msg(89002,'42',uid=2))
    self.assertIn('МИЖОЗ #42',send.call_args.args[1])
-   self.assertIn('Бириктирилган агент: D',send.call_args.args[1])
-   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
-                    [v for row in send.call_args.args[2] for v in row])
-   with self.assertRaises(ValueError):
-    bot.show_client_edit_fields(self.db,2,42)
+   self.assertIn('Мижозни қўшган агент: D',send.call_args.args[1])
+   self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
+                 [v for row in send.call_args.args[2] for v in row])
+   bot.show_client_edit_fields(self.db,2,42)
+   edit_choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
+   self.assertIn('🏠 Манзил',edit_choices)
+   self.assertNotIn(bot.DELIVERY_EDIT_LABEL,edit_choices)
    self.assertEqual(bot.role(self.db,2),'agent')
    bot.handle(self.db,msg(89003,'⬅️ Мижозлар',uid=2))
    bot.handle(self.db,msg(89004,'Бошқа',uid=2))
@@ -547,8 +584,8 @@ class Tests(unittest.TestCase):
    self.assertIn('42 ·',options)
    bot.handle(self.db,msg(89007,'1',uid=4))
    self.assertIn('МИЖОЗ #1',send.call_args.args[1])
-   self.assertNotIn('✏️ Мижоз маълумотини ўзгартириш',
-                    [v for row in send.call_args.args[2] for v in row])
+   self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
+                 [v for row in send.call_args.args[2] for v in row])
    bot.handle(self.db,msg(89008,'👥 Мижозлар',uid=1))
    bot.handle(self.db,msg(89009,'42',uid=1))
    self.assertIn('✏️ Мижоз маълумотини ўзгартириш',
@@ -575,18 +612,20 @@ class Tests(unittest.TestCase):
    self.assertIn('10 ·',third);self.assertIn('1 ·',third)
    self.assertNotIn('Кейинги 20 ➡️',third)
 
- def test_cross_agent_financial_flows_remain_restricted(self):
+ def test_cross_agent_customer_flows_are_shared(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone,shop_name) VALUES(42,4,'Бошқа мижоз','+998900000042','Бошқа дўкон')")
   with patch.object(bot,'send') as send:
    bot.prompt(self.db,2,{'action':'delivery','step':0,'values':{}})
    choices=' '.join(str(v) for row in send.call_args.args[2] for v in row)
    self.assertIn('1 ·',choices)
-   self.assertNotIn('42 ·',choices)
+   self.assertIn('42 ·',choices)
    now=int(time.time())
    msg={'update_id':89010,'message':{'message_id':89010,'date':now,'from':{'id':2},'chat':{'id':2,'type':'private'},'text':'42'}}
-   with self.assertRaises(ValueError):
-    bot.handle(self.db,msg)
-   self.assertIsNone(self.db.execute('SELECT 1 FROM events WHERE client=42').fetchone())
+   bot.handle(self.db,msg)
+   state=bot.state(self.db,2)
+   self.assertEqual(state['action'],'delivery')
+   self.assertEqual(state['values']['client'],42)
+   self.assertEqual(state['step'],1)
   core.set_agent_feature(self.db,1,2,'clients',False)
   with self.assertRaises(ValueError):bot.report_clients(self.db,2)
   with self.assertRaises(ValueError):bot.show_client_card(self.db,2,42)
@@ -633,14 +672,15 @@ class Tests(unittest.TestCase):
   audited=self.db.execute('SELECT field FROM client_edits WHERE client=1 ORDER BY id').fetchall()
   self.assertEqual([x[0] for x in audited],['shop_name','photo','lat','lon'])
 
- def test_client_edit_guards_agent_scope_and_duplicate_phone(self):
+ def test_client_edit_is_shared_but_protected_fields_and_duplicate_phone_are_blocked(self):
   self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(20,4,'Бошқа мижоз','+998901234567')")
-  with self.assertRaises(ValueError):core.edit_client(self.db,2,20,{'name':'Чет мижоз'})
+  core.edit_client(self.db,2,20,{'name':'Чет мижоз'})
+  self.assertEqual(self.db.execute('SELECT name FROM clients WHERE id=20').fetchone()[0],'Чет мижоз')
   with self.assertRaises(ValueError):core.edit_client(self.db,2,1,{'agent':4})
   with self.assertRaises(ValueError):
    core.edit_client(self.db,2,1,{'phone':'+998901234567'})
   self.assertEqual(self.db.execute('SELECT phone FROM clients WHERE id=1').fetchone()[0],'+998900000001')
-  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_edits').fetchone()[0],0)
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM client_edits').fetchone()[0],1)
 
  def test_agent_add_then_deactivate_preserves_all_existing_records(self):
   now=int(time.time())
@@ -698,6 +738,28 @@ class Tests(unittest.TestCase):
   core.set_product_price(self.db,1,1,core.money('12000'))
   self.assertEqual(core.product_price(self.db,1),core.money('12000'))
   with self.assertRaises(ValueError):core.set_product_price(self.db,2,1,core.money('13000'))
+
+ def test_agent_miniapp_admin_mode_is_temporarily_writable(self):
+  import inspect
+  source=inspect.getsource(bot.serve_webhook)
+  self.assertIn("effective_agent=subject if admin_mode else actor",source)
+  self.assertIn("admin_override=admin_mode",source)
+  self.assertIn("data['adminMode']=True;data['readOnly']=False",source)
+  self.assertNotIn("Admin nazorat rejimi faqat ko‘rish uchun.",source)
+  self.assertIn("upload_agent_camera_photo(actor,image)",source)
+
+ def test_admin_agent_stock_load_is_temporarily_disabled(self):
+  def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
+  self.assertFalse(bot.allowed(self.db,1,'load'))
+  self.assertNotIn('🚚 Агентга товар',[x for row in bot.admin_agent_menu(1) for x in row])
+  before=self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0]
+  with patch.object(bot,'send'):
+   with self.assertRaisesRegex(ValueError,'вақтинча ўчирилган'):
+    bot.handle(self.db,msg(299,'🚚 Агентга товар'))
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0],before)
+  with self.assertRaisesRegex(ValueError,'вақтинча ўчирилган'):
+   bot.finish(self.db,1,{'action':'load','values':{'agent':2,'pack':1,'unit':'Дона','qty':5}},29999)
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='load'").fetchone()[0],before)
 
  def test_admin_agent_management_and_price_flow(self):
   def msg(i,t):return {'update_id':i,'message':{'message_id':i,'date':int(time.time()),'from':{'id':1},'chat':{'id':1,'type':'private'},'text':t}}
@@ -778,7 +840,8 @@ class Tests(unittest.TestCase):
     self.assertTrue(path.startswith('/map/client/') or path.startswith('/map/client-photo/'))
    source=inspect.getsource(bot.serve_webhook)
    self.assertIn('reports.client_card_html(local,actor,cid,photo_url=photo_url)',source)
-   self.assertIn('photo_data=customer_photo_bytes',source)
+   self.assertIn('photo_data=photo_response(',source)
+   self.assertIn('except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):',source)
 
  def test_customer_photo_proxy_validates_telegram_file(self):
   import io
@@ -789,8 +852,23 @@ class Tests(unittest.TestCase):
    self.assertIn('/file/botlocal-test-token/photos/file_12.jpg',urlopen.call_args.args[0])
   with patch.object(bot,'api',return_value={'file_path':'../secret.txt','file_size':3}):
    with self.assertRaises(ValueError):bot.customer_photo_bytes('bad-file')
-  with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':8_000_001}):
+  with patch.object(bot,'api',return_value={'file_path':'photos/file_1.jpg','file_size':18_000_001}):
    with self.assertRaises(ValueError):bot.customer_photo_bytes('large-file')
+
+ def test_telegram_photo_without_standard_extension(self):
+  import io
+  jpg=bytes([255,216,255])+b'camera-photo'
+  for index,filename in enumerate(('photos/file_53','photos/file_54.bin','documents/customer_55.heic')):
+   with self.subTest(filename=filename):
+    with patch.object(bot,'TOKEN','local-test-token'),patch.object(bot,'api',return_value={'file_path':filename,'file_size':len(jpg)}),patch.object(bot.urllib.request,'urlopen',return_value=io.BytesIO(jpg)) as opening:
+     self.assertEqual(bot.customer_photo_bytes('unusual-name-'+str(index)),jpg)
+     self.assertIn('/'+filename,opening.call_args.args[0])
+  for index,filename in enumerate(('photos/../bad.jpg','documents/a//b.png','https://example.com/other','photos/img.jpg?hack=1')):
+   with self.subTest(rejected=filename):
+    with patch.object(bot,'api',return_value={'file_path':filename,'file_size':len(jpg)}),patch.object(bot.urllib.request,'urlopen') as opening:
+     with self.assertRaises(ValueError):
+      bot.customer_photo_bytes('invalid-path-'+str(index))
+     opening.assert_not_called()
 
  def test_map_links_expire(self):
   with patch.dict(bot.os.environ,{'RENDER_EXTERNAL_URL':'https://example.test'},clear=False),patch.object(bot.time,'time',return_value=2_000_000_000):
@@ -845,7 +923,7 @@ class Tests(unittest.TestCase):
    for i,t in enumerate(seq,710):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.client_stock(self.db,2,1,1),3)
    self.assertEqual(core.client_debt_usd(self.db,1),core.money('10.00'))
-   seq=['💰 Пул олиш','1','5000','✅ Тасдиқлаш']
+   seq=['💰 Пул олиш','1','💵 Доллар','5000','✅ Тасдиқлаш']
    for i,t in enumerate(seq,720):bot.handle(self.db,amsg(i,t))
    self.assertEqual(core.cash_usd(self.db,2),core.money('5000'))
   day=bot.datetime.fromtimestamp(int(time.time()),bot.TZ).strftime('%Y-%m-%d')

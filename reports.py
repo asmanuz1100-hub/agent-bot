@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from html import escape
 import io,csv,json,time
-from core import route_stats,product_name,distance
+from core import route_stats,product_name,product_ids,distance,payment_label
 import customer_status as cs
+import client_ledger as ledger
 TZ=ZoneInfo('Asia/Tashkent')
 NAMES={'delivery':'Товар топширилди (USD қарз)','sold':'Сотилган миқдор қайд этилди','payment':'USD тўлов олинди','return':'Товар қайтарилди (USD қарз камайди)','order':'Буюртма','visit':'Ташриф / таклиф'}
 
@@ -30,8 +31,8 @@ def _map_html(title, routes, shops, summary,points_only=False,summary_metrics=No
             ('Дўконлар',metrics.get('total_clients',len(shops))),
             ('Жами қарз',f"{m(metrics.get('debt_usd',0))} USD"),
             ('Товар қолдиғи',f"{metrics.get('stock',0)} дона"),
-            ('🟠 3–7 кун',metrics.get('visit_yellow',0)),
-            ('🔴 8+ кун',metrics.get('visit_red',0)),
+            ('🟡 3–4 кун',metrics.get('visit_yellow',0)),
+            ('🔴 5+ кун',metrics.get('visit_red',0)),
             ('Локациясиз',metrics.get('missing_location',0)),
         ]
     elif points_only:
@@ -113,7 +114,7 @@ function esc(s){{return String(s??'').replace(/[&<>"']/g,m=>({{'&':'&amp;','<':'
 const legend=document.getElementById('legend');
 const workPanel=document.getElementById('agent-work');
 if(D.agent_clients){{
-  [['#16a34a','0–2 кун · яқинда ташриф'],['#b45309','3–7 кун · ташриф керак'],['#dc2626','8+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
+  [['#16a34a','0–2 кун · яқинда ташриф'],['#b45309','3–4 кун · ташриф керак'],['#dc2626','5+ кун · устувор ташриф'],['#0284c7','Кейинги ташриф санаси белгиланган']].forEach(x=>{{
     const row=document.createElement('div');row.className='legend-row';
     row.innerHTML='<span class="dot" style="background:'+x[0]+'"></span><span>'+x[1]+'</span>';legend.appendChild(row);
   }});
@@ -138,17 +139,18 @@ D.routes.forEach((r,i)=>{{const color=colors[i%colors.length];
   const row=document.createElement('div');row.className='legend-row';row.innerHTML='<span class="dot" style="background:'+color+'"></span><span>'+esc(r.agent)+' · '+esc(r.km||0)+' км · '+esc(segments.length)+' смена</span>';legend.appendChild(row);
 }});
 D.shops.forEach(s=>{{if(s.lat==null||s.lon==null)return;const p=[s.lat,s.lon];if(D.points_only||D.agent_clients||(!bounds.length&&s.active))bounds.push(p);
-  const visitIcon=s.visit_level==='yellow'?'🟠':s.visit_level==='red'?'🔴':s.visit_level==='fresh'?'🟢':s.visit_level==='scheduled'?'🔵':(s.icon||'🟠');
+  const visitIcon=s.visit_level==='yellow'?'🟡':s.visit_level==='red'?'🔴':s.visit_level==='fresh'?'🟢':s.visit_level==='scheduled'?'🔵':(s.icon||'🟠');
   const marker=D.agent_clients?L.marker(p,{{icon:L.divIcon({{html:'<span class="status-marker" style="border-color:'+esc(s.visit_color||'#94a3b8')+';background:'+esc(s.visit_background||'white')+'">'+visitIcon+'</span>',className:'',iconSize:[32,32],iconAnchor:[16,16]}})}}):
     L.circleMarker(p,{{radius:s.active?9:6,weight:s.active?3:1,color:s.active?'#0f766e':'#64748b',fillColor:s.active?'#14b8a6':'#cbd5e1',fillOpacity:s.active?.9:.65}});
   const last=s.last_note?'<br>📝 Охирги суҳбат: '+esc(s.last_note):'';
   const when=s.followup?'<br>📅 Қайта бориш: '+esc(s.followup):'';
-  const history=s.history?'<details style="margin-top:8px"><summary>📜 Олдинги ташрифлар</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  const history=s.history?'<details style="margin-top:8px"><summary>📝 Суҳбат ва ташриф қайдлари</summary><div style="white-space:pre-line;max-height:180px;overflow:auto">'+esc(s.history)+'</div></details>':'';
+  const finance=s.finance?'<details style="margin-top:8px"><summary>📒 Товар ва пул тарихи</summary><div style="white-space:pre-line;max-height:260px;overflow:auto">'+esc(s.finance)+'</div></details>':'';
   const visitPlan=s.visit_label?'<br><b>'+esc(s.visit_label)+'</b>':'';
-  const lastVisit=s.last_visit?'<br>🕐 Охирги ташриф: '+esc(s.last_visit):'';
-  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Агент: '+esc(s.owner):'')+
+  const lastVisit=s.last_visit?'<br>🕐 Охирги қайд: '+esc(s.last_visit):'';
+  marker.addTo(map).bindPopup('<b>'+esc(s.shop||s.name)+'</b><br>'+esc(s.name)+'<br>'+esc(s.address)+(s.owner?'<br>👨‍💼 Қўшган агент: '+esc(s.owner):'')+
     '<br>'+(s.status?esc(s.status):s.prospect?'🟠 Потенциал мижоз':s.active?'✅ Фаол савдо нуқтаси':'Қайд этилган савдо нуқтаси')+
-    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'')+visitPlan+lastVisit+last+when+history+
+    (D.agent_clients?'<br>💵 Қарз: '+esc(s.debt)+' USD · 📦 Қолдиқ: '+esc(s.stock)+' дона':'') +visitPlan+lastVisit+last+when+history+finance+
     (s.card_url?'<br><a target="_blank" rel="noopener noreferrer" href="'+esc(s.card_url)+'">👤 Мижоз карточкасини очиш</a>':'')+
     '<br><a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination='+p[0]+','+p[1]+'">📍 Навигаторда очиш</a>'+
     (D.agent_clients && s.visit_url?'<br><a href="'+esc(s.visit_url)+'">📝 Янги ташриф / изоҳ</a>':'')+
@@ -165,20 +167,17 @@ if(bounds.length)map.fitBounds(bounds,{{padding:[35,35],maxZoom:16}});else map.s
 </script></body></html>'''.encode('utf-8')
 
 def agent_clients_map_html(db,agent,action_url=None):
-    """All previously supplied shops belonging to this agent, not only today.
-
-    The signed HTTP endpoint checks the agent's role and customers feature
-    before rendering; Telegram actions independently recheck ownership.
-    """
-    from core import client_debt_usd,client_stock,feature_enabled
+    """Shared customer map: every active agent can see every customer."""
+    from core import client_debt_usd,client_stock_total,feature_enabled
     r=db.execute("SELECT role,name FROM users WHERE id=?",(agent,)).fetchone()
     if not r or r['role']!='agent' or not feature_enabled(db,agent,'clients'):
         raise ValueError('Мижозлар харитасига рухсат йўқ.')
-    rows=db.execute("""SELECT c.id,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only
-        FROM clients c WHERE c.agent=?
-        AND (c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
-                    AND e.agent=? AND e.kind='delivery'))
-        ORDER BY c.id DESC""",(agent,agent)).fetchall()
+    rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
+        u.name AS agent_name
+        FROM clients c LEFT JOIN users u ON u.id=c.agent
+        WHERE c.map_only=1 OR EXISTS (SELECT 1 FROM events e WHERE e.client=c.id
+                    AND e.kind='delivery')
+        ORDER BY c.id DESC""").fetchall()
     shops=[];missing=0;debt_total=0;stock_total=0;visit_yellow=0;visit_red=0
     for row in rows:
         cid=int(row['id'])
@@ -188,7 +187,7 @@ def agent_clients_map_html(db,agent,action_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in product_ids())
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -199,28 +198,28 @@ def agent_clients_map_html(db,agent,action_url=None):
               'prospect':bool(row['map_only']),
                'status':status['label'],'icon':status['icon'],
                'last_note':status['note'] or '', 'followup':status['followup'],
-               'history':history,'visit_level':attention['level'],
+               'history':history,'finance':ledger.summary(db,cid)+'\n\n'+ledger.recent_text(db,cid,5),'visit_level':attention['level'],
                'visit_label':attention['label'],'visit_color':attention['color'],
                'visit_background':attention['background'],
-               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else ''}
+               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
+               'owner':row['agent_name'] or str(row['agent'])}
         if action_url:
             visit=action_url('visit',cid)
             if visit:shop['visit_url']=visit
-            if row['map_only']:
-                delivery=action_url('delivery',cid)
-                if delivery:shop['delivery_url']=delivery
-            else:
+            delivery=action_url('delivery',cid)
+            if delivery:shop['delivery_url']=delivery
+            if not row['map_only']:
                 pay=action_url('pay',cid)
                 back=action_url('return',cid)
                 if pay and back:
                     shop['pay_url']=pay
                     shop['return_url']=back
         shops.append(shop)
-    summary=(f'Жами {len(rows)} та дўкондан {len(shops)} таси харитада. '
+    summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами қарз: {m(debt_total)} USD. Қизил нуқталар ташриф режасида устувор.')
-    return _map_html(f'Мижозлар харитаси · {r["name"]}',[],shops,summary,
+    return _map_html(f'Мижозлар харитаси · умумий · {r["name"]}',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows),
                                       'visit_yellow':visit_yellow,'visit_red':visit_red},
@@ -233,7 +232,7 @@ def admin_clients_map_html(db,actor,card_url=None):
     Unlike an agent's map, this administrator view has no payment or return
     actions: the customer's assigned agent must confirm those in Telegram.
     """
-    from core import client_debt_usd,client_stock
+    from core import client_debt_usd,client_stock_total
     admin_only(db,actor)
     rows=db.execute("""SELECT c.id,c.agent,c.name,c.shop_name,c.address,c.lat,c.lon,c.map_only,
         u.name AS agent_name FROM clients c
@@ -250,7 +249,7 @@ def admin_clients_map_html(db,actor,card_url=None):
         if attention['level']=='yellow':visit_yellow+=1
         elif attention['level']=='red':visit_red+=1
         debt=int(client_debt_usd(db,cid))
-        stock=sum(max(0,int(client_stock(db,agent,cid,p))) for p in (1,3,5))
+        stock=sum(max(0,int(client_stock_total(db,cid,p))) for p in product_ids())
         debt_total+=debt;stock_total+=stock
         lat,lon=row['lat'],row['lon']
         if lat is None or lon is None or not (-90<=float(lat)<=90 and -180<=float(lon)<=180):
@@ -261,7 +260,7 @@ def admin_clients_map_html(db,actor,card_url=None):
               'prospect':bool(row['map_only']),
               'status':status['label'],'icon':status['icon'],
               'last_note':status['note'] or '', 'followup':status['followup'],
-              'history':history,'visit_level':attention['level'],
+              'history':history,'finance':ledger.summary(db,cid)+'\n\n'+ledger.recent_text(db,cid,5),'visit_level':attention['level'],
               'visit_label':attention['label'],'visit_color':attention['color'],
               'visit_background':attention['background'],
               'last_visit':datetime.fromtimestamp(attention['last_ts'],TZ).strftime('%d.%m.%Y %H:%M') if attention['last_ts'] else '',
@@ -272,10 +271,10 @@ def admin_clients_map_html(db,actor,card_url=None):
         shops.append(item)
     summary=(f'Барча агентлар бўйича {len(rows)} та дўкондан {len(shops)} таси харитада. '
              f'Товар олмаган: {sum(bool(row["map_only"]) for row in rows)} та. '
-             f'🟠 3–7 кун ташрифсиз: {visit_yellow} та. 🔴 8+ кун: {visit_red} та. '
+             f'🟡 3–4 кун ташрифсиз: {visit_yellow} та. 🔴 5+ кун: {visit_red} та. '
              f'Жами USD қарз: {m(debt_total)}. '
              f'Нуқтани босиб мижоз карточкаси ёки навигаторни очинг. '
-             f'Пул олиш ва товар қайтаришни мижозга бириктирилган агент тасдиқлайди.')
+             f'Агентлар мижозлар билан умумий ишлайди; операцияни бажарган агент тарихда алоҳида сақланади.')
     return _map_html('Админ · Мижозлар харитаси',[],shops,summary,
                      summary_metrics={'debt_usd':debt_total,'stock':stock_total,
                                       'missing_location':missing,'total_clients':len(rows),
@@ -292,7 +291,7 @@ def client_card_html(db,actor,client_id,photo_url=None):
     admin_only(db,actor)
     customer=db.execute('SELECT * FROM clients WHERE id=?',(client_id,)).fetchone()
     if not customer:raise ValueError('Мижоз топилмади.')
-    from core import client_debt_usd,legacy_debt_uzs,client_stock
+    from core import client_debt_usd,legacy_debt_uzs,client_stock_total
     owner=db.execute('SELECT name FROM users WHERE id=?',(customer['agent'],)).fetchone()
     owner_name=(owner[0] if owner else None) or str(customer['agent'])
     e=lambda value:escape(str(value if value is not None else ''),quote=True)
@@ -306,10 +305,14 @@ def client_card_html(db,actor,client_id,photo_url=None):
     status_text=e(status_info['label'])
     followup_text=e(status_info['followup'] or 'Белгиланмаган')
     visits=e(cs.timeline_text(db,client_id,5))
+    finance_summary=e(ledger.summary(db,client_id))
+    finance_history=e(ledger.recent_text(db,client_id,100))
     due=e(customer['payment_due'] or 'Аниқ эмас')
+    product_rows=[(pack,int(client_stock_total(db,client_id,pack))) for pack in product_ids()]
+    product_rows=[item for item in product_rows if item[1]]
     products=''.join('<tr><td>'+e(product_name(pack))+'</td><td>'+
-                     str(int(client_stock(db,customer['agent'],client_id,pack)))+
-                     ' дона</td></tr>' for pack in (1,3,5))
+                     str(qty)+' дона</td></tr>' for pack,qty in product_rows)
+    if not products:products='<tr><td colspan="2">Товар қолдиғи йўқ</td></tr>'
     debt=client_debt_usd(db,client_id)
     old=legacy_debt_uzs(db,client_id)
     legacy=('<div class="field">Эски сўм ҳисоби: <strong>'+f'{old/100:,.2f} сўм'+'</strong></div>') if old else ''
@@ -337,9 +340,13 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}}td{{border-bottom:1px 
 <div class="field">🏠 Манзил: {address}</div>
 <div class="field">{status_text} · 📅 Қайта ташриф: {followup_text}</div>
 <div class="field">📝 Дастлабки изоҳ: {comment}</div>
-<h2>📜 Ташрифлар тарихи</h2><div class="field" style="white-space:pre-line">{visits}</div>
+<h2>📝 Суҳбат ва ташриф қайдлари</h2><div class="field" style="white-space:pre-line">{visits}</div>
 <div class="field">📅 Тўлов санаси: {due}</div>
-<h2>📦 Мижоздаги товар</h2><table>{products}</table>
+<h2>📦 Мижоздаги товар қолдиғи</h2><table>{products}</table>
+<h2>📒 Товар бериш ва олинган пуллар</h2>
+<div class="field" style="white-space:pre-line">{finance_summary}</div>
+<h3>🕒 Операциялар тарихи (сўнгги 100 тагача)</h3>
+<div class="field" style="white-space:pre-line;max-height:440px;overflow:auto;border:1px solid #e4eaf3;border-radius:12px;padding:12px">{finance_history}</div>
 <div class="field">💵 Мижоз қарзи: <strong>{debt/100:,.2f} USD</strong></div>
 {legacy}{loc}<p class="subtle">Карточка фақат кўриш учун. Маълумотни ўзгартириш — ботнинг «👥 Мижозлар» бўлимида.</p>
 </article></main></body></html>"""
@@ -603,14 +610,17 @@ def reconciliation(db,actor,client,start=None,end=None):
     elif start is not None and end is not None:a,b=dates(start,end)
     else:raise ValueError('Иккала санани ҳам киритинг ёки умумий акт сверкадан фойдаланинг.')
     opening_row=db.execute("""SELECT
-        COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=1 AND kind='delivery' THEN qty WHEN pack=1 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=3 AND kind='delivery' THEN qty WHEN pack=3 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0),
-        COALESCE(SUM(CASE WHEN pack=5 AND kind='delivery' THEN qty WHEN pack=5 AND kind IN ('sold','return') THEN -qty ELSE 0 END),0)
+        COALESCE(SUM(CASE WHEN kind='sold' THEN amount WHEN kind='payment' THEN -amount ELSE 0 END),0)
         FROM events WHERE client=? AND ts<?""",(client,a)).fetchone()
     opening=int(opening_row[0] or 0)
-    stocks={1:int(opening_row[1] or 0),3:int(opening_row[2] or 0),5:int(opening_row[3] or 0)}
-    events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd FROM events
+    stocks={pack:0 for pack in product_ids()}
+    opening_stock_rows=db.execute("""SELECT pack,
+        COALESCE(SUM(CASE WHEN kind='delivery' THEN qty
+                          WHEN kind IN ('sold','return') THEN -qty ELSE 0 END),0) AS qty
+        FROM events WHERE client=? AND ts<? AND pack>0 GROUP BY pack""",(client,a)).fetchall()
+    for item in opening_stock_rows:
+        stocks[int(item['pack'])]=int(item['qty'] or 0)
+    events=db.execute("""SELECT id,ts,kind,pack,qty,amount,amount_usd,pay_method,paid_uzs,fx_rate FROM events
         WHERE client=? AND ts>=? AND ts<? AND kind IN ('delivery','sold','return','payment')
         ORDER BY ts,id""",(client,a,b)).fetchall()
     before_usd=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd
@@ -621,7 +631,9 @@ def reconciliation(db,actor,client,start=None,end=None):
     for e in events:
         k=e['kind']
         if k not in ('delivery','sold','return','payment'):continue
-        if k in ('delivery','sold','return'):stocks[e['pack']]+=e['qty']*(1 if k=='delivery' else -1)
+        if k in ('delivery','sold','return'):
+            pack=int(e['pack'] or 0)
+            stocks[pack]=stocks.get(pack,0)+e['qty']*(1 if k=='delivery' else -1)
         charge=e['amount'] if k=='sold' else 0;credit=e['amount'] if k=='payment' else 0
         balance+=charge-credit;sales+=charge;payments+=credit
         usd_charge=e['amount_usd'] if k=='delivery' else 0
@@ -629,7 +641,12 @@ def reconciliation(db,actor,client,start=None,end=None):
         usd_balance+=usd_charge-usd_credit;usd_sales+=usd_charge
         if k=='payment':usd_payments+=usd_credit
         if k=='return':usd_returns+=usd_credit
-        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':NAMES[k],'pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
+        label=NAMES[k]
+        if k=='payment':
+            extra=payment_label(e)
+            if extra:label=f"{label} ({extra})"
+        rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':label,
+                     'paid_uzs':int(e['paid_uzs'] or 0),'fx_rate':int(e['fx_rate'] or 0),'pay_method':e['pay_method'] or '','pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
     return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
 
 def reconciliation_xlsx(r):
@@ -664,9 +681,12 @@ def reconciliation_xlsx(r):
     stock_row=header_row+max(1,len(r['rows']))+3
     ws.merge_cells(start_row=stock_row,start_column=1,end_row=stock_row,end_column=8)
     ws.cell(stock_row,1,'МИЖОЗДАГИ СОТИЛМАГАН ТОВАР');ws.cell(stock_row,1).font=Font(bold=True,color='FFFFFF');ws.cell(stock_row,1).fill=PatternFill('solid',fgColor='123747')
-    for offset,pack in enumerate((1,3,5),1):
+    stock_packs=[pack for pack in product_ids() if r['opening_stock'].get(pack,0) or r['closing_stock'].get(pack,0)]
+    if not stock_packs:
+        ws.cell(stock_row+1,1,'Товар қолдиғи йўқ');ws.merge_cells(start_row=stock_row+1,start_column=1,end_row=stock_row+1,end_column=8)
+    for offset,pack in enumerate(stock_packs,1):
         ws.cell(stock_row+offset,1,product_name(pack));ws.merge_cells(start_row=stock_row+offset,start_column=1,end_row=stock_row+offset,end_column=6)
-        ws.cell(stock_row+offset,7,'Қолдиқ');ws.cell(stock_row+offset,8,r['closing_stock'][pack])
+        ws.cell(stock_row+offset,7,'Қолдиқ');ws.cell(stock_row+offset,8,r['closing_stock'].get(pack,0))
     widths=[9,20,30,30,10,21,23,18]
     for idx,width in enumerate(widths,1):ws.column_dimensions[chr(64+idx)].width=width
     ws.freeze_panes='A11';ws.sheet_view.showGridLines=False
@@ -697,7 +717,10 @@ def reconciliation_pdf(r):
     if len(data)==1:data.append([Paragraph('Операциялар йўқ',normal),'','','','','','',''])
     operations=Table(data,colWidths=[10*mm,28*mm,42*mm,45*mm,13*mm,28*mm,31*mm,25*mm],repeatRows=1)
     operations.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#087F8C')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
-    stock=[[Paragraph('<b>Товар</b>',normal),Paragraph('<b>Қолдиқ, дона</b>',normal)]]+[[Paragraph(esc(product_name(pack)),normal),Paragraph(str(r['closing_stock'][pack]),right)] for pack in (1,3,5)]
+    stock_packs=[pack for pack in product_ids() if r['opening_stock'].get(pack,0) or r['closing_stock'].get(pack,0)]
+    stock=[[Paragraph('<b>Товар</b>',normal),Paragraph('<b>Қолдиқ, дона</b>',normal)]]
+    stock += ([[Paragraph(esc(product_name(pack)),normal),Paragraph(str(r['closing_stock'].get(pack,0)),right)] for pack in stock_packs]
+              if stock_packs else [[Paragraph('Товар қолдиғи йўқ',normal),Paragraph('0',right)]])
     stock_table=Table(stock,colWidths=[90*mm,30*mm])
     stock_table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#123747')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('PADDING',(0,0),(-1,-1),5)]))
     story=[Paragraph('ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА',title),Spacer(1,3*mm),info_table,Spacer(1,4*mm),operations,Spacer(1,4*mm),stock_table,Spacer(1,3*mm),Paragraph('Масъул ходим: ____________________     Мижоз: ____________________',normal)]
@@ -801,7 +824,9 @@ def m(x):return f'{x/100:,.2f}'.replace(',',' ')
 
 def reconciliation_html(r):
     c=r['client'];esc=lambda x:escape(str(x),quote=True)
-    stock=''.join(f'<tr><td>{escape(product_name(p))}</td><td>{r["opening_stock"][p]}</td><td>{r["closing_stock"][p]}</td></tr>' for p in (1,3,5))
+    stock_packs=[p for p in product_ids() if r["opening_stock"].get(p,0) or r["closing_stock"].get(p,0)]
+    stock=''.join(f'<tr><td>{escape(product_name(p))}</td><td>{r["opening_stock"].get(p,0)}</td><td>{r["closing_stock"].get(p,0)}</td></tr>' for p in stock_packs)
+    if not stock:stock='<tr><td colspan="3">Товар қолдиғи йўқ</td></tr>'
     rows=''.join('<tr>'+''.join(f'<td>{esc(v)}</td>' for v in [x['id'],x['time'],x['kind'],product_name(x['pack']) if x['pack'] else '—',x['qty'] or '—',m(x['usd_charge']),m(x['usd_credit']),m(x['usd_balance'])])+'</tr>' for x in r['rows'])
     return f'''<!doctype html><html lang="uz"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ички ҳисоб — акт сверка</title><style>
 body{{font:14px Arial,sans-serif;color:#15243b;background:#eef3f8;margin:0;padding:24px}}main{{max-width:1000px;margin:auto;background:white;padding:36px}}h1{{color:#174e87;margin:8px 0}}.muted{{color:#52647a}}.cards{{display:flex;flex-wrap:wrap;gap:16px;margin:24px 0}}.card{{padding:16px;background:#edf4fb;flex:1;min-width:160px}}strong{{display:block;font-size:20px;margin-top:8px}}table{{border-collapse:collapse;width:100%;font-size:12px;margin:18px 0}}th{{background:#174e87;color:white}}td,th{{padding:9px;border:1px solid #d3dce8;text-align:left}}.scroll{{overflow:auto}}footer{{margin-top:32px}}@media print{{body{{background:white;padding:0}}main{{padding:0}}thead{{display:table-header-group}}tr{{break-inside:avoid}}button{{display:none}}}}@page{{size:A4 landscape;margin:14mm}}

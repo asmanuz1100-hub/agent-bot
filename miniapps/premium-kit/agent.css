@@ -1,0 +1,157 @@
+/* Agent Mini App on ASMAN v3 (test mode only, html.pm).
+ * Maps the agent's own classes onto the shared tokens in premium.css. */
+html.pm{--tg-bg:var(--bg);--paper:var(--bg);--tg-text:var(--tx);--tg-section:var(--card);--tg-hint:var(--mu);--muted:var(--mu);--navy:var(--tx);--blue:var(--pri);--green:var(--ok);--red:var(--bad);--amber:#e08a0b;--purple:#7a5af0}
+html.pm .app{background:transparent!important;max-width:760px;margin:0 auto;padding-bottom:calc(104px + env(safe-area-inset-bottom))!important}
+html.pm .adminbar{background:var(--pri-soft)!important;color:var(--tx)!important;border:0!important;margin:0 14px;border-radius:14px}
+html.pm main{padding:6px 14px 18px!important}
+html.pm #pmHero .pill{background:var(--soft)!important;color:var(--mu)!important;border:1px solid var(--line)!important;font-weight:700}
+html.pm #pmHero h1 #homeCommandTitle{color:var(--tx)}
+html.pm .pm-next{margin-top:12px;width:100%;min-height:48px;border:0!important;border-radius:14px!important;padding:12px!important;font-weight:800!important;color:#fff!important;background:var(--gl)!important;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66!important}
+
+/* Typography: one family, tight steps */
+html.pm .screenhead{font-size:22px!important;font-weight:800!important;letter-spacing:-.3px;margin:6px 2px 12px!important;color:var(--tx)!important}
+html.pm .title{font-size:16px!important;font-weight:800!important;letter-spacing:-.2px;margin:22px 2px 10px!important;color:var(--tx)!important}
+html.pm .muted,html.pm .small,html.pm .tiny,html.pm label{color:var(--mu)}
+html.pm .tiny{font-size:12px!important}
+html.pm label{font-weight:700;font-size:13px}
+
+/* KPI grid */
+html.pm .kpis{margin:0!important;gap:10px!important;display:grid!important;grid-template-columns:1fr 1fr}
+html.pm .kpis .card{margin:0!important}
+html.pm .kpis .c.kp:after,html.pm .kpi:after{display:none!important}
+
+/* Cards and rows */
+html.pm .card{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important}
+html.pm .rowbtn,html.pm .client,html.pm .client-row,html.pm .plan-row,html.pm .order-card,html.pm .collection-task{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:var(--sh)!important}
+html.pm .rowbtn:active,html.pm .client:active{background:var(--soft)!important}
+
+/* Summary cards that used to be dark — now the v3 hero card */
+html.pm .balance,html.pm .report-hero,html.pm .customer-hero,html.pm .expense-balance{color:var(--tx)!important;background:var(--card)!important;border:1px solid var(--line)!important;border-radius:22px!important;box-shadow:var(--sh)!important;position:relative;overflow:hidden}
+html.pm .balance:after,html.pm .report-hero:after,html.pm .expense-balance:after,html.pm .customer-hero:after{display:none!important}
+html.pm .balance *,html.pm .expense-balance *,html.pm .report-hero *{color:inherit}
+html.pm .balance .muted,html.pm .expense-balance .muted,html.pm .report-hero small{color:var(--mu)!important}
+html.pm .balance .num,html.pm .expense-balance .num{font-weight:800;letter-spacing:-.6px;color:var(--tx)!important;-webkit-text-fill-color:currentColor!important;background:none!important}
+html.pm .report-hero-mini,html.pm .report-kpi,html.pm .report-flow-card,html.pm .profile-stat,html.pm .gps-stat{background:var(--soft)!important;border:1px solid var(--line)!important;color:var(--tx)!important;box-shadow:none!important;border-radius:14px!important}
+html.pm .customer-hero-overlay{background:linear-gradient(transparent,#0b121bcc)!important}
+html.pm .customer-hero-overlay,html.pm .customer-hero-overlay *{color:#fff!important}
+
+/* Quick actions → Rahbar .qa tiles */
+html.pm .quick-grid{display:grid!important;grid-template-columns:1fr 1fr;gap:10px}
+html.pm .quick-tile{background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important;text-align:left;padding:14px!important;min-height:76px;position:relative;overflow:hidden}
+html.pm .quick-tile b{color:var(--tx)!important;font-size:15px;display:flex;align-items:center;gap:8px}
+html.pm .quick-tile b ico{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;margin:0;color:#fff;background:linear-gradient(160deg,#ffffff4d,#fff0 60%),var(--q,#2a8bf2);box-shadow:0 8px 14px -8px var(--q,#2a8bf2)}
+html.pm .quick-grid>:nth-child(2){--q:#34c759}html.pm .quick-grid>:nth-child(3){--q:#f0527a}html.pm .quick-grid>:nth-child(4){--q:#8b5cf6}
+html.pm .quick-tile b ico svg{width:18px;height:18px}
+html.pm .quick-tile small{color:var(--mu)!important;font-size:12px;margin-top:4px;display:block}
+html.pm .quick-tile.primary{background:var(--gl)!important;border-color:transparent!important;box-shadow:0 12px 24px -12px #1f6fd1cc!important}
+html.pm .quick-tile.primary b,html.pm .quick-tile.primary small{color:#fff!important}
+html.pm .quick-tile.primary b ico{background:#ffffff2e}
+
+/* Buttons, chips, pills */
+html.pm button{font-family:inherit}
+html.pm .primary{background:var(--gl)!important;color:#fff!important;border:0!important;border-radius:14px!important;box-shadow:0 10px 22px -10px #1f6fd1cc,inset 0 1px 0 #ffffff66!important;font-weight:800!important;min-height:48px}
+html.pm .primary:active{filter:brightness(.92)}
+html.pm .secondary{background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important;border-radius:14px!important;font-weight:700!important;min-height:44px;white-space:nowrap}
+html.pm .tools{gap:8px}
+html.pm .chip{flex:0 0 auto!important;max-width:none!important;background:var(--card)!important;color:var(--tx)!important;border:1px solid var(--line)!important;border-radius:20px!important;font-weight:700!important;box-shadow:none!important;min-height:40px}
+html.pm .chip.active{background:var(--gl)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 8px 18px -8px #1f6fd1cc!important}
+html.pm .pill{border-radius:20px!important;font-weight:700!important}
+html.pm .pill.green,html.pm .green .pill{background:var(--ok-soft)!important;color:var(--ok)!important}
+html.pm .pill.red,html.pm .red .pill{background:var(--bad-soft)!important;color:var(--bad)!important}
+html.pm .pill.yellow,html.pm .yellow .pill{background:var(--warn-soft)!important;color:var(--warn)!important}
+html.pm .icon{border-radius:12px!important;background:var(--pri-soft)!important;color:var(--pri-tx)!important}
+html.pm .bar{background:var(--soft)!important}html.pm .bar i{background:var(--gl)!important}
+html.pm .client-wizard-progress i,html.pm .wizard-step.on{background:var(--pri)!important}
+
+/* Feedback */
+html.pm #notice{background:var(--tx)!important;color:var(--bg)!important;border-radius:14px!important;border:0;box-shadow:0 12px 28px -12px #0009;font-weight:600}
+html.pm .offlinebar{background:var(--warn-soft)!important;color:var(--warn)!important}
+html.pm #gate{background:var(--bg)!important;color:var(--tx)!important}
+html.pm #gate .card{max-width:420px}
+html.pm .client-photo,html.pm .client-photo-fallback,html.pm .client-thumb{background:var(--soft)!important}
+
+/* Tablet / desktop */
+@media (min-width:760px){
+ html.pm main{padding:6px 24px 24px!important}
+ html.pm .kpis{grid-template-columns:repeat(4,1fr)}
+ html.pm .quick-grid{grid-template-columns:repeat(4,1fr)}
+ html.pm .app{max-width:760px}
+}
+@media (min-width:1100px){html.pm .app{max-width:920px}}
+
+/* Long lists: skip layout/paint of off-screen rows */
+html.pm #clientList>*,html.pm #homePlan>*,html.pm #collectionTaskList>*{content-visibility:auto;contain-intrinsic-size:auto 76px}
+html.pm [hidden]{display:none!important}
+
+/* Visit card: vivid gradient card like Rahbar heroes (text stays readable) */
+html.pm .visit-card{background:var(--gl)!important;color:#fff!important;border:0!important;border-radius:22px!important;box-shadow:0 16px 30px -16px #1f6fd1cc!important}
+html.pm .visit-card.live{background:linear-gradient(135deg,#34c759,#1c9b43)!important;box-shadow:0 16px 30px -16px #1c9b43cc!important}
+html.pm .visit-card.other{background:linear-gradient(135deg,#f5b544,#c77c00)!important}
+html.pm .visit-card small{color:#ffffffd9!important;font-size:12px!important}
+html.pm .visit-card b{color:#fff!important}
+html.pm .visit-card .visit-main{background:#fff!important;color:#1f6fd1!important;box-shadow:0 8px 18px -10px #0006!important}
+html.pm .visit-card .visit-ghost{background:#ffffff26!important;color:#fff!important;border:1px solid #ffffff55!important}
+/* Report bars: gradient like Rahbar dynamics */
+html.pm .report-trend-col i{background:var(--gl)!important;box-shadow:0 8px 14px -8px #1f6fd199}
+/* Client status bar: one colour per status (matches the legend dots) */
+html.pm .report-client-bar{gap:3px;height:14px!important}
+html.pm .report-client-bar i{border-radius:7px;background:linear-gradient(180deg,#ffffff40,#fff0 70%),var(--sc,#a9b8d6)!important}
+html.pm .report-client-bar i[style*="width:0%"]{display:none}
+html.pm .report-client-bar .fresh,html.pm .report-client-legend .fresh{--sc:#34c759}
+html.pm .report-client-bar .yellow,html.pm .report-client-legend .yellow{--sc:#f5a524}
+html.pm .report-client-bar .red,html.pm .report-client-legend .red{--sc:#f0527a}
+html.pm .report-client-bar .scheduled,html.pm .report-client-legend .scheduled{--sc:#8b5cf6}
+html.pm .report-client-legend span:before{background:var(--sc)!important}
+html.pm .report-trend-col em,html.pm .report-trend-col small{font-size:10px!important}
+html.pm .report-kpi small{font-size:12px!important;color:var(--mu)!important}
+html.pm .report-trend-tabs button{border-radius:20px!important}
+html.pm .report-trend-tabs .active,html.pm .report-trend-tabs button.on{background:var(--gl)!important;color:#fff!important;border-color:transparent!important}
+html.pm .report-kpi.pm-k{display:flex!important;flex-direction:row!important;align-items:center;gap:10px;padding:12px!important;background:var(--card)!important}
+html.pm .report-kpi.pm-k strong{font-size:18px!important}
+html.pm .report-flow-card.pm-k{display:flex!important;align-items:center;gap:10px;padding:12px!important;min-height:0!important}
+html.pm .report-flow-card.pm-k b{margin-top:2px!important}
+/* Theme-safe surfaces: the agent's own light-only colours mapped to tokens so dark mode has no white boxes */
+html.pm .delivery-row,html.pm .order-row,html.pm .payment-convert,html.pm .camera-box,html.pm .wizard-location-state,html.pm .report-client-stat,html.pm .gps-map-empty{background:var(--soft)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm .report-trend,html.pm .report-client-card,html.pm .report-product,html.pm .report-stock-item{background:var(--card)!important;border-color:var(--line)!important;color:var(--tx)!important;box-shadow:var(--sh)!important}
+html.pm .report-trend-track,html.pm .report-client-bar,html.pm .report-product-bar{background:var(--soft)!important}
+html.pm .report-products-toggle,html.pm .mapinfo,html.pm .payment-rate-card,html.pm .report-product-stock,html.pm .report-stock-qty,html.pm #reportHeroBadge{background:var(--pri-soft)!important;border-color:transparent!important;color:var(--pri-tx)!important}
+html.pm .payment-rate-card b{color:var(--pri-tx)!important}
+html.pm .report-product-stock.red,html.pm .report-stock-qty.red,html.pm .payment-convert.warn,html.pm .delivery-warning{background:var(--bad-soft)!important;color:var(--bad)!important;border-color:transparent!important}
+html.pm .report-stock-qty.green,html.pm .wizard-location-state.ok{background:var(--ok-soft)!important;color:var(--ok)!important}
+html.pm .report-section-head b,html.pm #clientCount,html.pm .report-client-stat b,html.pm .payment-convert b{color:var(--tx)!important}
+html.pm .report-client-stat.debt b{color:var(--bad)!important}
+html.pm .report-section-head small,html.pm .report-client-stat small,html.pm .payment-convert small,html.pm .payment-rate-card small{color:var(--mu)!important}
+html.pm #notice{background:var(--tx)!important;color:var(--bg)!important}
+html.pm .delivery-warning{font-size:12px!important}
+html.pm .delivery-summary{background:var(--gl)!important;color:#fff!important;border:0!important;box-shadow:0 14px 28px -14px #1f6fd1cc!important}
+html.pm .delivery-summary *{color:#fff!important}
+html.pm .delivery-summary small{color:#ffffffd9!important;font-size:12px!important}
+html.pm .gps-stat,html.pm .gps-meta div,html.pm .report-product-grid div{background:var(--soft)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm .gps-stat small,html.pm .gps-meta small,html.pm .report-product-grid small{color:var(--mu)!important;font-size:11px!important}
+html.pm .gps-stat strong,html.pm .gps-meta b,html.pm .report-product-grid b{color:var(--tx)!important}
+html.pm .gps-period-tabs button,html.pm .report-trend-tabs button{background:var(--card)!important;color:var(--mu)!important;border:1px solid var(--line)!important}
+html.pm .gps-period-tabs button.active,html.pm .report-trend-tabs button.active{background:var(--gl)!important;color:#fff!important;border-color:transparent!important}
+html.pm .detail-section-title b{color:var(--tx)!important}
+html.pm .detail-section-title small{color:var(--mu)!important}
+html.pm .profile-stat,html.pm .profile-stat.good,html.pm .profile-stat.debt{background:var(--card)!important;border-color:var(--line)!important}
+html.pm .profile-stat.good b{color:var(--ok)!important}
+html.pm .profile-stat.debt b{color:var(--bad)!important}
+html.pm .pill:not(.green):not(.red):not(.yellow){background:var(--pri-soft)!important;color:var(--pri-tx)!important;border:0!important}
+/* Payments: card waiting for the cashier stands out; flow card for pending card money */
+html.pm .pay-row.card-wait{border-color:#f5a52466!important;background:linear-gradient(180deg,var(--warn-soft),transparent 70%),var(--card)!important}
+html.pm .report-flow-card.yellow b{color:var(--warn)!important}
+html.pm .pay-row .tiny{font-size:12px!important;color:var(--mu)!important}
+
+/* Dark theme: every light-only surface of the classic Agent markup follows the dark palette. */
+html.pm[data-pmt="dark"] .report-stock-item,html.pm[data-pmt="dark"] .report-flow-card,html.pm[data-pmt="dark"] .report-trend,html.pm[data-pmt="dark"] .report-product,html.pm[data-pmt="dark"] .report-client-card,html.pm[data-pmt="dark"] .profile-stat,html.pm[data-pmt="dark"] .profile-stat.debt,html.pm[data-pmt="dark"] .profile-stat.good,html.pm[data-pmt="dark"] .home-next,html.pm[data-pmt="dark"] .collection-task,html.pm[data-pmt="dark"] .collection-task-note,html.pm[data-pmt="dark"] .order-card,html.pm[data-pmt="dark"] .my-track,html.pm[data-pmt="dark"] .chip,html.pm[data-pmt="dark"] .gps-period-tabs button,html.pm[data-pmt="dark"] .offlinebar button,html.pm[data-pmt="dark"] .my-loc-btn{background:var(--card)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm[data-pmt="dark"] .stock-item,html.pm[data-pmt="dark"] .delivery-row,html.pm[data-pmt="dark"] .order-row,html.pm[data-pmt="dark"] .payment-convert,html.pm[data-pmt="dark"] .payment-rate-card,html.pm[data-pmt="dark"] .report-product-grid div,html.pm[data-pmt="dark"] .report-client-stat,html.pm[data-pmt="dark"] .gps-meta div,html.pm[data-pmt="dark"] .gps-map-empty,html.pm[data-pmt="dark"] .camera-box,html.pm[data-pmt="dark"] .wizard-location-state,html.pm[data-pmt="dark"] .client-wizard-progress span,html.pm[data-pmt="dark"] .visit-meta span,html.pm[data-pmt="dark"] .order-pill,html.pm[data-pmt="dark"] .report-trend-tabs button,html.pm[data-pmt="dark"] .report-trend-track,html.pm[data-pmt="dark"] .report-product-bar,html.pm[data-pmt="dark"] .report-client-bar,html.pm[data-pmt="dark"] .report-products-toggle,html.pm[data-pmt="dark"] .photo-badge,html.pm[data-pmt="dark"] .client-thumb,html.pm[data-pmt="dark"] .wizard-number,html.pm[data-pmt="dark"] .mapinfo,html.pm[data-pmt="dark"] .bar,html.pm[data-pmt="dark"] .adminbar,html.pm[data-pmt="dark"] .icon,html.pm[data-pmt="dark"] .my-track-tg:not(.on),html.pm[data-pmt="dark"] .camera-preview,html.pm[data-pmt="dark"] .visit-thumb,html.pm[data-pmt="dark"] .client-photo-fallback,html.pm[data-pmt="dark"] .wizard-choice.active,html.pm[data-pmt="dark"] .client-wizard-progress span.active,html.pm[data-pmt="dark"] .report-stock-qty,html.pm[data-pmt="dark"] .report-product-stock,html.pm[data-pmt="dark"] .order-pill.new{background:var(--soft)!important;border-color:var(--line)!important;color:var(--tx)!important}
+html.pm[data-pmt="dark"] .pill.green,html.pm[data-pmt="dark"] .order-pill.loaded,html.pm[data-pmt="dark"] .report-stock-qty.green,html.pm[data-pmt="dark"] .wizard-location-state.ok,html.pm[data-pmt="dark"] .client-wizard-progress span.done{background:var(--ok-soft)!important;color:var(--ok)!important;border-color:transparent!important}
+html.pm[data-pmt="dark"] .pill.yellow,html.pm[data-pmt="dark"] .order-pill.preparing,html.pm[data-pmt="dark"] .map-status,html.pm[data-pmt="dark"] .offlinebar{background:var(--warn-soft)!important;color:var(--warn)!important;border-color:transparent!important}
+html.pm[data-pmt="dark"] .pill.red,html.pm[data-pmt="dark"] .order-pill.rejected,html.pm[data-pmt="dark"] .report-stock-qty.red,html.pm[data-pmt="dark"] .report-product-stock.red,html.pm[data-pmt="dark"] .delivery-remove,html.pm[data-pmt="dark"] .delivery-warning,html.pm[data-pmt="dark"] .payment-convert.warn,html.pm[data-pmt="dark"] .offlinebar.offline,html.pm[data-pmt="dark"] .offlinebar.failed{background:var(--bad-soft)!important;color:var(--bad)!important;border-color:transparent!important}
+html.pm[data-pmt="dark"] .stock-item b,html.pm[data-pmt="dark"] .stock-item span,html.pm[data-pmt="dark"] .delivery-row small,html.pm[data-pmt="dark"] .order-row input,html.pm[data-pmt="dark"] .my-track b{color:var(--tx)!important}html.pm[data-pmt="dark"] .my-track small,html.pm[data-pmt="dark"] .delivery-row-meta small{color:var(--mu)!important}
+html.pm[data-pmt="dark"] .leaflet-control-zoom a,html.pm[data-pmt="dark"] .leaflet-control-attribution{background:var(--card)!important;color:var(--mu)!important;border-color:var(--line)!important}
+
+/* While the login gate / admin agent picker is open, the floating nav must not be tappable. */
+html.pm body:has(#gate:not(.hidden)) nav:not(.tabs){display:none!important}
+html.pm[data-pmt="dark"] #gate{background:var(--bg)!important}html.pm[data-pmt="dark"] #gate .card{background:var(--card)!important;color:var(--tx)!important}
+html.pm .quick-tile small{white-space:normal!important;overflow-wrap:anywhere}

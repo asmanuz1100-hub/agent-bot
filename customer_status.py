@@ -25,17 +25,20 @@ def normalize(status, followup=None):
         return followup
     return None
 
-def add_visit(db,actor,client,status,note,followup=None):
+def add_visit(db,actor,client,status,note,followup=None,ts=None):
     person=db.execute('SELECT agent FROM clients WHERE id=?',(client,)).fetchone()
     who=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
-    if not person or not who or not (who[0]=='admin' or (who[0]=='agent' and person[0]==actor)):
+    if not person or not who or who[0] not in ('admin','agent'):
         raise ValueError('Бу дўконнинг ташрифини қайд этишга рухсат йўқ.')
+    if int((db.execute('SELECT blacklisted FROM clients WHERE id=?',(client,)).fetchone() or [0])[0] or 0):
+        raise ValueError('⛔ Mijoz qora ro‘yxatda — u bilan hech qanday amal bajarib bo‘lmaydi.')
     note=str(note or '').strip()
     if not note or len(note)>1000:
         raise ValueError('Суҳбат ҳақида 1–1000 белги ёзинг.')
     followup=normalize(status,followup)
-    db.execute('INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(?,?,?,?,?,?)',
-               (client,actor,status,note,followup,int(time.time())))
+    row=db.execute('INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(?,?,?,?,?,?) RETURNING id',
+               (client,actor,status,note,followup,int(time.time() if ts is None else ts))).fetchone()
+    return int(row[0])
 
 def history(db,client,limit=5):
     return db.execute("""SELECT v.status,v.note,v.followup,v.ts,v.actor,u.name AS actor_name
@@ -59,14 +62,14 @@ def last_contact_ts(db,client):
     row=db.execute('SELECT MAX(ts) FROM client_visits WHERE client=?',(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
     row=db.execute("""SELECT MAX(ts) FROM events WHERE client=?
-        AND kind IN ('visit','delivery','payment','return')""",(client,)).fetchone()
+        AND kind IN ('visit','delivery','sold','return')""",(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
     row=db.execute('SELECT created_ts FROM clients WHERE id=?',(client,)).fetchone()
     if row and row[0]:values.append(int(row[0]))
     return max(values) if values else None
 
 def visit_attention(db,client,map_only=False,now=None):
-    """Map urgency: fresh <3d, yellow 3–7d, red >7d.
+    """Map urgency: fresh <3d, yellow 3–4d, red 5+d.
 
     A future explicit follow-up date keeps a waiting customer in scheduled mode
     so the agent is not pushed back to the shop before the agreed date.
@@ -88,7 +91,7 @@ def visit_attention(db,client,map_only=False,now=None):
         return {'level':'unknown','days':None,'last_ts':None,'color':'#64748b',
                 'background':'#f8fafc','label':'⚪ Ташриф санаси аниқ эмас'}
     days=max(0,(now-last)//86400)
-    if days>7:
+    if days>=5:
         return {'level':'red','days':days,'last_ts':last,'color':'#dc2626',
                 'background':'#fee2e2','label':f'🔴 {days} кундан бери ташриф йўқ'}
     if days>=3:

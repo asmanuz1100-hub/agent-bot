@@ -12,6 +12,7 @@ import reports
 
 class ProspectsTests(unittest.TestCase):
     def setUp(self):
+        from unittest.mock import patch as _p; _mo=_p.object(__import__('bot'),'BOT_MINIAPP_ONLY',set()); _mo.start(); self.addCleanup(_mo.stop)  # legacy bot wizard coverage
         self.db = core.connect(':memory:')
         self.db.executemany(
             'INSERT INTO users(id,role,name) VALUES(?,?,?)',
@@ -99,7 +100,9 @@ class ProspectsTests(unittest.TestCase):
             self.assertEqual([x['id'] for x in admin['shops']], [cid])
             self.assertEqual(admin['shops'][0]['owner'], 'Agent')
             self.assertNotIn('delivery_url', admin['shops'][0])
-            self.assertEqual(self.map_data(reports.agent_clients_map_html(self.db, 3))['shops'], [])
+            shared = self.map_data(reports.agent_clients_map_html(self.db, 3))
+            self.assertEqual([x['id'] for x in shared['shops']], [cid])
+            self.assertTrue(shared['shops'][0]['prospect'])
 
     def test_first_delivery_promotes_prospect_preserving_identity(self):
         with patch.object(bot, 'ADMINS', {1}):

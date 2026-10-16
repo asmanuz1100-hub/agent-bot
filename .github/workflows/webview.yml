@@ -1,0 +1,26 @@
+name: WebView browser regressions
+on: [push, pull_request]
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/browser/webview.cjs
+      - run: node tests/browser/cashier-category.cjs
+      - run: node tests/browser/cashier-conversion.cjs
+      - run: node tests/browser/agent-payment-flow.cjs
+      - run: node tests/browser/manager-filters.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cashier-conversion-ui
+          path: |
+            test-results/cashier-conversion
+            test-results/agent-payment-flow
+            test-results/manager-filters
+          retention-days: 3

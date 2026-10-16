@@ -103,7 +103,7 @@ class ReportsTests(unittest.TestCase):
   html=reports.admin_clients_map_html(self.db,1,card_url=url).decode()
   self.assertIn('Админ · Мижозлар харитаси',html)
   self.assertIn('Навигаторда очиш',html)
-  self.assertIn('Агент:',html)
+  self.assertIn('Қўшган агент:',html)
   self.assertNotIn('<script>alert(1)</script>',html)
   self.assertNotIn('+998900000001',html)
   found=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
@@ -118,7 +118,7 @@ class ReportsTests(unittest.TestCase):
   for uid in (2,3,4,99):
    with self.assertRaises(ValueError):reports.admin_clients_map_html(self.db,uid)
 
- def test_agent_previous_deliveries_map_and_private_quick_actions(self):
+ def test_agent_shared_customer_map_and_private_quick_actions(self):
   import json,re
   self.db.execute("UPDATE clients SET lat=40.111,lon=71.222,shop_name='<img onerror=alert(1)>' WHERE id=1")
   self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount_usd,ts) VALUES(2,2,1,'delivery',1,3,600,?)",(int(datetime(2026,9,18,9,tzinfo=reports.TZ).timestamp()),))
@@ -130,22 +130,27 @@ class ReportsTests(unittest.TestCase):
   self.assertIn('Навигаторда очиш',html)
   self.assertIn('Пул олиш',html)
   self.assertIn('Товар қайтариш',html)
+  self.assertIn('Товар бериш',html)
   self.assertNotIn('+998900000001',html)
-  self.assertNotIn('Other shop',html)
+  self.assertIn('Other shop',html)
   self.assertNotIn('<img onerror=alert(1)>',html)
   found=re.search(r'<script id="data" type="application/json">(.*?)</script>',html,re.S)
   data=json.loads(found.group(1))
   self.assertTrue(data['agent_clients'])
-  self.assertEqual(len(data['shops']),1)
-  self.assertEqual(data['shops'][0]['id'],1)
-  self.assertEqual(data['shops'][0]['stock'],3)
-  self.assertEqual(data['shops'][0]['debt'],'6.00')
-  self.assertIn('start=pay_1',data['shops'][0]['pay_url'])
-  self.assertIn('start=return_1',data['shops'][0]['return_url'])
+  self.assertEqual({x['id'] for x in data['shops']},{1,3})
+  by_id={x['id']:x for x in data['shops']}
+  self.assertEqual(by_id[1]['stock'],3)
+  self.assertEqual(by_id[1]['debt'],'6.00')
+  self.assertEqual(by_id[3]['stock'],1)
+  self.assertEqual(by_id[3]['owner'],'D')
+  self.assertIn('start=pay_1',by_id[1]['pay_url'])
+  self.assertIn('start=return_1',by_id[1]['return_url'])
+  self.assertIn('start=delivery_3',by_id[3]['delivery_url'])
   self.assertIn('Локациясиз',html)
-  for agent in (1,3,4):
-   if agent!=4:
-    with self.assertRaises(ValueError):reports.agent_clients_map_html(self.db,agent)
+  same=reports.agent_clients_map_html(self.db,4,action_url=lambda verb,cid:'x').decode()
+  self.assertIn('Other shop',same)
+  for agent in (1,3):
+   with self.assertRaises(ValueError):reports.agent_clients_map_html(self.db,agent)
 
  def test_multiple_shifts_one_agent_one_daily_route_and_summary(self):
   import json,re

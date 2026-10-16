@@ -34,7 +34,7 @@ class VisitAgingTests(unittest.TestCase):
 
     def test_exact_thresholds(self):
         now=self.shop(1,0)
-        for days,level in ((2,'fresh'),(3,'yellow'),(7,'yellow'),(8,'red')):
+        for days,level in ((2,'fresh'),(3,'yellow'),(4,'yellow'),(5,'red'),(8,'red')):
             ts=now-days*86400
             self.db.execute('UPDATE clients SET created_ts=? WHERE id=1',(ts,))
             self.db.execute('UPDATE client_visits SET ts=? WHERE client=1',(ts,))
@@ -48,7 +48,7 @@ class VisitAgingTests(unittest.TestCase):
         self.assertIn(future,attention['label'])
 
     def test_agent_and_admin_maps_expose_yellow_and_red_priorities(self):
-        self.shop(3,5)
+        self.shop(3,4)
         self.shop(4,9)
         agent=self.shops(reports.agent_clients_map_html(self.db,2))
         by_id={s['id']:s for s in agent}
@@ -59,10 +59,10 @@ class VisitAgingTests(unittest.TestCase):
         admin=self.shops(reports.admin_clients_map_html(self.db,1))
         self.assertEqual({s['visit_level'] for s in admin},{'yellow','red'})
         html=reports.agent_clients_map_html(self.db,2).decode()
-        self.assertIn('3–7 кун · ташриф керак',html)
-        self.assertIn('8+ кун · устувор ташриф',html)
-        self.assertIn('🟠 3–7 кун',html)
-        self.assertIn('🔴 8+ кун',html)
+        self.assertIn('3–4 кун · ташриф керак',html)
+        self.assertIn('5+ кун · устувор ташриф',html)
+        self.assertIn('🟡 3–4 кун',html)
+        self.assertIn('🔴 5+ кун',html)
 
 
 if __name__=='__main__':

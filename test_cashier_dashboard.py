@@ -8,6 +8,7 @@ import core
 
 class CashierDashboardTests(unittest.TestCase):
     def setUp(self):
+        from unittest.mock import patch as _p; _mo=_p.object(__import__('bot'),'BOT_MINIAPP_ONLY',set()); _mo.start(); self.addCleanup(_mo.stop)  # legacy bot wizard coverage
         self.db=core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',[
             (1,'admin','Admin'),(2,'agent','Ali Agent'),(3,'cashier','Malika Kassir'),(4,'cashier','Ikkinchi Kassir')])
@@ -34,10 +35,10 @@ class CashierDashboardTests(unittest.TestCase):
             self.assertIn('10.00 USD',text)
             self.assertIn('Ali Agent',text)
             self.assertIn('Baraka dokon',text)
-            self.assertNotIn('/accept 1',text)
+            self.assertIn('/review 1',text)
         with patch.object(bot,'send') as send:
             bot.cashbox_report(self.db,3)
-            self.assertIn('/accept 1',send.call_args.args[1])
+            self.assertIn('/review 1',send.call_args.args[1])
 
     def test_payment_finish_notifies_every_cashier_with_agent_and_customer(self):
         state={'action':'payment','values':{'client':1,'amount':'5.00'}}
@@ -56,12 +57,18 @@ class CashierDashboardTests(unittest.TestCase):
         state={'action':'handover','values':{'amount':'15.00'}}
         with patch.object(bot,'send') as send:
             bot.finish(self.db,2,state,72002)
-        calls=[(c.args[0],c.args[1]) for c in send.call_args_list]
+        calls=[(call.args[0],call.args[1]) for call in send.call_args_list]
         self.assertTrue(any(uid==3 and 'КАССАГА ПУЛ ТОПШИРИШ' in text and '15.00 USD' in text for uid,text in calls))
         self.assertTrue(any(uid==4 and 'КАССАГА ПУЛ ТОПШИРИШ' in text for uid,text in calls))
+        cashier_calls=[call for call in send.call_args_list if call.args[0] in (3,4)
+                       and 'КАССАГА ПУЛ ТОПШИРИШ' in call.args[1]]
+        self.assertTrue(cashier_calls)
+        self.assertTrue(all(any('🔎 Кўриб чиқиш #' in button for row in call.args[2] for button in row)
+                            for call in cashier_calls))
         hid=self.db.execute("SELECT id FROM handovers WHERE status='pending'").fetchone()[0]
         with patch.object(bot,'send') as send,patch.object(bot,'ADMINS',{1}):
-            bot.handle(self.db,self.message(3,f'/accept {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/review {hid}',72003))
+            bot.handle(self.db,self.message(3,f'/accept {hid}',72004))
         row=self.db.execute('SELECT status,cashier,accepted_ts FROM handovers WHERE id=?',(hid,)).fetchone()
         self.assertEqual(row['status'],'accepted')
         self.assertEqual(row['cashier'],3)
