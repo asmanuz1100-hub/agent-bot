@@ -7,6 +7,7 @@ inventory/cash rules and customer_status visit rules.
 import hashlib
 import os
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -234,13 +235,79 @@ def _visit_age(last,followup,now):
     return ("red" if days>=5 else "yellow" if days>=3 else "fresh"),int(days)
 
 
+_SNAPSHOT_CACHE={}                   # schema -> {'v': version, 'by': {id: row}, 'list': [row...]}
+_SNAPSHOT_LOCK=threading.Lock()      # protects _SNAPSHOT_CACHE
+_SNAPSHOT_BUILD=threading.Lock()     # only one thread refreshes the list; the others reuse its result
+_SNAPSHOT_STATS={'hit':0,'patch':0,'full':0,'bypass':0}
+SNAPSHOT_PATCH_LIMIT=60
+_PRUNE_EVERY=600
+_last_prune=[0.0]
+
+
+def _with_age(row,now):
+    item=dict(row)
+    item['stock']=dict(item['stock'])      # keshdagi qatorni hech kim o'zgartira olmasin
+    item['age'],item['days']=_visit_age(item['lastTs'],item['followup'],now)
+    return item
+
+
 def _client_snapshot(db,now,client_id=None):
+    """Mijozlar ro'yxati (hamma agentga bir xil ko'rinish).
+
+    PostgreSQL'da natija jarayon xotirasida saqlanadi va har so'rovda bazadagi commit qilingan
+    o'zgarish hisoblagichi (core.client_changes_since) bilan solishtiriladi: faqat o'zgargan mijozlar
+    qayta hisoblanadi, shuning uchun eski qarz/ombor/egasi hech qachon ko'rsatilmaydi va bir nechta
+    server nusxasi ham to'g'ri ishlaydi. Shu tranzaksiyada yozuv bo'lsa kesh ishlatilmaydi.
+    Yosh (age/days) har so'rovda `now` bo'yicha qayta hisoblanadi.
+    """
+    if client_id is not None or not isinstance(db,core.PostgresDB) or not core.change_tracking_ready(db):
+        return _client_snapshot_build(db,now,client_id)
+    schema=core._schema_name()
+    with _SNAPSHOT_LOCK:
+        entry=_SNAPSHOT_CACHE.get(schema)
+    version,changed,writing=core.client_changes_since(db,entry['v'] if entry else None)
+    if writing:
+        with _SNAPSHOT_LOCK:_SNAPSHOT_STATS['bypass']+=1
+        return _client_snapshot_build(db,now,None)
+    if entry and entry['v']==version:
+        with _SNAPSHOT_LOCK:_SNAPSHOT_STATS['hit']+=1
+        return [_with_age(r,now) for r in entry['list']]
+    with _SNAPSHOT_BUILD:
+        with _SNAPSHOT_LOCK:
+            entry=_SNAPSHOT_CACHE.get(schema)
+        if entry and entry['v']>=version:
+            # Boshqa so'rov kutish paytida yangiladi (bir xil yoki undan yangi holat).
+            with _SNAPSHOT_LOCK:_SNAPSHOT_STATS['hit']+=1
+            return [_with_age(r,now) for r in entry['list']]
+        version,changed,_=core.client_changes_since(db,entry['v'] if entry else None)
+        full=(entry is None or changed is None or 0 in changed or len(changed)>SNAPSHOT_PATCH_LIMIT
+              or len(entry['by'])>=MAX_CLIENTS)
+        if full:
+            by={r['id']:r for r in _client_snapshot_build(db,now,None)}
+        else:
+            by=dict(entry['by'])
+            for cid in changed:
+                part=_client_snapshot_build(db,now,cid)
+                if part:by[cid]=part[0]
+                else:by.pop(cid,None)
+        rows=sorted(by.values(),key=lambda r:r['id'],reverse=True)[:MAX_CLIENTS]
+        with _SNAPSHOT_LOCK:
+            _SNAPSHOT_CACHE[schema]={'v':version,'by':by,'list':rows}
+            _SNAPSHOT_STATS['full' if full else 'patch']+=1
+        if time.time()-_last_prune[0]>_PRUNE_EVERY:
+            _last_prune[0]=time.time()
+            try:core.prune_client_changes(db)
+            except Exception:db.rollback()
+    return [_with_age(r,now) for r in rows]
+
+
+def _client_snapshot_build(db,now,client_id=None):
     if client_id is None:
         rows=db.execute("""SELECT c.*,u.name AS agent_name FROM clients c
             LEFT JOIN users u ON u.id=c.agent ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
         latest=db.execute("""SELECT v.client,v.status,v.followup,v.ts,v.note,v.actor,u.name AS actor_name
             FROM client_visits v LEFT JOIN users u ON u.id=v.actor
-            WHERE v.id=(SELECT MAX(v2.id) FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
+            WHERE v.id IN (SELECT MAX(id) FROM client_visits GROUP BY client)""").fetchall()
         contacts_rows=db.execute("""SELECT client,MAX(ts) AS ts FROM events
             WHERE client IS NOT NULL AND kind IN ('visit','delivery','sold','return')
             GROUP BY client""").fetchall()
@@ -298,20 +365,27 @@ def _client_snapshot(db,now,client_id=None):
             "debtUsd":_usd(debt.get(cid,0)),
             "blacklisted":bool(int(c['blacklisted'] or 0)),"blacklistReason":c['blacklist_reason'] or "",
             "blacklistTs":int(c['blacklist_ts'] or 0) or None,
-            "stock":{str(pack):stocks.get(cid,{}).get(pack,0) for pack in core.product_ids()}
+            # Faqat noldan farqli qoldiqlar: ilova yo‘q mahsulotni 0 deb oladi; 1000 mijozda javob ~3 marta kichrayadi.
+            "stock":{str(pack):q for pack,q in stocks.get(cid,{}).items() if q}
         })
     return result
 
 def _products(db,agent):
+    # 2 ta so'rov: avval har mahsulot uchun 3x core.amount (zaxira) ikki marta + narx = ~160 so'rov edi.
+    # Formula core.agent_stock bilan bir xil: load - delivery + return.
+    stocks={int(r[0]):int(r[1] or 0) for r in db.execute("""SELECT pack,
+        COALESCE(SUM(CASE WHEN kind='load' THEN qty WHEN kind='delivery' THEN -qty WHEN kind='return' THEN qty ELSE 0 END),0)
+        FROM events WHERE agent=? AND kind IN ('load','delivery','return') GROUP BY pack""",(agent,)).fetchall()}
+    prices={int(r[0]):int(r[1] or 0) for r in db.execute('SELECT pack,price FROM products').fetchall()}
     out=[]
     for pack in core.product_ids():
         active=pack not in core.INACTIVE_PRODUCTS
-        stock=int(core.agent_stock(db,agent,pack))
+        stock=stocks.get(int(pack),0)
         if not active and stock==0:continue
         out.append({"pack":pack,"name":core.product_name(pack),"active":active,"custom":pack not in core.BUILTIN_PRODUCTS,
                     "weightKg":core.product_weight(pack),
-                    "priceUsd":_usd(core.product_price(db,pack)),
-                    "agentStock":int(core.agent_stock(db,agent,pack)),
+                    "priceUsd":_usd(prices.get(int(pack),0)),
+                    "agentStock":stock,
                     "blockUnits":core.block_units(pack)})
     return out
 

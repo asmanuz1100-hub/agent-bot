@@ -42,5 +42,4 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
       - run: python -m pip install -r requirements.txt
-      - run: python -m unittest test_analytics test_cashier_conversions test_agent_payment_flow -v
-
+      - run: python -m unittest test_analytics test_pg_flows test_cashier_conversions test_agent_payment_flow -v

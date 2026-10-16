@@ -1,4 +1,4 @@
-import sqlite3, json, time, math, re, os
+import sqlite3, json, time, math, re, os, threading
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 PRODUCT_CATALOG={
@@ -140,6 +140,9 @@ CREATE INDEX IF NOT EXISTS idx_events_client_ts ON events(client,ts);
 CREATE INDEX IF NOT EXISTS idx_points_shift_ts ON points(shift,ts);
 CREATE INDEX IF NOT EXISTS idx_shifts_agent_start ON shifts(agent,start);
 CREATE INDEX IF NOT EXISTS idx_handovers_agent_status ON handovers(agent,status);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS idx_client_visits_actor_ts ON client_visits(actor,ts);
+CREATE INDEX IF NOT EXISTS idx_client_visits_ts ON client_visits(ts);
 '''
 
 PG_SCHEMA = '''
@@ -193,6 +196,9 @@ CREATE INDEX IF NOT EXISTS idx_events_client_ts ON events(client,ts);
 CREATE INDEX IF NOT EXISTS idx_points_shift_ts ON points(shift,ts);
 CREATE INDEX IF NOT EXISTS idx_shifts_agent_start ON shifts(agent,start);
 CREATE INDEX IF NOT EXISTS idx_handovers_agent_status ON handovers(agent,status);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS idx_client_visits_actor_ts ON client_visits(actor,ts);
+CREATE INDEX IF NOT EXISTS idx_client_visits_ts ON client_visits(ts);
 '''
 
 class HybridRow:
@@ -239,6 +245,167 @@ class PostgresDB:
         if typ is None:self.conn.commit()
         else:self.conn.rollback()
         return False
+
+class PoolTimeout(RuntimeError):
+    """All pooled PostgreSQL connections stayed busy for the whole wait."""
+
+
+class _PooledPostgresDB(PostgresDB):
+    """A pooled connection: close() hands it back to the pool instead of disconnecting."""
+    def __init__(self,conn,pool,born):
+        super().__init__(conn);self._pool=pool;self._born=born;self._returned=False
+    def close(self):
+        if self._returned:return
+        self._returned=True
+        self._pool._put(self)
+
+
+def _pg_idle(conn):
+    """True when the connection is open and outside any transaction (psycopg 3; tolerant of test drivers)."""
+    if getattr(conn,'closed',False) or getattr(conn,'broken',False):return False
+    info=getattr(conn,'info',None)
+    status=getattr(info,'transaction_status',None) if info is not None else None
+    if status is None:return not getattr(conn,'in_tx',False)
+    return int(status)==0   # pq.TransactionStatus.IDLE
+
+
+class PgPool:
+    """Bounded PostgreSQL connection pool for request threads.
+
+    * at most `size` connections are open; a request waits up to `timeout` seconds, then PoolTimeout;
+    * every connection is rolled back when it comes back (open transaction, row and advisory
+      xact locks never reach the next request); one that is not idle afterwards is closed;
+    * connections older than `max_age` seconds are replaced (server-side restarts, idle killers);
+    * search_path is set once per physical connection and never changed by the app.
+    """
+    def __init__(self,url,size=None,timeout=None,max_age=None):
+        self.url=url
+        self.size=max(1,int(size or os.getenv('DB_POOL_SIZE') or 8))
+        self.timeout=float(timeout or os.getenv('DB_POOL_TIMEOUT') or 15)
+        self.max_age=float(max_age or os.getenv('DB_POOL_MAX_AGE') or 600)
+        self._idle=[];self._lock=threading.Lock();self._slots=threading.BoundedSemaphore(self.size)
+        self.opened=0;self.reused=0;self.discarded=0
+    def get(self):
+        if not self._slots.acquire(timeout=self.timeout):
+            raise PoolTimeout('Ma’lumotlar bazasi band. Birozdan keyin qayta urinib ko‘ring.')
+        try:
+            while True:
+                with self._lock:
+                    item=self._idle.pop() if self._idle else None
+                if item is None:
+                    db=connect(self.url,initialize=False)
+                    with self._lock:self.opened+=1
+                    return _PooledPostgresDB(db.conn,self,time.time())
+                conn,born=item
+                if time.time()-born>self.max_age or not _pg_idle(conn):
+                    self._discard(conn);continue
+                pooled=_PooledPostgresDB(conn,self,born)
+                # Catalog edits made by other connections/instances stay visible, as with a fresh connection.
+                refresh_catalog(pooled);pooled.commit()
+                with self._lock:self.reused+=1
+                return pooled
+        except BaseException:
+            self._slots.release();raise
+    def _discard(self,conn):
+        with self._lock:self.discarded+=1
+        try:conn.close()
+        except Exception:pass
+    def _put(self,pooled):
+        conn=pooled.conn
+        try:
+            try:conn.rollback()
+            except Exception:self._discard(conn);return
+            if not _pg_idle(conn) or time.time()-pooled._born>self.max_age:
+                self._discard(conn);return
+            with self._lock:self._idle.append((conn,pooled._born))
+        finally:
+            self._slots.release()
+    def stats(self):
+        with self._lock:
+            return {'size':self.size,'idle':len(self._idle),'opened':self.opened,'reused':self.reused,'discarded':self.discarded}
+    def close(self):
+        with self._lock:items,self._idle=self._idle,[]
+        for conn,_ in items:
+            try:conn.close()
+            except Exception:pass
+
+
+# --- Mijozlar ro'yxati keshi uchun o'zgarish hisoblagichi (faqat PostgreSQL) ---
+# Har bir commit qilingan o'zgarish (mijoz, tashrif, harakat, foydalanuvchi) commit paytida
+# data_version.v ni +1 qiladi va qaysi mijoz o'zgarganini data_changes ga yozadi. Qator qulfi
+# tufayli v commit tartibida o'sadi, shuning uchun o'qilgan v dan oldingi hamma o'zgarish ko'rinadi.
+CLIENT_CHANGE_TABLES=('clients','client_visits','events','users')
+_CHANGE_TRACKING={}
+
+
+def change_tracking_ready(db):
+    return bool(_CHANGE_TRACKING.get(_schema_name()))
+
+
+def _schema_name():
+    return (os.getenv('DB_SCHEMA','agentbot') or 'agentbot').strip()
+
+
+def _install_change_tracking(db,schema):
+    db.execute('CREATE TABLE IF NOT EXISTS data_version(k TEXT PRIMARY KEY, v BIGINT NOT NULL DEFAULT 0)')
+    db.execute("INSERT INTO data_version(k,v) VALUES('clients',0) ON CONFLICT(k) DO NOTHING")
+    db.execute('CREATE TABLE IF NOT EXISTS data_changes(v BIGINT NOT NULL, client BIGINT NOT NULL, PRIMARY KEY(v,client))')
+    # client=0: hamma mijozga ta'sir qiladi (masalan agent ismi o'zgardi) -> to'liq qayta hisob.
+    db.execute(f'''CREATE OR REPLACE FUNCTION "{schema}".asman_client_changed() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+DECLARE
+  cur BIGINT;
+  a BIGINT;
+  b BIGINT;
+BEGIN
+  cur := NULLIF(current_setting('asman.client_v', true), '')::BIGINT;
+  IF cur IS NULL THEN
+    UPDATE "{schema}".data_version SET v = v + 1 WHERE k = 'clients' RETURNING v INTO cur;
+    PERFORM set_config('asman.client_v', cur::text, true);
+  END IF;
+  IF TG_TABLE_NAME = 'users' THEN
+    a := 0;
+  ELSIF TG_TABLE_NAME = 'clients' THEN
+    IF TG_OP <> 'INSERT' THEN a := OLD.id; END IF;
+    IF TG_OP <> 'DELETE' THEN b := NEW.id; END IF;
+  ELSE
+    IF TG_OP <> 'INSERT' THEN a := OLD.client; END IF;
+    IF TG_OP <> 'DELETE' THEN b := NEW.client; END IF;
+  END IF;
+  IF a IS NOT NULL THEN
+    INSERT INTO "{schema}".data_changes(v, client) VALUES (cur, a) ON CONFLICT DO NOTHING;
+  END IF;
+  IF b IS NOT NULL AND b IS DISTINCT FROM a THEN
+    INSERT INTO "{schema}".data_changes(v, client) VALUES (cur, b) ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN NULL;
+END;
+$fn$''')
+    for table in CLIENT_CHANGE_TABLES:
+        exists=db.execute("""SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname=? AND c.relname=? AND t.tgname='asman_client_changed'""",(schema,table)).fetchone()
+        if not exists:
+            # DEFERRED: hisoblagich qulfi commit oxirida olinadi -> boshqa qulflar bilan deadlock bo'lmaydi.
+            db.execute(f'''CREATE CONSTRAINT TRIGGER asman_client_changed AFTER INSERT OR UPDATE OR DELETE
+                ON "{schema}".{table} DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+                EXECUTE FUNCTION "{schema}".asman_client_changed()''')
+
+
+def client_changes_since(db,version):
+    """(current_version, changed_client_ids|None, in_write_tx). None = to'liq qayta hisoblash kerak."""
+    row=db.execute("""SELECT v,txid_current_if_assigned() IS NOT NULL FROM data_version WHERE k='clients'""").fetchone()
+    current=int(row[0]);writing=bool(row[1])
+    if version is None or writing:return current,None,writing
+    if current==version:return current,set(),False
+    if current-version>500:return current,None,False
+    ids={int(r[0]) for r in db.execute('SELECT DISTINCT client FROM data_changes WHERE v>? AND v<=?',(version,current)).fetchall()}
+    return current,ids,False
+
+
+def prune_client_changes(db,keep=5000):
+    db.execute("""DELETE FROM data_changes WHERE v<(SELECT v FROM data_version WHERE k='clients')-?""",(int(keep),))
+
 
 def is_integrity_error(exc):
     if isinstance(exc,sqlite3.IntegrityError):return True
@@ -301,6 +468,16 @@ def connect(path,initialize=True):
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
         db.commit()
+        try:
+            _install_change_tracking(db,schema)
+            db.commit()
+            _CHANGE_TRACKING[schema]=True
+        except Exception:
+            # Kesh ixtiyoriy: o'rnatilmasa ro'yxat har safar bazadan to'liq hisoblanadi (eski xatti-harakat).
+            db.rollback()
+            _CHANGE_TRACKING[schema]=False
+            import logging
+            logging.exception('Client change tracking is not installed; client list cache disabled')
         return db
     db=sqlite3.connect(path,timeout=30)
     db.row_factory=sqlite3.Row
@@ -1181,6 +1358,25 @@ def agent_fund_balance_uzs(db,agent):
     if legacy and rate:
         balance+=int((Decimal(legacy)*Decimal(rate)/Decimal(100)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
     return balance
+
+
+def agent_fund_balances(db):
+    """{agent: (usd_cents, uzs)} for every agent with wallet rows — one query instead of 3 per agent.
+    Same arithmetic as agent_fund_balance_usd / agent_fund_balance_uzs."""
+    rate=cashier_rate(db)
+    out={}
+    for r in db.execute("""SELECT agent,
+        COALESCE(SUM(CASE WHEN kind='topup' THEN amount_usd WHEN kind='expense' THEN -amount_usd ELSE 0 END),0) AS usd,
+        COALESCE(SUM(CASE WHEN amount_uzs>0 AND kind='topup' THEN amount_uzs
+                          WHEN amount_uzs>0 AND kind='expense' THEN -amount_uzs ELSE 0 END),0) AS uzs,
+        COALESCE(SUM(CASE WHEN amount_uzs=0 AND kind='topup' THEN amount_usd
+                          WHEN amount_uzs=0 AND kind='expense' THEN -amount_usd ELSE 0 END),0) AS legacy_usd
+        FROM agent_funds GROUP BY agent""").fetchall():
+        balance=int(r['uzs'] or 0);legacy=int(r['legacy_usd'] or 0)
+        if legacy and rate:
+            balance+=int((Decimal(legacy)*Decimal(rate)/Decimal(100)).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+        out[int(r['agent'])]=(int(r['usd'] or 0),balance)
+    return out
 
 
 def fund_agent_expense_uzs(db,actor,agent,amount_uzs,note,source,expected_rate=None):

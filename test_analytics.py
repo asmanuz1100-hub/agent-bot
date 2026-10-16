@@ -260,6 +260,15 @@ class InsightsTests(unittest.TestCase):
         out = self.month()
         self.assertEqual(self.row(out, 10)['paidCents'], 0)
         self.assertEqual(out['summary']['legacyEvents'], 1)
+        self.assertNotIn('score', self.row(out, 10)['kpi'])   # yangi mijoz — baribir ball yo'q
+
+    def test_unpriced_delivery_blocks_exact_score(self):
+        self.client(10)
+        self.ev(10, 'delivery', 2, T(2026, 8, 1))
+        self.db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
+            VALUES(2,2,10,'delivery',1,3,0,0,'',?,9002)""", (T(2026, 10, 2),))
+        k = self.row(self.month(), 10)['kpi']
+        self.assertEqual(k['status'], 'incomplete')
 
     # Bugun kimga
     def test_payment_does_not_update_visit_date(self):
