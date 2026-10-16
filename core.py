@@ -467,6 +467,7 @@ def connect(path,initialize=True):
         _promote_8068123777_to_admin_once(db)
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
+        import warehouse;warehouse.init(db)
         db.commit()
         try:
             _install_change_tracking(db,schema)
@@ -535,6 +536,7 @@ def connect(path,initialize=True):
     _promote_8068123777_to_admin_once(db)
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
+    import warehouse;warehouse.init(db)
     db.commit()
     db.execute('PRAGMA journal_mode=WAL')
     return db
@@ -826,7 +828,7 @@ def transfer_agent_account(db,actor,old_id,new_id):
     if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(old_id,)).fetchone():
         raise ValueError('Аввал агент сменасини ёпинг.')
     db.execute('INSERT INTO users(id,role,name) VALUES(?,?,?)',(new_id,'agent',current['name']))
-    for table in ('clients','events','shifts','handovers'):
+    for table in ('clients','events','shifts','handovers','warehouse_moves','warehouse_requests'):
         db.execute(f'UPDATE {table} SET agent=? WHERE agent=?',(new_id,old_id))
     db.execute('INSERT INTO agent_features(agent,feature,enabled) SELECT ?,feature,enabled FROM agent_features WHERE agent=?',
                (new_id,old_id))
@@ -969,7 +971,7 @@ def add_or_promote_admin(db,actor,uid,name):
         return 'created'
     if row['role']=='admin':
         raise ValueError('Бу Telegram ID аллақачон админ.')
-    if row['role'] not in ('agent','disabled','cashier'):
+    if row['role'] not in ('agent','disabled','cashier','warehouse'):
         raise ValueError('Бу аккаунт ролини админга ўзгартириш мумкин эмас.')
     if db.execute('SELECT 1 FROM shifts WHERE agent=? AND end IS NULL',(uid,)).fetchone():
         raise ValueError('Аввал ходимнинг очиқ сменасини ёпинг.')
@@ -1040,7 +1042,9 @@ def amount(db, agent, kinds, client=None, pack=None, field='qty'):
     return db.execute(q,args).fetchone()[0]
 
 def agent_stock(db,a,p):
-    return amount(db,a,['load'],pack=p)-amount(db,a,['delivery'],pack=p)+amount(db,a,['return'],pack=p)
+    # 'unload' — агент товарни омборга қайтарган (warehouse.py).
+    return (amount(db,a,['load'],pack=p)-amount(db,a,['delivery'],pack=p)
+            +amount(db,a,['return'],pack=p)-amount(db,a,['unload'],pack=p))
 
 def client_stock(db,a,c,p):
     return amount(db,a,['delivery'],c,p)-amount(db,a,['sold','return'],c,p)

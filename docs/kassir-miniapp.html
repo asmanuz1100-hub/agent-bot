@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kassir Mini App — prototip</title>
+<style>
+  :root {
+    --tg-bg: #17212b;
+    --tg-head: #232e3c;
+    --tg-card: #232e3c;
+    --tg-text: #f5f5f5;
+    --tg-hint: #8b9bb4;
+    --tg-link: #6ab2f2;
+    --tg-button: #5288c1;
+    --tg-ok: #3dcc85;
+    --tg-ok-bg: rgba(61,204,133,.14);
+    --tg-bad: #e75c5c;
+    --tg-bad-bg: rgba(231,92,92,.14);
+    --tg-warn: #f5a524;
+    --tg-sep: rgba(255,255,255,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0e1621;
+    color: var(--tg-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .stage {
+    max-width: 420px;
+    margin: 24px auto 48px;
+    background: var(--tg-bg);
+    min-height: 760px;
+    position: relative;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+  }
+  .tg-bar {
+    background: var(--tg-head);
+    padding: 14px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .tg-bar small { color: var(--tg-hint); font-weight: 400; }
+  .screen { padding: 14px 14px 88px; }
+  .hidden { display: none !important; }
+  .kpis {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .kpi {
+    background: var(--tg-card);
+    border-radius: 14px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .kpi b { display: block; font-size: 13px; }
+  .kpi span { color: var(--tg-hint); font-size: 11px; }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--tg-hint); margin: 18px 0 8px; }
+  .card {
+    background: var(--tg-card);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .amount { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+  .badge {
+    font-size: 12px;
+    color: var(--tg-warn);
+    background: rgba(245,165,36,.12);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .meta { color: var(--tg-hint); font-size: 13px; margin-top: 6px; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  button {
+    border: 0;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ok { background: var(--tg-ok); color: #08301c; }
+  .bad { background: var(--tg-bad-bg); color: #ffb4b4; }
+  .ghost { background: transparent; color: var(--tg-link); width: 100%; }
+  .pay { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--tg-sep); font-size: 14px; }
+  .pay:last-child { border-bottom: 0; }
+  .nav {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--tg-head);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 8px 6px 16px;
+    border-top: 1px solid var(--tg-sep);
+  }
+  .nav button {
+    background: none;
+    color: var(--tg-hint);
+    padding: 8px;
+    font-size: 12px;
+  }
+  .nav button.on { color: var(--tg-link); }
+  .sheet {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex;
+    align-items: flex-end;
+  }
+  .sheet .box {
+    background: #1c2733;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 18px 16px 28px;
+  }
+  .big { font-size: 36px; font-weight: 800; text-align: center; margin: 8px 0 4px; }
+  .center { text-align: center; color: var(--tg-hint); }
+  .warn-line {
+    background: var(--tg-warn);
+    color: #2a1a00;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 12px 0;
+  }
+  .empty { color: var(--tg-hint); text-align: center; padding: 32px 12px; }
+  .toast {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 78px;
+    background: #111a24;
+    border: 1px solid var(--tg-sep);
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+  .legend { max-width: 420px; margin: 0 auto 24px; color: #9bb0c9; font-size: 14px; padding: 0 12px; }
+</style>
+</head>
+<body>
+<p class="legend">
+  Kassir Mini App prototipi — Telegram ichida ochiladi. <b>/accept</b> o‘rniga katta tugma + summani qayta ko‘rsatish.
+  Bu dizayn; backend hali ulanmagan.
+</p>
+
+<div class="stage">
+  <div class="tg-bar">Kassir · Mini App <small>Malika</small></div>
+
+  <section id="navbat" class="screen">
+    <div class="kpis">
+      <div class="kpi"><b id="kpi-pay">148.00</b><span>Bugun olingan</span></div>
+      <div class="kpi"><b id="kpi-acc">120.00</b><span>Qabul qilingan</span></div>
+      <div class="kpi"><b id="kpi-pend">28.00</b><span>Kutayotgan</span></div>
+    </div>
+    <h2>Navbat — qo‘ldagi pul</h2>
+    <div id="queue"></div>
+  </section>
+
+  <section id="bugun" class="screen hidden">
+    <h2>Bugun mijozlardan</h2>
+    <div class="card" id="pays"></div>
+    <p class="meta">Bu ro‘yxat nazorat uchun. Kassir faqat agent topshirgan naqdni qabul qiladi.</p>
+  </section>
+
+  <section id="tarix" class="screen hidden">
+    <h2>Oxirgi kassir harakatlari</h2>
+    <div class="card" id="hist"></div>
+  </section>
+
+  <nav class="nav">
+    <button class="on" data-tab="navbat">Navbat</button>
+    <button data-tab="bugun">Bugun</button>
+    <button data-tab="tarix">Tarix</button>
+  </nav>
+</div>
+
+<script>
+const data = {
+  pending: [
+    {id:12, agent:'Ali Agent', amount:'28.00', time:'09:14', note:'3 ta do‘kondan yig‘ilgan'}
+  ],
+  payments: [
+    {t:'09:02', agent:'Ali Agent', shop:'Baraka do‘kon', amount:'12.50'},
+    {t:'08:41', agent:'Ali Agent', shop:'Navro‘z', amount:'15.50'},
+    {t:'08:20', agent:'Sardor', shop:'Guliston', amount:'120.00'}
+  ],
+  history: [
+    {id:11, ok:true, agent:'Sardor', amount:'120.00', who:'Malika', t:'08:25'},
+    {id:10, ok:false, agent:'Ali Agent', amount:'5.00', who:'Malika', t:'kecha'}
+  ]
+};
+
+function $(id){ return document.getElementById(id); }
+
+function renderQueue(){
+  const box = $('queue');
+  if (!data.pending.length) {
+    box.innerHTML = '<div class="empty">Navbat bo‘sh. Agent topshirishi kelganda shu yerda chiqadi.</div>';
+    $('kpi-pend').textContent = '0.00';
+    return;
+  }
+  box.innerHTML = data.pending.map(x => `
+    <article class="card">
+      <div class="row">
+        <div>
+          <div style="font-weight:600">${x.agent}</div>
+          <div class="meta">${x.note} · ${x.time}</div>
+        </div>
+        <span class="badge">#${x.id}</span>
+      </div>
+      <div class="amount">${x.amount} <small style="font-size:16px;color:var(--tg-hint)">USD</small></div>
+      <div class="actions">
+        <button class="ok" onclick="openSheet(${x.id}, true)">Qabul qilish</button>
+        <button class="bad" onclick="openSheet(${x.id}, false)">Rad etish</button>
+      </div>
+    </article>`).join('');
+}
+
+function renderPays(){
+  $('pays').innerHTML = data.payments.map(p =>
+    `<div class="pay"><span>${p.t} · ${p.agent}<br><small style="color:var(--tg-hint)">${p.shop}</small></span><b>${p.amount}</b></div>`
+  ).join('');
+}
+
+function renderHist(){
+  $('hist').innerHTML = data.history.map(h =>
+    `<div class="pay"><span>${h.ok?'✅':'❌'} #${h.id} · ${h.agent}<br><small style="color:var(--tg-hint)">${h.who} · ${h.t}</small></span><b>${h.amount}</b></div>`
+  ).join('');
+}
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.querySelector('.stage').appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+function openSheet(id, accept){
+  const x = data.pending.find(p => p.id === id);
+  const overlay = document.createElement('div');
+  overlay.className = 'sheet';
+  overlay.innerHTML = `
+    <div class="box">
+      <div class="center">${accept ? 'Pulni qo‘lda ko‘rdingizmi?' : 'Rad etish'}</div>
+      <div class="big">${x.amount} USD</div>
+      <div class="center">${x.agent} · topshirish #${x.id}</div>
+      <div class="warn-line">${accept
+        ? 'Faqat stolingizdagi naqd shu summaga teng bo‘lsa qabul qiling.'
+        : 'Rad etilsa agentda navbat ochiq qoladi, pul qaytmaydi — u qayta topshiradi.'}</div>
+      <div class="actions">
+        <button class="ok" id="confirmBtn">${accept ? 'Ha, qabul' : 'Ha, rad et'}</button>
+        <button class="bad" id="cancelBtn">Bekor</button>
+      </div>
+    </div>`;
+  document.querySelector('.stage').appendChild(overlay);
+  overlay.querySelector('#cancelBtn').onclick = () => overlay.remove();
+  overlay.querySelector('#confirmBtn').onclick = () => {
+    data.pending = data.pending.filter(p => p.id !== id);
+    data.history.unshift({id, ok: accept, agent: x.agent, amount: x.amount, who: 'Malika', t: 'hozir'});
+    if (accept) {
+      const acc = (parseFloat($('kpi-acc').textContent) + parseFloat(x.amount)).toFixed(2);
+      $('kpi-acc').textContent = acc;
+    }
+    overlay.remove();
+    renderQueue(); renderHist();
+    toast(accept ? 'Qabul qilindi. Agentga xabar ketdi.' : 'Rad etildi. Agentga xabar ketdi.');
+  };
+}
+
+document.querySelectorAll('.nav button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    ['navbat','bugun','tarix'].forEach(id => $(id).classList.toggle('hidden', id !== btn.dataset.tab));
+  };
+});
+
+renderQueue(); renderPays(); renderHist();
+</script>
+</body>
+</html>
