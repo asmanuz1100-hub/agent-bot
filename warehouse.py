@@ -6,7 +6,7 @@
 Ёзувлар ўчирилмайди ва таҳрирланмайди; хато бўлса тескари амал киритилади.
 """
 import time
-from core import PRODUCTS, PostgresDB, lock_agent, agent_stock, product_name, units_per_block
+from core import PRODUCTS, PostgresDB, lock_agent, agent_stock, product_name, units_per_block, block_units
 
 KEEPER_ROLES=('warehouse','admin')
 MOVE_LABELS={
@@ -171,7 +171,7 @@ def snapshot(db,actor):
     return {
         'me':{'id':actor,'role':_role(db,actor),
               'name':(db.execute('SELECT name FROM users WHERE id=?',(actor,)).fetchone() or [''])[0]},
-        'products':[{'pack':p,'name':name,'block':units_per_block(p),'stock':stock(db,p)} for p,name in PRODUCTS.items()],
+        'products':[{'pack':p,'name':name,'block':block_units(p) or 0,'stock':stock(db,p)} for p,name in PRODUCTS.items()],
         'agents':[{'id':int(a['id']),'name':a['name'],
                    'stock':{str(p):agent_stock(db,a['id'],p) for p in PRODUCTS}} for a in agents],
         'requests':[{'id':int(r['id']),'agent':int(r['agent']),'agent_name':r['agent_name'] or str(r['agent']),
@@ -186,8 +186,9 @@ def snapshot(db,actor):
 def report_text(db):
     lines=['🏬 ОМБОР ҚОЛДИҒИ']
     for p,name in PRODUCTS.items():
-        n=stock(db,p);block=units_per_block(p)
-        lines.append(f'{name}: {n} дона ({n//block} блок + {n%block} дона)')
+        n=stock(db,p);block=block_units(p)
+        # Some catalog items are sold by weight/piece only and have no block size.
+        lines.append(f'{name}: {n} дона ({n//block} блок + {n%block} дона)' if block else f'{name}: {n} дона')
     pending=pending_requests(db,20)
     if pending:
         lines.append('\n⏳ КУТАЁТГАН СЎРОВЛАР')
