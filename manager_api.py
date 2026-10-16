@@ -354,6 +354,22 @@ def _enrich_period_analysis(db,report,offset_seconds):
     return report
 
 
+def _daily_series(db,today,now,recent_visits):
+    """Oxirgi 7 kun: tashrif, yetkazish va to'lov. Avval har kun uchun to'liq _period_report
+    (mahsulot, smena, GPS) hisoblanardi; grafik faqat shu uch raqamni ishlatadi — bitta so'rov yetarli."""
+    days=[(today-k*86400,min(today-k*86400+86400,now+1)) for k in range(6,-1,-1)]
+    rows=db.execute("""SELECT ts,kind,amount_usd FROM events
+        WHERE ts>=? AND ts<? AND kind IN ('delivery','payment')""",(days[0][0],days[-1][1])).fetchall()
+    out=[]
+    for lo,hi in days:
+        delivered=sum(int(r["amount_usd"] or 0) for r in rows if lo<=int(r["ts"])<hi and r["kind"]=="delivery")
+        payments=sum(int(r["amount_usd"] or 0) for r in rows if lo<=int(r["ts"])<hi and r["kind"]=="payment")
+        out.append({"day":datetime.fromtimestamp(lo,TZ).strftime("%d.%m"),
+                    "visits":sum(1 for _,ts in recent_visits if lo<=ts<hi),
+                    "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments)})
+    return out
+
+
 def dashboard(db, now=None):
     """One consistent read snapshot of the real agentbot schema.
 
@@ -373,15 +389,17 @@ def dashboard(db, now=None):
     last_points = db.execute("""SELECT p.shift,p.lat,p.lon,p.ts,p.accuracy
        FROM points p JOIN shifts s ON s.id=p.shift
        WHERE s.end IS NULL
-         AND p.id=(SELECT MAX(p2.id) FROM points p2 WHERE p2.shift=p.shift)""").fetchall()
+         AND p.id IN (SELECT MAX(p2.id) FROM points p2 JOIN shifts s2 ON s2.id=p2.shift
+                      WHERE s2.end IS NULL GROUP BY p2.shift)""").fetchall()
     points = {int(p["shift"]): p for p in last_points}
     # Last known GPS is also useful after a shift closes, but it must never be
     # presented as live. Keep it separately and mark the location source.
     historical_points = db.execute("""SELECT s.agent,p.lat,p.lon,p.ts,p.accuracy,p.id
        FROM points p JOIN shifts s ON s.id=p.shift
-       WHERE p.id=(SELECT p2.id FROM points p2
+       WHERE p.id IN (SELECT (SELECT p2.id FROM points p2
           JOIN shifts s2 ON s2.id=p2.shift
-          WHERE s2.agent=s.agent ORDER BY p2.ts DESC,p2.id DESC LIMIT 1)
+          WHERE s2.agent=a.agent ORDER BY p2.ts DESC,p2.id DESC LIMIT 1)
+          FROM (SELECT DISTINCT agent FROM shifts) a)
        ORDER BY s.agent""").fetchall()
     last_by_agent = {int(p["agent"]): p for p in historical_points}
     visit_rows = db.execute("""SELECT v.actor,v.ts FROM client_visits v
@@ -402,8 +420,8 @@ def dashboard(db, now=None):
          FROM clients c LEFT JOIN users u ON u.id=c.agent
          ORDER BY c.id DESC LIMIT ?""",(MAX_CLIENTS,)).fetchall()
     latest = db.execute("""SELECT v.client,v.status,v.followup,v.ts,v.note
-        FROM client_visits v WHERE v.id=(SELECT MAX(v2.id)
-             FROM client_visits v2 WHERE v2.client=v.client)""").fetchall()
+        FROM client_visits v WHERE v.id IN (SELECT MAX(id)
+             FROM client_visits GROUP BY client)""").fetchall()
     latest_by_client = {int(v["client"]): v for v in latest}
     contacts = db.execute("""SELECT client,MAX(ts) AS ts FROM events
         WHERE client IS NOT NULL AND kind IN ('visit','delivery','sold','return')
@@ -524,14 +542,7 @@ def dashboard(db, now=None):
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
     report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now),7*86400)
     report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now),30*86400)
-    series=[]
-    for k in range(6,-1,-1):
-        day=today-k*86400
-        next_day=min(day+86400,now+1)
-        daily=_period_report(db,day,next_day,staff,clients,recent_visits,now)
-        series.append({"day":datetime.fromtimestamp(day,TZ).strftime("%d.%m"),
-                       "visits":daily["visits"],"deliveredUsd":daily["deliveredUsd"],
-                       "paymentsUsd":daily["paymentsUsd"]})
+    series=_daily_series(db,today,now,recent_visits)
     total_debt=sum(int(v or 0) for v in debt_by_client.values())
     return {
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,

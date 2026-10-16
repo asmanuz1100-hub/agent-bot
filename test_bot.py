@@ -301,8 +301,10 @@ class Tests(unittest.TestCase):
   self.assertIsNot(HTTPServer,ThreadingHTTPServer)
   self.assertIn('ThreadingHTTPServer if postgres else HTTPServer',
                 __import__('inspect').getsource(bot.serve_webhook))
-  self.assertIn('return connect(database_url,initialize=False) if postgres else db',
-                __import__('inspect').getsource(bot.serve_webhook))
+  # Each request thread gets its own PostgreSQL connection (from the bounded pool), never the bootstrap one.
+  src=__import__('inspect').getsource(bot.serve_webhook)
+  self.assertIn('pool=PgPool(database_url) if postgres else None',src)
+  self.assertIn('return pool.get() if postgres else db',src)
 
  def test_admin_can_open_all_customer_map_and_agent_link_routes_match(self):
   import ast,inspect,re

@@ -410,7 +410,7 @@ def today_plan(db, agent=None, now=None, limit=25):
     visits = {}
     for v in db.execute(f"""SELECT v.client AS client,v.status AS status,v.followup AS followup,v.ts AS ts FROM client_visits v
             JOIN clients c ON c.id=v.client
-            WHERE v.id=(SELECT MAX(v2.id) FROM client_visits v2 WHERE v2.client=v.client){w}""", wa).fetchall():
+            WHERE v.id IN (SELECT MAX(id) FROM client_visits GROUP BY client){w}""", wa).fetchall():
         visits[_i(v['client'])] = v
     tw, ta = ('', [])
     if agent is not None:

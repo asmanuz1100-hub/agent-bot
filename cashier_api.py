@@ -160,9 +160,10 @@ def dashboard(db, actor):
         WHERE h.status!='pending' ORDER BY h.accepted_ts DESC,h.id DESC LIMIT 100""").fetchall()]
     expenses = [dict(x) for x in db.execute("""SELECT e.*,u.name AS cashier_name FROM cashier_expenses e
         LEFT JOIN users u ON u.id=e.cashier ORDER BY e.ts DESC,e.id DESC LIMIT 100""").fetchall()]
+    funds = core.agent_fund_balances(db)
     agents = [{'id': int(x['id']), 'name': x['name'],
-               'fund_balance': core.agent_fund_balance_usd(db,int(x['id'])),
-               'fund_balance_uzs': core.agent_fund_balance_uzs(db,int(x['id']))}
+               'fund_balance': funds.get(int(x['id']), (0, 0))[0],
+               'fund_balance_uzs': funds.get(int(x['id']), (0, 0))[1]}
               for x in db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()]
     agents.sort(key=lambda x:(-x['fund_balance_uzs'],x['name'] or ''))
     agent_funds = [dict(x) for x in db.execute("""SELECT f.*,a.name AS agent_name,u.name AS actor_name

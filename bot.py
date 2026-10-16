@@ -2250,10 +2250,12 @@ def serve_webhook(db,base_url):
     port=int(os.getenv('PORT','10000'))
     postgres=isinstance(db,PostgresDB)
     database_url=os.getenv('DATABASE_URL') or DB_PATH
+    pool=PgPool(database_url) if postgres else None
     def request_db():
         # Every HTTP thread owns its own transaction/connection. Sharing the
         # bootstrap psycopg connection across request threads is unsafe.
-        return connect(database_url,initialize=False) if postgres else db
+        # Connections come from a bounded pool; close() rolls back and returns them.
+        return pool.get() if postgres else db
 
     class Handler(BaseHTTPRequestHandler):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
