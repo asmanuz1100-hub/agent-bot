@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent bot — vizual maslahat</title>
+<style>
+  :root {
+    --bg: #f4efe6;
+    --ink: #1c1915;
+    --muted: #5c564c;
+    --card: #fffdf8;
+    --line: #e4d9c8;
+    --go: #0f6b4c;
+    --go-bg: #e4f4ec;
+    --wait: #1d4e89;
+    --wait-bg: #e8f0fa;
+    --stop: #9a3412;
+    --stop-bg: #fde8dc;
+    --warn: #b45309;
+    --warn-bg: #fff3d9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 1.7rem; margin: 0 0 8px; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 28px; }
+  h2 { font-size: 1.15rem; margin: 36px 0 14px; }
+  .hero {
+    background: linear-gradient(135deg, #14352c, #1d4e89);
+    color: #fff;
+    border-radius: 20px;
+    padding: 28px 26px;
+  }
+  .hero p { margin: 8px 0 0; opacity: .9; }
+  .row { display: grid; gap: 12px; }
+  @media (min-width: 800px) {
+    .t3 { grid-template-columns: 1fr 1fr 1fr; }
+    .t2 { grid-template-columns: 1fr 1fr; }
+    .t5 { grid-template-columns: repeat(5, 1fr); }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 16px 14px;
+  }
+  .card strong { display: block; margin-bottom: 6px; }
+  .tag {
+    display: inline-block;
+    font-size: .72rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .go { background: var(--go-bg); color: var(--go); }
+  .wait { background: var(--wait-bg); color: var(--wait); }
+  .stop { background: var(--stop-bg); color: var(--stop); }
+  .warn { background: var(--warn-bg); color: var(--warn); }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .step {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    flex: 1 1 140px;
+    min-width: 130px;
+  }
+  .arrow { color: var(--muted); font-weight: 700; }
+  .eq {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: .82rem;
+    background: #f7f3ea;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 8px 0 0;
+  }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  .people { display: grid; gap: 10px; }
+  @media (min-width: 800px) { .people { grid-template-columns: 1fr 1fr 1fr; } }
+  footer { margin-top: 36px; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Hozir yangi funksiya emas — real smena</h1>
+    <p>Bot yetarli. Keyingi qadam: backup, 2–3 agent, 1 kassir, 1 hafta dala sinovi.</p>
+  </div>
+
+  <h2>Vaqt chizig‘i</h2>
+  <div class="row t3">
+    <article class="card">
+      <span class="tag go">Hafta 1 — qil</span>
+      <strong>Ishga tushirish</strong>
+      <ul>
+        <li>Postgres dump/tiklash mashqi</li>
+        <li>Alohida <code>WEBHOOK_SECRET</code></li>
+        <li>Token/URL GitHubda yo‘q</li>
+        <li>2–3 agent + 1 kassir</li>
+      </ul>
+    </article>
+    <article class="card">
+      <span class="tag wait">Keyin</span>
+      <strong>Kodni yengillashtirish</strong>
+      <ul>
+        <li><code>bot.py</code> ni bo‘lish</li>
+        <li>Xarita uchun <code>MAP_SECRET</code></li>
+        <li>Tovar katalogi bazadan</li>
+        <li>Kassirda summani qayta ko‘rsatish</li>
+      </ul>
+    </article>
+    <article class="card">
+      <span class="tag stop">Hozir qilma</span>
+      <strong>Kattalashtirish</strong>
+      <ul>
+        <li>1C / bank</li>
+        <li>Ko‘p valyuta, yangi liniya</li>
+        <li>Ko‘p Render instansiya</li>
+        <li>OCR’ga ishonib saqlash</li>
+      </ul>
+    </article>
+  </div>
+
+  <h2>Ishga tushirish oqimi</h2>
+  <div class="flow">
+    <div class="step"><span class="tag go">1</span><strong>Secretlar</strong>BOT_TOKEN, ADMIN_IDS, WEBHOOK_SECRET alohida</div>
+    <span class="arrow">→</span>
+    <div class="step"><span class="tag go">2</span><strong>Postgres</strong>Doimiy baza. Dump ni tiklab ko‘r</div>
+    <span class="arrow">→</span>
+    <div class="step"><span class="tag warn">3</span><strong>Render</strong>Free uxlaydi. Jiddiy pul bo‘lsa — paid</div>
+    <span class="arrow">→</span>
+    <div class="step"><span class="tag go">4</span><strong>Dala</strong>Haqiqiy smena, qo‘lda solishtirish</div>
+  </div>
+
+  <h2>Har kuni 5 ta tenglama</h2>
+  <div class="row t5">
+    <article class="card">
+      <span class="tag go">Zaxira</span>
+      <div class="eq">yuk − berilgan + qaytgan</div>
+    </article>
+    <article class="card">
+      <span class="tag go">Qarz</span>
+      <div class="eq">berilgan − to‘lov − qaytarish</div>
+    </article>
+    <article class="card">
+      <span class="tag go">Naqd</span>
+      <div class="eq">olingan − kassir qabul</div>
+    </article>
+    <article class="card">
+      <span class="tag warn">GPS</span>
+      <div class="eq">5 daqiqa eski → amal yopiq</div>
+    </article>
+    <article class="card">
+      <span class="tag wait">Xarita</span>
+      <div class="eq">15 daqiqa → havola o‘chadi</div>
+    </article>
+  </div>
+
+  <h2>Xato bo‘lsa</h2>
+  <div class="row t2">
+    <article class="card">
+      <span class="tag go">Qil</span>
+      <strong>Yangi qaytarish yoki yangi tovar yozuvi</strong>
+      <p>FIFO tarixi saqlanadi. Storno/tahrirni kam ishlat.</p>
+    </article>
+    <article class="card">
+      <span class="tag stop">Qilma</span>
+      <strong>Eski partiyani o‘chirib qayta yozish</strong>
+      <p>Keyingi sotuv/qaytarish narxini buzadi. Bot ham buni to‘xtatadi.</p>
+    </article>
+  </div>
+
+  <h2>Odamlar qoidasi</h2>
+  <div class="people">
+    <article class="card">
+      <span class="tag go">Agent</span>
+      <strong>Smena ochiq = live-location</strong>
+      Ish tugasa botda ham, Telegramda ham to‘xtat.
+    </article>
+    <article class="card">
+      <span class="tag wait">Admin</span>
+      <strong>Xarita havolasini forward qilma</strong>
+      15 daqiqa ichida URL yetarli. GPS — isbot emas, ogohlantirish.
+    </article>
+    <article class="card">
+      <span class="tag warn">Kassir</span>
+      <strong>Faqat qo‘lida ko‘rgan pul</strong>
+      /accept dan oldin summani qayta ko‘r.
+    </article>
+  </div>
+
+  <footer>
+    Manba: agent-bot tahlili. Bu sahifa kodni o‘zgartirmaydi — faqat ish tartibi.
+  </footer>
+</div>
+</body>
+</html>
