@@ -102,6 +102,7 @@ class AgentApiTests(unittest.TestCase):
         self.db.execute("INSERT INTO clients(agent,name,phone,address,created_ts,map_only) VALUES(4,'Other Shop','+998909876543','X',?,0)",(self.now,))
         other=self.db.execute("SELECT id FROM clients WHERE agent=4").fetchone()[0]
 
+        core.record(self.db,1,4,None,'load',1,99,0,'',8001,currency='USD')
         core.record(self.db,2,2,cid,'delivery',1,4,0,'',8101,currency='USD')
         core.record(self.db,2,2,cid,'sold',1,1,0,'',8102,currency='USD')
         core.record(self.db,2,2,cid,'payment',0,0,500,'',8103,currency='USD')
@@ -238,16 +239,23 @@ class AgentApiTests(unittest.TestCase):
         self.assertIn('mahsulot hozircha berilmadi',row['comment'])
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE client=? AND kind='delivery'",(cid,)).fetchone()[0],0)
 
-    def test_delivery_can_continue_when_agent_stock_becomes_negative(self):
+    def test_delivery_is_blocked_beyond_agent_stock(self):
+        # Agent faqat ombordan olgan tovarini topshiradi: minus qoldiq yo‘q.
         self.add_client('negative_stock_client')
         cid=self.db.execute("SELECT id FROM clients WHERE shop_name='Baraka'").fetchone()[0]
+        before=core.agent_stock(self.db,2,1)
+        with self.assertRaisesRegex(ValueError,'qo‘lingizda'):
+            agent_api.mutate(self.db,2,'delivery',
+                {'clientId':cid,'items':[{'pack':1,'qty':before+5}]},
+                'negative_stock_delivery',self.now)
+        self.assertEqual(core.agent_stock(self.db,2,1),before)
+        self.assertEqual(core.client_stock_total(self.db,cid,1),0)
         out=agent_api.mutate(self.db,2,'delivery',
-            {'clientId':cid,'items':[{'pack':1,'qty':35}]},
-            'negative_stock_delivery',self.now)
+            {'clientId':cid,'items':[{'pack':1,'qty':before}]},
+            'exact_stock_delivery',self.now)
         self.assertTrue(out['ok'])
-        self.assertEqual(core.agent_stock(self.db,2,1),-5)
-        self.assertEqual(core.client_stock_total(self.db,cid,1),35)
-        self.assertEqual(core.client_debt_usd(self.db,cid),8750)
+        self.assertEqual(core.agent_stock(self.db,2,1),0)
+        self.assertEqual(core.client_stock_total(self.db,cid,1),before)
 
     def test_admin_override_can_use_disabled_agent_actions_without_live_gps(self):
         self.add_client('admin_override_client')
@@ -258,11 +266,15 @@ class AgentApiTests(unittest.TestCase):
             agent_api.mutate(self.db,2,'delivery',
                 {'clientId':cid,'items':[{'pack':1,'qty':1}]},
                 'disabled_delivery_normal',self.now)
+        with self.assertRaisesRegex(ValueError,'qo‘lingizda'):
+            agent_api.mutate(self.db,2,'delivery',
+                {'clientId':cid,'items':[{'pack':1,'qty':31}]},
+                'disabled_delivery_admin_big',self.now,admin_override=True)
         delivered=agent_api.mutate(self.db,2,'delivery',
-            {'clientId':cid,'items':[{'pack':1,'qty':31}]},
+            {'clientId':cid,'items':[{'pack':1,'qty':30}]},
             'disabled_delivery_admin',self.now,admin_override=True)
         self.assertTrue(delivered['ok'])
-        self.assertEqual(core.agent_stock(self.db,2,1),-1)
+        self.assertEqual(core.agent_stock(self.db,2,1),0)
         paid=agent_api.mutate(self.db,2,'payment',
             {'clientId':cid,'amount':'10.00'},
             'payment_admin_override',self.now,admin_override=True)
@@ -559,16 +571,14 @@ class OffCatalogDeliveryTests(unittest.TestCase):
         cid=agent_api.mutate(db,2,'add_client',{'shopName':'Baraka','name':'Vali','phone':'+998901234567','address':'Q',
                              'lat':40.5,'lon':70.9,'status':'interested','note':'x'},'client_create_9',now)['clientId']
         db.execute('INSERT INTO shifts(id,agent,start,live_id) VALUES(5,2,?,1)',(now-600,))
-        out=agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'Emal PF-115 oq 2.7 kg','priceUsd':'4.50','qty':'3'}]},
+        db.commit()
+        # Katalogda yo‘q tovar agent qo‘lida bo‘lmaydi (ombordan olinmagan): topshirib bo‘lmaydi.
+        with self.assertRaisesRegex(ValueError,'qo‘lingizda 0 dona'):
+            agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'Emal PF-115 oq 2.7 kg','priceUsd':'4.50','qty':'3'}]},
                              'req_custom_000001',now,admin_override=True)
-        self.assertIn('Katalogga qo‘shildi',out['message'])
-        pack=db.execute("SELECT pack FROM products WHERE name='Emal PF-115 oq 2.7 kg'").fetchone()[0]
-        self.assertGreaterEqual(pack,core.CUSTOM_PRODUCT_START)
-        self.assertEqual(core.client_debt_usd(db,cid),1350)
-        # same name again reuses the product instead of creating a duplicate
-        agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'emal pf-115 OQ 2.7 kg','priceUsd':'4.50','qty':'1'}]},
-                         'req_custom_000002',now,admin_override=True)
-        self.assertEqual(db.execute("SELECT COUNT(*) FROM products WHERE pack>=?",(core.CUSTOM_PRODUCT_START,)).fetchone()[0],1)
+        db.rollback()
+        self.assertEqual(core.client_debt_usd(db,cid),0)
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM products WHERE pack>=?",(core.CUSTOM_PRODUCT_START,)).fetchone()[0],0)
         with self.assertRaises(ValueError):
             agent_api.mutate(db,2,'delivery',{'clientId':cid,'items':[{'customName':'Yangi','priceUsd':'0','qty':'1'}]},
                              'req_custom_000003',now,admin_override=True)

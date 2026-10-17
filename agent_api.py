@@ -372,10 +372,7 @@ def _client_snapshot_build(db,now,client_id=None):
 
 def _products(db,agent):
     # 2 ta so'rov: avval har mahsulot uchun 3x core.amount (zaxira) ikki marta + narx = ~160 so'rov edi.
-    # Formula core.agent_stock bilan bir xil: load - delivery + return.
-    stocks={int(r[0]):int(r[1] or 0) for r in db.execute("""SELECT pack,
-        COALESCE(SUM(CASE WHEN kind='load' THEN qty WHEN kind='delivery' THEN -qty WHEN kind='return' THEN qty ELSE 0 END),0)
-        FROM events WHERE agent=? AND kind IN ('load','delivery','return') GROUP BY pack""",(agent,)).fetchall()}
+    stocks=core.agent_stock_map(db,agent)  # core.agent_stock bilan bir xil formula
     prices={int(r[0]):int(r[1] or 0) for r in db.execute('SELECT pack,price FROM products').fetchall()}
     out=[]
     for pack in core.product_ids():

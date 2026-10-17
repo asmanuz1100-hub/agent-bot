@@ -136,10 +136,12 @@ class ManagerApiTests(unittest.TestCase):
         day=snap['reports']['today']
         self.assertEqual(day['visits'],1)
         self.assertEqual(day['newClients'],1)
-        self.assertEqual(day['deliveredUsd'],100)
+        # Realizatsiya sof: 100 topshirildi − 10 qaytdi.
+        self.assertEqual(day['deliveredUsd'],90)
+        self.assertEqual(day['grossDeliveredUsd'],100)
         self.assertEqual(day['paymentsUsd'],25)
         self.assertEqual(day['returnsUsd'],10)
-        self.assertEqual(day['deliveredQty'],10)
+        self.assertEqual(day['deliveredQty'],9)
         self.assertEqual(day['soldQty'],2)
         self.assertEqual(day['acceptedCashUsd'],25)
         self.assertEqual(day['cashierExpensesUsd'],5)
@@ -154,15 +156,15 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(day['workSeconds'],3600)
         self.assertGreater(day['distanceKm'],0)
         self.assertEqual(day['agents'][0]['agent'],'Alisher')
-        self.assertEqual(day['agents'][0]['deliveredUsd'],100)
+        self.assertEqual(day['agents'][0]['deliveredUsd'],90)
         self.assertEqual(day['agents'][0]['paymentsUsd'],25)
         self.assertEqual(day['agents'][0]['visits'],1)
         self.assertEqual(day['agents'][0]['newClients'],1)
         self.assertGreater(day['agents'][0]['distanceKm'],0)
         self.assertEqual(snap['summary']['debtUsd'],65)
-        self.assertEqual(snap['reports']['week']['deliveredUsd'],100)
+        self.assertEqual(snap['reports']['week']['deliveredUsd'],90)
         self.assertEqual(snap['reports']['month']['paymentsUsd'],25)
-        self.assertEqual(snap['reports']['series'][-1]['deliveredUsd'],100)
+        self.assertEqual(snap['reports']['series'][-1]['deliveredUsd'],90)
         self.assertEqual(snap['reports']['series'][-1]['paymentsUsd'],25)
 
     def test_general_analysis_has_previous_period_receivable_and_customer_status(self):
@@ -212,21 +214,21 @@ class ManagerApiTests(unittest.TestCase):
                              VALUES(?,?,?,?,?,?,?,?)""",rows)
         snap=manager_api.dashboard(self.db,self.now)
         day=snap['reports']['today']
-        self.assertEqual(day['deliveredUsd'],270)
+        self.assertEqual(day['deliveredUsd'],260)   # 270 topshirildi − 10 qaytdi
         self.assertEqual(day['soldQty'],6)
         self.assertEqual(len(day['products']),3)
         first=day['products'][0]
         self.assertEqual(first['pack'],1)
         self.assertEqual(first['name'],'Грунтовка 7/1 — 1 кг')
-        self.assertEqual(first['deliveredQty'],10)
-        self.assertEqual(first['deliveredUsd'],100)
+        self.assertEqual(first['deliveredQty'],9)
+        self.assertEqual(first['deliveredUsd'],90)
         self.assertEqual(first['soldQty'],4)
         self.assertEqual(first['returnedQty'],1)
         self.assertEqual(first['returnedUsd'],10)
-        self.assertAlmostEqual(first['sharePct'],37.0,places=1)
+        self.assertAlmostEqual(first['sharePct'],34.6,places=1)
         self.assertEqual(day['topProduct'],'Грунтовка 7/1 — 1 кг')
         # "sold" amount is intentionally not added to financial realization.
-        self.assertEqual(sum(p['deliveredUsd'] for p in day['products']),270)
+        self.assertEqual(sum(p['deliveredUsd'] for p in day['products']),260)
 
     def test_closed_shift_keeps_last_known_gps_but_never_marks_it_live(self):
         self.db.execute("""INSERT INTO shifts(id,agent,start,"end",live_id)

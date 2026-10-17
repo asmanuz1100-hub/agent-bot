@@ -47,15 +47,15 @@ class Tests(unittest.TestCase):
   self.assertEqual(core.client_stock(self.db,2,1,1),2)
   self.assertEqual(core.cash(self.db,2),700000)
   self.assertEqual(core.amount(self.db,2,['sold'],1,field='amount')-core.amount(self.db,2,['payment'],1,field='amount'),300000)
- def test_agent_delivery_can_make_stock_negative_but_customer_stock_still_limits_sale(self):
-  self.rec('delivery',2)
-  self.assertEqual(core.agent_stock(self.db,2,1),-2)
-  self.assertEqual(core.client_stock(self.db,2,1,1),2)
-  self.rec('load',1,actor=1)
+ def test_agent_delivers_only_what_was_loaded_and_customer_stock_limits_sale(self):
+  with self.assertRaisesRegex(ValueError,'qo‘lingizda 0 dona'):self.rec('delivery',2)
+  self.assertEqual(core.agent_stock(self.db,2,1),0)
+  self.rec('load',3,actor=1)
   self.rec('delivery',3)
-  self.assertEqual(core.agent_stock(self.db,2,1),-4)
-  self.assertEqual(core.client_stock(self.db,2,1,1),5)
-  with self.assertRaises(ValueError):self.rec('sold',6,100)
+  with self.assertRaises(ValueError):self.rec('delivery',1)
+  self.assertEqual(core.agent_stock(self.db,2,1),0)
+  self.assertEqual(core.client_stock(self.db,2,1,1),3)
+  with self.assertRaises(ValueError):self.rec('sold',4,100)
  def test_stock_permissions(self):
   with self.assertRaises(ValueError):self.rec('load',1)
   with self.assertRaises(ValueError):self.rec('delivery',1,actor=4)
