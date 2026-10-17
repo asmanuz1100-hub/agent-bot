@@ -49,4 +49,17 @@ class WarehouseBotTests(unittest.TestCase):
             with self.assertRaises(ValueError):bot.handle(self.db,msg(6,1,f'/wh_issue 2 {self.pack} 100'))
             with self.assertRaises(ValueError):bot.handle(self.db,msg(7,1,'/wh_in abc 1'))
 
+    def test_agent_app_stock_counts_warehouse_return(self):
+        import agent_api
+        with patch.object(bot,'WAREHOUSE_TEST_MODE',True),patch.object(bot,'send'):
+            bot.handle(self.db,msg(1,1,f'/wh_in {self.pack} 10'))
+            bot.handle(self.db,msg(2,1,f'/wh_issue 2 {self.pack} 5 эрталабки юк'))
+            rid=warehouse.create_request(self.db,2,'return',self.pack,3)
+            bot.handle(self.db,msg(3,1,f'/wh_ok {rid}'))
+        self.assertEqual(core.agent_stock(self.db,2,self.pack),2)
+        shown={p['pack']:p['agentStock'] for p in agent_api._products(self.db,2)}
+        self.assertEqual(shown[self.pack],2)
+        note=self.db.execute("SELECT note FROM warehouse_moves WHERE kind='issue'").fetchone()[0]
+        self.assertEqual(note,'эрталабки юк')
+
 if __name__=='__main__':unittest.main()
