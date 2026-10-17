@@ -17,6 +17,7 @@ import manager_api
 import agent_api
 import analytics
 import cashier_api
+import warehouse_api
 import full_backup
 import profiles
 from pathlib import Path
@@ -52,6 +53,8 @@ def _miniapp_url(env_name,legacy_url,app,version):
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
 MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v16')
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v12')
+# Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261017-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -705,6 +708,11 @@ def menu(db,u):
         rows.insert(0,['📱 Agent Mini App'])
     if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
         rows.insert(0,['📱 Кассир Mini App'])
+    if WAREHOUSE_MINIAPP_URL:
+        if r in ('admin','warehouse'):
+            rows.insert(0,['📱 Омбор Mini App'])
+        elif r=='agent':
+            rows.append(['📦 Омбор сўрови'])
     return rows
 
 def show_cashier_menu(db,u):
@@ -1120,7 +1128,7 @@ def prompt(db,u,s):
             msg+=f'\n1 блок = {block} дона ({product_name(s["values"]["pack"])}).'
         else:
             msg+='\nБу товар учун ҳозирча фақат дона ҳисоби киритилган.'
-    if key=='role':keys=[['agent','cashier']]
+    if key=='role':keys=[['agent','cashier','warehouse']]
     if key=='currency' and s['action'] in ('payment','handover'):
         keys=[['💴 Сўм','💵 Доллар']]
         if s['action']=='handover':
@@ -1598,6 +1606,17 @@ def handle(db,update):
                  'asman.shift.end.v1':'⏹ Ишни тугатиш'}
         if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
         text=actions[payload]
+    if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
+        if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
+        if r in ('admin','warehouse'):
+            api('sendMessage',chat_id=u,text='🏬 Омбор панели · кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
+                reply_markup={'inline_keyboard':[[{'text':'🏬 Омбор панелини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
+        elif r=='agent':
+            api('sendMessage',chat_id=u,text='📦 Омбордан товар сўраш ёки омборга қайтариш. Қуйидаги тугмадан очинг.',
+                reply_markup={'inline_keyboard':[[{'text':'📦 Омбор сўровини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
+        else:
+            raise ValueError('Омбор бўлимига рухсат йўқ.')
+        return
     if text=='📱 Кассир Mini App':
         cashier_api.require_cashier(db,u)
         api('sendMessage',chat_id=u,text='📱 Кассир панели · Қуйидаги тугмадан очинг.',
@@ -2103,7 +2122,7 @@ def handle(db,update):
             raise ValueError('Бу товар учун блок ҳисоби белгиланмаган. Дона танланг.')
         v=text
     elif key=='role':
-        if text not in ('agent','cashier'):raise ValueError('agent ёки cashier танланг.')
+        if text not in ('agent','cashier','warehouse'):raise ValueError('agent, cashier ёки warehouse (омборчи) танланг.')
         v=text
     else:
         if not text or len(text)>1000:raise ValueError('1–1000 белгидан иборат матн киритинг.')
@@ -2216,13 +2235,15 @@ def menu_button_for(role):
     """Chat pastidagi doimiy tugma: agent/admin — Agent ilovasi, kassir — Kassir ilovasi."""
     if role=='cashier' and CASHIER_MINIAPP_URL:
         return {'type':'web_app','text':'Kassir app','web_app':{'url':CASHIER_MINIAPP_URL}}
+    if role=='warehouse' and WAREHOUSE_MINIAPP_URL:
+        return {'type':'web_app','text':'Ombor app','web_app':{'url':WAREHOUSE_MINIAPP_URL}}
     if role in ('agent','admin') and AGENT_MINIAPP_URL:
         return {'type':'web_app','text':'Agent app','web_app':{'url':AGENT_MINIAPP_URL}}
     return {'type':'commands'}
 
 def menu_button_users(db):
     try:
-        rows=[(int(r[0]),r[1]) for r in db.execute("SELECT id,role FROM users WHERE role IN ('admin','agent','cashier')").fetchall()]
+        rows=[(int(r[0]),r[1]) for r in db.execute("SELECT id,role FROM users WHERE role IN ('admin','agent','cashier','warehouse')").fetchall()]
         db.commit()
         return rows
     except Exception as e:
@@ -2571,6 +2592,40 @@ def serve_webhook(db,base_url):
                     if local is not None:local.rollback()
                     logging.exception('Cashier Mini App request failed')
                     answer_cashier(500,{'error':'Сақлаб бўлмади. Қайта уриниб кўринг.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
+            if urlparse(self.path).path=='/api/warehouse':
+                def answer_wh(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                                'application/json; charset=utf-8')
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 2<=length<=20000:raise ValueError('Invalid length')
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):raise ValueError('Invalid payload')
+                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                except (ValueError,TypeError):
+                    answer_wh(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
+                local=None
+                try:
+                    local=request_db()
+                    if role(local,actor) not in ('warehouse','admin','agent'):
+                        answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
+                    data=warehouse_api.handle(local,actor,payload.get('action','dashboard'),payload)
+                    notify=data.pop('_notify',None)
+                    local.commit()
+                    for recipients,msg_text in notify or ():
+                        try:_safe_send_many(set(recipients)-{actor},msg_text)
+                        except Exception:logging.exception('Warehouse Mini App notification failed')
+                    answer_wh(200,data)
+                except (ValueError,TypeError,OverflowError) as exc:
+                    if local is not None:local.rollback()
+                    answer_wh(400,{'error':str(exc)})
+                except Exception:
+                    if local is not None:local.rollback()
+                    logging.exception('Warehouse Mini App request failed')
+                    answer_wh(500,{'error':'Сақлаб бўлмади. Қайта уриниб кўринг.'})
                 finally:
                     if local is not None and postgres:local.close()
                 return
