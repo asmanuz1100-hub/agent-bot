@@ -281,7 +281,10 @@ class WarehouseBotTests(unittest.TestCase):
         sent=[]
         with patch.object(bot,'_safe_send_many',side_effect=lambda ids,text:sent.append((list(ids),text))):
             bot.notify_admins_order(self.db,2,oid)
-        self.assertEqual([ids for ids,_ in sent],[[1],[5]])
+        # Adminlar ro‘yxatiga ADMIN_IDS muhit o‘zgaruvchisidagi adminlar ham qo‘shiladi (Render build).
+        self.assertEqual(len(sent),2)
+        self.assertIn(1,sent[0][0]);self.assertNotIn(5,sent[0][0])
+        self.assertEqual(sent[1][0],[5])
         self.assertIn('Раҳбар Mini App',sent[0][1])
         self.assertIn('Омбор Mini App',sent[1][1]);self.assertNotIn('Раҳбар',sent[1][1])
 
