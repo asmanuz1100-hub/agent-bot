@@ -2047,7 +2047,9 @@ def order_view(db,row):
 
 
 def set_order_status(db,actor,oid,status,admin_note=''):
-    _require_admin(db,actor,'Buyurtma holatini faqat rahbar o‘zgartiradi.')
+    r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not r or r[0] not in ('admin','warehouse'):
+        raise ValueError('Buyurtma holatini faqat rahbar yoki omborchi o‘zgartiradi.')
     if status not in ORDER_STATUSES:raise ValueError('Holat noto‘g‘ri.')
     row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
     if not row:raise ValueError('Buyurtma topilmadi.')
@@ -2065,9 +2067,10 @@ def set_order_status(db,actor,oid,status,admin_note=''):
         items=order_items(db,oid)
         if any(i['custom'] for i in items):
             raise ValueError('Avval katalogda yo‘q mahsulotlarni katalogga qo‘shing yoki bog‘lang.')
-        for idx,i in enumerate(items):
-            record(db,actor,int(row['agent']),None,'load',i['pack'],i['qty'],
-                   note=f'Buyurtma #{oid}',source=_order_source(f'order-load/{oid}/{idx}'),currency='USD')
+        # The goods leave the warehouse: stock is checked and reduced, the agent gets a 'load'.
+        import warehouse
+        warehouse.issue_order(db,actor,oid,int(row['agent']),
+                              [(i['pack'],i['qty'],_order_source(f'order-load/{oid}/{idx}')) for idx,i in enumerate(items)])
     db.execute('UPDATE orders SET status=?,admin=?,admin_note=?,updated_ts=? WHERE id=?',
                (status,actor,note or (row['admin_note'] or ''),int(time.time()),oid))
     return row

@@ -91,6 +91,69 @@ class WarehouseApiTests(unittest.TestCase):
         statuses={x['id']:x['status'] for x in self.call(2,'my')['requests']}
         self.assertEqual(statuses[rej],'rejected')
 
+    def order(self,items,source):
+        cid=self.db.execute("SELECT id FROM clients WHERE phone='+998900000777'").fetchone()
+        if not cid:
+            self.db.execute("INSERT INTO clients(agent,name,shop_name,phone,address,created_ts) VALUES(2,'Vali','Baraka','+998900000777','Qo‘qon',?)",
+                            (int(time.time()),))
+            cid=self.db.execute("SELECT id FROM clients WHERE phone='+998900000777'").fetchone()
+        oid,_=core.create_order(self.db,2,int(cid[0]),items,source=source)
+        self.db.commit()
+        return oid
+
+    def test_keeper_prepares_and_loads_orders_from_warehouse_stock(self):
+        oid=self.order([{'pack':self.plain,'qty':6}],-501)
+        d=self.call(5,'dashboard')
+        o=d['orders']['list'][0]
+        self.assertEqual((o['id'],o['status'],o['client_name'],o['ready']),(oid,'new','Baraka',False))
+        self.assertNotIn('totalCents',o)                       # omborchi narxlarni ko‘rmaydi
+        self.assertEqual(next(p for p in d['products'] if p['pack']==self.plain)['demand'],6)
+        r=self.call(5,'order_status',id=oid,to='preparing')
+        self.assertEqual(r['_orders'],[oid])
+        with self.assertRaisesRegex(ValueError,'yetarli emas'):self.call(5,'order_status',id=oid,to='loaded')
+        self.assertEqual(core.agent_stock(self.db,2,self.plain),0)
+        self.call(5,'receive',pack=self.plain,qty=10,requestId='recv-order-1')
+        self.assertTrue(self.call(5,'dashboard')['orders']['list'][0]['ready'])
+        self.call(5,'order_status',id=oid,to='loaded')
+        self.assertEqual((warehouse.stock(self.db,self.plain),core.agent_stock(self.db,2,self.plain)),(4,6))
+        self.assertEqual(self.call(5,'orders',status='loaded')['orders']['list'][0]['id'],oid)
+        self.assertEqual(self.call(5,'dashboard')['orders']['list'],[])
+        with self.assertRaises(ValueError):self.call(5,'order_status',id=oid,to='loaded')
+        self.assertEqual(warehouse.stock(self.db,self.plain),4)
+        rej=self.order([{'pack':self.plain,'qty':1}],-502)
+        with self.assertRaisesRegex(ValueError,'sababini'):self.call(5,'order_status',id=rej,to='rejected')
+        self.call(5,'order_status',id=rej,to='rejected',note='Mahsulot yo‘q')
+        self.assertEqual(self.call(5,'orders',status='rejected')['orders']['list'][0]['admin_note'],'Mahsulot yo‘q')
+        with self.assertRaises(ValueError):self.call(2,'order_status',id=rej,to='new')
+        with self.assertRaises(ValueError):self.call(5,'order_status',id=rej,to='delivered')
+
+    def test_take_back_respects_pending_returns_and_moves_filter(self):
+        self.call(5,'receive',pack=self.plain,qty=10,requestId='recv-take-01')
+        self.call(5,'issue',agent=2,pack=self.plain,qty=5,requestId='issue-take-1')
+        self.call(2,'request',kind='return',pack=self.plain,qty=3,requestId='ret-take-001')
+        with self.assertRaisesRegex(ValueError,'2 dona'):
+            self.call(5,'take_back',agent=2,pack=self.plain,qty=3,requestId='take-000001')
+        d=self.call(5,'take_back',agent=2,pack=self.plain,qty=2,requestId='take-000002')
+        self.call(5,'take_back',agent=2,pack=self.plain,qty=2,requestId='take-000002')  # double tap
+        self.assertEqual(d['_notify'][0][0],{2})
+        self.assertEqual((warehouse.stock(self.db,self.plain),core.agent_stock(self.db,2,self.plain)),(7,3))
+        moves=self.call(5,'moves',kind='agent_return')['moves']
+        self.assertEqual([(m['kind'],m['qty'],m['agent']) for m in moves],[('agent_return',2,2)])
+        self.assertEqual(len(self.call(5,'moves',pack=self.plain)['moves']),3)
+        self.assertEqual(self.call(5,'moves',agent=6)['moves'],[])
+        first=self.call(5,'moves')['moves']
+        self.assertEqual([m['id'] for m in self.call(5,'moves',before=first[0]['id'])['moves']],[m['id'] for m in first[1:]])
+        with self.assertRaises(ValueError):self.call(5,'moves',kind='bad')
+        with self.assertRaises(ValueError):self.call(2,'moves')
+
+    def test_today_totals_use_tashkent_calendar_day(self):
+        start=warehouse.day_start()
+        self.call(5,'receive',pack=self.plain,qty=3,requestId='recv-today-1')
+        self.db.execute('UPDATE warehouse_moves SET ts=?',(start-60,));self.db.commit()
+        self.call(5,'receive',pack=self.plain,qty=2,requestId='recv-today-2')
+        self.assertEqual(self.call(5,'dashboard')['today'],{'in':2})
+        self.assertEqual(warehouse.day_start(1760650000),1760641200)   # 2025-10-17 00:00 Asia/Tashkent
+
     def test_bad_input_is_rejected(self):
         for payload in ({'pack':'x','qty':1},{'pack':self.plain,'qty':0},{'pack':self.plain,'qty':1.5},
                         {'pack':self.plain,'qty':True},{'pack':self.plain,'qty':1,'requestId':'bad id!'}):
@@ -160,6 +223,30 @@ class WarehouseBotTests(unittest.TestCase):
         self.assertEqual(core.agent_stock(self.db,2,pack),2)
         agent=post({'initData':signed_data('test-token',2)})
         self.assertEqual(agent['data']['mode'],'agent')
+        # Order status from the keeper: the agent is told only after the commit.
+        self.db.execute("INSERT INTO clients(agent,name,phone,address,created_ts) VALUES(2,'Vali','+998900000778','X',0)")
+        cid=self.db.execute("SELECT id FROM clients WHERE phone='+998900000778'").fetchone()[0]
+        oid,_=core.create_order(self.db,2,cid,[{'pack':pack,'qty':1}],source=-601);self.db.commit()
+        told=[]
+        def order_notify(db,order_id):
+            self.assertFalse(self.db.in_transaction)
+            told.append(order_id)
+        with patch.object(bot,'notify_agent_order_status',side_effect=order_notify):
+            r=post({**keeper,'action':'order_status','id':oid,'to':'loaded','requestId':'http-order-1'})
+        self.assertEqual(r['code'],200);self.assertNotIn('_orders',r['data'])
+        self.assertEqual(told,[oid])
+        self.assertEqual(core.agent_stock(self.db,2,pack),3)
+
+    def test_new_order_reaches_keepers_with_ombor_hint(self):
+        self.db.execute("INSERT INTO clients(agent,name,phone,address,created_ts) VALUES(2,'Vali','+998900000779','X',0)")
+        cid=self.db.execute("SELECT id FROM clients WHERE phone='+998900000779'").fetchone()[0]
+        oid,_=core.create_order(self.db,2,cid,[{'pack':next(iter(core.PRODUCTS)),'qty':2}],source=-602)
+        sent=[]
+        with patch.object(bot,'_safe_send_many',side_effect=lambda ids,text:sent.append((list(ids),text))):
+            bot.notify_admins_order(self.db,2,oid)
+        self.assertEqual([ids for ids,_ in sent],[[1],[5]])
+        self.assertIn('Раҳбар Mini App',sent[0][1])
+        self.assertIn('Омбор Mini App',sent[1][1]);self.assertNotIn('Раҳбар',sent[1][1])
 
     def test_miniapp_is_served(self):
         code,body,ctype,_=bot.miniapp_response('/app/ombor/')

@@ -54,7 +54,7 @@ MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-mi
 MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261016-v16')
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v12')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
-WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261017-v1')
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261017-v2')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -871,10 +871,14 @@ def notify_admins_order(db,agent,order_id):
     label=(c['shop_name'] or c['name']) if c else f"#{row['client']}"
     lines=[f"• {i['name']} — {i['qty']} дона"+(" ⚠️ каталогда йўқ" if i['custom'] else '') for i in v['items']]
     text=(f"🛒 ЯНГИ БУЮРТМА #{order_id}\n👨‍💼 Агент: {_staff_name(db,agent)}\n🏪 Мижоз: {label}\n"+"\n".join(lines)+
-          (f"\n📝 {v['note']}" if v['note'] else '')+
+          (f"\n📝 {v['note']}" if v['note'] else ''))
+    _safe_send_many(admin_ids(db),text+
           ("\n\n⚠️ Каталогда йўқ маҳсулот бор — Раҳбар Mini App → Омбор бўлимида қўшинг ёки боғланг." if v['unmapped'] else
            "\n\nРаҳбар Mini App → 📦 Омбор бўлимида кўриб чиқинг."))
-    _safe_send_many(admin_ids(db),text)
+    keepers=[int(r[0]) for r in db.execute("SELECT id FROM users WHERE role='warehouse'").fetchall()]
+    if keepers:
+        _safe_send_many(keepers,text+("\n\n⚠️ Каталогда йўқ маҳсулот бор — раҳбар уни каталогга қўшгач, агентга бера оласиз." if v['unmapped'] else
+                                      "\n\n📱 Омбор Mini App → 🛒 Буюртмалар бўлимида тайёрланг ва агентга беринг."))
 
 def notify_admins_blacklist(db,agent,client,reason):
     c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
@@ -1609,7 +1613,7 @@ def handle(db,update):
     if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
         if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
         if r in ('admin','warehouse'):
-            api('sendMessage',chat_id=u,text='🏬 Омбор панели · кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
+            api('sendMessage',chat_id=u,text='🏬 Омбор панели · буюртмалар, кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
                 reply_markup={'inline_keyboard':[[{'text':'🏬 Омбор панелини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
         elif r=='agent':
             api('sendMessage',chat_id=u,text='📦 Омбордан товар сўраш ёки омборга қайтариш. Қуйидаги тугмадан очинг.',
@@ -2614,10 +2618,14 @@ def serve_webhook(db,base_url):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
                     data=warehouse_api.handle(local,actor,payload.get('action','dashboard'),payload)
                     notify=data.pop('_notify',None)
+                    orders=data.pop('_orders',None)
                     local.commit()
                     for recipients,msg_text in notify or ():
                         try:_safe_send_many(set(recipients)-{actor},msg_text)
                         except Exception:logging.exception('Warehouse Mini App notification failed')
+                    for oid in orders or ():
+                        try:notify_agent_order_status(local,oid)
+                        except Exception:logging.exception('Order status notification failed order=%s',oid)
                     answer_wh(200,data)
                 except (ValueError,TypeError,OverflowError) as exc:
                     if local is not None:local.rollback()

@@ -5,6 +5,7 @@ import unittest
 import agent_api
 import core
 import manager_api
+import warehouse
 
 
 class CatalogAndOrdersTests(unittest.TestCase):
@@ -86,9 +87,17 @@ class CatalogAndOrdersTests(unittest.TestCase):
         self.assertEqual(w['orders'][0]['clientName'], 'Baraka')
         stock_before = core.agent_stock(self.db, 2, 1)
         core.set_order_status(self.db, 1, oid, 'preparing')
+        # Loading takes the goods out of the warehouse: an empty warehouse blocks it and writes nothing.
+        warehouse.receive(self.db, 1, 1, 6)
+        with self.assertRaisesRegex(ValueError, 'yetarli emas'):
+            core.set_order_status(self.db, 1, oid, 'loaded')
+        self.assertEqual(core.agent_stock(self.db, 2, 1), stock_before)
+        warehouse.receive(self.db, 1, 1, 4)
+        warehouse.receive(self.db, 1, 1004, 5)
         core.set_order_status(self.db, 1, oid, 'loaded')
         self.assertEqual(core.agent_stock(self.db, 2, 1), stock_before + 10)   # loaded to the agent
         self.assertEqual(core.agent_stock(self.db, 2, 1004), 2)
+        self.assertEqual((warehouse.stock(self.db, 1), warehouse.stock(self.db, 1004)), (0, 3))
         with self.assertRaisesRegex(ValueError, 'o‘tib bo‘lmaydi'):
             core.set_order_status(self.db, 1, oid, 'preparing')
         debt = core.client_debt_usd(self.db, self.cid)
@@ -128,6 +137,8 @@ class CatalogAndOrdersTests(unittest.TestCase):
         pack = core.add_product(self.db, 1, 'Emal PF-115 oq 2.7 kg', 2.7, 450)
         self.assertEqual(core.map_custom_name(self.db, 1, 'Emal PF-115 oq', pack), 2)
         self.assertEqual(core.custom_demand(self.db), [])
+        warehouse.receive(self.db, 1, pack, 5)
+        warehouse.receive(self.db, 1, 1, 2)
         core.set_order_status(self.db, 1, o1, 'loaded')
         self.assertEqual(core.agent_stock(self.db, 2, pack), 5)
         v2 = core.order_view(self.db, self.db.execute('SELECT * FROM orders WHERE id=?', (o2,)).fetchone())

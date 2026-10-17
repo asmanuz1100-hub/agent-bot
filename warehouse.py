@@ -5,8 +5,13 @@
 ёзилади, шунинг учун агент қолдиғи (core.agent_stock) ҳам автомат мос келади.
 Ёзувлар ўчирилмайди ва таҳрирланмайди; хато бўлса тескари амал киритилади.
 """
+import hashlib
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from core import PRODUCTS, PostgresDB, lock_agent, agent_stock, product_name, units_per_block, block_units
+
+TZ=ZoneInfo('Asia/Tashkent')
 
 KEEPER_ROLES=('warehouse','admin')
 MOVE_LABELS={
@@ -39,14 +44,14 @@ def _role(db,uid):
 
 def _require_keeper(db,actor):
     if _role(db,actor) not in KEEPER_ROLES:
-        raise ValueError('Бу амал фақат омборчи ёки админ учун.')
+        raise ValueError('Bu amal faqat omborchi yoki rahbar uchun.')
 
 def _check_item(pack,qty):
-    if pack not in PRODUCTS:raise ValueError('Товар нотўғри.')
-    if not isinstance(qty,int) or not 0<qty<=100000:raise ValueError('Миқдор 1 дан 100000 гача бўлсин.')
+    if pack not in PRODUCTS:raise ValueError('Mahsulot noto‘g‘ri.')
+    if not isinstance(qty,int) or not 0<qty<=100000:raise ValueError('Miqdor 1 dan 100000 gacha bo‘lsin.')
 
 def _check_agent(db,agent):
-    if _role(db,agent)!='agent':raise ValueError('Агент топилмади.')
+    if _role(db,agent)!='agent':raise ValueError('Agent topilmadi.')
 
 def _lock_warehouse(db):
     # Serialize every warehouse balance change across PostgreSQL connections.
@@ -89,10 +94,10 @@ def receive(db,actor,pack,qty,note='',source=None):
 
 def write_off(db,actor,pack,qty,note,source=None):
     _require_keeper(db,actor);_check_item(pack,qty)
-    if not (note or '').strip():raise ValueError('Брак сабабини ёзинг.')
+    if not (note or '').strip():raise ValueError('Brak sababini yozing.')
     _lock_warehouse(db)
     if _seen(db,source):return None
-    if stock(db,pack)<qty:raise ValueError(f'Омборда {product_name(pack)} етарли эмас.')
+    if stock(db,pack)<qty:raise ValueError(f'Omborda {product_name(pack)} yetarli emas: {stock(db,pack)} dona bor.')
     return _move(db,actor,'writeoff',pack,qty,note=note,source=source)
 
 def issue(db,actor,agent,pack,qty,note='',source=None,request=None):
@@ -101,31 +106,62 @@ def issue(db,actor,agent,pack,qty,note='',source=None,request=None):
     lock_agent(db,agent);_lock_warehouse(db)
     if _seen(db,source):return None
     if stock(db,pack)<qty:
-        raise ValueError(f'Омборда {product_name(pack)} етарли эмас: {stock(db,pack)} дона бор.')
+        raise ValueError(f'Omborda {product_name(pack)} yetarli emas: {stock(db,pack)} dona bor.')
     move=_move(db,actor,'issue',pack,qty,agent=agent,request=request,note=note,source=source)
     db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
         VALUES(?,?,NULL,'load',?,?,0,0,?,?,NULL)''',(actor,agent,pack,qty,f'Омбор #{move}'+(f' | {note}' if note else ''),int(time.time())))
     return move
 
-def _accept_return(db,actor,agent,pack,qty,request,note=''):
+def _accept_return(db,actor,agent,pack,qty,request,note='',source=None):
     lock_agent(db,agent);_lock_warehouse(db)
-    if agent_stock(db,agent,pack)<qty:raise ValueError('Агентда қайтариладиган товар етарли эмас.')
-    move=_move(db,actor,'agent_return',pack,qty,agent=agent,request=request,note=note)
+    if agent_stock(db,agent,pack)<qty:raise ValueError('Agentda qaytariladigan tovar yetarli emas.')
+    move=_move(db,actor,'agent_return',pack,qty,agent=agent,request=request,note=note,source=source)
     db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
         VALUES(?,?,NULL,'unload',?,?,0,0,?,?,NULL)''',(actor,agent,pack,qty,f'Омборга қайтди #{move}',int(time.time())))
     return move
 
+def take_back(db,actor,agent,pack,qty,note='',source=None):
+    """Агент товарни ўзи олиб келди: сўровсиз омборга қабул (кутаётган қайтариш сўровлари ҳисобга олинади)."""
+    _require_keeper(db,actor);_check_item(pack,qty);_check_agent(db,agent)
+    lock_agent(db,agent);_lock_warehouse(db)
+    if _seen(db,source):return None
+    free=agent_stock(db,agent,pack)-reserved_return(db,agent,pack)
+    if free<qty:raise ValueError(f'Agentda {product_name(pack)} bo‘yicha {max(free,0)} dona erkin qoldiq bor.')
+    return _accept_return(db,actor,agent,pack,qty,None,note,source)
+
+def _order_move_source(oid,idx):
+    return -(int.from_bytes(hashlib.sha256(f'order-wh/{oid}/{idx}'.encode()).digest()[:7],'big')*16+11)
+
+def issue_order(db,actor,oid,agent,lines):
+    """Буюртма агентга берилганда: омбор камаяди, агентда 'load' пайдо бўлади.
+
+    lines=[(pack,qty,event_source)]; омборда бирорта товар етмаса, ҳеч нарса ёзилмайди.
+    """
+    lock_agent(db,agent);_lock_warehouse(db)
+    need={}
+    for pack,qty,_ in lines:need[pack]=need.get(pack,0)+qty
+    short=[f'{product_name(p)}: kerak {q}, omborda {stock(db,p)}' for p,q in need.items() if stock(db,p)<q]
+    if short:raise ValueError('Omborda tovar yetarli emas — '+'; '.join(short)+'. Avval kirim qiling.')
+    now=int(time.time());moves=[]
+    for idx,(pack,qty,event_source) in enumerate(lines):
+        source=_order_move_source(oid,idx)
+        if _seen(db,source):continue
+        moves.append(_move(db,actor,'issue',pack,qty,agent=agent,note=f'Buyurtma #{oid}',source=source))
+        db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
+            VALUES(?,?,NULL,'load',?,?,0,0,?,?,?)''',(actor,agent,pack,qty,f'Buyurtma #{oid}',now,event_source))
+    return moves
+
 def create_request(db,agent,kind,pack,qty,note='',source=None):
     """Агент сўрови: 'need' — омбордан товар, 'return' — омборга қайтариш."""
     _check_agent(db,agent);_check_item(pack,qty)
-    if kind not in REQUEST_LABELS:raise ValueError('Сўров тури нотўғри.')
+    if kind not in REQUEST_LABELS:raise ValueError('So‘rov turi noto‘g‘ri.')
     lock_agent(db,agent)
     if source is not None:
         old=db.execute('SELECT id FROM warehouse_requests WHERE source=?',(source,)).fetchone()
         if old:return int(old[0])
     if kind=='return':
         free=agent_stock(db,agent,pack)-reserved_return(db,agent,pack)
-        if free<qty:raise ValueError(f'Қўлингизда {product_name(pack)}дан {max(free,0)} дона эркин қолдиқ бор.')
+        if free<qty:raise ValueError(f'Qo‘lingizda {product_name(pack)} bo‘yicha {max(free,0)} dona erkin qoldiq bor.')
     cur=db.execute('''INSERT INTO warehouse_requests(agent,kind,pack,qty,note,ts,source)
         VALUES(?,?,?,?,?,?,?) RETURNING id''',(agent,kind,pack,qty,note or '',int(time.time()),source))
     return int(cur.fetchone()[0])
@@ -134,16 +170,16 @@ def decide(db,actor,request_id,accepted=True,qty=None):
     """Омборчи сўровни қабул ёки рад қилади. Товар сўровида миқдорни камайтириш мумкин."""
     _require_keeper(db,actor)
     row=db.execute("SELECT * FROM warehouse_requests WHERE id=? AND status='pending'",(request_id,)).fetchone()
-    if not row:raise ValueError('Сўров топилмади ёки аввал ҳал қилинган.')
+    if not row:raise ValueError('So‘rov topilmadi yoki avval hal qilingan.')
     lock_agent(db,row['agent']);_lock_warehouse(db)
     row=db.execute("SELECT * FROM warehouse_requests WHERE id=? AND status='pending'",(request_id,)).fetchone()
-    if not row:raise ValueError('Бу сўров аввал ҳал қилинган.')
+    if not row:raise ValueError('Bu so‘rov avval hal qilingan.')
     final=int(row['qty'])
     if accepted:
         if qty is not None:
-            if row['kind']!='need':raise ValueError('Қайтаришда миқдор ўзгартирилмайди.')
+            if row['kind']!='need':raise ValueError('Qaytarishda miqdor o‘zgartirilmaydi.')
             _check_item(int(row['pack']),qty)
-            if qty>final:raise ValueError('Сўралгандан кўп бериб бўлмайди.')
+            if qty>final:raise ValueError('So‘ralgandan ko‘p berib bo‘lmaydi.')
             final=qty
         if row['kind']=='need':
             issue(db,actor,int(row['agent']),int(row['pack']),final,note=f'Сўров #{request_id}',request=request_id)
@@ -158,10 +194,32 @@ def pending_requests(db,limit=50):
     return db.execute("""SELECT r.*,u.name AS agent_name FROM warehouse_requests r
         LEFT JOIN users u ON u.id=r.agent WHERE r.status='pending' ORDER BY r.id LIMIT ?""",(limit,)).fetchall()
 
-def recent_moves(db,limit=30):
-    return db.execute("""SELECT m.*,ua.name AS agent_name,uk.name AS actor_name FROM warehouse_moves m
-        LEFT JOIN users ua ON ua.id=m.agent LEFT JOIN users uk ON uk.id=m.actor
-        ORDER BY m.id DESC LIMIT ?""",(limit,)).fetchall()
+def recent_moves(db,limit=30,kind=None,pack=None,agent=None,before=None):
+    where,args=[],[]
+    if kind:where.append('m.kind=?');args.append(kind)
+    if pack is not None:where.append('m.pack=?');args.append(pack)
+    if agent is not None:where.append('m.agent=?');args.append(agent)
+    if before is not None:where.append('m.id<?');args.append(before)
+    sql=("""SELECT m.*,ua.name AS agent_name,uk.name AS actor_name FROM warehouse_moves m
+        LEFT JOIN users ua ON ua.id=m.agent LEFT JOIN users uk ON uk.id=m.actor"""
+         +(' WHERE '+' AND '.join(where) if where else '')+' ORDER BY m.id DESC LIMIT ?')
+    return db.execute(sql,(*args,limit)).fetchall()
+
+def move_view(m):
+    return {'id':int(m['id']),'kind':m['kind'],'pack':int(m['pack']),'qty':int(m['qty']),
+            'agent':int(m['agent']) if m['agent'] is not None else None,
+            'agent_name':m['agent_name'] or '','actor_name':m['actor_name'] or '',
+            'note':m['note'] or '','ts':int(m['ts'])}
+
+def day_start(now=None):
+    d=datetime.fromtimestamp(time.time() if now is None else now,TZ)
+    return int(d.replace(hour=0,minute=0,second=0,microsecond=0).timestamp())
+
+def open_order_demand(db):
+    """Янги ва тайёрланаётган буюртмаларда ҳар товардан қанча керак."""
+    rows=db.execute("""SELECT i.pack,COALESCE(SUM(i.qty),0) FROM order_items i JOIN orders o ON o.id=i.order_id
+        WHERE i.pack IS NOT NULL AND o.status IN ('new','preparing') GROUP BY i.pack""").fetchall()
+    return {int(r[0]):int(r[1]) for r in rows}
 
 def agent_requests(db,agent,limit=10):
     return db.execute('SELECT * FROM warehouse_requests WHERE agent=? ORDER BY id DESC LIMIT ?',(agent,limit)).fetchall()
@@ -170,20 +228,19 @@ def snapshot(db,actor):
     """Омборчи иловаси учун бутун ҳолат (фақат ўқиш)."""
     _require_keeper(db,actor)
     agents=db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name").fetchall()
-    today=int(time.time())-24*3600
-    totals=db.execute("""SELECT kind,COALESCE(SUM(qty),0) FROM warehouse_moves WHERE ts>=? GROUP BY kind""",(today,)).fetchall()
+    totals=db.execute("""SELECT kind,COALESCE(SUM(qty),0) FROM warehouse_moves WHERE ts>=? GROUP BY kind""",(day_start(),)).fetchall()
+    demand=open_order_demand(db)
     return {
         'me':{'id':actor,'role':_role(db,actor),
               'name':(db.execute('SELECT name FROM users WHERE id=?',(actor,)).fetchone() or [''])[0]},
-        'products':[{'pack':p,'name':name,'block':block_units(p) or 0,'stock':stock(db,p)} for p,name in PRODUCTS.items()],
+        'products':[{'pack':p,'name':name,'block':block_units(p) or 0,'stock':stock(db,p),'demand':demand.get(p,0)}
+                    for p,name in PRODUCTS.items()],
         'agents':[{'id':int(a['id']),'name':a['name'],
                    'stock':{str(p):agent_stock(db,a['id'],p) for p in PRODUCTS}} for a in agents],
         'requests':[{'id':int(r['id']),'agent':int(r['agent']),'agent_name':r['agent_name'] or str(r['agent']),
                      'kind':r['kind'],'pack':int(r['pack']),'qty':int(r['qty']),'note':r['note'] or '',
                      'ts':int(r['ts'])} for r in pending_requests(db)],
-        'moves':[{'id':int(m['id']),'kind':m['kind'],'pack':int(m['pack']),'qty':int(m['qty']),
-                  'agent_name':m['agent_name'] or '','actor_name':m['actor_name'] or '',
-                  'note':m['note'] or '','ts':int(m['ts'])} for m in recent_moves(db,40)],
+        'moves':[move_view(m) for m in recent_moves(db,40)],
         'today':{k:int(v) for k,v in totals},
     }
 
