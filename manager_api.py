@@ -162,24 +162,28 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
         COALESCE(SUM(qty),0) AS qty
         FROM events WHERE ts>=? AND ts<? AND kind IN ('delivery','payment','return','sold')
         GROUP BY agent,kind""",(start,end)).fetchall()
+    # Realizatsiya — sof: davrda mijozga topshirilgan minus shu davrda mijozdan qaytgan tovar.
     delivered=payments=returns=0
-    delivered_qty=sold_qty=0
+    delivered_qty=sold_qty=returned_qty=0
+    per_agent={}
     for row in event_rows:
         aid=int(row["agent"]);kind=row["kind"]
         cents=int(row["amount_usd"] or 0);qty=int(row["qty"] or 0)
+        acc=per_agent.setdefault(aid,{"delivery":[0,0],"return":[0,0],"payment":[0,0],"sold":[0,0]})
+        acc[kind][0]+=cents;acc[kind][1]+=qty
+        if kind=="delivery":delivered+=cents;delivered_qty+=qty
+        elif kind=="payment":payments+=cents
+        elif kind=="return":returns+=cents;returned_qty+=qty
+        elif kind=="sold":sold_qty+=qty
+    for aid,acc in per_agent.items():
         target=by_agent.get(aid)
-        if kind=="delivery":
-            delivered+=cents;delivered_qty+=qty
-            if target:target["deliveredUsd"]=_usd(cents);target["deliveredQty"]=qty
-        elif kind=="payment":
-            payments+=cents
-            if target:target["paymentsUsd"]=_usd(cents)
-        elif kind=="return":
-            returns+=cents
-            if target:target["returnsUsd"]=_usd(cents)
-        elif kind=="sold":
-            sold_qty+=qty
-            if target:target["soldQty"]=qty
+        if not target:continue
+        target["deliveredUsd"]=_usd(acc["delivery"][0]-acc["return"][0])
+        target["deliveredQty"]=acc["delivery"][1]-acc["return"][1]
+        target["grossDeliveredUsd"]=_usd(acc["delivery"][0])
+        target["paymentsUsd"]=_usd(acc["payment"][0])
+        target["returnsUsd"]=_usd(acc["return"][0])
+        target["soldQty"]=acc["sold"][1]
 
     product_names={int(r["pack"]):r["name"] for r in db.execute(
         "SELECT pack,name FROM products ORDER BY pack").fetchall()}
@@ -201,11 +205,14 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
             "sharePct":0.0,
         })
         if kind=="delivery":
-            item["deliveredQty"]=qty;item["deliveredUsd"]=_usd(cents)
+            item["grossDeliveredQty"]=qty;item["_gross"]=cents
         elif kind=="sold":
             item["soldQty"]=qty
         elif kind=="return":
-            item["returnedQty"]=qty;item["returnedUsd"]=_usd(cents)
+            item["returnedQty"]=qty;item["returnedUsd"]=_usd(cents);item["_ret"]=cents
+    for item in products.values():
+        item["deliveredQty"]=item.get("grossDeliveredQty",0)-item["returnedQty"]
+        item["deliveredUsd"]=_usd(item.pop("_gross",0)-item.pop("_ret",0))
     product_list=list(products.values())
     product_total=sum(float(p["deliveredUsd"] or 0) for p in product_list)
     for p in product_list:
@@ -259,8 +266,9 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     agents.sort(key=lambda a:(a["deliveredUsd"],a["paymentsUsd"],a["visits"]),reverse=True)
     return {
         "start":start,"end":end,"visits":visits,"newClients":new_clients,
-        "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments),
-        "returnsUsd":_usd(returns),"deliveredQty":delivered_qty,"soldQty":sold_qty,
+        "deliveredUsd":_usd(delivered-returns),"paymentsUsd":_usd(payments),
+        "grossDeliveredUsd":_usd(delivered),"returnedQty":returned_qty,
+        "returnsUsd":_usd(returns),"deliveredQty":delivered_qty-returned_qty,"soldQty":sold_qty,
         "acceptedCashUsd":_usd(accepted),"cashierExpensesUsd":_usd(expenses),
         "workSeconds":work_seconds,"distanceKm":round(distance_km,2),
         "agents":agents,"products":product_list,"topProduct":top_product,
@@ -334,7 +342,7 @@ def _period_business_snapshot(db,start,end):
     expenses=direct_expenses+agent_funding
     delivered=int(row["delivered"] or 0);payments=int(row["payments"] or 0);returns=int(row["returns"] or 0)
     return {
-      "deliveredUsd":_usd(delivered),"paymentsUsd":_usd(payments),"returnsUsd":_usd(returns),
+      "deliveredUsd":_usd(delivered-returns),"paymentsUsd":_usd(payments),"returnsUsd":_usd(returns),
       "visits":visits,"newClients":new_clients,"acceptedCashUsd":_usd(accepted),
       "cashierExpensesUsd":_usd(expenses),
       "netReceivableChangeUsd":_usd(delivered-payments-returns),
@@ -345,10 +353,9 @@ def _enrich_period_analysis(db,report,offset_seconds):
     start=int(report["start"]);end=int(report["end"])
     offset_seconds=max(1,int(offset_seconds))
     previous=_period_business_snapshot(db,start-offset_seconds,end-offset_seconds)
-    delivered=float(report.get("deliveredUsd") or 0)
+    delivered=float(report.get("deliveredUsd") or 0)   # sof realizatsiya (qaytish ayirilgan)
     payments=float(report.get("paymentsUsd") or 0)
-    returns=float(report.get("returnsUsd") or 0)
-    report["netReceivableChangeUsd"]=round(delivered-payments-returns,2)
+    report["netReceivableChangeUsd"]=round(delivered-payments,2)
     report["paymentToDeliveryPct"]=round(payments/delivered*100,1) if delivered else None
     report["previous"]=previous
     return report
@@ -359,10 +366,11 @@ def _daily_series(db,today,now,recent_visits):
     (mahsulot, smena, GPS) hisoblanardi; grafik faqat shu uch raqamni ishlatadi — bitta so'rov yetarli."""
     days=[(today-k*86400,min(today-k*86400+86400,now+1)) for k in range(6,-1,-1)]
     rows=db.execute("""SELECT ts,kind,amount_usd FROM events
-        WHERE ts>=? AND ts<? AND kind IN ('delivery','payment')""",(days[0][0],days[-1][1])).fetchall()
+        WHERE ts>=? AND ts<? AND kind IN ('delivery','payment','return')""",(days[0][0],days[-1][1])).fetchall()
     out=[]
     for lo,hi in days:
-        delivered=sum(int(r["amount_usd"] or 0) for r in rows if lo<=int(r["ts"])<hi and r["kind"]=="delivery")
+        delivered=sum((1 if r["kind"]=="delivery" else -1)*int(r["amount_usd"] or 0)
+                      for r in rows if lo<=int(r["ts"])<hi and r["kind"] in ("delivery","return"))
         payments=sum(int(r["amount_usd"] or 0) for r in rows if lo<=int(r["ts"])<hi and r["kind"]=="payment")
         out.append({"day":datetime.fromtimestamp(lo,TZ).strftime("%d.%m"),
                     "visits":sum(1 for _,ts in recent_visits if lo<=ts<hi),
@@ -772,10 +780,10 @@ AGENT_FEATURE_LABELS={
 def _agent_period_stats(db,agent_id,start,end,now):
     start,end=int(start),int(end)
     row=db.execute("""SELECT
-      COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd ELSE 0 END),0) AS delivered,
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN amount_usd WHEN kind='return' THEN -amount_usd ELSE 0 END),0) AS delivered,
       COALESCE(SUM(CASE WHEN kind='payment' THEN amount_usd ELSE 0 END),0) AS payments,
       COALESCE(SUM(CASE WHEN kind='return' THEN amount_usd ELSE 0 END),0) AS returns,
-      COALESCE(SUM(CASE WHEN kind='delivery' THEN qty ELSE 0 END),0) AS delivered_qty,
+      COALESCE(SUM(CASE WHEN kind='delivery' THEN qty WHEN kind='return' THEN -qty ELSE 0 END),0) AS delivered_qty,
       COALESCE(SUM(CASE WHEN kind='sold' THEN qty ELSE 0 END),0) AS sold_qty
       FROM events WHERE agent=? AND ts>=? AND ts<?""",(agent_id,start,end)).fetchone()
     visits=int(db.execute("""SELECT COUNT(*) FROM client_visits
@@ -1066,6 +1074,8 @@ def warehouse(db, status=None):
     products = core.catalog(db)
     for p in products:
         p['priceUsd'] = round(p['priceCents'] / 100, 2)
+    import warehouse as wh
     return {'filter': status, 'counts': counts, 'orders': orders,
             'catalog': products, 'demand': core.custom_demand(db),
+            'stock': wh.manager_summary(db),
             'statusLabels': dict(core.ORDER_STATUS_LABELS)}

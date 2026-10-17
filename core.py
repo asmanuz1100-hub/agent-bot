@@ -1041,10 +1041,21 @@ def amount(db, agent, kinds, client=None, pack=None, field='qty'):
     if pack is not None: q+=' AND pack=?'; args.append(pack)
     return db.execute(q,args).fetchone()[0]
 
+# Agent stock: + omborda olingan ('load'), + mijozdan qaytgan ('return'),
+# − mijozga topshirilgan ('delivery'), − omborga qaytgan ('unload'),
+# ± 'adjust' (bir martalik tuzatish, qty ishorasi bilan; warehouse.py).
+AGENT_STOCK_SQL="""COALESCE(SUM(CASE WHEN kind IN ('load','return','adjust') THEN qty
+    WHEN kind IN ('delivery','unload') THEN -qty ELSE 0 END),0)"""
+AGENT_STOCK_KINDS="('load','return','adjust','delivery','unload')"
+
 def agent_stock(db,a,p):
-    # 'unload' — агент товарни омборга қайтарган (warehouse.py).
-    return (amount(db,a,['load'],pack=p)-amount(db,a,['delivery'],pack=p)
-            +amount(db,a,['return'],pack=p)-amount(db,a,['unload'],pack=p))
+    row=db.execute(f'SELECT {AGENT_STOCK_SQL} FROM events WHERE agent=? AND pack=? AND kind IN {AGENT_STOCK_KINDS}',(a,p)).fetchone()
+    return int(row[0] or 0)
+
+def agent_stock_map(db,a):
+    """{pack: qty} for every product the agent ever moved (zeros included)."""
+    return {int(r[0]):int(r[1] or 0) for r in db.execute(
+        f'SELECT pack,{AGENT_STOCK_SQL} FROM events WHERE agent=? AND kind IN {AGENT_STOCK_KINDS} GROUP BY pack',(a,)).fetchall()}
 
 def client_stock(db,a,c,p):
     return amount(db,a,['delivery'],c,p)-amount(db,a,['sold','return'],c,p)
@@ -1135,9 +1146,12 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
         if int(c[1] or 0): raise ValueError(BLACKLIST_MSG)
     if kind in ('load','delivery','sold','return','order'):
         if pack not in PRODUCTS or not isinstance(qty,int) or qty<=0: raise ValueError('Товар ёки миқдор нотўғри.')
-    # Delivery is allowed even when the accounting stock is zero or negative.
-    # A negative agent stock is an operational discrepancy to reconcile later;
-    # it must not block a real customer delivery.
+    # Agent faqat ombordan olgan (qo‘lidagi) tovarni topshira oladi.
+    if kind=='delivery':
+        have=agent_stock(db,agent,pack)
+        if have<qty:
+            raise ValueError(f'{product_name(pack)}: qo‘lingizda {max(have,0)} dona bor, {qty} dona topshirib bo‘lmaydi. '
+                             'Avval ombordan oling.')
     if kind in ('sold','return') and client_stock_total(db,client,pack)<qty: raise ValueError('Мижозда етарли товар йўқ.')
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
     if kind=='payment' and (not isinstance(value,int) or value<=0): raise ValueError('Сумма киритилмаган.')
@@ -2051,6 +2065,8 @@ def set_order_status(db,actor,oid,status,admin_note=''):
     if not r or r[0] not in ('admin','warehouse'):
         raise ValueError('Buyurtma holatini faqat rahbar yoki omborchi o‘zgartiradi.')
     if status not in ORDER_STATUSES:raise ValueError('Holat noto‘g‘ri.')
+    if status=='loaded' and r[0]!='warehouse':
+        raise ValueError('Tovarni agentga faqat omborchi beradi (Ombor Mini App).')
     row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
     if not row:raise ValueError('Buyurtma topilmadi.')
     lock_agent(db,row['agent'])

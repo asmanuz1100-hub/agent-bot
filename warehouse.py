@@ -13,7 +13,8 @@ from core import PRODUCTS, PostgresDB, lock_agent, agent_stock, product_name, un
 
 TZ=ZoneInfo('Asia/Tashkent')
 
-KEEPER_ROLES=('warehouse','admin')
+KEEPER_ROLES=('warehouse','admin')   # Ombor panelini ko‘radi
+OPERATOR_ROLES=('warehouse',)        # tovar harakatini faqat omborchi kiritadi
 MOVE_LABELS={
     'in':'📥 Кирим',
     'issue':'🚚 Агентга берилди',
@@ -37,6 +38,29 @@ def init(db):
             if stmt.strip():db.execute(stmt)
     else:
         db.executescript(SCHEMA)
+    reset_agent_stock_once(db)
+
+STOCK_RESET_KEY='agent_stock_reset_v1'
+
+def reset_agent_stock_once(db,now=None):
+    """Yangi qoida: agent faqat ombordan olgan tovarini topshiradi. Ishga tushganda eski
+    (tarixdan hisoblangan, minus bo‘lishi mumkin) qoldiq bir marta 0 ga tushiriladi.
+
+    Har agent/mahsulot uchun teskari 'adjust' yozuvi qo‘shiladi; mijoz qarzi, to‘lovlar va
+    hisobotlar o‘zgarmaydi. Meta kalit faqat bir marta yoziladi (bir nechta instance xavfsiz)."""
+    from core import agent_stock_map
+    claimed=db.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING RETURNING key",
+                       (STOCK_RESET_KEY,str(int(time.time() if now is None else now)))).fetchone()
+    if not claimed:return 0
+    ts=int(time.time() if now is None else now);n=0
+    for (agent,) in db.execute("SELECT DISTINCT agent FROM events WHERE agent IS NOT NULL").fetchall():
+        for pack,qty in agent_stock_map(db,int(agent)).items():
+            if qty:
+                db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
+                    VALUES(?,?,NULL,'adjust',?,?,0,0,?,?,NULL)''',
+                           (int(agent),int(agent),pack,-qty,f'Qoldiq 0 ga tushirildi (eski: {qty} dona)',ts))
+                n+=1
+    return n
 
 def _role(db,uid):
     row=db.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()
@@ -44,7 +68,11 @@ def _role(db,uid):
 
 def _require_keeper(db,actor):
     if _role(db,actor) not in KEEPER_ROLES:
-        raise ValueError('Bu amal faqat omborchi yoki rahbar uchun.')
+        raise ValueError('Bu bo‘lim faqat omborchi yoki rahbar uchun.')
+
+def _require_operator(db,actor):
+    if _role(db,actor) not in OPERATOR_ROLES:
+        raise ValueError('Tovar harakatini faqat omborchi kiritadi. Rahbar ombor panelini faqat ko‘radi.')
 
 def _check_item(pack,qty):
     if pack not in PRODUCTS:raise ValueError('Mahsulot noto‘g‘ri.')
@@ -87,13 +115,13 @@ def _move(db,actor,kind,pack,qty,agent=None,request=None,note='',source=None):
 
 def receive(db,actor,pack,qty,note='',source=None):
     """Ишлаб чиқариш ёки харид ҳисобидан омборга кирим."""
-    _require_keeper(db,actor);_check_item(pack,qty)
+    _require_operator(db,actor);_check_item(pack,qty)
     _lock_warehouse(db)
     if _seen(db,source):return None
     return _move(db,actor,'in',pack,qty,note=note,source=source)
 
 def write_off(db,actor,pack,qty,note,source=None):
-    _require_keeper(db,actor);_check_item(pack,qty)
+    _require_operator(db,actor);_check_item(pack,qty)
     if not (note or '').strip():raise ValueError('Brak sababini yozing.')
     _lock_warehouse(db)
     if _seen(db,source):return None
@@ -102,7 +130,7 @@ def write_off(db,actor,pack,qty,note,source=None):
 
 def issue(db,actor,agent,pack,qty,note='',source=None,request=None):
     """Омбордан агентга товар бериш: омбор камаяди, агентда 'load' пайдо бўлади."""
-    _require_keeper(db,actor);_check_item(pack,qty);_check_agent(db,agent)
+    _require_operator(db,actor);_check_item(pack,qty);_check_agent(db,agent)
     lock_agent(db,agent);_lock_warehouse(db)
     if _seen(db,source):return None
     if stock(db,pack)<qty:
@@ -122,7 +150,7 @@ def _accept_return(db,actor,agent,pack,qty,request,note='',source=None):
 
 def take_back(db,actor,agent,pack,qty,note='',source=None):
     """Агент товарни ўзи олиб келди: сўровсиз омборга қабул (кутаётган қайтариш сўровлари ҳисобга олинади)."""
-    _require_keeper(db,actor);_check_item(pack,qty);_check_agent(db,agent)
+    _require_operator(db,actor);_check_item(pack,qty);_check_agent(db,agent)
     lock_agent(db,agent);_lock_warehouse(db)
     if _seen(db,source):return None
     free=agent_stock(db,agent,pack)-reserved_return(db,agent,pack)
@@ -168,7 +196,7 @@ def create_request(db,agent,kind,pack,qty,note='',source=None):
 
 def decide(db,actor,request_id,accepted=True,qty=None):
     """Омборчи сўровни қабул ёки рад қилади. Товар сўровида миқдорни камайтириш мумкин."""
-    _require_keeper(db,actor)
+    _require_operator(db,actor)
     row=db.execute("SELECT * FROM warehouse_requests WHERE id=? AND status='pending'",(request_id,)).fetchone()
     if not row:raise ValueError('So‘rov topilmadi yoki avval hal qilingan.')
     lock_agent(db,row['agent']);_lock_warehouse(db)
@@ -214,6 +242,29 @@ def move_view(m):
 def day_start(now=None):
     d=datetime.fromtimestamp(time.time() if now is None else now,TZ)
     return int(d.replace(hour=0,minute=0,second=0,microsecond=0).timestamp())
+
+def month_start(now=None):
+    d=datetime.fromtimestamp(time.time() if now is None else now,TZ)
+    return int(d.replace(day=1,hour=0,minute=0,second=0,microsecond=0).timestamp())
+
+def manager_summary(db,now=None):
+    """Rahbar uchun: ombor qoldig‘i va agentlarga chiqqan tovar (bugun / shu oy)."""
+    day,month=day_start(now),month_start(now)
+    issued={}
+    for r in db.execute("""SELECT pack,COALESCE(SUM(CASE WHEN ts>=? THEN qty ELSE 0 END),0),COALESCE(SUM(qty),0)
+        FROM warehouse_moves WHERE kind='issue' AND ts>=? GROUP BY pack""",(day,month)).fetchall():
+        issued[int(r[0])]=(int(r[1] or 0),int(r[2] or 0))
+    totals=dict(db.execute("""SELECT kind,COALESCE(SUM(qty),0) FROM warehouse_moves WHERE ts>=? GROUP BY kind""",(month,)).fetchall())
+    products=[]
+    for p,name in PRODUCTS.items():
+        n=stock(db,p);t,m=issued.get(p,(0,0))
+        if n or t or m:
+            products.append({'pack':p,'name':name,'block':block_units(p) or 0,'stock':n,'issuedToday':t,'issuedMonth':m})
+    products.sort(key=lambda x:(-x['issuedMonth'],-x['stock'],x['pack']))
+    return {'stockTotal':sum(max(x['stock'],0) for x in products),
+            'issuedToday':sum(x['issuedToday'] for x in products),'issuedMonth':sum(x['issuedMonth'] for x in products),
+            'returnedMonth':int(totals.get('agent_return',0) or 0),'writeoffMonth':int(totals.get('writeoff',0) or 0),
+            'receivedMonth':int(totals.get('in',0) or 0),'products':products}
 
 def open_order_demand(db):
     """Янги ва тайёрланаётган буюртмаларда ҳар товардан қанча керак."""

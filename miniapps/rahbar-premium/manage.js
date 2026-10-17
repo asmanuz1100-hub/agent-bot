@@ -14,7 +14,7 @@ function usd(v){return Number(v||0).toLocaleString('en-US',{minimumFractionDigit
 function when(ts){if(!ts)return '—';try{return new Date(Number(ts)*1000).toLocaleString('uz-UZ',{timeZone:'Asia/Tashkent',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){return '—'}}
 function dur(s){s=Math.max(0,Number(s||0));var h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'s '+String(m).padStart(2,'0')+'d'}
 function say(m){if(typeof window.toast==='function')window.toast(m)}
-var primaryAdmin=false,wh=null,whTab='orders',whFilter='open',pending=null,periodMap=null,editPreview=null;
+var primaryAdmin=false,wh=null,whTab='stock',whFilter='open',pending=null,periodMap=null,editPreview=null;
 async function api(action,arg){var r=await P.req(action,arg);if(r&&typeof r.primaryAdmin==='boolean')primaryAdmin=r.primaryAdmin;return r}
 
 /* ---------- styles ---------- */
@@ -85,7 +85,7 @@ function whOrder(o){
  var items=o.items.map(function(i){return '<li class="'+(i.custom?'cu':'')+'"><span>'+esc(i.name)+(i.custom?' ⚠️':'')+'</span><b>'+i.qty+' dona</b></li>'}).join('');
  var a=[];
  if(o.status==='new')a.push('<div class="pm-b" data-pm="wh-status" data-to="preparing" data-id="'+o.id+'">📦 Tayyorlashga</div>');
- if(o.status==='new'||o.status==='preparing')a.push('<div class="pm-b p" data-pm="wh-status" data-to="loaded" data-id="'+o.id+'">🚚 Agentga berish</div>','<div class="pm-b r w" data-pm="wh-reject" data-id="'+o.id+'">❌ Rad etish</div>');
+ if(o.status==='new'||o.status==='preparing')a.push('<div class="pm-note" style="grid-column:1/-1;margin:0">🚚 Agentga berishni omborchi qiladi (Ombor Mini App).</div>','<div class="pm-b r w" data-pm="wh-reject" data-id="'+o.id+'">❌ Rad etish</div>');
  if(o.status==='loaded')a.push('<div class="pm-b w" data-pm="wh-status" data-to="delivered" data-id="'+o.id+'">✅ Yetkazildi deb belgilash</div>');
  if(o.status==='rejected')a.push('<div class="pm-b w" data-pm="wh-status" data-to="new" data-id="'+o.id+'">↺ Qayta ochish</div>');
  return '<div class="pm-card"><div class="pm-top"><div><b>#'+o.id+' · '+esc(o.clientName)+'</b><small>'+esc(o.agentName)+' · '+when(o.ts)+(o.totalCents?' · '+usd(o.totalCents/100)+' $':'')+'</small></div>'+whStatusTag(o)+'</div>'+
@@ -95,8 +95,17 @@ function whOrder(o){
 }
 function renderWarehouse(){
  if(!wh)return;var c=wh.counts||{},open=(c.new||0)+(c.preparing||0)+(c.loaded||0);
- var body='<div class="pm-tabs">'+[['orders','🛒 Buyurtmalar · '+open],['catalog','📋 Katalog · '+(wh.catalog||[]).length],['missing','⚠️ Katalogda yo‘q · '+(wh.demand||[]).length]].map(function(t){return '<button data-pm="wh-tab" data-tab="'+t[0]+'" class="'+(whTab===t[0]?'on':'')+'">'+t[1]+'</button>'}).join('')+'</div>';
- if(whTab==='orders'){
+ var body='<div class="pm-tabs">'+[['stock','📦 Qoldiq'],['orders','🛒 Buyurtmalar · '+open],['catalog','📋 Katalog · '+(wh.catalog||[]).length],['missing','⚠️ Katalogda yo‘q · '+(wh.demand||[]).length]].map(function(t){return '<button data-pm="wh-tab" data-tab="'+t[0]+'" class="'+(whTab===t[0]?'on':'')+'">'+t[1]+'</button>'}).join('')+'</div>';
+ if(whTab==='stock'){
+  var st=wh.stock||{products:[]},u=function(n,b){n=Number(n)||0;return b&&n>=b?n+' dona · '+Math.floor(n/b)+' blok':n+' dona'};
+  var line=function(l,v,first){return '<div class="pm-row"'+(first?' style="border-top:0"':'')+'><span>'+l+'</span><b style="white-space:nowrap">'+v+' dona</b></div>'};
+  body+='<div class="pm-card">'+line('📦 Omborda jami',st.stockTotal||0,1)+line('🚚 Bugun agentlarga chiqdi',st.issuedToday||0)+
+   line('📅 Shu oy agentlarga chiqdi',st.issuedMonth||0)+line('⬇ Shu oy kirim',st.receivedMonth||0)+
+   line('↩ Shu oy agentdan qaytdi',st.returnedMonth||0)+line('⚠ Shu oy brak',st.writeoffMonth||0)+'</div>';
+  body+=st.products.length?'<div class="pm-card">'+st.products.map(function(p){return '<div class="pm-row"><div><b>'+esc(p.name)+'</b><small>Chiqdi: bugun '+p.issuedToday+' · shu oy '+p.issuedMonth+' dona</small></div><b style="white-space:nowrap;color:'+(p.stock>0?'var(--tx)':'var(--bad)')+'">'+u(p.stock,p.block)+'</b></div>'}).join('')+'</div>'
+   :'<div class="pm-note" style="text-align:center">Omborda hali kirim yo‘q.</div>';
+  body+='<div class="pm-note">Kirim, agentga berish, qabul va brakni omborchi Ombor Mini App’da kiritadi. Rahbar bu yerda faqat ko‘radi.</div>';
+ }else if(whTab==='orders'){
   body+='<div class="pm-chips">'+[['open','Ochiq'],['new','Yangi · '+(c.new||0)],['preparing','Tayyorlanmoqda · '+(c.preparing||0)],['loaded','Agentda · '+(c.loaded||0)],['delivered','Yetkazildi'],['rejected','Rad etildi']].map(function(x){return '<button data-pm="wh-filter" data-f="'+x[0]+'" class="'+(whFilter===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>';
   body+=(wh.orders||[]).map(whOrder).join('')||'<div class="pm-note" style="text-align:center">Bu holatda buyurtma yo‘q.</div>';
  }else if(whTab==='catalog'){
@@ -107,7 +116,7 @@ function renderWarehouse(){
   var d=wh.demand||[];
   body+=d.length?d.map(function(x,i){return '<div class="pm-card"><b>'+esc(x.name)+'</b><small>'+x.clients+' mijoz · '+x.agents+' agent · '+x.orders+' buyurtma · jami '+x.qty+' dona'+(x.variants.length>1?'<br>Yozilishi: '+x.variants.map(esc).join(' | '):'')+'</small><div class="pm-act"><div class="pm-b p" data-pm="wh-demand-add" data-i="'+i+'">＋ Katalogga qo‘shish</div><div class="pm-b" data-pm="wh-demand-map" data-i="'+i+'">🔗 Mavjudga bog‘lash</div></div></div>'}).join(''):'<div class="pm-note" style="text-align:center">Katalogda yo‘q mahsulot so‘ralmagan.</div>';
  }
- sheet('📦 Ombor',body,'Buyurtmalar, katalog va narxlar');
+ sheet('📦 Ombor',body,'Qoldiq, buyurtmalar, katalog va narxlar');
 }
 async function openWarehouse(){loading('📦 Ombor');try{wh=await api('warehouse',{status:whFilter});renderWarehouse()}catch(e){sheet('📦 Ombor','<div class="pm-note">'+esc(e.message||'Ombor yuklanmadi')+'</div>')}}
 function productForm(p,mapName){
@@ -340,7 +349,7 @@ document.addEventListener('click',function(ev){
  if(k==='wh-demand-add'){var x=(wh.demand||[])[Number(b.dataset.i)];if(x)productForm(null,x.name);return}
  if(k==='wh-demand-map'){mapForm(Number(b.dataset.i));return}
  if(k==='wh-map-save'){mapSave(b);return}
- if(k==='wh-status'){var to=b.dataset.to;if(to==='loaded'&&!b.dataset.ok){b.dataset.ok='1';b.textContent='Tasdiqlash: tovar agentga o‘tadi';return}setStatus(id,to,'',b);return}
+ if(k==='wh-status'){setStatus(id,b.dataset.to,'',b);return}
  if(k==='wh-reject'){sheet('Buyurtmani rad etish','<div class="pm-f"><label>Sabab<input id="pm-rej" maxlength="300" placeholder="Masalan: omborda yo‘q"></label></div><div class="pm-b r" style="margin-top:14px" data-pm="wh-reject-save" data-id="'+id+'">❌ Rad etish</div>');return}
  if(k==='wh-reject-save'){setStatus(id,'rejected',$('pm-rej').value,b);return}
  if(k==='ag-manage'){agentManagement();return}

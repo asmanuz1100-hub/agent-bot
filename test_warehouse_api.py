@@ -49,6 +49,10 @@ class WarehouseApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.call(5,'request',kind='need',pack=self.plain,qty=5)
         self.assertEqual(self.call(1,'dashboard')['mode'],'keeper')
         self.assertEqual(self.call(2,'dashboard')['mode'],'agent')
+        # Rahbar panelni ko‘radi, lekin tovar harakatini faqat omborchi kiritadi.
+        for action,payload in (('receive',{'pack':self.plain,'qty':1}),('issue',{'agent':2,'pack':self.plain,'qty':1}),
+                               ('writeoff',{'pack':self.plain,'qty':1,'note':'x'}),('take_back',{'agent':2,'pack':self.plain,'qty':1})):
+            with self.assertRaisesRegex(ValueError,'faqat omborchi'):self.call(1,action,**payload)
 
     def test_receive_issue_writeoff_with_blocks_and_idempotency(self):
         block=core.block_units(self.block)
@@ -153,6 +157,39 @@ class WarehouseApiTests(unittest.TestCase):
         self.call(5,'receive',pack=self.plain,qty=2,requestId='recv-today-2')
         self.assertEqual(self.call(5,'dashboard')['today'],{'in':2})
         self.assertEqual(warehouse.day_start(1760650000),1760641200)   # 2025-10-17 00:00 Asia/Tashkent
+
+    def test_launch_resets_old_agent_stock_to_zero_once(self):
+        # Eski tarix: agentga tovar berilgan va minusga topshirilgan (eski qoida).
+        self.db.execute("INSERT INTO clients(id,agent,name,phone,address,created_ts) VALUES(70,2,'X','+998900000780','X',0)")
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts) VALUES(1,2,NULL,'load',?,5,0,0,1)",(self.plain,))
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts) VALUES(2,2,70,'delivery',?,8,0,800,2)",(self.plain,))
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts) VALUES(1,6,NULL,'load',?,4,0,0,3)",(self.block,))
+        self.db.execute("DELETE FROM meta WHERE key=?",(warehouse.STOCK_RESET_KEY,))
+        debt=core.client_debt_usd(self.db,70)
+        self.assertEqual((core.agent_stock(self.db,2,self.plain),core.agent_stock(self.db,6,self.block)),(-3,4))
+        self.assertEqual(warehouse.reset_agent_stock_once(self.db),2)
+        self.assertEqual((core.agent_stock(self.db,2,self.plain),core.agent_stock(self.db,6,self.block)),(0,0))
+        self.assertEqual(core.client_debt_usd(self.db,70),debt)
+        self.assertEqual(warehouse.reset_agent_stock_once(self.db),0)   # faqat bir marta
+        self.call(5,'receive',pack=self.plain,qty=5,requestId='recv-reset-01')
+        self.call(5,'issue',agent=2,pack=self.plain,qty=5,requestId='issue-reset-1')
+        self.assertEqual(core.agent_stock(self.db,2,self.plain),5)
+        self.assertEqual(next(p for p in self.call(2,'my')['products'] if p['pack']==self.plain)['stock'],5)
+
+    def test_manager_sees_warehouse_stock_and_issued_goods(self):
+        import manager_api
+        self.call(5,'receive',pack=self.plain,qty=20,requestId='recv-mgr-0001')
+        self.call(5,'issue',agent=2,pack=self.plain,qty=6,requestId='issue-mgr-001')
+        self.call(5,'issue',agent=6,pack=self.plain,qty=3,requestId='issue-mgr-002')
+        self.db.execute("UPDATE warehouse_moves SET ts=? WHERE source=(SELECT MAX(source) FROM warehouse_moves WHERE kind='issue' AND qty=3)",
+                        (warehouse.day_start()-60,))
+        self.db.commit()
+        st=manager_api.warehouse(self.db)['stock']
+        row=next(p for p in st['products'] if p['pack']==self.plain)
+        self.assertEqual((row['stock'],row['issuedToday']),(11,6))
+        self.assertEqual(st['stockTotal'],11)
+        if warehouse.day_start()-60>=warehouse.month_start():   # kecha ham shu oyda bo‘lsa
+            self.assertEqual((row['issuedMonth'],st['issuedMonth']),(9,9))
 
     def test_bad_input_is_rejected(self):
         for payload in ({'pack':'x','qty':1},{'pack':self.plain,'qty':0},{'pack':self.plain,'qty':1.5},

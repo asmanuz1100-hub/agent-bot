@@ -12,7 +12,7 @@ class CatalogAndOrdersTests(unittest.TestCase):
     def setUp(self):
         self.db = core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', [
-            (1, 'admin', 'Admin'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (4, 'agent', 'Vali')])
+            (1, 'admin', 'Admin'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (4, 'agent', 'Vali'), (5, 'warehouse', 'Omborchi')])
         self.now = int(time.time()) - 60
         self.db.execute('UPDATE products SET price=? WHERE pack=1', (10000,))
         core.record(self.db, 1, 2, None, 'load', 1, 50, source=7001, currency='USD')
@@ -88,13 +88,18 @@ class CatalogAndOrdersTests(unittest.TestCase):
         stock_before = core.agent_stock(self.db, 2, 1)
         core.set_order_status(self.db, 1, oid, 'preparing')
         # Loading takes the goods out of the warehouse: an empty warehouse blocks it and writes nothing.
-        warehouse.receive(self.db, 1, 1, 6)
+        warehouse.receive(self.db, 5, 1, 6)
         with self.assertRaisesRegex(ValueError, 'yetarli emas'):
-            core.set_order_status(self.db, 1, oid, 'loaded')
+            core.set_order_status(self.db, 5, oid, 'loaded')
         self.assertEqual(core.agent_stock(self.db, 2, 1), stock_before)
-        warehouse.receive(self.db, 1, 1, 4)
-        warehouse.receive(self.db, 1, 1004, 5)
-        core.set_order_status(self.db, 1, oid, 'loaded')
+        warehouse.receive(self.db, 5, 1, 4)
+        warehouse.receive(self.db, 5, 1004, 5)
+        # Rahbar tovar bermaydi: agentga faqat omborchi beradi.
+        with self.assertRaisesRegex(ValueError, 'faqat omborchi'):
+            core.set_order_status(self.db, 1, oid, 'loaded')
+        with self.assertRaisesRegex(ValueError, 'faqat omborchi'):
+            warehouse.receive(self.db, 1, 1, 1)
+        core.set_order_status(self.db, 5, oid, 'loaded')
         self.assertEqual(core.agent_stock(self.db, 2, 1), stock_before + 10)   # loaded to the agent
         self.assertEqual(core.agent_stock(self.db, 2, 1004), 2)
         self.assertEqual((warehouse.stock(self.db, 1), warehouse.stock(self.db, 1004)), (0, 3))
@@ -133,13 +138,13 @@ class CatalogAndOrdersTests(unittest.TestCase):
         self.assertEqual(len(demand), 1)
         self.assertEqual((demand[0]['qty'], demand[0]['clients'], demand[0]['agents']), (12, 2, 2))
         with self.assertRaisesRegex(ValueError, 'katalogga qo‘shing'):
-            core.set_order_status(self.db, 1, o1, 'loaded')
+            core.set_order_status(self.db, 5, o1, 'loaded')
         pack = core.add_product(self.db, 1, 'Emal PF-115 oq 2.7 kg', 2.7, 450)
         self.assertEqual(core.map_custom_name(self.db, 1, 'Emal PF-115 oq', pack), 2)
         self.assertEqual(core.custom_demand(self.db), [])
-        warehouse.receive(self.db, 1, pack, 5)
-        warehouse.receive(self.db, 1, 1, 2)
-        core.set_order_status(self.db, 1, o1, 'loaded')
+        warehouse.receive(self.db, 5, pack, 5)
+        warehouse.receive(self.db, 5, 1, 2)
+        core.set_order_status(self.db, 5, o1, 'loaded')
         self.assertEqual(core.agent_stock(self.db, 2, pack), 5)
         v2 = core.order_view(self.db, self.db.execute('SELECT * FROM orders WHERE id=?', (o2,)).fetchone())
         self.assertEqual((v2['items'][0]['pack'], v2['items'][0]['qty'], v2['unmapped']), (pack, 7, 0))
