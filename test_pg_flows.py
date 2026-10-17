@@ -12,6 +12,7 @@ import core
 import customer_status as cs
 import manager_api
 import test_blacklist
+import test_warehouse_api
 
 URL = os.getenv('TEST_DATABASE_URL')
 
@@ -34,6 +35,23 @@ class _PgMixin:
 
 @unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
 class PgBlacklistTests(_PgMixin, test_blacklist.BlacklistTests):
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgWarehouseApiTests(_PgMixin, test_warehouse_api.WarehouseApiTests):
+    """Omborchi/agent ombor oqimi PostgreSQL'da (BIGSERIAL, FOR UPDATE lock, RETURNING)."""
     def setUp(self):
         orig = core.connect
         core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)

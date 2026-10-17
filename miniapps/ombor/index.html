@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="uz-Cyrl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>ASMAN · Омбор</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:var(--tg-theme-bg-color,#f1f5f2);--card:var(--tg-theme-section-bg-color,#fff);--text:var(--tg-theme-text-color,#17352c);
+--hint:var(--tg-theme-hint-color,#63786e);--accent:var(--tg-theme-button-color,#1f7a55);--accent-text:var(--tg-theme-button-text-color,#fff);
+--line:rgba(127,127,127,.18);--bad:#c0392b;--ok:#1f7a55;--warn:#b7791f;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);padding:12px 12px 80px}
+h1{font-size:19px;margin:4px 0 2px}
+.sub{color:var(--hint);font-size:13px;margin-bottom:10px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:8px 0 12px;padding-bottom:2px}
+.tabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;padding:7px 13px;font-size:14px}
+.tabs button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:12px;margin-left:4px}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px;border:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .n{font-weight:600;white-space:nowrap}
+.muted{color:var(--hint);font-size:13px}
+.zero{color:var(--hint)}
+label{display:block;font-size:13px;color:var(--hint);margin:10px 0 4px}
+select,input,textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+textarea{min-height:60px;resize:vertical}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1 1 30%;padding:9px 6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:14px}
+.seg button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.btn{display:block;width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-text);font-size:16px;font-weight:600}
+.btn:disabled{opacity:.5}
+.btns{display:flex;gap:8px;margin-top:8px}
+.btns button{flex:1;padding:9px;border-radius:10px;border:0;font-size:14px;font-weight:600;color:#fff}
+.b-ok{background:var(--ok)}.b-no{background:var(--bad)}
+.toast{position:fixed;left:12px;right:12px;bottom:16px;padding:12px;border-radius:12px;color:#fff;font-size:14px;display:none;z-index:9}
+.toast.ok{background:var(--ok)}.toast.err{background:var(--bad)}
+.st-pending{color:var(--warn)}.st-accepted{color:var(--ok)}.st-rejected{color:var(--bad)}
+.empty{color:var(--hint);text-align:center;padding:14px 0}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<h1 id="title">🏬 Омбор</h1>
+<div class="sub" id="welcome">Юкланмоқда…</div>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+<div class="toast" id="toast"></div>
+<script>
+const tg=window.Telegram&&Telegram.WebApp;
+if(tg){tg.ready();tg.expand();}
+let S=null,tab=null,busy=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rid=()=>'wh'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+const fmtDate=ts=>{const d=new Date(ts*1000);return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});};
+function units(n,block){n=Number(n)||0;if(block&&n>=block){const b=Math.floor(n/block),r=n%block;return `${n} дона · ${b} блок${r?` + ${r}`:''}`;}return `${n} дона`;}
+function toast(msg,ok=true){const t=$('toast');t.textContent=msg;t.className='toast '+(ok?'ok':'err');t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3500);if(tg&&tg.HapticFeedback)tg.HapticFeedback.notificationOccurred(ok?'success':'error');}
+async function api(action,payload={}){
+  const r=await fetch('/api/warehouse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...payload,initData:tg?.initData||''})});
+  let j={};try{j=await r.json();}catch(e){}
+  if(!r.ok)throw Error(j.error||'Сўров бажарилмади.');
+  return j;
+}
+async function load(){S=await api('dashboard');render();}
+async function act(action,payload,okMsg){
+  if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{S=await api(action,{...payload,requestId:rid()});toast(okMsg);render();}
+  catch(e){toast(e.message,false);render();}
+  finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+function product(p){return (S.products||[]).find(x=>x.pack==p);}
+function productOptions(list){return list.map(p=>`<option value="${p.pack}">${esc(p.name)}</option>`).join('');}
+
+function render(){
+  const keeper=S.mode==='keeper';
+  $('title').textContent=keeper?'🏬 Омбор панели':'📦 Омбор сўрови';
+  $('welcome').textContent=`${S.me.name||''} · ${keeper?(S.me.role==='admin'?'админ':'омборчи'):'агент'}`;
+  const tabs=keeper?[['stock','📦 Қолдиқ'],['requests','⏳ Сўровлар',(S.requests||[]).length],['op','➕ Амал'],['moves','🧾 Тарих'],['agents','👥 Агентлар']]
+                   :[['ask','➕ Сўров'],['mine','📋 Сўровларим'],['have','📦 Қўлимда']];
+  if(!tab||!tabs.some(t=>t[0]===tab))tab=tabs[0][0];
+  $('tabs').innerHTML=tabs.map(([k,l,c])=>`<button class="${k===tab?'on':''}" data-t="${k}">${l}${c?`<span class="badge">${c}</span>`:''}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render();});
+  const v=$('view');
+  ({stock:vStock,requests:vRequests,op:vOp,moves:vMoves,agents:vAgents,ask:vAsk,mine:vMine,have:vHave})[tab](v);
+}
+function vStock(v){
+  const t=S.today||{};
+  v.innerHTML=`<div class="card"><div class="muted">Охирги 24 соат</div>
+   <div class="row"><span>📥 Кирим</span><span class="n">${t.in||0}</span></div>
+   <div class="row"><span>🚚 Агентларга</span><span class="n">${t.issue||0}</span></div>
+   <div class="row"><span>↩️ Қайтди</span><span class="n">${t.agent_return||0}</span></div>
+   <div class="row"><span>🗑 Брак</span><span class="n">${t.writeoff||0}</span></div></div>
+   <div class="card">${S.products.filter(p=>p.active!==false||p.stock).map(p=>`<div class="row"><span>${esc(p.name)}</span><span class="n ${p.stock?'':'zero'}">${units(p.stock,p.block)}</span></div>`).join('')||'<div class="empty">Товар йўқ</div>'}</div>`;
+}
+function vRequests(v){
+  const rs=S.requests||[];
+  if(!rs.length){v.innerHTML='<div class="card empty">Кутаётган сўров йўқ ✅</div>';return;}
+  v.innerHTML=rs.map(r=>{const p=product(r.pack)||{name:'#'+r.pack,stock:0,block:0};
+    return `<div class="card"><div><b>${esc(S.labels.requests[r.kind])} #${r.id}</b></div>
+      <div class="muted">👤 ${esc(r.agent_name)} · ${fmtDate(r.ts)}</div>
+      <div style="margin-top:6px">📦 ${esc(p.name)} · <b>${units(r.qty,p.block)}</b></div>
+      ${r.kind==='need'?`<div class="muted">Омборда: ${units(p.stock,p.block)}</div>
+        <label>Бериладиган миқдор (дона, ихтиёрий камайтириш)</label><input type="number" min="1" max="${r.qty}" inputmode="numeric" id="q${r.id}" placeholder="${r.qty}">`:''}
+      ${r.note?`<div class="muted">📝 ${esc(r.note)}</div>`:''}
+      <div class="btns"><button class="b-ok" data-ok="${r.id}">✅ Қабул</button><button class="b-no" data-no="${r.id}">❌ Рад</button></div></div>`;}).join('');
+  v.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>{const id=+b.dataset.ok,q=$('q'+id)?.value;
+    act('decide',{id,accepted:true,qty:q?Number(q):null},'✅ Сўров қабул қилинди');});
+  v.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{if(confirm('Сўровни рад этасизми?'))act('decide',{id:+b.dataset.no,accepted:false},'❌ Сўров рад этилди');});
+}
+let opKind='receive';
+function vOp(v){
+  const active=S.products.filter(p=>p.active!==false);
+  v.innerHTML=`<div class="card"><div class="seg" id="kind">
+     <button data-k="receive">📥 Кирим</button><button data-k="issue">🚚 Агентга</button><button data-k="writeoff">🗑 Брак</button></div>
+   <div id="agentBox"><label>Агент</label><select id="agent">${(S.agents||[]).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></div>
+   <label>Товар</label><select id="pack">${productOptions(active)}</select>
+   <div class="muted" id="have"></div>
+   <label>Миқдор</label><input id="qty" type="number" min="1" inputmode="numeric" placeholder="масалан 10">
+   <div class="seg" id="unitBox" style="margin-top:6px"><button data-u="Дона" class="on">Дона</button><button data-u="Блок">Блок</button></div>
+   <label id="noteLbl">Изоҳ (ихтиёрий)</label><textarea id="note" maxlength="300"></textarea>
+   <button class="btn" id="go">Сақлаш</button></div>`;
+  let unit='Дона';
+  const sync=()=>{
+    v.querySelectorAll('#kind button').forEach(b=>b.classList.toggle('on',b.dataset.k===opKind));
+    $('agentBox').classList.toggle('hidden',opKind!=='issue');
+    $('noteLbl').textContent=opKind==='writeoff'?'Брак сабаби (мажбурий)':'Изоҳ (ихтиёрий)';
+    const p=product($('pack').value);
+    $('unitBox').classList.toggle('hidden',!(p&&p.block));if(!(p&&p.block))unit='Дона';
+    v.querySelectorAll('#unitBox button').forEach(b=>b.classList.toggle('on',b.dataset.u===unit));
+    $('have').textContent=p?`Омборда: ${units(p.stock,p.block)}`:'';
+  };
+  v.querySelectorAll('#kind button').forEach(b=>b.onclick=()=>{opKind=b.dataset.k;sync();});
+  v.querySelectorAll('#unitBox button').forEach(b=>b.onclick=()=>{unit=b.dataset.u;sync();});
+  $('pack').onchange=sync;sync();
+  if(!active.length)$('go').disabled=true;
+  $('go').onclick=()=>{
+    const qty=Number($('qty').value);if(!qty||qty<1){toast('Миқдорни киритинг.',false);return;}
+    const payload={pack:Number($('pack').value),qty,unit,note:$('note').value.trim()};
+    if(opKind==='issue'){if(!$('agent').value){toast('Агент йўқ.',false);return;}payload.agent=Number($('agent').value);}
+    if(opKind==='writeoff'&&!payload.note){toast('Брак сабабини ёзинг.',false);return;}
+    act(opKind,payload,{receive:'📥 Кирим сақланди',issue:'🚚 Агентга берилди',writeoff:'🗑 Ҳисобдан чиқарилди'}[opKind]);
+  };
+}
+function vMoves(v){
+  const ms=S.moves||[];
+  v.innerHTML='<div class="card">'+(ms.map(m=>{const p=product(m.pack)||{name:'#'+m.pack,block:0};
+    return `<div class="row"><div><div>${esc(S.labels.moves[m.kind]||m.kind)} #${m.id}</div>
+      <div class="muted">${esc(p.name)}${m.agent_name?' · 👤 '+esc(m.agent_name):''} · ${fmtDate(m.ts)}${m.note?' · '+esc(m.note):''}</div></div>
+      <span class="n">${units(m.qty,p.block)}</span></div>`;}).join('')||'<div class="empty">Ҳаракатлар йўқ</div>')+'</div>';
+}
+function vAgents(v){
+  const as=S.agents||[];
+  if(!as.length){v.innerHTML='<div class="card empty">Агентлар йўқ</div>';return;}
+  v.innerHTML=as.map(a=>{const items=S.products.filter(p=>(a.stock[p.pack]||0)!==0);
+    return `<div class="card"><b>👤 ${esc(a.name)}</b>${items.map(p=>`<div class="row"><span>${esc(p.name)}</span><span class="n">${units(a.stock[p.pack],p.block)}</span></div>`).join('')||'<div class="muted">Қўлида товар йўқ</div>'}</div>`;}).join('');
+}
+let askKind='need';
+function vAsk(v){
+  v.innerHTML=`<div class="card"><div class="seg" id="kind"><button data-k="need">📥 Товар сўраш</button><button data-k="return">↩️ Омборга қайтариш</button></div>
+   <label>Товар</label><select id="pack">${productOptions(S.products)}</select>
+   <div class="muted" id="have"></div>
+   <label>Миқдор</label><input id="qty" type="number" min="1" inputmode="numeric" placeholder="масалан 10">
+   <div class="seg" id="unitBox" style="margin-top:6px"><button data-u="Дона" class="on">Дона</button><button data-u="Блок">Блок</button></div>
+   <label>Изоҳ (ихтиёрий)</label><textarea id="note" maxlength="300"></textarea>
+   <button class="btn" id="go">Юбориш</button></div>`;
+  let unit='Дона';
+  const sync=()=>{v.querySelectorAll('#kind button').forEach(b=>b.classList.toggle('on',b.dataset.k===askKind));
+    const p=product($('pack').value);$('unitBox').classList.toggle('hidden',!(p&&p.block));if(!(p&&p.block))unit='Дона';
+    v.querySelectorAll('#unitBox button').forEach(b=>b.classList.toggle('on',b.dataset.u===unit));
+    $('have').textContent=p?(askKind==='return'?`Қайтариш мумкин: ${units(p.free,p.block)}`:`Қўлингизда: ${units(p.stock,p.block)}`):'';};
+  v.querySelectorAll('#kind button').forEach(b=>b.onclick=()=>{askKind=b.dataset.k;sync();});
+  v.querySelectorAll('#unitBox button').forEach(b=>b.onclick=()=>{unit=b.dataset.u;sync();});
+  $('pack').onchange=sync;sync();
+  $('go').onclick=()=>{const qty=Number($('qty').value);if(!qty||qty<1){toast('Миқдорни киритинг.',false);return;}
+    act('request',{kind:askKind,pack:Number($('pack').value),qty,unit,note:$('note').value.trim()},'✅ Сўров омборчига юборилди');};
+}
+function vMine(v){
+  const rs=S.requests||[];
+  v.innerHTML='<div class="card">'+(rs.map(r=>{const p=product(r.pack)||{block:0};return `<div class="row"><div><div>${esc(S.labels.requests[r.kind])} #${r.id}</div>
+    <div class="muted">${esc(r.name)} · ${fmtDate(r.ts)}</div></div><div style="text-align:right"><div class="n">${units(r.qty,p.block)}</div>
+    <div class="st-${r.status}" style="font-size:13px">${esc(S.labels.status[r.status])}</div></div></div>`;}).join('')||'<div class="empty">Сўровлар йўқ</div>')+'</div>';
+}
+function vHave(v){
+  const items=S.products.filter(p=>p.stock);
+  v.innerHTML='<div class="card">'+(items.map(p=>`<div class="row"><span>${esc(p.name)}</span><span class="n">${units(p.stock,p.block)}</span></div>`).join('')||'<div class="empty">Қўлингизда товар йўқ</div>')+'</div>';
+}
+if(!tg||!tg.initData){$('welcome').textContent='Панелни Telegram ботдаги «📱 Омбор Mini App» ёки «📦 Омбор сўрови» тугмасидан очинг.';}
+else{load().catch(e=>{$('welcome').textContent=e.message;});}
+</script>
+</body>
+</html>
