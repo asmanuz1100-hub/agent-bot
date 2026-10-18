@@ -54,10 +54,10 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261017-v17')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261016-premium-v12')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261018-photo-v18')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v13')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
-WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261017-v3')
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v4')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -283,6 +283,35 @@ def user_photo_link(uid,now=None,version=0):
     expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
     scope=f'user-photo/{int(uid)}'
     return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}?t=1"+(f"&v={int(version)}" if version else '')
+
+def product_photo_link(pack,version=0,now=None):
+    """Stable signed link to a catalog product photo; a new upload gets a new version (no stale cache)."""
+    base=(os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or '').rstrip('/')
+    if not base:return None
+    now=int(time.time() if now is None else now)
+    expires=((now//PHOTO_LINK_BUCKET)+2)*PHOTO_LINK_BUCKET
+    scope=f'product-photo/{int(pack)}'
+    return f"{base}/map/{scope}/{expires}/{_map_sig(scope,expires)}"+(f"?v={int(version)}" if version else '')
+
+def attach_product_photo_urls(db,data,_versions=None,_depth=0):
+    """Add photoUrl/thumbUrl to every product-like dict ({'pack':…, 'name':…}) in an API response."""
+    if _depth>5 or not isinstance(data,(dict,list)):return data
+    if _versions is None:
+        try:_versions=product_photo_versions(db)
+        except Exception:
+            logging.warning('Product photo lookup failed');return data
+        if not _versions:return data
+    items=data.values() if isinstance(data,dict) else data
+    if isinstance(data,dict) and 'name' in data and 'pack' in data:
+        try:pack=int(data['pack'])
+        except (TypeError,ValueError):pack=None
+        if pack in _versions:
+            url=product_photo_link(pack,_versions[pack])
+            if url:
+                data['photoUrl']=url;data['thumbUrl']=url+('&' if '?' in url else '?')+'t=1'
+    for v in list(items):
+        if isinstance(v,(dict,list)):attach_product_photo_urls(db,v,_versions,_depth+1)
+    return data
 
 # Bound image memory on the free instance, reduce repeated Telegram getFile calls.
 _PHOTO_CACHE=OrderedDict()
@@ -531,6 +560,21 @@ def profile_action(db,uid,action,payload):
             # The avatar is ready immediately for every map/list, no Telegram round trip on first view.
             store_thumb(db,fid,make_thumb(raw))
     return profile_payload(db,uid)
+
+def product_photo_action(db,actor,payload):
+    """Rahbar / omborchi uploads (or removes) a catalog product photo from a Mini App."""
+    pack=payload.get('pack')
+    if payload.get('remove') is True:
+        set_product_photo(db,actor,pack,'')
+        db.commit()
+        return
+    raw=decode_agent_camera_image(payload.get('imageData'))
+    # Validate role and product before the Telegram upload, so a refused request sends nothing.
+    pack=product_photo_target(db,actor,pack)
+    fid=upload_agent_camera_photo(actor,raw)
+    set_product_photo(db,actor,pack,fid)
+    db.commit()
+    store_thumb(db,fid,make_thumb(raw))
 
 def attach_staff_photos(db,data):
     """Add photoUrl to every staff member (agents / cashiers) that has a profile photo."""
@@ -2582,6 +2626,28 @@ def serve_webhook(db,base_url):
                 except Exception:
                     logging.exception('Profile photo failed');self._reply(502,b'Photo temporarily unavailable')
                 return
+            m=re.fullmatch(r'/map/product-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
+            if m:
+                pack=int(m.group(1));expires=m.group(2);sig=m.group(3)
+                if not _map_valid(f'product-photo/{pack}',expires,sig):
+                    self._reply(410,b'Product photo link expired or invalid');return
+                try:
+                    local=request_db()
+                    try:
+                        fid=product_photo_file(local,pack)
+                        local.commit()
+                        photo_data=photo_response(fid,urlparse(self.path).query,local) if fid else None
+                    finally:
+                        if postgres:local.close()
+                    if not photo_data:
+                        self._reply(404,b'Photo not found');return
+                    self._reply(200,photo_data,photo_content_type(photo_data),PHOTO_CACHE_HEADERS)
+                except ValueError as exc:
+                    logging.warning('Product photo unavailable pack=%s reason=%s',pack,str(exc))
+                    self._reply(404,b'Photo not found')
+                except Exception:
+                    logging.exception('Product photo failed');self._reply(502,b'Photo temporarily unavailable')
+                return
             m=re.fullmatch(r'/map/client-photo/(\d+)/(\d{10,})/([0-9a-f]{32})',path)
             if m:
                 cid=int(m.group(1));expires=m.group(2);sig=m.group(3)
@@ -2660,9 +2726,10 @@ def serve_webhook(db,base_url):
                                 'application/json; charset=utf-8')
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if not 2<=length<=20000:raise ValueError('Invalid length')
+                    if not 2<=length<=1_900_000:raise ValueError('Invalid length')
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
+                    if length>20000 and payload.get('action')!='product_photo':raise ValueError('Invalid length')
                     actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_wh(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
@@ -2671,7 +2738,11 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     if role(local,actor) not in ('warehouse','admin','agent'):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
-                    data=warehouse_api.handle(local,actor,payload.get('action','dashboard'),payload)
+                    if payload.get('action')=='product_photo':
+                        product_photo_action(local,actor,payload)
+                        data=warehouse_api.handle(local,actor,'dashboard',payload)
+                    else:
+                        data=warehouse_api.handle(local,actor,payload.get('action','dashboard'),payload)
                     notify=data.pop('_notify',None)
                     orders=data.pop('_orders',None)
                     local.commit()
@@ -2681,6 +2752,7 @@ def serve_webhook(db,base_url):
                     for oid in orders or ():
                         try:notify_agent_order_status(local,oid)
                         except Exception:logging.exception('Order status notification failed order=%s',oid)
+                    attach_product_photo_urls(local,data)
                     answer_wh(200,data)
                 except (ValueError,TypeError,OverflowError) as exc:
                     if local is not None:local.rollback()
@@ -2822,6 +2894,7 @@ def serve_webhook(db,base_url):
                         data['adminMode']=True;data['readOnly']=False
                         data['agents']=admin_agents;data['selectedAgentId']=subject
                     attach_client_photo_urls(data)
+                    attach_product_photo_urls(local,data)
                     if isinstance(data,dict) and isinstance(data.get('me'),dict):
                         try:
                             v=profiles.photo_versions(local).get(int(data['me'].get('id') or 0))
@@ -2848,11 +2921,14 @@ def serve_webhook(db,base_url):
                                 'application/json; charset=utf-8',headers)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
-                    if length<2 or length>10_000:
+                    if length<2 or length>1_900_000:
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):
                         answer(400,{'error':'So‘rov noto‘g‘ri.'});return
+                    # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
+                    if length>10_000 and payload.get('action')!='product_photo':
+                        answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
                     answer(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
@@ -2921,6 +2997,9 @@ def serve_webhook(db,base_url):
                         update_product(local,actor,payload.get('pack'),name=payload.get('name'),
                                        price_cents=money(price) if price not in (None,'') else None,
                                        active=payload.get('active'),weight_kg=payload.get('weightKg'))
+                        data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='product_photo':
+                        product_photo_action(local,actor,payload)
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
                     elif action=='custom_map':
                         mapped=map_custom_name(local,actor,payload.get('name'),payload.get('pack'))
@@ -3012,6 +3091,7 @@ def serve_webhook(db,base_url):
                         data.setdefault('primaryAdmin',actor in ADMINS)
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
+                    attach_product_photo_urls(local,data)
                     if action=='dashboard' and isinstance(data,dict) and isinstance(data.get('agents'),list):
                         warm_staff_thumbs(local,[a.get('id') for a in data['agents'] if isinstance(a,dict) and a.get('photoUrl')],
                                           request_db if postgres else None)
