@@ -450,7 +450,8 @@ def connect(path,initialize=True):
             db.execute(f'ALTER TABLE client_visits ADD COLUMN IF NOT EXISTS {column} {definition}')
         db.execute('ALTER TABLE handovers ADD COLUMN IF NOT EXISTS amount_usd BIGINT DEFAULT 0')
         for column,definition in (('weight_kg','DOUBLE PRECISION NOT NULL DEFAULT 0'),('block_units','BIGINT NOT NULL DEFAULT 0'),
-                                  ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','BIGINT NOT NULL DEFAULT 0')):
+                                  ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','BIGINT NOT NULL DEFAULT 0'),
+                                  ('photo',"TEXT NOT NULL DEFAULT ''"),('photo_ts','BIGINT NOT NULL DEFAULT 0')):
             db.execute(f'ALTER TABLE products ADD COLUMN IF NOT EXISTS {column} {definition}')
         db.execute("ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD'")
         db.execute('ALTER TABLE cashier_expenses ADD COLUMN IF NOT EXISTS amount_uzs BIGINT NOT NULL DEFAULT 0')
@@ -527,7 +528,8 @@ def connect(path,initialize=True):
         if column not in fund_cols:db.execute(f'ALTER TABLE agent_funds ADD COLUMN {column} {definition}')
     product_cols={r[1] for r in db.execute('PRAGMA table_info(products)')}
     for column,definition in (('weight_kg','REAL NOT NULL DEFAULT 0'),('block_units','INTEGER NOT NULL DEFAULT 0'),
-                              ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','INTEGER NOT NULL DEFAULT 0')):
+                              ('active','INTEGER NOT NULL DEFAULT 1'),('custom','INTEGER NOT NULL DEFAULT 0'),('created_ts','INTEGER NOT NULL DEFAULT 0'),
+                              ('photo',"TEXT NOT NULL DEFAULT ''"),('photo_ts','INTEGER NOT NULL DEFAULT 0')):
         if column not in product_cols:db.execute(f'ALTER TABLE products ADD COLUMN {column} {definition}')
     for pack,item in PRODUCT_CATALOG.items():
         db.execute('INSERT INTO products(pack,name,price) VALUES(?,?,?) ON CONFLICT(pack) DO UPDATE SET name=excluded.name',
@@ -1980,6 +1982,37 @@ def update_product(db,actor,pack,name=None,price_cents=None,active=None,weight_k
         db.execute('UPDATE products SET active=? WHERE pack=?',(1 if active else 0,pack))
     refresh_catalog(db)
     return pack
+
+
+# Mahsulot rasmini rahbar (katalog egasi) va omborchi qo'yadi; agentlar faqat ko'radi.
+PRODUCT_PHOTO_ROLES=('admin','warehouse')
+
+def product_photo_target(db,actor,pack):
+    """Check that actor may set this product's photo; returns the product code."""
+    row=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+    if not row or row[0] not in PRODUCT_PHOTO_ROLES:raise ValueError('Mahsulot rasmini faqat rahbar yoki omborchi qo‘yadi.')
+    try:pack=int(pack)
+    except (TypeError,ValueError):raise ValueError('Mahsulot topilmadi.')
+    if pack not in PRODUCTS or not db.execute('SELECT 1 FROM products WHERE pack=?',(pack,)).fetchone():
+        raise ValueError('Mahsulot topilmadi.')
+    return pack
+
+def set_product_photo(db,actor,pack,file_id,ts=None):
+    """Save (or with an empty file_id remove) a product's Telegram photo; returns the new photo version."""
+    pack=product_photo_target(db,actor,pack)
+    file_id=str(file_id or '').strip()
+    if len(file_id)>300:raise ValueError('Rasm identifikatori noto‘g‘ri.')
+    version=int(time.time() if ts is None else ts) if file_id else 0
+    db.execute('UPDATE products SET photo=?,photo_ts=? WHERE pack=?',(file_id,version,pack))
+    return version
+
+def product_photo_file(db,pack):
+    row=db.execute('SELECT photo FROM products WHERE pack=?',(int(pack),)).fetchone()
+    return (row[0] or '') if row else ''
+
+def product_photo_versions(db):
+    """{pack: version} for every product that has a photo (version changes on each new upload)."""
+    return {int(r[0]):int(r[1] or 0) or 1 for r in db.execute("SELECT pack,photo_ts FROM products WHERE photo<>''").fetchall()}
 
 
 def catalog(db):

@@ -41,6 +41,9 @@ var css=document.createElement('style');css.textContent=
 '.pm-entry{display:flex;align-items:center;gap:12px;cursor:pointer}.pm-entry .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:var(--soft);flex:none}.pm-entry b{font-size:15px}.pm-entry small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.pm-entry em{margin-left:auto;font-style:normal;font-weight:800;color:var(--pri)}'+
 '.pm-badge{display:inline-block;min-width:20px;padding:2px 7px;border-radius:12px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;text-align:center;margin-left:6px}'+
 '.pm-cphoto{width:56px;height:56px;border-radius:16px;object-fit:cover;flex:none;cursor:zoom-in;background:var(--soft)}.pm-vphoto{width:52px;height:52px;border-radius:12px;object-fit:cover;cursor:zoom-in;background:var(--soft)}'+
+'.pm-pimg{flex:0 0 auto;width:42px;height:42px;border-radius:12px;object-fit:cover;background:var(--soft);display:inline-flex;align-items:center;justify-content:center;font-size:19px;margin-right:10px}.pm-prow{display:flex;align-items:center;min-width:0}'+
+'.pm-pbig{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:16px;background:var(--soft);cursor:zoom-in}.pm-pph{display:flex;align-items:center;justify-content:center;height:120px;border-radius:16px;background:var(--soft);font-size:42px}'+
+'.pm-pact{display:flex;gap:8px;margin:10px 0 4px}.pm-pact label{flex:1;text-align:center;cursor:pointer}.pm-pact input{display:none}'+
 '#pm-photo{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}#pm-photo img{max-width:100%;max-height:100%;border-radius:14px}'+
 '.pm-pock{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.pm-pock div{background:var(--soft);border-radius:14px;padding:10px 9px;min-width:0}.pm-pock small{display:block;color:var(--mu);font-size:10.5px}.pm-pock b{display:block;font-size:16px;margin-top:4px;overflow-wrap:anywhere}.pm-pock em{display:block;font-style:normal;color:var(--mu);font-size:10.5px}'+
 '.pm-cur3{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:6px 8px;font-size:12.5px;align-items:center}.pm-cur3 b{text-align:right}.pm-cur3 small{text-align:right;color:var(--mu);font-size:10.5px}.pm-pos{color:var(--ok)}.pm-neg{color:var(--bad)}.pm-off{opacity:.6}'+
@@ -102,7 +105,7 @@ function renderWarehouse(){
   body+='<div class="pm-card">'+line('📦 Omborda jami',st.stockTotal||0,1)+line('🚚 Bugun agentlarga chiqdi',st.issuedToday||0)+
    line('📅 Shu oy agentlarga chiqdi',st.issuedMonth||0)+line('⬇ Shu oy kirim',st.receivedMonth||0)+
    line('↩ Shu oy agentdan qaytdi',st.returnedMonth||0)+line('⚠ Shu oy brak',st.writeoffMonth||0)+'</div>';
-  body+=st.products.length?'<div class="pm-card">'+st.products.map(function(p){return '<div class="pm-row"><div><b>'+esc(p.name)+'</b><small>Chiqdi: bugun '+p.issuedToday+' · shu oy '+p.issuedMonth+' dona</small></div><b style="white-space:nowrap;color:'+(p.stock>0?'var(--tx)':'var(--bad)')+'">'+u(p.stock,p.block)+'</b></div>'}).join('')+'</div>'
+  body+=st.products.length?'<div class="pm-card">'+st.products.map(function(p){return '<div class="pm-row"><div class="pm-prow">'+prodImg(p)+'<div><b>'+esc(p.name)+'</b><small>Chiqdi: bugun '+p.issuedToday+' · shu oy '+p.issuedMonth+' dona</small></div></div><b style="white-space:nowrap;color:'+(p.stock>0?'var(--tx)':'var(--bad)')+'">'+u(p.stock,p.block)+'</b></div>'}).join('')+'</div>'
    :'<div class="pm-note" style="text-align:center">Omborda hali kirim yo‘q.</div>';
   body+='<div class="pm-note">Kirim, agentga berish, qabul va brakni omborchi Ombor Mini App’da kiritadi. Rahbar bu yerda faqat ko‘radi.</div>';
  }else if(whTab==='orders'){
@@ -110,7 +113,7 @@ function renderWarehouse(){
   body+=(wh.orders||[]).map(whOrder).join('')||'<div class="pm-note" style="text-align:center">Bu holatda buyurtma yo‘q.</div>';
  }else if(whTab==='catalog'){
   body+='<div class="pm-b p" data-pm="wh-new" style="margin-bottom:10px">＋ Yangi mahsulot qo‘shish</div><div class="pm-card">'+
-   (wh.catalog||[]).map(function(p){return '<div class="pm-row'+(p.active?'':' off')+'" data-pm="wh-edit" data-pack="'+p.pack+'" style="cursor:pointer"><div><b>'+esc(p.name)+'</b><small>'+(p.weightKg!=null?p.weightKg+' kg · ':'')+usd(p.priceUsd)+' $'+'</small></div><div style="display:flex;gap:5px;align-items:center">'+(p.custom?'<span class="pm-tag cu">yangi</span>':'')+(p.active?'':'<span class="pm-tag off">arxiv</span>')+'<b style="color:var(--pri)">✎</b></div></div>'}).join('')+'</div>'+
+   (wh.catalog||[]).map(function(p){return '<div class="pm-row'+(p.active?'':' off')+'" data-pm="wh-edit" data-pack="'+p.pack+'" style="cursor:pointer"><div class="pm-prow">'+prodImg(p)+'<div><b>'+esc(p.name)+'</b><small>'+(p.weightKg!=null?p.weightKg+' kg · ':'')+usd(p.priceUsd)+' $'+'</small></div></div><div style="display:flex;gap:5px;align-items:center">'+(p.custom?'<span class="pm-tag cu">yangi</span>':'')+(p.active?'':'<span class="pm-tag off">arxiv</span>')+'<b style="color:var(--pri)">✎</b></div></div>'}).join('')+'</div>'+
    '<div class="pm-note">Arxivdagi mahsulot agentlarga ko‘rinmaydi, lekin eski savdo va akt sverkalarda saqlanadi.</div>';
  }else{
   var d=wh.demand||[];
@@ -118,10 +121,29 @@ function renderWarehouse(){
  }
  sheet('📦 Ombor',body,'Qoldiq, buyurtmalar, katalog va narxlar');
 }
+/* Mahsulot rasmi: katalog va qoldiqda kichik rasm, tahrirlashda katta rasm + yuklash. */
+function prodImg(p){return p&&p.thumbUrl?'<img class="pm-pimg" src="'+esc(p.thumbUrl)+'" alt="" loading="lazy" decoding="async">':'<span class="pm-pimg">📦</span>'}
+function shrinkImage(file){return new Promise(function(ok,no){if(!file||!/^image\//.test(file.type||'image/'))return no(Error('Rasm faylini tanlang.'));var url=URL.createObjectURL(file),im=new Image();
+ im.onload=function(){var s=Math.min(1,1080/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*s)),h=Math.max(1,Math.round(im.naturalHeight*s)),c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
+  var q=.86,d=c.toDataURL('image/jpeg',q);while(d.length*.75>1100000&&q>.4){q-=.12;d=c.toDataURL('image/jpeg',q)}ok(d)};
+ im.onerror=function(){URL.revokeObjectURL(url);no(Error('Rasm ochilmadi.'))};im.src=url})}
+async function saveProductPhoto(pack,arg){
+ say(arg.remove?'Rasm o‘chirilmoqda…':'Rasm yuklanmoqda…');
+ try{var r=await api('product_photo',Object.assign({pack:pack,status:whFilter},arg));wh=r.warehouse;
+  say(arg.remove?'✅ Rasm o‘chirildi':'✅ Rasm saqlandi');P.reload(true);
+  productForm((wh.catalog||[]).find(function(p){return p.pack===pack}));
+ }catch(e){say('⚠️ '+(e.message||'Rasm saqlanmadi'))}
+}
+document.addEventListener('change',function(ev){var f=ev.target;if(!f||f.id!=='pm-p-photo')return;var file=f.files&&f.files[0],pack=Number(f.dataset.pack);f.value='';if(!file)return;
+ shrinkImage(file).then(function(d){return saveProductPhoto(pack,{imageData:d})},function(e){say('⚠️ '+e.message)})});
 async function openWarehouse(){loading('📦 Ombor');try{wh=await api('warehouse',{status:whFilter});renderWarehouse()}catch(e){sheet('📦 Ombor','<div class="pm-note">'+esc(e.message||'Ombor yuklanmadi')+'</div>')}}
 function productForm(p,mapName){
  var custom=!p||p.custom;
- sheet(p?'Mahsulotni tahrirlash':'Yangi mahsulot','<div class="pm-f">'+
+ var photo=p?'<div class="pm-card" style="margin-bottom:10px">'+(p.photoUrl?'<img class="pm-pbig" src="'+esc(p.thumbUrl||p.photoUrl)+'" data-full="'+esc(p.photoUrl)+'" alt="" onclick="pmPhoto(this.dataset.full)">':'<div class="pm-pph">📦</div>')+
+  '<div class="pm-pact"><label class="pm-b p">📷 '+(p.photoUrl?'Rasmni almashtirish':'Rasm qo‘yish')+'<input id="pm-p-photo" type="file" accept="image/*" data-pack="'+p.pack+'"></label>'+
+  (p.photoUrl?'<div class="pm-b" data-pm="wh-photo-del" data-pack="'+p.pack+'">🗑 O‘chirish</div>':'')+'</div><div class="pm-note" style="margin:0">Rasm agent, omborchi va rahbar ilovalarida mahsulot yonida ko‘rinadi.</div></div>':
+  '<div class="pm-note">Rasmni mahsulot saqlangandan keyin qo‘yasiz.</div>';
+ sheet(p?'Mahsulotni tahrirlash':'Yangi mahsulot',photo+'<div class="pm-f">'+
   (custom?'<label>Mahsulot nomi<input id="pm-p-name" maxlength="120" value="'+esc(p?p.name:(mapName||''))+'" placeholder="Masalan: Emal PF-115 oq 2.7 kg"></label><label>Og‘irligi (kg)<input id="pm-p-weight" inputmode="decimal" value="'+esc(p&&p.weightKg!=null?p.weightKg:'')+'" placeholder="2.7"></label>':'<div class="pm-note"><b>'+esc(p.name)+'</b><br>Asosiy mahsulot — nomi va og‘irligi o‘zgarmaydi.</div>')+
   '<label>Narxi (USD, 1 dona)<input id="pm-p-price" inputmode="decimal" value="'+esc(p?p.priceUsd:'')+'" placeholder="4.50"></label>'+
   (p?'':'<label>Blokdagi dona (ixtiyoriy)<input id="pm-p-block" inputmode="numeric" placeholder="masalan 6"></label>')+
@@ -346,6 +368,7 @@ document.addEventListener('click',function(ev){
  if(k==='wh-new'){productForm(null);return}
  if(k==='wh-edit'){productForm((wh.catalog||[]).find(function(p){return p.pack===Number(b.dataset.pack)}));return}
  if(k==='wh-save'){saveProduct(b);return}
+ if(k==='wh-photo-del'){if(confirm('Mahsulot rasmini o‘chirasizmi?'))saveProductPhoto(Number(b.dataset.pack),{remove:true});return}
  if(k==='wh-demand-add'){var x=(wh.demand||[])[Number(b.dataset.i)];if(x)productForm(null,x.name);return}
  if(k==='wh-demand-map'){mapForm(Number(b.dataset.i));return}
  if(k==='wh-map-save'){mapSave(b);return}
