@@ -1579,6 +1579,7 @@ def finish(db,u,s,source):
         send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
 WAREHOUSE_HELP=('''\n\n🧪 ТЕСТ РЕЖИМИ · фақат админ
+/wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА] — янги товар
 /wh_in КОД ДОНА [изоҳ] — омборга кирим
 /wh_issue АГЕНТ_ID КОД ДОНА [изоҳ] — агентга бериш
 /wh_off КОД ДОНА САБАБ — брак / ҳисобдан чиқариш
@@ -1597,6 +1598,13 @@ def handle_warehouse(db,u,r,text):
     if cmd in ('🏬','/wh'):
         codes='\n'.join(f'{p} — {name}' for p,name in PRODUCTS.items())
         send(u,warehouse.report_text(db)+'\n\n📦 ТОВАР КОДЛАРИ\n'+codes+WAREHOUSE_HELP);return
+    if cmd=='/wh_new':
+        fields=[x.strip() for x in text[len(cmd):].split('|')]
+        if len(fields) not in (3,4) or not all(fields):
+            raise ValueError('Формат: /wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА]\nМасалан: /wh_new Эмаль оқ — 3 кг | 3 | 12.50 | 6')
+        block=_wh_int(fields[3],'Блокдаги дона') if len(fields)==4 else 0
+        pack=add_product(db,u,fields[0],fields[1],money(fields[2]),block)
+        send(u,f'✅ Янги товар қўшилди: {product_name(pack)} · код {pack}.\nКирим: /wh_in {pack} ДОНА');return
     if cmd=='/wh_in':
         if len(parts)<3:raise ValueError('Формат: /wh_in КОД ДОНА [изоҳ]')
         pack=_wh_int(parts[1],'Товар коди');qty=_wh_int(parts[2],'Миқдор')

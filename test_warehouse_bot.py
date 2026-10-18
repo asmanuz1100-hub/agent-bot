@@ -62,4 +62,20 @@ class WarehouseBotTests(unittest.TestCase):
         note=self.db.execute("SELECT note FROM warehouse_moves WHERE kind='issue'").fetchone()[0]
         self.assertEqual(note,'эрталабки юк')
 
+    def test_admin_adds_new_product_from_warehouse(self):
+        with patch.object(bot,'WAREHOUSE_TEST_MODE',True),patch.object(bot,'send') as send:
+            bot.handle(self.db,msg(1,1,'/wh_new Эмаль оқ — 3 кг | 3 | 12.50 | 6'))
+            pack=max(core.PRODUCTS)
+            self.assertEqual(core.PRODUCTS[pack],'Эмаль оқ — 3 кг')
+            self.assertEqual(core.block_units(pack),6)
+            self.assertEqual(core.product_price(self.db,pack),1250)
+            self.assertIn(f'код {pack}',send.call_args.args[1])
+            bot.handle(self.db,msg(2,1,f'/wh_in {pack} 12'))
+            self.assertEqual(warehouse.stock(self.db,pack),12)
+            bot.handle(self.db,msg(3,1,'🏬 Омбор (ТЕСТ)'))
+            self.assertIn('Эмаль оқ — 3 кг: 12 дона (2 блок + 0 дона)',send.call_args.args[1])
+            for bad in ('/wh_new Эмаль', '/wh_new Эмаль | 3 | 0', '/wh_new Эмаль оқ — 3 кг | 3 | 5'):
+                with self.assertRaises(ValueError):bot.handle(self.db,msg(9,1,bad))
+            with self.assertRaises(ValueError):bot.handle(self.db,msg(10,2,'/wh_new Бошқа | 1 | 2'))
+
 if __name__=='__main__':unittest.main()
