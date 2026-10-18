@@ -302,8 +302,10 @@ const cols={"5+ kun":['bad','p-bad'],"0–2 kun":['ok','p-ok'],"3–4 kun":['war
 const CL=[["Otabek market","Bag'dod","Chakana savdo",120,"5+ kun"],["Sardor shop","Buvayda","Oziq-ovqat",0,"0–2 kun"],["Azizbek do'kon","Furqat","Maishiy tovarlar",45,"Rejada"],["Kamola savdo","Rishton","Qurilish mollari",15.5,"3–4 kun"],["Nur savdo","Toshloq","Chakana savdo",8,"0–2 kun"]];
 const AG=[["Ilyosjon","Bag'dod hududi",6,2,"Faol"],["Ikboljon aka","Chilonzor hududi",4,0,"Kechikkan"],["Abduvoxid","Sergeli hududi",8,3,"Faol"]];
 const KM=[["Ilyosjon","Kassa to'lovini tasdiqlash kutilmoqda","14:32","37.80","Kutilmoqda","p-wa","🪙"],["Ikboljon Aka","Naqd pul qabul qilindi","12:18","+10.20","Qabul qilindi","p-ok","⬇️"],["Agentga berildi","100,000 UZS · 8.44 USD","11:05","-8.44","Rasxod","p-bad","👤"],["Boshqa xarajat","-2,370,000 UZS · 200.00 USD","09:14","-200.00","Rasxod","p-bad","📦"]];
-const clRow=c=>{const i=CL.indexOf(c),[k,p]=cols[c[4]];return `<div class="row"><div class="av" onclick="openC(${i})" style="background:linear-gradient(135deg,#2f7bff,#0b3fae);cursor:pointer">${c[0][0]}</div><div class="t" onclick="openC(${i})" style="cursor:pointer"><b>${c[0]}</b><small>📍 ${c[1]}</small><small>👤 ${c[2]}</small></div><div class="qcall" onclick="event.stopPropagation();toast('📞 '+'${c[0]}'+' ga qo\\'ng\\'iroq qilinmoqda…')">📞</div><div class="debt p-${k=='ok'?'ok':k=='bad'?'bad':k=='warn'?'wa':'pri'}" onclick="openC(${i})" style="background:var(--soft);cursor:pointer"><small>Qarzdorlik</small><b>${c[3].toFixed(2)} USD</b><span class="pill ${p}">● ${c[4]}</span></div></div>`};
-const agRow=a=>`<div class="row" onclick="selA(${AG.indexOf(a)})"><div class="av">${a[0][0]}</div><div class="t"><b>${a[0]}</b><small>📍 ${a[1]}</small><small>✅ ${a[2]} ta tashrif &nbsp; 👥 ${a[3]} ta yangi mijoz</small></div><span class="pill ${a[4]=='Faol'?'p-ok':'p-wa'}">● ${a[4]}</span></div>`;
+// Mijoz/agent nomlari agentlar kiritgan matn: HTML'ga faqat hx() orqali qo'yiladi (XSS).
+const hx=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const clRow=c=>{const i=CL.indexOf(c),[k,p]=cols[c[4]];return `<div class="row"><div class="av" onclick="openC(${i})" style="background:linear-gradient(135deg,#2f7bff,#0b3fae);cursor:pointer">${hx(c[0][0])}</div><div class="t" onclick="openC(${i})" style="cursor:pointer"><b>${hx(c[0])}</b><small>📍 ${hx(c[1])}</small><small>👤 ${hx(c[2])}</small></div><div class="qcall" onclick="event.stopPropagation();toast('📞 '+CL[${i}][0]+' ga qo\\'ng\\'iroq qilinmoqda…')">📞</div><div class="debt p-${k=='ok'?'ok':k=='bad'?'bad':k=='warn'?'wa':'pri'}" onclick="openC(${i})" style="background:var(--soft);cursor:pointer"><small>Qarzdorlik</small><b>${c[3].toFixed(2)} USD</b><span class="pill ${p}">● ${hx(c[4])}</span></div></div>`};
+const agRow=a=>`<div class="row" onclick="selA(${AG.indexOf(a)})"><div class="av">${hx(a[0][0])}</div><div class="t"><b>${hx(a[0])}</b><small>📍 ${hx(a[1])}</small><small>✅ ${a[2]} ta tashrif &nbsp; 👥 ${a[3]} ta yangi mijoz</small></div><span class="pill ${a[4]=='Faol'?'p-ok':'p-wa'}">● ${hx(a[4])}</span></div>`;
 const S=[
 `<div class="hd">${B}<div class="hero"><span class="live">● JONLI</span><small class="k">ASMAN · CONTROL CENTER</small><h1>Rahbar boshqaruv markazi</h1><p>Bugun · jonli ko'rsatkichlari</p><div class="two"><div class="hb"><small>Joriy kassa qoldig'i</small><b><span class="bal">393.15</span> <u>USD</u></b><small>Tasdiqlangan kirim – chiqimlar</small></div><div class="hb"><small>Kutilayotgan pul</small><b><span class="pend">37.80</span> <u>USD</u></b><small>Kassir tasdig'ida</small></div></div></div></div>
 <div class="bd"><div class="two" style="margin-bottom:12px">${kp('👥','Jami agent','3','● 2 tasi ishda','ok','go(1)')}${kp('🏪','Jami mijoz','91','● 4 ta yangi bugun','ok','goCl(0)')}${kp('📅','Bugungi tashrif','18','Agentlar qaydi','','go(1)')}${kp('⚠️','Nazorat kerak','7','● 5+ kun tashrifsiz','bad','goCl(3)')}</div>
@@ -357,18 +359,18 @@ const AG_LL=[[41.2932,69.2497],[41.2786,69.2007],[41.2179,69.2481]];
 const CL_LL=[[41.3011,69.2582],[41.2705,69.1932],[41.3268,69.3176],[41.2148,69.2519],[41.2861,69.2735]];
 let ymapObj=null,ymapPMs=[],ymapCPMs=[],selAgent=0;
 function selA(i){const a=AG[i];sa_av.textContent=a[0][0];sa_n.textContent=a[0];sa_i.textContent='📍 '+a[1]+' · '+a[2]+' ta tashrif · '+a[3]+' ta yangi mijoz';sa_p.className='pill '+(a[4]=='Faol'?'p-ok':'p-wa');sa_p.textContent='● '+a[4];selAgent=i;
-  ymapPMs.forEach((m,k)=>m.setIcon(L.divIcon({className:'',html:`<div class="ymap-pin${k==i?' on':''}"><b>${AG[k][0][0]}</b></div>`,iconSize:[38,38],iconAnchor:[19,34]})));
+  ymapPMs.forEach((m,k)=>m.setIcon(L.divIcon({className:'',html:`<div class="ymap-pin${k==i?' on':''}"><b>${hx(AG[k][0][0])}</b></div>`,iconSize:[38,38],iconAnchor:[19,34]})));
   if(ymapObj)ymapObj.flyTo(AG_LL[i],15,{duration:.6});
   scrollTo({top:0,behavior:'smooth'})}
 function ymapRoute(i){const [la,lo]=AG_LL[i];const url='https://www.google.com/maps/dir/?api=1&destination='+la+','+lo;if(tg&&tg.openLink)tg.openLink(url);else window.open(url,'_blank')}
 const LV={"5+ kun":"7 kun oldin","0–2 kun":"Kecha","3–4 kun":"3 kun oldin","Rejada":"Ertaga · rejada"};
 function openC(i){const c=CL[i],p=cols[c[4]][1],ag=AG[i%3][0];
 sh.innerHTML=`<div style="width:44px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 14px"></div>
-<div class="kp"><div class="av" style="width:56px;height:56px;background:linear-gradient(135deg,#ffb454,#f0384f)">${c[0][0]}</div><div style="flex:1"><b style="font-size:18px">${c[0]}</b><small>📍 ${c[1]} · 🏪 ${c[2]}</small></div><span class="pill ${p}">● ${c[4]}</span></div>
+<div class="kp"><div class="av" style="width:56px;height:56px;background:linear-gradient(135deg,#ffb454,#f0384f)">${hx(c[0][0])}</div><div style="flex:1"><b style="font-size:18px">${hx(c[0])}</b><small>📍 ${hx(c[1])} · 🏪 ${hx(c[2])}</small></div><span class="pill ${p}">● ${c[4]}</span></div>
 <div class="three" style="margin:16px 0"><div class="c" style="margin:0"><small style="color:var(--mu);font-size:11px">Qarzdorlik</small><b style="display:block;font-size:17px">${c[3].toFixed(2)} $</b></div><div class="c" style="margin:0"><small style="color:var(--mu);font-size:11px">Oxirgi tashrif</small><b style="display:block;font-size:14px;margin-top:3px">${LV[c[4]]}</b></div><div class="c" style="margin:0"><small style="color:var(--mu);font-size:11px">Oylik aylanma</small><b style="display:block;font-size:17px">${200+i*140} $</b></div></div>
-<div class="tl"><span>📞 Telefon</span><b>+998 90 ${100+i*37} 45 ${10+i*9}</b></div><div class="tl"><span>👤 Mas'ul agent</span><b>${ag}</b></div>
+<div class="tl"><span>📞 Telefon</span><b>+998 90 ${100+i*37} 45 ${10+i*9}</b></div><div class="tl"><span>👤 Mas'ul agent</span><b>${hx(ag)}</b></div>
 <h3 style="margin:16px 0 4px;font-size:14px">So'nggi tashriflar</h3>
-<div class="tl"><span>Buyurtma yig'ildi<br><small>${ag}</small></span><b class="ok">+${40+i*12} $</b></div><div class="tl"><span>Qarz to'lovi<br><small>${ag}</small></span><b class="ok">+${20+i*5} $</b></div><div class="tl"><span>Tashrif — buyurtmasiz<br><small>${ag}</small></span><small>—</small></div>
+<div class="tl"><span>Buyurtma yig'ildi<br><small>${hx(ag)}</small></span><b class="ok">+${40+i*12} $</b></div><div class="tl"><span>Qarz to'lovi<br><small>${hx(ag)}</small></span><b class="ok">+${20+i*5} $</b></div><div class="tl"><span>Tashrif — buyurtmasiz<br><small>${hx(ag)}</small></span><small>—</small></div>
 <div class="two" style="margin-top:16px"><div class="btn g" id="b1">📞 Qo'ng'iroq</div><div class="btn" id="b2">✓ Tashrif belgilash</div></div>`;
 b1.onclick=()=>toast("📞 Qo'ng'iroq qilinmoqda…");b2.onclick=()=>{closeS();toast("✅ "+c[0]+" — tashrif belgilandi")};
 sh.classList.add('on');ov.classList.add('on')}
@@ -484,7 +486,7 @@ function initYmap(){
   ymapCPMs=CL.map((c,i)=>{
     const icon=L.divIcon({className:'',html:`<div class="ymap-dot" style="background:${CC[i]}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
     const m=L.marker(CL_LL[i],{icon}).addTo(ymapObj);
-    m.bindPopup(`<div class="ymap-bln"><b>${c[0]}</b><small>📍 ${c[1]} · Qarz: ${c[3].toFixed(2)} $</small><button onclick="ymapRoute(${i%3})">➤ Marshrutni ochish</button></div>`);
+    m.bindPopup(`<div class="ymap-bln"><b>${hx(c[0])}</b><small>📍 ${hx(c[1])} · Qarz: ${c[3].toFixed(2)} $</small><button onclick="ymapRoute(${i%3})">➤ Marshrutni ochish</button></div>`);
     return m});
 }
 /* Map is intentionally deferred until the visible tab is opened. */

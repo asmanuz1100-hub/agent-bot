@@ -20,6 +20,7 @@ import cashier_api
 import warehouse_api
 import full_backup
 import profiles
+import warehouse
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -30,6 +31,8 @@ def stop_signal(*_):
 TOKEN=os.getenv('BOT_TOKEN','')
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
+# Омбор (warehouse.py) ҳозирча фақат тест серверида ва фақат админга очиқ.
+WAREHOUSE_TEST_MODE=os.getenv('WAREHOUSE_TEST_MODE','').strip().lower() in ('1','true','yes','on')
 DB_PATH=os.getenv('DB_PATH','data/agent-test.sqlite3')
 # --- Mini Apps are served by this same service under /app/<name>/ (folder: miniapps/). ---
 # Set SELF_HOSTED_MINIAPPS=0 to fall back to the old separate Render static sites.
@@ -696,6 +699,8 @@ def menu(db,u):
     if r=='admin':
         if u in ADMINS:
             rows.append(['📦 Тўлиқ Backup'])
+        if WAREHOUSE_TEST_MODE:
+            rows.append(['🏬 Омбор (ТЕСТ)'])
         # Only the premium apps are offered: one launcher per role, no separate TEST buttons.
         if MANAGER_PREMIUM_TEST_URL or MANAGER_MINIAPP_URL:
             rows.insert(0,['📱 Раҳбар Mini App'])
@@ -1585,6 +1590,54 @@ def finish(db,u,s,source):
     else:
         send(u,'✅ Сақланди.' if a!='tracking' else 'Ҳисобот тайёр.',menu(db,u))
 
+WAREHOUSE_HELP=('''\n\n🧪 ТЕСТ РЕЖИМИ · фақат админ
+/wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА] — янги товар
+Кирим, агентга бериш, брак ва сўровларни омборчи Омборчи Mini App’да киритади.''')
+
+def _wh_int(value,label):
+    if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
+    return int(value)
+
+def handle_warehouse(db,u,r,text):
+    if not WAREHOUSE_TEST_MODE or r!='admin':
+        raise ValueError('Омбор бўлими ҳозирча фақат тест режимида админ учун.')
+    parts=text.split(maxsplit=3)
+    cmd=parts[0]
+    if cmd in ('🏬','/wh'):
+        codes='\n'.join(f'{p} — {name}' for p,name in PRODUCTS.items())
+        send(u,warehouse.report_text(db)+'\n\n📦 ТОВАР КОДЛАРИ\n'+codes+WAREHOUSE_HELP);return
+    if cmd=='/wh_new':
+        fields=[x.strip() for x in text[len(cmd):].split('|')]
+        if len(fields) not in (3,4) or not all(fields):
+            raise ValueError('Формат: /wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА]\nМасалан: /wh_new Эмаль оқ — 3 кг | 3 | 12.50 | 6')
+        block=_wh_int(fields[3],'Блокдаги дона') if len(fields)==4 else 0
+        pack=add_product(db,u,fields[0],fields[1],money(fields[2]),block)
+        send(u,f'✅ Янги товар қўшилди: {product_name(pack)} · код {pack}.\nКиримни омборчи Омборчи Mini App’да киритади.');return
+    if cmd=='/wh_in':
+        if len(parts)<3:raise ValueError('Формат: /wh_in КОД ДОНА [изоҳ]')
+        pack=_wh_int(parts[1],'Товар коди');qty=_wh_int(parts[2],'Миқдор')
+        move=warehouse.receive(db,u,pack,qty,parts[3] if len(parts)>3 else '')
+        send(u,f'✅ Кирим #{move}: {product_name(pack)} {qty} дона. Омборда: {warehouse.stock(db,pack)} дона.');return
+    if cmd=='/wh_issue':
+        parts=text.split(maxsplit=4)
+        if len(parts)<4:raise ValueError('Формат: /wh_issue АГЕНТ_ID КОД ДОНА')
+        agent=_wh_int(parts[1],'Агент ID');pack=_wh_int(parts[2],'Товар коди');qty=_wh_int(parts[3],'Миқдор')
+        move=warehouse.issue(db,u,agent,pack,qty,parts[4] if len(parts)>4 else '')
+        send(u,f'✅ Агентга берилди #{move}: {product_name(pack)} {qty} дона. Омборда: {warehouse.stock(db,pack)} дона.');return
+    if cmd=='/wh_off':
+        if len(parts)<4:raise ValueError('Формат: /wh_off КОД ДОНА САБАБ')
+        pack=_wh_int(parts[1],'Товар коди');qty=_wh_int(parts[2],'Миқдор')
+        move=warehouse.write_off(db,u,pack,qty,parts[3])
+        send(u,f'✅ Ҳисобдан чиқарилди #{move}: {product_name(pack)} {qty} дона. Омборда: {warehouse.stock(db,pack)} дона.');return
+    if cmd in ('/wh_ok','/wh_no'):
+        if len(parts)<2:raise ValueError(f'Формат: {cmd} СЎРОВ_ID')
+        rid=_wh_int(parts[1],'Сўров рақами')
+        qty=_wh_int(parts[2],'Миқдор') if cmd=='/wh_ok' and len(parts)>2 else None
+        res=warehouse.decide(db,u,rid,accepted=cmd=='/wh_ok',qty=qty)
+        send(u,f"{'✅ Қабул қилинди' if res['accepted'] else '❌ Рад этилди'} · сўров #{res['id']} · "
+               f"{product_name(res['pack'])} {res['qty']} дона.");return
+    raise ValueError('Омбор буйруғи нотўғри. /wh — ёрдам.')
+
 def handle(db,update):
     m=update.get('message') or update.get('edited_message')
     if not m or m.get('chat',{}).get('type')!='private':return
@@ -1694,6 +1747,8 @@ def handle(db,update):
         send(u,'⏳ Тўлиқ backup тайёрланяпти: база ва мижоз расмлари йиғилади. Бот ишлашда давом этади.')
         threading.Thread(target=_full_backup_worker,args=(u,),daemon=True,name='full-backup-export').start()
         return
+    if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
+        handle_warehouse(db,u,r,text);return
     if text=='/failed':
         if r!='admin':raise ValueError('Фақат админ.')
         rows=db.execute("""SELECT update_id,actor,failure_type,attempts,status,created_ts

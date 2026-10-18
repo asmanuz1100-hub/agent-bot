@@ -788,7 +788,10 @@ def _pdf_font():
     import os
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    candidates=[os.getenv('PDF_FONT_PATH',''),'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf','/usr/share/fonts/dejavu/DejaVuSans.ttf']
+    candidates=[os.getenv('PDF_FONT_PATH',''),'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf','/usr/share/fonts/dejavu/DejaVuSans.ttf',
+                # macOS (lokal ishlab chiqish): kirill harflari bor TTF shriftlar.
+                '/System/Library/Fonts/Supplemental/Arial Unicode.ttf','/Library/Fonts/Arial Unicode.ttf',
+                '/System/Library/Fonts/Supplemental/Arial.ttf']
     for path in candidates:
         if path and os.path.exists(path):
             if 'ASMANDejaVu' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('ASMANDejaVu',path))
