@@ -130,6 +130,26 @@ class ProductPhotoTests(unittest.TestCase):
         big = self._post(handler, '/api/manager', {**admin, 'action': 'dashboard', 'pad': 'x' * 20000}, MANAGER_ORIGIN)
         self.assertEqual(big['code'], 400)
 
+    def test_upload_trims_transparent_border_to_square_icon(self):
+        # Mahsulot rasmlari 2000x2000, shaffof fonda, atrofi bo'sh: ikonkada mahsulot yirik ko'rinishi kerak.
+        im = Image.new('RGBA', (2000, 2000), (0, 0, 0, 0))
+        im.paste((30, 80, 160, 255), (700, 600, 1300, 1400))
+        out = io.BytesIO()
+        im.save(out, 'PNG')
+        trimmed = Image.open(io.BytesIO(bot.trim_product_image(out.getvalue())))
+        self.assertEqual(trimmed.format, 'JPEG')
+        self.assertEqual(trimmed.width, trimmed.height)
+        self.assertLessEqual(trimmed.width, 1080)
+        rgb = trimmed.convert('RGB')
+        self.assertGreater(min(rgb.getpixel((5, 5))), 240)  # transparent corner became white
+        self.assertLess(rgb.getpixel((trimmed.width // 2, trimmed.height // 2))[0], 80)
+        dark = sum(1 for p in rgb.getdata() if p[0] < 100)
+        self.assertGreater(dark / (trimmed.width * trimmed.height), 0.6)  # object fills the icon
+        with patch.object(bot, 'upload_agent_camera_photo', return_value='TG-TRIM') as upload:
+            bot.product_photo_action(self.db, 1, {'pack': self.pack, 'imageData': jpeg_data_url()})
+        sent = Image.open(io.BytesIO(upload.call_args.args[1]))
+        self.assertEqual(sent.width, sent.height)
+
     def test_photo_route_serves_signed_image(self):
         handler = self._handler()
         core.set_product_photo(self.db, 1, self.pack, 'TG-FILE-3', ts=77)

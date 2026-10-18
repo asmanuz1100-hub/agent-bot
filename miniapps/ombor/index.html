@@ -152,8 +152,8 @@ nav button i{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;hei
 @media (min-width:760px){.app{max-width:760px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 :focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-.pimg{width:44px;height:44px;border-radius:14px;object-fit:cover;flex:none;background:var(--line)}
-.pbig{display:block;width:100%;max-height:260px;object-fit:contain;border-radius:16px;background:var(--line);margin:10px 0 6px;cursor:zoom-in}
+.pimg{width:44px;height:44px;border-radius:14px;object-fit:contain;padding:2px;box-sizing:border-box;flex:none;background:#fff;border:1px solid var(--line)}
+.pbig{display:block;width:100%;max-height:260px;object-fit:contain;border-radius:16px;background:#fff;margin:10px 0 6px;cursor:zoom-in}
 .pfull{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}.pfull img{max-width:100%;max-height:100%;border-radius:14px}
 .pact{display:flex;gap:8px;margin:6px 0 10px}.pact label,.pact button{flex:1;text-align:center}.pact input{display:none}
 </style>
@@ -270,7 +270,7 @@ const canPhoto=()=>keeper()&&['warehouse','admin'].includes(S.me.role);
 const pimg=(p,color)=>p&&p.thumbUrl?`<img class="pimg" src="${esc(p.thumbUrl)}" alt="" loading="lazy" decoding="async">`:box('box',color);
 function showPhoto(src){const o=document.createElement('div');o.className='pfull';o.innerHTML=`<img alt="" src="${esc(src)}">`;o.onclick=()=>o.remove();document.body.appendChild(o);}
 function shrinkImage(file){return new Promise((ok,no)=>{if(!file||!/^image\//.test(file.type||'image/'))return no(Error('Rasm faylini tanlang.'));const url=URL.createObjectURL(file),im=new Image();
-  im.onload=()=>{const k=Math.min(1,1080/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*k)),h=Math.max(1,Math.round(im.naturalHeight*k)),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
+  im.onload=()=>{const k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*k)),h=Math.max(1,Math.round(im.naturalHeight*k)),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
     let q=.86,d=c.toDataURL('image/jpeg',q);while(d.length*.75>1100000&&q>.4){q-=.12;d=c.toDataURL('image/jpeg',q);}ok(d);};
   im.onerror=()=>{URL.revokeObjectURL(url);no(Error('Rasm ochilmadi.'));};im.src=url;});}
 async function productPhoto(pack,arg){

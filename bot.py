@@ -54,10 +54,10 @@ def _miniapp_url(env_name,legacy_url,app,version):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
 MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
-MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261018-photo-v18')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v13')
+MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261018-photo-v19')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v14')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
-WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v4')
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v5')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -561,6 +561,28 @@ def profile_action(db,uid,action,payload):
             store_thumb(db,fid,make_thumb(raw))
     return profile_payload(db,uid)
 
+def trim_product_image(content,px=1080,threshold=240,margin=.04):
+    """Mahsulot rasmi kichik ikonkada yirik ko'rinsin: oq/shaffof chetlarni kesib, oq fonli kvadrat JPEG qiladi."""
+    if _PILImage is None:return content
+    try:
+        im=_PILImage.open(io.BytesIO(content))
+        im=_PILImageOps.exif_transpose(im).convert('RGBA')
+        bg=_PILImage.new('RGBA',im.size,'white');bg.alpha_composite(im);im=bg.convert('RGB')
+        small=im.copy();small.thumbnail((400,400))
+        box=small.convert('L').point(lambda v:255 if v<threshold else 0).getbbox()
+        if box:
+            sx=im.width/small.width;sy=im.height/small.height
+            im=im.crop((int(box[0]*sx),int(box[1]*sy),min(im.width,int(box[2]*sx+1)),min(im.height,int(box[3]*sy+1))))
+        side=int(max(im.width,im.height)*(1+2*margin))
+        square=_PILImage.new('RGB',(side,side),'white')
+        square.paste(im,((side-im.width)//2,(side-im.height)//2))
+        square.thumbnail((px,px))
+        out=io.BytesIO();square.save(out,'JPEG',quality=88,optimize=True,progressive=True)
+        return out.getvalue()
+    except Exception:
+        logging.warning('Product image trim failed, keeping original bytes=%s',len(content))
+        return content
+
 def product_photo_action(db,actor,payload):
     """Rahbar / omborchi uploads (or removes) a catalog product photo from a Mini App."""
     pack=payload.get('pack')
@@ -568,7 +590,7 @@ def product_photo_action(db,actor,payload):
         set_product_photo(db,actor,pack,'')
         db.commit()
         return
-    raw=decode_agent_camera_image(payload.get('imageData'))
+    raw=trim_product_image(decode_agent_camera_image(payload.get('imageData')))
     # Validate role and product before the Telegram upload, so a refused request sends nothing.
     pack=product_photo_target(db,actor,pack)
     fid=upload_agent_camera_photo(actor,raw)
