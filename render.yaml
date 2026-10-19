@@ -1,4 +1,4 @@
-# Free test deployment: Telegram webhook + existing Render Postgres.
+# Render web service: Telegram webhook + Render Postgres (the live bot).
 # Database tables are isolated in DB_SCHEMA=agentbot.
 services:
   - type: web

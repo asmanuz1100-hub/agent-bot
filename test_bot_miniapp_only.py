@@ -30,16 +30,11 @@ class BotMiniAppOnlyTests(unittest.TestCase):
         self.assertIsNone(bot.state(self.db, 2))
         self.assertIn('Agent Mini App', str(api.call_args))
 
-    def test_only_premium_launchers_old_test_buttons_still_work(self):
+    def test_only_premium_launchers(self):
         flat = [b for row in bot.menu(self.db, 1) for b in row]
         self.assertNotIn('🧪 Agent Premium TEST', flat)
         self.assertNotIn('🧪 Kassir Premium TEST', flat)
         self.assertNotIn('🧪 Rahbar Premium TEST', flat)
-        with patch.object(bot, 'api') as api, patch.object(bot, 'send'):
-            bot.handle(self.db, self.msg(2, '🧪 Kassir Premium TEST', 1))
-        self.assertIn('theme=premium', str(api.call_args))
-        with self.assertRaises(ValueError):
-            bot.handle(self.db, self.msg(3, '🧪 Agent Premium TEST', 2))
 
 
     def test_rahbar_button_opens_premium_and_old_app_redirects(self):
@@ -49,7 +44,9 @@ class BotMiniAppOnlyTests(unittest.TestCase):
         code, body, ctype, _ = bot.miniapp_response('/app/rahbar/', 'v=1')
         self.assertEqual(code, 200)
         self.assertIn(b'/app/rahbar-premium/', body)
-        self.assertNotIn(b'/app/rahbar-premium/', bot.miniapp_response('/app/rahbar/', 'classic=1')[1][:4000])
+        # The old app is gone: classic=1 also redirects, and its other files are 404.
+        self.assertIn(b'/app/rahbar-premium/', bot.miniapp_response('/app/rahbar/', 'classic=1')[1])
+        self.assertEqual(bot.miniapp_response('/app/rahbar/app.js')[0], 404)
 
     def test_agent_and_cashier_apps_default_to_premium(self):
         for rel in ('agent/index.html',):

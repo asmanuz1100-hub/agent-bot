@@ -53,7 +53,10 @@ class AgentMiniAppButtonTests(unittest.TestCase):
         self.assertNotIn('AGENT_V2_TEST_URL',source)
         self.assertNotIn('https://asman-rahbar-v2-functional-test.onrender.com',source)
         self.assertNotIn('https://asman-agent-v2-manager-base-test.onrender.com',source)
-        self.assertIn('Rahbar Premium TEST',source)
+        self.assertNotIn('Rahbar Premium TEST',source)
+        self.assertNotIn('Agent Premium TEST',source)
+        self.assertNotIn('Kassir Premium TEST',source)
+        self.assertNotIn('premium_test_url',source)
         self.assertIn('https://asman-rahbar-uploaded-test.onrender.com',source)
 
 if __name__=='__main__':

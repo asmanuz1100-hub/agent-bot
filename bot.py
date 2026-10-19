@@ -78,8 +78,8 @@ def miniapp_response(path,query=''):
     rel=rest[1:]
     if rel=='' or rel.endswith('/'):
         rel+='index.html'
-    if app=='rahbar' and rel=='index.html' and 'classic=1' not in (query or ''):
-        # The old Rahbar Mini App is retired: old buttons and links open Rahbar Premium (Telegram data in the hash is kept).
+    if app=='rahbar' and rel=='index.html':
+        # The old Rahbar Mini App is removed: old buttons and links open Rahbar Premium (Telegram data in the hash is kept).
         body=('<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
               '<title>ASMAN · Rahbar</title><style>html,body{margin:0;height:100%;background:#0e1621}</style></head><body>'
               '<script>location.replace("/app/rahbar-premium/"+location.search+location.hash)</script></body></html>').encode()
@@ -753,10 +753,6 @@ def allowed(db,u,action):
     return (r=='admin' and action in ('user','agent_add','tracking','analytics','analytics_day','analytics_week','analytics_month','clients','visit','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_admin','agent_list','agent_profile','agent_rename','prices','price_set','home','cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='cashier' and action in ('cashier_menu','cashbox','cashier_pending','cashier_daily','cashier_rate','cashier_expense','cashier_expense_uzs','cashier_expenses','agent_fund')) or (r=='agent' and (action in ('shift','end','location_help','reconcile','reconcile_client_xlsx','reconcile_client_pdf','reconcile_all_xlsx','reconcile_all_pdf','agent_expense','agent_expense_balance') or (action in AGENT_FEATURES and feature_enabled(db,u,action))))
 
 BTN_LABEL_BY_ACTION={a:b for b,a in BTN.items()}
-
-def premium_test_url(url):
-    if not url:return ''
-    return url+('&' if '?' in url else '?')+'theme=premium'
 
 def menu(db,u):
     keys=[b for b,a in BTN.items() if allowed(db,u,a) and a not in ADMIN_SUB_ACTIONS and a not in CASHIER_SUB_ACTIONS and a not in ANALYTICS_PERIODS]
@@ -1746,8 +1742,8 @@ def handle(db,update):
             reply_markup={'inline_keyboard':[[{'text':'📱 Кассир панелини очиш',
                 'web_app':{'url':CASHIER_MINIAPP_URL}}]]})
         return
-    if text in ('📱 Раҳбар Mini App','🧪 Rahbar Premium TEST'):
-        # The premium Rahbar app is the only Rahbar app; the old TEST button text still works from old keyboards.
+    if text=='📱 Раҳбар Mini App':
+        # The premium Rahbar app is the only Rahbar app.
         url=MANAGER_PREMIUM_TEST_URL or MANAGER_MINIAPP_URL
         if r!='admin' or not url:
             raise ValueError('Фақат админ.')
@@ -1755,18 +1751,6 @@ def handle(db,update):
             text='📱 Rahbar paneli · real ma’lumotlar. Quyidagi tugmadan oching.',
             reply_markup={'inline_keyboard':[[{'text':'📱 Rahbar panelini ochish',
                                                   'web_app':{'url':url}}]]})
-        if text!='📱 Раҳбар Mini App':send(u,'Menyu yangilandi.',menu(db,u))
-        return
-    if text in ('🧪 Agent Premium TEST','🧪 Kassir Premium TEST'):
-        # Old keyboards: open the (now premium) app and refresh the menu without TEST buttons.
-        if r!='admin':raise ValueError('Фақат админ.')
-        agent_test=text.startswith('🧪 Agent')
-        url=premium_test_url(AGENT_MINIAPP_URL if agent_test else CASHIER_MINIAPP_URL)
-        if not url:raise ValueError('Mini App манзили созланмаган.')
-        api('sendMessage',chat_id=u,
-            text=('📱 Agent Mini App · admin nazorat rejimi.' if agent_test else '📱 Kassir paneli.'),
-            reply_markup={'inline_keyboard':[[{'text':'📱 Ochish','web_app':{'url':url}}]]})
-        send(u,'Menyu yangilandi.',menu(db,u))
         return
     if text=='📱 Agent Mini App':
         if r not in ('agent','admin') or not AGENT_MINIAPP_URL:
@@ -1780,7 +1764,7 @@ def handle(db,update):
     if text.startswith('/start '):
         open_agent_client_action(db,u,text[7:].strip());return
     if text in ('/start','/cancel','❌ Бекор қилиш','⬅️ Меню'):
-        db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот • ТЕСТ\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
+        db.execute('DELETE FROM sessions WHERE agent=?',(u,));send(u,f'Ички агент бот\nСизнинг ID: {u}\nАмални танланг:',menu(db,u));return
     if text=='⬅️ Мижозлар':
         report_clients(db,u);return
     if text=='⬅️ Мижоз карточкаси':

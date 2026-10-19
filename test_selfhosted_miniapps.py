@@ -18,11 +18,11 @@ class SelfHostedMiniAppTests(unittest.TestCase):
             self.assertIn(b'<html', body.lower())
 
     def test_miniapps_call_same_origin_api(self):
-        for rel in ('agent/index.html', 'rahbar/index.html', 'rahbar-premium/real-data.js'):
+        for rel in ('agent/index.html', 'rahbar-premium/real-data.js'):
             text = (bot.MINIAPP_DIR / rel).read_text(encoding='utf-8')
             self.assertNotIn('asman-agent-test.onrender.com', text, rel)
         self.assertIn('var API="/api/agent"', (bot.MINIAPP_DIR / 'agent/index.html').read_text(encoding='utf-8'))
-        self.assertIn('var API="/api/manager"', (bot.MINIAPP_DIR / 'rahbar/index.html').read_text(encoding='utf-8'))
+        self.assertIn("REAL_API='/api/manager'", (bot.MINIAPP_DIR / 'rahbar-premium/real-data.js').read_text(encoding='utf-8'))
 
     def test_assets_and_content_types(self):
         code, body, ctype, headers = bot.miniapp_response('/app/agent/vendor/leaflet/leaflet.js')
