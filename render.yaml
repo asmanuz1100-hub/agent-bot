@@ -4,7 +4,7 @@ services:
   - type: web
     name: asman-agent-test
     runtime: python
-    plan: free
+    plan: starter
     region: oregon
     autoDeployTrigger: checksPass
     buildCommand: pip install -r requirements.txt && python -m unittest discover -v
