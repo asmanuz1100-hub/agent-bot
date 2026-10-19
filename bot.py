@@ -14,6 +14,7 @@ import cashier_pending
 import cashier_daily
 import customer_status as cs
 import manager_api
+import web_auth
 import agent_api
 import analytics
 import cashier_api
@@ -1656,6 +1657,21 @@ WAREHOUSE_HELP=('''\n\n🧪 ТЕСТ РЕЖИМИ · фақат админ
 /wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА] — янги товар
 Кирим, агентга бериш, брак ва сўровларни омборчи Омборчи Mini App’да киритади.''')
 
+WEB_PANEL_URL=f'{PUBLIC_BASE_URL}/app/rahbar-web/'
+
+def handle_web_password(db,u,r,text):
+    """Rahbar web panel (kompyuter): login va bir martalik parol berish yoki o'chirish."""
+    if r!='admin':raise ValueError('Web panel faqat rahbar uchun.')
+    if text=='/webyopish':
+        web_auth.revoke(db,u)
+        send(u,'🔒 Web panel akkaunti o‘chirildi, barcha kompyuterlardan chiqildi.\nQayta ochish: /webparol');return
+    parts=text.split()
+    if len(parts)>2:raise ValueError('Format: /webparol yoki /webparol LOGIN')
+    login,password=web_auth.issue_password(db,u,parts[1] if len(parts)==2 else None)
+    send(u,f'💻 RAHBAR WEB PANEL\n\nSayt: {WEB_PANEL_URL}\nLogin: {login}\nParol: {password}\n\n'
+           'Kirgach, «Sozlamalar»da parolni o‘zingiznikiga almashtiring. Bu xabarni hech kimga yubormang.\n'
+           'Avvalgi kirishlar yopildi. Loginni o‘zgartirish: /webparol yangi_login · O‘chirish: /webyopish')
+
 def _wh_int(value,label):
     if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
     return int(value)
@@ -1797,6 +1813,8 @@ def handle(db,update):
         send(u,'⏳ Тўлиқ backup тайёрланяпти: база ва мижоз расмлари йиғилади. Бот ишлашда давом этади.')
         threading.Thread(target=_full_backup_worker,args=(u,),daemon=True,name='full-backup-export').start()
         return
+    if text=='/webparol' or text.startswith('/webparol ') or text=='/webyopish':
+        handle_web_password(db,u,r,text);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2417,7 +2435,7 @@ def serve_webhook(db,base_url):
             if origin!=allowed_origin:return None
             return {'Access-Control-Allow-Origin':origin,'Vary':'Origin',
                     'Access-Control-Allow-Methods':'POST, OPTIONS',
-                    'Access-Control-Allow-Headers':'Content-Type'}
+                    'Access-Control-Allow-Headers':'Content-Type, Authorization'}
         def _manager_headers(self):
             origin=self.headers.get('Origin','')
             allowed={
@@ -2426,6 +2444,9 @@ def serve_webhook(db,base_url):
             }|SELF_MINIAPP_ORIGINS
             if origin not in allowed:return None
             return self._cors_headers(origin)
+        def _bearer_token(self):
+            value=self.headers.get('Authorization','')
+            return value[7:].strip() if value[:7].lower()=='bearer ' else ''
         def _agent_headers(self):
             origin=self.headers.get('Origin','')
             allowed={
@@ -2435,7 +2456,7 @@ def serve_webhook(db,base_url):
             return self._cors_headers(origin)
         def do_OPTIONS(self):
             req_path=urlparse(self.path).path
-            headers=self._manager_headers() if req_path=='/api/manager' else (
+            headers=self._manager_headers() if req_path in ('/api/manager','/api/web') else (
                     self._agent_headers() if req_path=='/api/agent' else None)
             if headers is None:
                 self._reply(403,b'Forbidden');return
@@ -2918,6 +2939,65 @@ def serve_webhook(db,base_url):
                 finally:
                     if local is not None and postgres:local.close()
                 return
+            if urlparse(self.path).path=='/api/web':
+                headers=self._manager_headers()
+                if headers is None or self.path!='/api/web':
+                    self._reply(403,b'Forbidden');return
+                def answer_web(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                                'application/json; charset=utf-8',headers)
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if length<2 or length>4000:
+                        answer_web(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):raise ValueError
+                except (ValueError,TypeError,json.JSONDecodeError):
+                    answer_web(400,{'error':'So‘rov noto‘g‘ri.'});return
+                local=None
+                try:
+                    local=request_db()
+                    action=payload.get('action')
+                    token=self._bearer_token()
+                    if action=='login':
+                        uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
+                        if role(local,uid)!='admin':
+                            web_auth.logout(local,token);local.commit()
+                            answer_web(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
+                        data={'ok':True,'token':token}
+                    elif action=='logout':
+                        web_auth.logout(local,token);data={'ok':True}
+                    elif action in ('me','change_password'):
+                        try:uid=web_auth.session_user(local,token)
+                        except ValueError as e:
+                            local.commit();answer_web(401,{'error':str(e),'relogin':True});return
+                        if role(local,uid)!='admin':
+                            answer_web(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
+                        if action=='change_password':
+                            web_auth.change_password(local,uid,payload.get('old'),payload.get('new'),keep_token=token)
+                        acc=web_auth.account(local,uid)
+                        me=profiles.get(local,uid)
+                        try:
+                            v=profiles.photo_versions(local).get(uid)
+                            if v is not None:me['photoUrl']=user_photo_link(uid,version=v)
+                        except Exception:
+                            logging.warning('Own photo lookup failed')
+                        data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS}
+                    else:
+                        answer_web(400,{'error':'Amal noto‘g‘ri.'});return
+                    local.commit()
+                    answer_web(200,data)
+                except ValueError as e:
+                    # Noto'g'ri urinishlar hisobi saqlansin (bloklash uchun).
+                    if local is not None:local.commit()
+                    answer_web(400,{'error':str(e)})
+                except Exception:
+                    if local is not None:local.rollback()
+                    logging.exception('Web panel auth request failed')
+                    answer_web(500,{'error':'Server xatosi. Qayta urinib ko‘ring.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
             if urlparse(self.path).path=='/api/manager':
                 headers=self._manager_headers()
                 if headers is None or self.path!='/api/manager':
@@ -2935,12 +3015,17 @@ def serve_webhook(db,base_url):
                     # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
                     if length>10_000 and payload.get('action')!='product_photo':
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    web_token=self._bearer_token()
+                    actor=None if web_token and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
                     answer(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,web_token)
+                        except ValueError as e:
+                            answer(401,{'error':str(e),'relogin':True});return
                     if role(local,actor)!='admin':
                         answer(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
                     action=payload.get('action','dashboard')

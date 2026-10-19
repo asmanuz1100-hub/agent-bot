@@ -469,6 +469,7 @@ def connect(path,initialize=True):
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
         import warehouse;warehouse.init(db)
+        import web_auth;web_auth.init(db)
         db.commit()
         try:
             _install_change_tracking(db,schema)
@@ -539,6 +540,7 @@ def connect(path,initialize=True):
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
     import warehouse;warehouse.init(db)
+    import web_auth;web_auth.init(db)
     db.commit()
     db.execute('PRAGMA journal_mode=WAL')
     return db
