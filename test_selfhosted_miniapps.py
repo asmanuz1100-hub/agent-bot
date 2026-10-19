@@ -33,6 +33,15 @@ class SelfHostedMiniAppTests(unittest.TestCase):
         code, _, ctype, _ = bot.miniapp_response('/app/agent/vendor/leaflet/images/marker-icon.png')
         self.assertEqual((code, ctype), (200, 'image/png'))
 
+    def test_agent_service_worker_cache_rules(self):
+        sw = (bot.MINIAPP_DIR / 'agent/sw.js').read_text(encoding='utf-8')
+        self.assertIn('url.pathname.startsWith("/api/")', sw)  # API answers are never cached
+        self.assertIn('TILE_LIMIT', sw)  # map tiles are capped
+        self.assertIn('dropOtherVersions', sw)  # old ?v= copies are removed
+        html = (bot.MINIAPP_DIR / 'agent/index.html').read_text(encoding='utf-8')
+        # Files cached by ?v= must be bumped when they change: the page has to point at the current premium kit.
+        self.assertIn('premium.js?v=20261019-offline-v6', html)
+
     def test_redirect_adds_trailing_slash_and_keeps_query(self):
         code, _, _, headers = bot.miniapp_response('/app/agent', 'v=1')
         self.assertEqual(code, 301)

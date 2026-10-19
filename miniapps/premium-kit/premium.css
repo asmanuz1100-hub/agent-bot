@@ -43,7 +43,7 @@ html.pm .hero .mt{position:absolute;right:0;bottom:0;width:78%;height:100%;point
 html.pm .hero small.k{display:block;font-size:11px;letter-spacing:1.2px;color:var(--gold2);font-weight:700;margin-bottom:2px;padding-right:100px;text-transform:uppercase}
 html.pm .hero h1{margin:4px 0;font-size:25px;letter-spacing:-.4px;line-height:1.2;font-weight:800;color:var(--tx);padding-right:90px}
 html.pm .hero p{margin:0 0 10px;font-size:13px;color:var(--mu)}
-html.pm span.live{position:absolute;right:12px;top:12px;font-size:11px;font-weight:700;background:#34c7591f!important;border:1px solid #34c75966!important;color:var(--ok)!important;padding:4px 10px;border-radius:20px;z-index:2;animation:pmpl 2s infinite}
+html.pm span.live{position:absolute;right:12px;top:12px;font-size:11px;font-weight:700;background:#34c7591f!important;border:1px solid #34c75966!important;color:var(--ok)!important;padding:4px 10px;border-radius:20px;z-index:2;animation:pmpl 2s infinite}html.pm span.live.off{background:#ff9f0a1f!important;border-color:#ff9f0a66!important;color:#c77700!important;animation:none}
 @keyframes pmpl{50%{box-shadow:0 0 0 7px #34c75922}}
 html.pm .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 html.pm .three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}

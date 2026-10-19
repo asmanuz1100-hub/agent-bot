@@ -128,6 +128,11 @@ function agent(){
  var greet=D.getElementById('greet'),desc=D.getElementById('headerDesc'),cmd=D.getElementById('homeCommand'),kp=D.querySelector('#page-home .kpis');
  var nh=el('<header class="hd" id="pmHd">'+brand('AGENT PANEL','A')+'<div class="gr" id="pmGr"></div><div class="hero" id="pmHero">'+MT+'<span class="live">● JONLI</span><small class="k">ASMAN · AGENT PANEL</small></div></header>');
  nh.querySelector('#pmGr').append(greet,desc);
+ // The badge follows the connection: offline the app shows the last saved copy, not live data.
+ var live=nh.querySelector('.live');
+ function net(){var on=navigator.onLine!==false&&!/OFFLINE/.test(desc?desc.textContent:'');live.textContent=on?'● JONLI':'● OFFLINE';live.classList.toggle('off',!on)}
+ net();window.addEventListener('online',net);window.addEventListener('offline',net);
+ if(desc&&window.MutationObserver)new MutationObserver(net).observe(desc,{childList:true,characterData:true,subtree:true});
  var hero=nh.querySelector('#pmHero');
  if(cmd){var t=cmd.querySelector('#homeCommandTitle'),st=cmd.querySelector('#homeCommandStatus'),a=cmd.querySelector('#homeCashAvailable'),u=cmd.querySelector('#homeUrgentCount'),nx=cmd.querySelector('#homeNextClient');
   var h1=D.createElement('h1');h1.append(t);hero.append(h1);
