@@ -139,6 +139,13 @@ class AgentRouteAnyDayTests(unittest.TestCase):
         other = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-11', date_to='2026-10-11')
         self.assertEqual(other['route']['gpsTotal'], 0)
 
+    def test_shift_start_and_end_are_returned(self):
+        import manager_api
+        d = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-10', date_to='2026-10-10')
+        self.assertEqual(d['shifts'], [{'id': d['shifts'][0]['id'], 'start': self.day, 'end': self.day + 7200}])
+        empty = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-12', date_to='2026-10-12')
+        self.assertEqual(empty['shifts'], [])
+
     def test_custom_range_is_limited(self):
         import manager_api
         with self.assertRaises(ValueError):

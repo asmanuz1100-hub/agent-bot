@@ -140,7 +140,7 @@ async function boot(){
 /* ---------- navigation ---------- */
 var PAGES=[
   ['home','home','Asosiy','Bugungi jonli holat'],
-  ['agents','compass','Agentlar','Joylashuv va faoliyat'],
+  ['agents','compass','GPS markaz','Agentlar joylashuvi, marshruti va mijozlar xaritasi'],
   ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
   ['cash','wallet','Kassa','Kirim, chiqim va qoldiq'],
   ['reports','chart','Hisobot','Davr bo‘yicha tahlil'],
@@ -502,27 +502,132 @@ function bindAgentLinks(root){root.querySelectorAll('[data-agent]').forEach(func
 function bindClientLinks(root){root.querySelectorAll('[data-client]').forEach(function(el){el.onclick=function(e){if(e.target.closest('a[href]'))return;openClient(+el.dataset.client)}})}
 
 /* ----- Agentlar ----- */
-var agFilter='';
+/* ----- GPS Control Center: chapda agentlar, markazda xarita, o'ngda tanlangan agent ----- */
+var GPS=(function(){try{return Object.assign({agent:null,region:'',status:'',q:'',clients:true,day:''},JSON.parse(store('rw-gps')||'{}'))}catch(e){return {agent:null,region:'',status:'',q:'',clients:true,day:''}}})();
+var STALE=300;  // dashboard qoidasi: oxirgi GPS 5 daqiqadan eski bo'lsa "kechikkan"
+function gpsSave(){store('rw-gps',JSON.stringify(GPS))}
+function agentRegions(){
+  // Agent hududi = mijozlari joylashgan hududlar (agentlarda alohida hudud maydoni yo'q).
+  var m={};S.dash.clients.forEach(function(c){var k=(c.region||'').trim();if(!k)return;(m[c.agentId]=m[c.agentId]||{})[k]=((m[c.agentId]||{})[k]||0)+1});return m;
+}
+function gpsAgents(){
+  var q=GPS.q.trim().toLowerCase(),reg=agentRegions();
+  return S.dash.agents.filter(function(a){
+    if(GPS.status&&a.status!==GPS.status)return false;
+    if(GPS.region&&!(reg[a.id]&&reg[a.id][GPS.region]))return false;
+    if(q&&a.name.toLowerCase().indexOf(q)<0)return false;return true})
+   .sort(function(a,b){return (b.shiftOpen-a.shiftOpen)||(b.done-a.done)||a.name.localeCompare(b.name)});
+}
 function pageAgents(page){
-  page.innerHTML='<div class="agents-layout"><div class="map" id="agMap"></div><div class="card"><div class="toolbar"><div class="seg" id="agSeg">'+
-    [['','Barchasi'],['active','Faol'],['late','Kechikkan'],['offline','Yopiq']].map(function(x){return '<button data-f="'+x[0]+'" class="'+(agFilter===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+
-    '</div></div><div class="list" id="agList"></div></div></div>';
-  $('agSeg').onclick=function(e){var b=e.target.closest('button');if(!b)return;agFilter=b.dataset.f;$('agSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});agentsList()};
-  var m=makeMap($('agMap'),'agents');S.agMarkers={};
-  if(m){S.dash.agents.forEach(function(a){if(a.lat==null)return;S.agMarkers[a.id]=L.marker([a.lat,a.lon],{icon:agentIcon(a)}).addTo(m).bindPopup(agentPopup(a)).on('click',function(){openAgent(a.id,true)})});
-    var pts=S.dash.agents.filter(function(a){return a.lat!=null}).map(function(a){return [a.lat,a.lon]});if(pts.length)m.fitBounds(pts,{padding:[40,40],maxZoom:14});setTimeout(function(){m.invalidateSize()},50)}
-  agentsList();
+  var regions=Array.from(new Set(S.dash.clients.map(function(c){return (c.region||'').trim()}).filter(Boolean))).sort();
+  if(GPS.agent&&!S.dash.agents.some(function(a){return a.id===GPS.agent}))GPS.agent=null;
+  page.innerHTML='<div class="gps">'+
+   '<div class="card gps-list"><div class="gps-tools"><input type="search" id="gpsQ" placeholder="Agent qidirish…" value="'+esc(GPS.q)+'">'+
+     '<div class="seg" id="gpsSt">'+[['','Hammasi'],['active','Faol'],['late','Kechikkan'],['offline','Yopiq']].map(function(x){return '<button data-s="'+x[0]+'" class="'+(GPS.status===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+     '<select id="gpsRegion" aria-label="Hudud"><option value="">Barcha hududlar</option>'+regions.map(function(r){return '<option'+(GPS.region===r?' selected':'')+'>'+esc(r)+'</option>'}).join('')+'</select></div>'+
+     '<div class="list" id="gpsList"></div></div>'+
+   '<div class="gps-map"><div class="map" id="agMap"></div>'+
+     '<div class="map-legend"><label><input type="checkbox" id="gpsCl"'+(GPS.clients?' checked':'')+'> Mijozlar</label>'+
+     [['#16A34A','0–2 kun'],['#F59E0B','3–4 kun'],['#DC2626','5+ kun'],['#2563EB','Rejada'],['#94A3B8','Noma’lum']].map(function(x){return '<span><i style="background:'+x[0]+'"></i>'+x[1]+'</span>'}).join('')+'</div></div>'+
+   '<div class="card gps-detail" id="gpsDetail"></div></div>';
+  $('gpsQ').oninput=debounce(function(){GPS.q=this.value;gpsSave();gpsListRender()},150);
+  $('gpsSt').onclick=function(e){var b=e.target.closest('button');if(!b)return;GPS.status=b.dataset.s;gpsSave();$('gpsSt').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});gpsListRender();gpsMarkers(true)};
+  $('gpsRegion').onchange=function(){GPS.region=this.value;gpsSave();gpsListRender();gpsMarkers(true);gpsClientLayer(true);if(!GPS.agent)gpsDetail();gpsFitClients()};
+  $('gpsCl').onchange=function(){GPS.clients=this.checked;gpsSave();gpsClientLayer(true)};
+  var m=makeMap($('agMap'),'agents');S.agMarkers={};S.gpsLayers={};
+  if(m){S.gpsLayers.route=L.layerGroup().addTo(m);gpsClientLayer(false);gpsMarkers(true);setTimeout(function(){m.invalidateSize()},60)}
+  gpsListRender();gpsDetail();
 }
 function agentPopup(a){return '<b>'+esc(a.name)+'</b><br>'+(a.locationSource==='live'?'Jonli GPS':'Oxirgi ma’lum joy')+' · '+ago(a.lastGpsTs)}
-function agentsList(){
-  var rows=S.dash.agents.filter(function(a){return !agFilter||a.status===agFilter}).sort(function(a,b){return (b.shiftOpen-a.shiftOpen)||(b.done-a.done)||a.name.localeCompare(b.name)});
-  $('agList').innerHTML=rows.length?rows.map(function(a){var st=AG_ST[a.status]||AG_ST.offline;return '<div class="li click" data-agent="'+a.id+'">'+avatar(a.name,a.photoUrl)+'<div class="t"><b>'+esc(a.name)+'</b><small>'+a.done+' tashrif bugun · '+a.clients+' mijoz'+(a.late?' · <span class="bad">'+a.late+' kechikkan</span>':'')+'</small><small>'+(a.lastGpsTs?ic('pin','sm')+' '+(a.locationSource==='live'?'jonli':'oxirgi')+' · '+ago(a.lastGpsTs):ic('pin','sm')+' GPS yo‘q')+'</small></div>'+pill('<span class="dot"></span>'+st[0],st[1])+'</div>'}).join(''):'<div class="empty">Agent topilmadi</div>';
-  $('agList').querySelectorAll('[data-agent]').forEach(function(el){el.onclick=function(){var id=+el.dataset.agent,mk=S.agMarkers&&S.agMarkers[id];if(mk&&S.maps.agents){S.maps.agents.flyTo(mk.getLatLng(),15,{duration:.5});mk.openPopup()}openAgent(id,true)}});
+function gpsListRender(){
+  var rows=gpsAgents(),rep={};(S.dash.reports.today.agents||[]).forEach(function(r){rep[r.agentId]=r});
+  $('gpsList').innerHTML=(GPS.agent?'<div class="li click" data-all="1"><div class="tone t-blue" style="width:32px;height:32px">'+ic('users')+'</div><div class="t"><b>Barcha agentlar</b><small>Tanlovni bekor qilish</small></div></div>':'')+
+   (rows.length?rows.map(function(a){var st=AG_ST[a.status]||AG_ST.offline,r=rep[a.id]||{},stale=a.shiftOpen&&a.lastGpsTs&&Date.now()/1000-a.lastGpsTs>STALE;
+    return '<div class="li click gps-ag'+(GPS.agent===a.id?' on':'')+'" data-gid="'+a.id+'"><span class="ring" style="--ring:'+st[2]+'">'+avatar(a.name,a.photoUrl)+'</span><div class="t"><b>'+esc(a.name)+'</b>'+
+      '<small>'+(a.lastGpsTs?(stale?'<span class="warn">'+ic('alert','sm')+' GPS '+ago(a.lastGpsTs)+'</span>':ic('pin','sm')+' '+ago(a.lastGpsTs)):'GPS yo‘q')+'</small>'+
+      '<small>'+a.done+' tashrif · '+usd(r.deliveredUsd||0)+' · '+usd(r.paymentsUsd||0)+'</small></div>'+pill('<span class="dot"></span>'+st[0],st[1])+'</div>'}).join(''):emptyState('Agent topilmadi','users'));
+  $('gpsList').querySelectorAll('[data-gid]').forEach(function(el){el.onclick=function(){gpsSelect(+el.dataset.gid)}});
+  var all=$('gpsList').querySelector('[data-all]');if(all)all.onclick=function(){gpsSelect(null)};
+}
+function gpsFitClients(){var m=S.maps.agents,l=S.gpsLayers&&S.gpsLayers.clients;if(!m||!l||!l.getBounds)return;var b=l.getBounds();if(b.isValid())m.fitBounds(b,{padding:[40,40],maxZoom:14})}
+function gpsSelect(id){
+  GPS.agent=id;GPS.day='';gpsSave();gpsListRender();gpsMarkers(false);gpsClientLayer(true);gpsDetail();
+  var mk=id&&S.agMarkers[id],m=S.maps.agents;if(mk&&m)m.flyTo(mk.getLatLng(),14,{duration:.5});
+}
+function gpsMarkers(fit){
+  var m=S.maps.agents;if(!m)return;var keep=gpsAgents().map(function(a){return a.id}),pts=[];
+  S.dash.agents.forEach(function(a){var mk=S.agMarkers[a.id];
+    if(a.lat==null||keep.indexOf(a.id)<0){if(mk){m.removeLayer(mk);delete S.agMarkers[a.id]}return}
+    var icon=agentIcon(a,GPS.agent===a.id);
+    if(mk){mk.setLatLng([a.lat,a.lon]);mk.setIcon(icon);mk.setPopupContent(agentPopup(a))}
+    else S.agMarkers[a.id]=L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:1000}).addTo(m).bindPopup(agentPopup(a)).on('click',function(){gpsSelect(a.id)});
+    pts.push([a.lat,a.lon])});
+  if(fit&&!GPS.agent&&pts.length)m.fitBounds(pts,{padding:[50,50],maxZoom:13});
+}
+function gpsClientLayer(rebuild){
+  var m=S.maps.agents;if(!m)return;
+  if(S.gpsLayers.clients){m.removeLayer(S.gpsLayers.clients);S.gpsLayers.clients=null}
+  if(!GPS.clients)return;
+  var grp=window.L&&L.markerClusterGroup?L.markerClusterGroup({showCoverageOnHover:false,maxClusterRadius:46,spiderfyOnMaxZoom:true,
+    iconCreateFunction:function(cl){var ms=cl.getAllChildMarkers(),n=ms.length,c={fresh:0,yellow:0,red:0};ms.forEach(function(x){c[x.options.age]=(c[x.options.age]||0)+1});
+      var col=c.red?'#DC2626':c.yellow?'#F59E0B':'#16A34A',sz=n<10?34:n<50?40:48;
+      return L.divIcon({className:'',html:'<div class="ccl" style="--c:'+col+';width:'+sz+'px;height:'+sz+'px"><b>'+n+'</b>'+(c.red?'<i>'+c.red+'</i>':'')+'</div>',iconSize:[sz,sz]})}}):L.layerGroup();
+  S.dash.clients.forEach(function(c){
+    if(c.lat==null)return;if(GPS.agent&&c.agentId!==GPS.agent)return;if(GPS.region&&(c.region||'').trim()!==GPS.region)return;
+    var col=c.blacklisted?'#0F172A':(AGE[c.age]||AGE.unknown)[2];
+    grp.addLayer(L.marker([c.lat,c.lon],{age:c.age,icon:L.divIcon({className:'',html:'<div class="cdot" style="background:'+col+'"></div>',iconSize:[14,14],iconAnchor:[7,7]})})
+      .bindTooltip(esc(c.name)+' · '+(AGE[c.age]||AGE.unknown)[0]+(c.debtUsd>0?' · qarz '+usd(c.debtUsd):'')).on('click',function(){openClient(c.id)}));
+  });
+  S.gpsLayers.clients=grp.addTo(m);
+}
+async function gpsDetail(){
+  var el=$('gpsDetail');if(!el)return;var d=S.dash;
+  if(!GPS.agent){
+    var by={active:0,late:0,offline:0};d.agents.forEach(function(a){by[a.status]=(by[a.status]||0)+1});
+    var stale=d.agents.filter(function(a){return a.shiftOpen&&a.lastGpsTs&&Date.now()/1000-a.lastGpsTs>STALE});
+    var cl=d.clients.filter(function(c){return !GPS.region||(c.region||'').trim()===GPS.region}),cnt={fresh:0,yellow:0,red:0,scheduled:0,unknown:0};cl.forEach(function(c){cnt[c.age]=(cnt[c.age]||0)+1});
+    el.innerHTML='<div class="card-h"><h3>'+ic('compass')+' Umumiy holat</h3>'+(GPS.region?pill(esc(GPS.region),'p-pri'):'')+'</div>'+
+     '<div class="grid g3" style="gap:8px;margin-bottom:14px"><div class="mini"><small>Faol</small><b class="ok">'+by.active+'</b></div><div class="mini"><small>Kechikkan</small><b class="warn">'+by.late+'</b></div><div class="mini"><small>Yopiq</small><b>'+by.offline+'</b></div></div>'+
+     (stale.length?'<div class="banner">'+ic('alert','sm')+' '+stale.length+' agentdan GPS kechikmoqda: '+stale.map(function(a){return esc(a.name)+' ('+ago(a.lastGpsTs)+')'}).join(', ')+'</div>':'')+
+     '<div class="card-h" style="margin-top:6px"><h3>'+ic('store')+' Mijozlar ('+num(cl.length)+')</h3></div>'+donut([['0–2 kun',cnt.fresh,'#16A34A'],['3–4 kun',cnt.yellow,'#F59E0B'],['5+ kun',cnt.red,'#DC2626'],['Rejada',cnt.scheduled,'#2563EB'],['Noma’lum',cnt.unknown,'#94A3B8']],num(cl.length),'mijoz')+
+     '<p class="hint" style="margin-top:12px">Agentni tanlang: uning bugungi marshruti, tashriflari, savdosi va smena vaqtlari shu yerda chiqadi. GPS Telegram jonli lokatsiyasidan keladi va panel har 30 soniyada yangilanadi.</p>';
+    if(S.gpsLayers&&S.gpsLayers.route)S.gpsLayers.route.clearLayers();return;
+  }
+  var a=d.agents.find(function(x){return x.id===GPS.agent});if(!a){GPS.agent=null;return gpsDetail()}
+  var st=AG_ST[a.status]||AG_ST.offline,r=(d.reports.today.agents||[]).find(function(x){return x.agentId===a.id})||{};
+  var day=GPS.day||today(),isToday=day===today(),stale=a.shiftOpen&&a.lastGpsTs&&Date.now()/1000-a.lastGpsTs>STALE;
+  el.innerHTML='<div class="dh" style="margin:0 0 12px">'+avatar(a.name,a.photoUrl,'lg')+'<div style="min-width:0"><h2 style="font-size:18px">'+esc(a.name)+'</h2><div>'+pill('<span class="dot"></span>'+st[0],st[1])+'</div></div></div>'+
+   (stale?'<div class="banner">'+ic('alert','sm')+' GPS kechikmoqda: oxirgi nuqta '+ago(a.lastGpsTs)+' ('+hm(a.lastGpsTs)+'). Xaritada oxirgi ma’lum joy ko‘rsatilgan.</div>':'')+
+   '<dl class="kv" style="grid-template-columns:120px 1fr;margin-bottom:12px"><dt>Oxirgi GPS</dt><dd>'+(a.lastGpsTs?dt(a.lastGpsTs)+' <span class="muted">('+ago(a.lastGpsTs)+')</span>':'—')+'</dd>'+
+   '<dt>Joylashuv</dt><dd>'+(a.lat!=null?(a.locationSource==='live'?'Jonli':'Oxirgi ma’lum')+' · <a href="https://www.google.com/maps/search/?api=1&query='+a.lat+','+a.lon+'" target="_blank" rel="noopener">xaritada ↗</a>':'—')+'</dd>'+
+   '<dt>Smena</dt><dd id="gpsShift">…</dd></dl>'+
+   '<div class="toolbar" style="margin-bottom:10px"><div class="seg" id="gpsDay"><button data-d="today" class="'+(isToday?'on':'')+'">Bugun</button><button data-d="pick" class="'+(isToday?'':'on')+'">Kun</button></div><input type="date" id="gpsDate" value="'+day+'" max="'+today()+'" style="width:auto"'+(isToday?' hidden':'')+'></div>'+
+   (isToday?'<div class="grid g3" style="gap:8px;margin-bottom:12px"><div class="mini"><small>Realizatsiya</small><b>'+usd(r.deliveredUsd||0)+'</b></div><div class="mini"><small>Yig‘ilgan pul</small><b>'+usd(r.paymentsUsd||0)+'</b></div><div class="mini"><small>Tashrif</small><b>'+a.done+'</b></div>'+
+     '<div class="mini"><small>Yangi mijoz</small><b>'+(r.newClients||0)+'</b></div><div class="mini"><small>Ish vaqti</small><b>'+num((r.workSeconds||0)/3600,1)+' soat</b></div><div class="mini"><small>Masofa</small><b>'+num(r.distanceKm||0,1)+' km</b></div></div>':'')+
+   '<div id="gpsInfo" class="muted small"></div><div id="gpsVisits"></div>'+
+   '<div class="actions" style="margin-top:12px"><button class="btn sm" id="gpsCard">'+ic('file','sm')+' To‘liq karta</button></div>';
+  $('gpsCard').onclick=function(){openAgent(a.id)};
+  $('gpsDay').onclick=function(e){var b=e.target.closest('button');if(!b)return;if(b.dataset.d==='today'){GPS.day='';gpsSave();gpsDetail()}else{$('gpsDate').hidden=false;$('gpsDay').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)})}};
+  $('gpsDate').onchange=function(){GPS.day=this.value===today()?'':this.value;gpsSave();gpsDetail()};
+  var dd=await api('agent_period_detail',{agentId:a.id,period:'custom',from:day,to:day}).catch(function(e){$('gpsInfo').textContent=e.message;return null});
+  if(!dd||GPS.agent!==a.id||!$('gpsShift'))return;
+  $('gpsShift').innerHTML=dd.shifts.length?dd.shifts.map(function(sh){return hm(sh.start)+' – '+(sh.end?hm(sh.end):'<span class="ok">davom etmoqda</span>')}).join('<br>'):'<span class="muted">Bu kunda smena yo‘q</span>';
+  var lay=S.gpsLayers&&S.gpsLayers.route,m=S.maps.agents;if(lay)lay.clearLayers();var bounds=[],km=0;
+  dd.route.segments.forEach(function(sg,i){var pts=sg.map(function(p){return [p.lat,p.lon]});bounds=bounds.concat(pts);for(var j=1;j<sg.length;j++)km+=hav(sg[j-1],sg[j]);
+    if(lay){if(pts.length>1)L.polyline(pts,{color:'#2563EB',weight:4,opacity:.85}).addTo(lay).bindTooltip(hm(sg[0].ts)+' – '+hm(sg[sg.length-1].ts));
+      L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:'#16A34A',fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Boshlanish '+hm(sg[0].ts));
+      L.circleMarker(pts[pts.length-1],{radius:5,color:'#fff',fillColor:'#DC2626',fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Oxirgi nuqta '+hm(sg[sg.length-1].ts))}});
+  dd.visits.forEach(function(v){if(v.lat==null||!lay)return;bounds.push([v.lat,v.lon]);L.marker([v.lat,v.lon],{zIndexOffset:900,icon:L.divIcon({className:'',html:'<div class="vpin">'+ic('check','sm')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(lay).bindTooltip('Tashrif: '+esc(v.name)+' · '+hm(v.ts)).on('click',function(){openClient(v.clientId)})});
+  if(m&&bounds.length)m.fitBounds(bounds.concat(a.lat!=null&&isToday?[[a.lat,a.lon]]:[]),{padding:[40,40],maxZoom:15});
+  $('gpsInfo').innerHTML=num(dd.route.gpsTotal)+' GPS nuqta · ~'+num(km,1)+' km · '+dd.visitsTotal+' tashrif · '+dd.newClientsTotal+' yangi mijoz';
+  var ev=dd.visits.map(function(v){return {ts:v.ts,id:v.clientId,t:VISIT[v.status]||v.status||'Tashrif',n:v.name,ic:'walk'}}).concat(dd.newClients.map(function(c){return {ts:c.ts,id:c.id,t:'Yangi mijoz',n:c.name,ic:'userplus'}})).sort(function(x,y){return y.ts-x.ts});
+  $('gpsVisits').innerHTML='<div class="card-h" style="margin:14px 0 4px"><h3>'+ic('walk')+' Tashrif buyurilgan mijozlar</h3></div>'+(ev.length?'<div class="list">'+ev.map(function(e){return '<div class="li click" data-client="'+e.id+'"><div class="t"><b>'+esc(e.n)+'</b><small>'+ic(e.ic,'sm')+' '+esc(e.t)+' · '+hm(e.ts)+'</small></div></div>'}).join('')+'</div>':emptyState('Bu kunda tashrif yo‘q','walk'));
+  bindClientLinks($('gpsVisits'));
 }
 function updateAgentsLive(){
-  if(!S.maps.agents)return;
-  S.dash.agents.forEach(function(a){if(a.lat==null)return;var mk=S.agMarkers[a.id];if(mk){mk.setLatLng([a.lat,a.lon]);mk.setIcon(agentIcon(a));mk.setPopupContent(agentPopup(a))}else S.agMarkers[a.id]=L.marker([a.lat,a.lon],{icon:agentIcon(a)}).addTo(S.maps.agents).bindPopup(agentPopup(a))});
-  agentsList();
+  if(!S.maps.agents||!$('gpsList'))return;
+  gpsMarkers(false);gpsListRender();
+  if(!GPS.agent)gpsDetail();
 }
 
 /* Agent kartasi */

@@ -67,11 +67,11 @@ Belgilar: ✅ tayyor · 🟡 qisman · ❌ yo‘q
 | Agentlar xaritada, oxirgi GPS, yangilanish vaqti, ishlayaptimi | ✅ | `dashboard.agents` |
 | Kunlik yo‘nalish, tashrif buyurilgan mijozlar | ✅ | agent kartasida, `agent_period_detail` |
 | Agentning bugungi savdosi, yig‘ilgan pul, smena boshi | ✅ | agent kartasida |
-| Smena tugash vaqti | 🟡 | faqat «oxirgi smena» rejimida |
-| 3 panelli maket (ro‘yxat / xarita / agent) | ❌ | hozir 2 panel + o‘ng drawer |
-| Hudud bo‘yicha filtr | ❌ | |
-| Mijoz markerlari yashil/sariq/qizil | 🟡 | Mijozlar xaritasida bor (0–2 / 3–4 / 5+ kun, `manager_api.dashboard`), GPS sahifasida yo‘q |
-| Markerlarni guruhlash (cluster) | ❌ | |
+| Smena boshlash / tugash vaqti | ✅ Phase 3 | `agent_period_detail.shifts` |
+| 3 panelli maket (ro‘yxat / xarita / agent) | ✅ Phase 3 | «GPS markaz» sahifasi |
+| Hudud bo‘yicha filtr | ✅ Phase 3 | agent hududi = mijozlari hududi (agentda alohida hudud maydoni yo‘q) |
+| Mijoz markerlari yashil/sariq/qizil | ✅ Phase 3 | 0–2 / 3–4 / 5+ kun (`manager_api.dashboard` qoidasi), rejada — ko‘k |
+| Markerlarni guruhlash (cluster) | ✅ Phase 3 | Leaflet.markercluster 1.5.3, klaster rangi eng yomon holat bo‘yicha |
 
 ### 4.3 Agentlar
 ✅ ro‘yxat, holat, bugungi faoliyat, tashrif, yangi mijoz, realizatsiya, yig‘ilgan pul, agentdagi pul,

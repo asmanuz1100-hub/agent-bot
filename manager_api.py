@@ -1019,8 +1019,12 @@ def agent_period_detail(db, agent_id, period, now=None, date_from=None, date_to=
          (SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?),
          (SELECT COUNT(*) FROM client_visits WHERE actor=? AND ts>=? AND ts<?)""",
          (agent_id,start,end,agent_id,start,end)).fetchone()
+    # Smenalar (ish boshlash / tugatish): davr bilan kesishganlari, ochiq smenada end=None.
+    shift_rows=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts
+        WHERE agent=? AND start<? AND COALESCE("end",?)>? ORDER BY start,id""",(agent_id,end,end,start)).fetchall()
+    shifts=[{"id":int(r["id"]),"start":int(r["start"]),"end":int(r["end_ts"]) if r["end_ts"] else None} for r in shift_rows]
     return {"agentId":agent_id,"agent":row["name"] or str(agent_id),
-            "period":period,"label":label,"start":start,"end":end,
+            "period":period,"label":label,"start":start,"end":end,"shifts":shifts,
             "route":{"segments":segments,"gpsTotal":gps_total,"gpsShown":len(gps),
                      "sampled":gps_total>len(gps)},
             "newClients":new_clients,"visits":visits,
