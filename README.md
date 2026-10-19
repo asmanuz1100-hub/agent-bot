@@ -1,6 +1,6 @@
-# Ички савдо-агент боти · ТЕСТ
+# Ички савдо-агент боти
 
-Telegram орқали агент сменаси, жонли GPS, мижоз/дўкон, Грунтовка 7/1 (1/3/5 кг), товар ҳаракати, USD қарз/тўлов, касса ва акт сверка. Python 3.11+, Telegram Bot API. PostgreSQL учун `psycopg` (`requirements.txt`) талаб қилинади. Ҳозир Render web service + PostgreSQL’да webhook орқали ишлаяпти. Бу ишлаб чиқаришга тайёр SLA’ли маҳсулот эмас; тест ҳисоблари билан бошланг.
+Telegram орқали агент сменаси, жонли GPS, мижоз/дўкон, Грунтовка 7/1 (1/3/5 кг), товар ҳаракати, USD қарз/тўлов, касса ва акт сверка. Python 3.11+, Telegram Bot API. PostgreSQL учун `psycopg` (`requirements.txt`) талаб қилинади. Ҳозир Render web service (`asman-agent-test` — номида «test» бўлса ҳам, бу **ишчи бот**) + PostgreSQL’да webhook орқали ишлаяпти.
 
 ## Жойлаштириш ва муҳит ўзгарувчилари
 
@@ -16,6 +16,25 @@ pip install -r requirements.txt
 python -m unittest discover -v
 python bot.py
 ```
+
+## Mini App’лар
+
+Барча Mini App’ларни шу бот хизматининг ўзи беради (`miniapps/` папкаси):
+
+| Манзил | Ким учун |
+|---|---|
+| `/app/agent/` | Агент (админ — назорат режими) |
+| `/app/rahbar-premium/` | Раҳбар (админ). Эски `/app/rahbar/` ҳаволаси шу ерга ўтказади |
+| `/app/ombor/` | Омборчи ва агент сўровлари |
+| `/cashier/` | Кассир (`cashier-miniapp.html`) |
+
+Умумий дизайн файллари `miniapps/premium-kit/`да.
+
+## Render ва GitHub
+
+- `main` бранчига ҳар бир push Render’да ишчи ботни **дарҳол** янгилайди. Build вақтида `python -m unittest discover -v` ишлайди — тест йиқилса, янги версия чиқмайди ва эскиси ишлашда давом этади.
+- Ўзгаришлар аввал алоҳида бранчда қилинади, GitHub Actions (`Tests`, `WebView browser regressions`) яшил бўлгандан кейин `main`га қўшилади.
+- Render’даги муҳит ўзгарувчилари dashboard’да сақланади; `render.yaml` уларнинг рўйхати ва намунаси.
 
 `render.yaml` ва `.github/workflows/` файллари жойлаштириш/тест учун мўлжалланган. GitHub’га `.env`, база URL’и, токенлар ёки мижоз маълумотларини юкламанг. Маҳаллий SQLite режимида HTTP сервер битта оқимли; Render/PostgreSQL режимида кўп оқимли сервер ҳар сўров учун алоҳида DB уланишидан фойдаланади. Бир агент операциялари PostgreSQL user-row lock билан сериализация қилинади. Бир нечта Render инстансни ёқишдан олдин яна нагрузка ва транзакция тестлари ўтказинг.
 
