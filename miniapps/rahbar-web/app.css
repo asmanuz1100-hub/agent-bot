@@ -162,7 +162,8 @@ td .t b{display:block}td .t small{color:var(--mu);font-size:12px;display:block}
 .dh h2{font-size:21px}.dh .muted{font-size:13px}
 .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 14px;font-size:13px}
 .kv dt{color:var(--mu);font-weight:700}.kv dd{margin:0;word-break:break-word}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 12px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{white-space:nowrap}
 .tabs button{all:unset;cursor:pointer;padding:9px 12px;font-weight:800;color:var(--mu);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs button.on{color:var(--pri);border-color:var(--pri)}
 .actions{display:flex;gap:8px;flex-wrap:wrap}

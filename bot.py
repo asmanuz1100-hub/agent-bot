@@ -3109,7 +3109,8 @@ def serve_webhook(db,base_url):
                     elif action=='period_report':
                         data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
                     elif action=='agent_period_detail':
-                        data=manager_api.agent_period_detail(local,payload.get('agentId'),payload.get('period'))
+                        data=manager_api.agent_period_detail(local,payload.get('agentId'),payload.get('period'),
+                                                             date_from=payload.get('from'),date_to=payload.get('to'))
                     elif action=='insights':
                         try:aid=int(payload.get('agentId') or 0) or None
                         except (TypeError,ValueError):raise ValueError('Agent noto‘g‘ri.')

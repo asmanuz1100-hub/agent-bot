@@ -8,6 +8,8 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import bot
 import core
@@ -85,6 +87,38 @@ class WebAuthUnitTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             web_auth.login(self.db, 'rahbar1', password)
         self.assertEqual(web_auth.login(self.db, 'rahbar1', 'new-password-1')[0], 1)
+
+
+class AgentRouteAnyDayTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = core.connect(os.path.join(self.tmp.name, 'r.sqlite3'))
+        self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', [(1, 'admin', 'Rahbar'), (2, 'agent', 'Ali')])
+        # 2026-10-10 10:00 Toshkent: bitta smena, ikki GPS nuqta
+        self.day = int(datetime(2026, 10, 10, 10, tzinfo=ZoneInfo('Asia/Tashkent')).timestamp())
+        sid = self.db.execute('INSERT INTO shifts(agent,start,"end") VALUES(2,?,?)', (self.day, self.day + 7200)).lastrowid
+        self.db.executemany('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,5)',
+                            [(sid, self.day + 60, 40.5, 71.6), (sid, self.day + 600, 40.51, 71.61)])
+        self.now = self.day + 9 * 86400
+
+    def tearDown(self):
+        self.db.close()
+        self.tmp.cleanup()
+
+    def test_custom_day_returns_only_that_day(self):
+        import manager_api
+        d = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-10', date_to='2026-10-10')
+        self.assertEqual(d['route']['gpsTotal'], 2)
+        self.assertEqual(d['label'], '10.10.2026 – 10.10.2026')
+        other = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-11', date_to='2026-10-11')
+        self.assertEqual(other['route']['gpsTotal'], 0)
+
+    def test_custom_range_is_limited(self):
+        import manager_api
+        with self.assertRaises(ValueError):
+            manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-08-01', date_to='2026-10-10')
+        with self.assertRaises(ValueError):
+            manager_api.agent_period_detail(self.db, 2, 'year', now=self.now)
 
 
 class WebPanelBotCommandTests(unittest.TestCase):

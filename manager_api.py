@@ -929,7 +929,7 @@ def agent_deactivate_preview(db,agent_id):
 PERIOD_LABELS={"today":"Bugun","week":"7 kun","month":"30 kun"}
 
 
-def agent_period_detail(db, agent_id, period, now=None):
+def agent_period_detail(db, agent_id, period, now=None, date_from=None, date_to=None):
     """Historical agent route and explicit client/visit activity for one selected period.
 
     Route positions are recorded GPS; client markers use their saved shop
@@ -940,16 +940,22 @@ def agent_period_detail(db, agent_id, period, now=None):
         agent_id=int(agent_id)
     except (TypeError,ValueError):
         raise ValueError("Agent ID noto‘g‘ri.")
-    if period not in PERIOD_LABELS:
+    if period not in PERIOD_LABELS and period!="custom":
         raise ValueError("Davr noto‘g‘ri.")
     row=db.execute("SELECT id,name,role FROM users WHERE id=? AND role IN ('agent','disabled')",
                    (agent_id,)).fetchone()
     if not row:
         raise ValueError("Agent topilmadi.")
     now=int(time.time() if now is None else now)
-    today=_midnight(now)
-    start=today-({"today":0,"week":6,"month":29}[period])*86400
-    end=now+1
+    if period=="custom":
+        # Istalgan kun yoki sana oralig'i (web panel): 31 kundan oshmaydi, GPS baribir 1000 nuqtaga siqiladi.
+        start,end,label=core.resolve_period("custom",date_from,date_to,now)
+        if end-start>31*86400:
+            raise ValueError("Marshrut uchun davr 31 kundan oshmasin.")
+    else:
+        today=_midnight(now)
+        start=today-({"today":0,"week":6,"month":29}[period])*86400
+        end=now+1;label=PERIOD_LABELS[period]
     # Sample the entire selected period on the DB side: older days do not
     # disappear merely because the agent sent many GPS points this week.
     # A one-hour report does not accidentally include last shift's trajectory.
@@ -1012,7 +1018,7 @@ def agent_period_detail(db, agent_id, period, now=None):
          (SELECT COUNT(*) FROM client_visits WHERE actor=? AND ts>=? AND ts<?)""",
          (agent_id,start,end,agent_id,start,end)).fetchone()
     return {"agentId":agent_id,"agent":row["name"] or str(agent_id),
-            "period":period,"label":PERIOD_LABELS[period],"start":start,"end":end,
+            "period":period,"label":label,"start":start,"end":end,
             "route":{"segments":segments,"gpsTotal":gps_total,"gpsShown":len(gps),
                      "sampled":gps_total>len(gps)},
             "newClients":new_clients,"visits":visits,
