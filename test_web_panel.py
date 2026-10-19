@@ -89,6 +89,32 @@ class WebAuthUnitTests(unittest.TestCase):
         self.assertEqual(web_auth.login(self.db, 'rahbar1', 'new-password-1')[0], 1)
 
 
+class WebPanelDesignSystemTests(unittest.TestCase):
+    """Phase 1: spetsifikatsiya ranglari, Inter shrifti, global qidiruv, emoji'siz menyu."""
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'miniapps', 'rahbar-web')
+
+    def read(self, name):
+        with open(os.path.join(self.base, name), encoding='utf-8') as f:
+            return f.read()
+
+    def test_spec_tokens_and_font(self):
+        css = self.read('app.css')
+        for token in ('--bg:#F8FAFC', '--card:#FFFFFF', '--pri:#2563EB', '--tx:#0F172A', '--mu:#64748B',
+                      '--line:#E2E8F0', '--ok:#16A34A', '--warn:#F59E0B', '--bad:#DC2626'):
+            self.assertIn(token, css)
+        self.assertIn('family=Inter', self.read('index.html'))
+
+    def test_light_theme_is_default_and_search_is_present(self):
+        html = self.read('index.html')
+        self.assertIn("getItem('rw-theme')||'light'", html)
+        self.assertIn('id="gq"', html)
+
+    def test_navigation_uses_icons_not_emoji(self):
+        js = self.read('app.js')
+        pages = js[js.index('var PAGES=['):js.index('];', js.index('var PAGES=['))]
+        self.assertNotRegex(pages, '[\U0001F300-\U0001FAFF\u2600-\u27BF]')
+
+
 class AgentRouteAnyDayTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

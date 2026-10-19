@@ -7,11 +7,11 @@
 <title>ASMAN · Rahbar paneli</title>
 <link rel="icon" href="/app/premium-kit/emblem.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="app.css?v=10">
-<meta name="theme-color" content="#060a14">
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('rw-theme')||'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
+<link rel="stylesheet" href="app.css?v=21">
+<meta name="theme-color" content="#F8FAFC">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('rw-theme')||'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
 </head>
 <body>
 <!-- Kirish -->
@@ -40,6 +40,7 @@
   <main class="main">
     <header class="top">
       <div><h1 id="pageTitle">Asosiy</h1><small id="pageSub" class="muted"></small></div>
+      <div class="gsearch" role="search"><input id="gq" type="search" placeholder="Qidirish: mijoz, agent, telefon…" autocomplete="off" aria-label="Global qidiruv" aria-controls="gres"><kbd>Ctrl K</kbd><div id="gres" class="gres" role="listbox" hidden></div></div>
       <div class="top-act">
         <span id="updated" class="live"></span>
         <button class="icon-btn" id="refreshBtn" title="Yangilash (R)" aria-label="Yangilash"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg></button>
@@ -59,6 +60,6 @@
 <div id="toast" class="toast" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
