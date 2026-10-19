@@ -9,8 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="app.css?v=4">
-<script>try{var t=localStorage.getItem('rw-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="app.css?v=10">
+<meta name="theme-color" content="#060a14">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('rw-theme')||'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
 </head>
 <body>
 <!-- Kirish -->
@@ -40,9 +41,9 @@
     <header class="top">
       <div><h1 id="pageTitle">Asosiy</h1><small id="pageSub" class="muted"></small></div>
       <div class="top-act">
-        <span id="updated" class="muted small"></span>
-        <button class="icon-btn" id="refreshBtn" title="Yangilash (R)" aria-label="Yangilash">⟳</button>
-        <button class="icon-btn" id="themeBtn" title="Mavzu" aria-label="Mavzuni almashtirish">◐</button>
+        <span id="updated" class="live"></span>
+        <button class="icon-btn" id="refreshBtn" title="Yangilash (R)" aria-label="Yangilash"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg></button>
+        <button class="icon-btn" id="themeBtn" title="Yorug‘ / to‘q mavzu" aria-label="Mavzuni almashtirish"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
       </div>
     </header>
     <div id="page" class="page"></div>
@@ -51,13 +52,13 @@
 
 <!-- O'ng panel (mijoz / agent kartasi) -->
 <div id="drawerOv" class="drawer-ov"></div>
-<aside id="drawer" class="drawer" aria-hidden="true"><button class="drawer-x icon-btn" id="drawerX" aria-label="Yopish">✕</button><div id="drawerBody"></div></aside>
+<aside id="drawer" class="drawer" aria-hidden="true"><button class="drawer-x icon-btn" id="drawerX" aria-label="Yopish"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button><div id="drawerBody"></div></aside>
 
 <!-- Modal -->
 <div id="modalOv" class="modal-ov" hidden><div class="modal" role="dialog" aria-modal="true"><div id="modalBody"></div></div></div>
 <div id="toast" class="toast" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
