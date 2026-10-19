@@ -51,11 +51,11 @@ Ulardan faqat kompozitsiya, ritm va vizual uslub olinadi — rasmlar, matnlar, k
 | Sahifa | Holat | Bosqich |
 |---|---|---|
 | Executive Dashboard | qayta quriladi | Phase 2 (shu PR) |
-| GPS Control Center | mavjud (Phase 3), yangi tokenlarga o‘tadi | Phase 3 V2 |
-| Customers CRM | mavjud jadval + drawer; kartalar/aging qo‘shiladi | Phase 4 |
-| Agent Management | yangi alohida sahifa (hozir Xodimlar + GPS) | Phase 4 |
-| Finance & Debt | Kassa sahifasi kengayadi: aging, qarzdorlar, konvertatsiya | Phase 4 |
-| Orders Kanban | Ombor buyurtmalari Board/List | Phase 4 |
+| GPS Control Center | ✅ V2 tokenlar, pill tablar, kalit belgilar | Phase 3 V2 |
+| Customers CRM | ✅ holat xulosasi (faol / e’tibor / passiv / qarzdor), Jadval · Kartalar · Xarita, CRM profil kartasi, qarz tarixi (yurgan qoldiq) | Phase 4 |
+| Agent Management | ✅ «Agentlar» sahifasi: KPI, yetakchilar, saralanadigan jadval, agentdagi pul, kassirga topshirilgan, portfel qarzi, 3 tagacha taqqoslash | Phase 4 |
+| Finance & Debt | ✅ «Moliya»: hamyonlar (so‘m/$ alohida), tushum dinamikasi, qarz yoshi, agentlardagi pul, qarzdorlar, kassa harakatlari, xarajatlar, konvertatsiyalar | Phase 4 |
+| Orders Kanban | ✅ Board (5 status ustuni, drag-and-drop faqat ruxsat etilgan o‘tishlar), rangli detail modal, Ro‘yxat va katalog | Phase 4 |
 
 Buyurtma statuslari backendda: `new → preparing → loaded → delivered`, `rejected`. Ruxsat etilgan o‘tishlar
 `core.set_order_status`da; `loaded`ni faqat omborchi qo‘yadi. Kanbanda drag-and-drop faqat shu o‘tishlarga ruxsat beradi.

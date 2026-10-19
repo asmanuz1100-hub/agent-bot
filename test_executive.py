@@ -175,6 +175,28 @@ class ExecutiveTests(unittest.TestCase):
         self.assertEqual(cal['values']['15']['realizationUsd'], 70)
         self.assertEqual(cal['values']['14']['realizationUsd'], 100)
 
+    def test_conversions_are_listed_in_display_units(self):
+        self.db.execute("""INSERT INTO cashier_conversions(cashier,pay_from,from_currency,amount_from,amount_to,rate_uzs_per_usd,valuation_rate,usd_delta,note,source,ts)
+            VALUES(4,'cash','USD',10000,1270000,12700,12700,0,'',501,?)""", (self.today + 60,))
+        self.db.execute("""INSERT INTO cashier_conversions(cashier,pay_from,from_currency,amount_from,amount_to,rate_uzs_per_usd,valuation_rate,usd_delta,note,source,ts)
+            VALUES(4,'card','UZS',635000,5000,12700,12700,0,'',502,?)""", (self.today - 3 * DAY,))
+        d = executive.executive(self.db, 'today', now=self.now)
+        self.assertEqual(len(d['conversions']), 1)
+        c = d['conversions'][0]
+        self.assertEqual((c['from'], c['amountFrom'], c['to'], c['amountTo'], c['rate']), ('USD', 100, 'UZS', 1270000, 12700))
+        w = executive.executive(self.db, 'd7', now=self.now)['conversions']
+        self.assertEqual([(x['from'], x['amountFrom'], x['amountTo']) for x in w], [('USD', 100, 1270000), ('UZS', 635000, 50)])
+
+    def test_warehouse_all_statuses_for_kanban(self):
+        now = self.now
+        for i, st in enumerate(('new', 'preparing', 'loaded', 'delivered', 'rejected')):
+            self.db.execute("INSERT INTO orders(agent,client,status,note,source,ts,updated_ts) VALUES(2,10,?,'',?,?,?)", (st, 600 + i, now - i, now - i))
+        w = manager_api.warehouse(self.db, 'all')
+        self.assertEqual(sorted(o['status'] for o in w['orders']), sorted(('new', 'preparing', 'loaded', 'delivered', 'rejected')))
+        self.assertEqual(w['filter'], 'all')
+        with self.assertRaises(ValueError):
+            manager_api.warehouse(self.db, 'bogus')
+
     def test_read_only(self):
         self.seed()
         before = self.db.total_changes

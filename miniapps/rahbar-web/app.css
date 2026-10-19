@@ -120,6 +120,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0
 .live{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--mu);font-weight:500;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);white-space:nowrap}
 .live i{width:7px;height:7px;border-radius:50%;background:var(--forest);animation:pulse 2s infinite}
 .live.off i{background:var(--orange);animation:none}
+.live:empty{display:none}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(36,107,87,.45)}70%{box-shadow:0 0 0 7px rgba(36,107,87,0)}100%{box-shadow:0 0 0 0 rgba(36,107,87,0)}}
 .page{padding:16px 28px 48px;min-width:0;animation:fade .24s var(--ease)}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}}
@@ -367,6 +368,56 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 .vpin .ico{width:12px;height:12px;stroke-width:3}
 .gps-detail .mini b{font-size:16px}
 
+/* Orders Kanban (1817 Pipeline) */
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:14px;overflow-x:auto;padding-bottom:6px;align-items:start}
+.kcol{background:color-mix(in srgb,var(--card) 60%,transparent);border:1px solid var(--line);border-radius:20px;padding:12px;min-height:320px;transition:border-color .15s,background .15s,opacity .15s}
+.kcol header{display:flex;align-items:center;gap:8px;margin:2px 4px 12px}
+.kcol header b{font-weight:600}.kcol header small{margin-left:auto}
+.kcol.can{border-color:var(--forest);border-style:dashed;background:var(--forest-soft)}
+.kcol.over{border-color:var(--forest);border-style:solid;box-shadow:inset 0 0 0 2px var(--forest)}
+.kcol.cant{opacity:.45}
+.kbody{display:grid;gap:10px}
+.kcard{padding:14px;cursor:grab;display:grid;gap:4px;border-radius:16px}
+.kcard.dragging{opacity:.4;transform:rotate(2deg)}
+.kc-top{display:flex;justify-content:space-between;align-items:center}
+.kc-top .round-btn{width:26px;height:26px;background:transparent;border-color:currentColor;opacity:.5;color:inherit}
+.kc-title{font-size:16px;font-weight:600;line-height:1.25}
+.kc-foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px}
+.kc-foot b{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.kcard u{text-decoration:none;font-weight:600}
+.kempty{border:1px dashed var(--line2);border-radius:14px;padding:18px;text-align:center;color:var(--mu);font-size:13px}
+.omodal{margin:-26px;padding:26px;border-radius:22px}
+.omodal:not([class*="c-"]){background:var(--card)}
+.ostages{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:16px 0}
+.ostages i{display:block;height:5px;border-radius:5px;background:currentColor;opacity:.25}
+.ostages .done i{opacity:1}
+.ostages small{display:block;margin-top:6px;font-size:11.5px}
+.oitems{background:rgba(255,255,255,.12);border-radius:14px;padding:10px 12px;display:grid;gap:6px;font-size:13px}
+.omodal:not(.c-forest):not(.c-ink):not(.c-orange) .oitems{background:rgba(23,34,31,.06)}
+.oitems>div{display:flex;justify-content:space-between;gap:10px}
+.otot{border-top:1px solid currentColor;padding-top:6px;margin-top:2px;opacity:.95}
+.omodal .btn{background:rgba(255,255,255,.9);color:#17221F;border-color:transparent}
+
+/* Customers CRM (1817 Customer Information) */
+.crm-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:14px;margin-right:44px}
+.crm-profile{text-align:center;display:grid;justify-items:center;align-content:start;gap:4px}
+.crm-profile h2{font-size:20px;margin-top:8px}
+.crm-ava .ring{display:inline-block}
+.crm-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.crm-acts a.round-btn{text-decoration:none}
+.crm-row{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+.crm-row:last-child{border-bottom:0}.crm-row>.ico{margin-top:10px;color:var(--mu)}
+.crm-row small{display:block;font-size:11.5px;color:var(--mu)}.crm-row span{display:block;word-break:break-word}
+.cl-stat{all:unset;cursor:pointer;display:flex;gap:10px;align-items:center;padding:6px 10px;border-radius:14px;transition:background .15s}.cl-stat:hover{background:var(--hover)}.cl-stat.on{background:var(--side-act)}
+.ccards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.ccard{padding:14px;display:grid;gap:6px;cursor:pointer;border-radius:16px}
+.ccard .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ccard b.nm{font-size:15.5px;font-weight:600;line-height:1.25}
+.ccard .money{display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px}
+.ccard .money b{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.ccard .t small,.ccard .money small{display:block}.ccard .t{min-width:0}.ccard .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:860px){.crm-head{grid-template-columns:1fr;margin-right:0}}
+
 /* Drawer */
 .drawer-ov{position:fixed;inset:0;background:rgba(23,34,31,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s var(--ease);z-index:1200}
 .drawer-ov.on{opacity:1;pointer-events:auto}
@@ -415,6 +466,7 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 @media (min-width:1700px){.page{padding-left:36px;padding-right:36px}}
 @media (max-width:1600px){.g6 .kpi .tone{display:none}.g6 .kpi{padding:16px}}
 @media (max-width:1440px){.dash{grid-template-columns:minmax(0,1fr) 300px}}
+@media (max-width:1560px) and (min-width:861px){.tabs-nav button .ico{display:none}.tabs-nav button{padding:7px 12px}.gsearch{width:min(250px,22vw)}.gsearch kbd{display:none}}
 @media (max-width:1360px){.g-main{grid-template-columns:1fr}.g6{grid-template-columns:repeat(3,minmax(0,1fr))}
   .gps{grid-template-columns:270px minmax(0,1fr);grid-template-rows:minmax(460px,1fr) auto;height:auto}.gps-detail{grid-column:1 / -1}.gps>.gps-list{max-height:calc(100vh - 190px)}}
 @media (max-width:1180px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.dash{grid-template-columns:1fr}.dash-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}}

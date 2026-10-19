@@ -221,6 +221,23 @@ def _debt_aging(db, scope, as_of):
              'usd': _usd(b['cents']), 'clients': len(b['clients'])} for b in out]
 
 
+def _conversions(db, start, end):
+    """Kassir konvertatsiyalari (kassa darajasida, agent/hudud filtriga bog'liq emas).
+    Dollar summasi sentda, so'm butun so'mda saqlanadi — bu yerda ko'rsatish birligiga o'tkaziladi."""
+    rows = db.execute("""SELECT c.ts,c.pay_from,c.from_currency,c.amount_from,c.amount_to,c.rate_uzs_per_usd,c.note,
+            COALESCE(u.name,CAST(c.cashier AS TEXT)) AS cashier
+        FROM cashier_conversions c LEFT JOIN users u ON u.id=c.cashier
+        WHERE c.ts>=? AND c.ts<? ORDER BY c.ts DESC,c.id DESC LIMIT 50""", (start, end)).fetchall()
+    out = []
+    for r in rows:
+        usd_first = r['from_currency'] == 'USD'
+        out.append({'ts': int(r['ts']), 'payFrom': r['pay_from'], 'from': r['from_currency'], 'to': 'UZS' if usd_first else 'USD',
+                    'amountFrom': _usd(r['amount_from']) if usd_first else int(r['amount_from']),
+                    'amountTo': int(r['amount_to']) if usd_first else _usd(r['amount_to']),
+                    'rate': int(r['rate_uzs_per_usd']), 'cashier': r['cashier'], 'note': r['note'] or ''})
+    return out
+
+
 def _agents_cash(db, scope):
     """Agentlardagi pul: dollar va so'm alohida (hech qachon qo'shilmaydi) va kassirda tasdiq kutayotgani."""
     rows = db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()
@@ -397,6 +414,7 @@ def executive(db, period='today', date_from=None, date_to=None, agent=None, regi
         'series': series, 'agents': agents,
         'debtAging': _debt_aging(db, scope, rng['end']), 'agentsCash': _agents_cash(db, scope),
         'regionSales': region_sales, 'calendar': calendar,
+        'conversions': _conversions(db, rng['start'], rng['end']),
         'options': {'agents': [{'id': k, 'name': v or str(k)} for k, v in sorted(names.items(), key=lambda kv: (kv[1] or '', kv[0]))],
                     'regions': [{'key': k, 'name': v} for k, v in sorted(regions.items(), key=lambda kv: kv[1])]},
     }
