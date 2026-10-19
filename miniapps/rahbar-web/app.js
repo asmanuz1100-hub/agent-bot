@@ -87,8 +87,9 @@ function today(){return new Date(Date.now()+5*3600e3).toISOString().slice(0,10)}
 function toast(msg,err){var t=$('toast');t.textContent=msg;t.className='toast on'+(err?' err':'');clearTimeout(toast.t);toast.t=setTimeout(function(){t.className='toast'+(err?' err':'')},err?4200:2600)}
 function debounce(fn,ms){var t;return function(){var a=arguments,self=this;clearTimeout(t);t=setTimeout(function(){fn.apply(self,a)},ms)}}
 
-var AGE={fresh:['0–2 kun','p-ok','#16A34A'],yellow:['3–4 kun','p-warn','#F59E0B'],red:['5+ kun','p-bad','#DC2626'],scheduled:['Rejada','p-pri','#2563EB'],unknown:['Noma’lum','','#94A3B8']};
-var AG_ST={active:['Faol','p-ok','#16A34A'],late:['Kechikkan','p-warn','#F59E0B'],offline:['Yopiq','','#94A3B8']};
+var C={pri:'#1F6BFF',forest:'#246B57',yellow:'#F3CF56',orange:'#E46542',ink:'#191D23',gray:'#A3A8A1',violet:'#6D4FC2',cyan:'#0E7490'};
+var AGE={fresh:['0–2 kun','p-ok',C.forest],yellow:['3–4 kun','p-warn',C.yellow],red:['5+ kun','p-bad',C.orange],scheduled:['Rejada','p-pri',C.pri],unknown:['Noma’lum','',C.gray]};
+var AG_ST={active:['Faol','p-ok',C.forest],late:['Kechikkan','p-warn','#D9A520'],offline:['Yopiq','',C.gray]};
 var KIND={delivery:ic('box','sm')+' Tovar berildi',payment:ic('coins','sm')+' To‘lov',sold:ic('cart','sm')+' Sotildi',return:ic('in','sm')+' Qaytarildi',order:ic('note','sm')+' Buyurtma',visit:ic('walk','sm')+' Tashrif'};
 var VISIT={active:'Faol',interested:'Qiziqdi',thinking:'O‘ylab ko‘radi',refused:'Rad etdi',closed:'Yopilgan',no_answer:'Javob yo‘q'};
 var FIELD={name:'Mijoz ismi',shop_name:'Do‘kon nomi',phone:'Telefon',address:'Manzil',comment:'Izoh',payment_due:'To‘lov sanasi'};
@@ -142,20 +143,33 @@ var PAGES=[
   ['home','home','Asosiy','Bugungi jonli holat'],
   ['agents','compass','GPS markaz','Agentlar joylashuvi, marshruti va mijozlar xaritasi'],
   ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
-  ['cash','wallet','Kassa','Kirim, chiqim va qoldiq'],
+  ['cash','wallet','Kassa','Kirim, chiqim va qoldiq',0,'Moliya'],
   ['reports','chart','Hisobot','Davr bo‘yicha tahlil'],
   ['insights','target','Tahlil','Bugungi reja, mijozlar reytingi va hududlar'],
-  ['warehouse','box','Ombor','Buyurtmalar va mahsulotlar'],
-  ['staff','users','Xodimlar','Agentlar va kassirlar'],
-  ['settings','settings','Sozlamalar','Akkaunt va xavfsizlik']
+  ['warehouse','box','Ombor','Buyurtmalar va mahsulotlar',0,'Buyurtmalar'],
+  ['staff','users','Xodimlar','Agentlar va kassirlar',1],
+  ['settings','settings','Sozlamalar','Akkaunt va xavfsizlik',1]
 ];
 function renderNav(){
   var d=S.dash,badge={};
   if(d){badge.warehouse=d.warehouse&&d.warehouse.newOrders;badge.cash=d.summary&&d.summary.pendingCount}
-  $('nav').innerHTML=PAGES.map(function(p){return '<button data-p="'+p[0]+'" class="'+(S.page===p[0]?'on':'')+'">'+ic(p[1],'lg')+'<span class="lbl">'+p[2]+'</span>'+(badge[p[0]]?'<span class="badge">'+badge[p[0]]+'</span>':'')+'</button>'}).join('');
+  $('nav').innerHTML=PAGES.filter(function(p){return !p[4]}).map(function(p){return '<button data-p="'+p[0]+'" class="'+(S.page===p[0]?'on':'')+'"'+(S.page===p[0]?' aria-current="page"':'')+'>'+ic(p[1])+'<span class="lbl">'+(p[5]||p[2])+'</span>'+(badge[p[0]]?'<span class="badge">'+badge[p[0]]+'</span>':'')+'</button>'}).join('');
+  ['railStaff','railSettings'].forEach(function(id,i){var b=$(id);if(b)b.classList.toggle('on',S.page===['staff','settings'][i])});
 }
 $('nav').addEventListener('click',function(e){var b=e.target.closest('button[data-p]');if(b)location.hash=b.dataset.p});
 $('meBtn').onclick=function(){location.hash='settings'};
+/* Rail (1817): tezkor amallar; logotip bosilsa kengayadi / yig'iladi (holat saqlanadi). */
+(function(){var r=$('rail'),w=store('rw-rail')==='1';r.classList.toggle('wide',w);$('railToggle').setAttribute('aria-expanded',w)})();
+$('railToggle').onclick=function(){var r=$('rail'),w=!r.classList.contains('wide');r.classList.toggle('wide',w);this.setAttribute('aria-expanded',w);store('rw-rail',w?'1':'0');setTimeout(function(){Object.keys(S.maps).forEach(function(k){try{S.maps[k].invalidateSize()}catch(e){}})},260)};
+$('railSearch').onclick=function(){$('gq').focus();$('gq').select()};
+$('railStaff').onclick=function(){location.hash='staff'};
+$('railSettings').onclick=function(){location.hash='settings'};
+$('railFeed').onclick=function(){openFeedDrawer()};
+function openFeedDrawer(){
+  $('railDot').hidden=true;S.feedSeen=(S.feed||[]).length;
+  openDrawer('<div class="dh"><div class="tone t-blue">'+ic('bell','lg')+'</div><div><h2>Jonli lenta</h2><div class="muted">Panel ochiq turganda kelgan hodisalar · har 30 soniyada tekshiriladi</div></div></div><div class="card"><div class="list" id="feed"></div></div>');
+  renderFeed();
+}
 window.addEventListener('hashchange',route);
 function route(){
   if($('shell').hidden)return;
@@ -186,7 +200,7 @@ function autoRefresh(){
   loadDash().then(function(d){
     notifyAll(diffDash(prev,d));
     if(!$('modalOv').hidden)return;
-    if(S.page==='home'&&$('liveBody')){$('liveBody').innerHTML=homeLive(d);bindGo($('liveBody'));bindAgentLinks($('liveBody'));bindClientLinks($('liveBody'));renderFeed();if(EX.period!=="yesterday"&&S.tick%2===0)exRender(true)}
+    if(S.page==='home'&&$('dashSide')){$('dashSide').innerHTML=homeSide(d);bindSide();renderOps();if(EX.period!=="yesterday"&&S.tick%2===0)exRender(true)}
     else if(S.page==='cash')render();else if(S.page==='agents')updateAgentsLive();
   }).catch(function(){var u=$('updated');u.className='live off';u.innerHTML='<i></i>Aloqa yo‘q'});
 }
@@ -219,6 +233,7 @@ function notifyAll(ev){
   beep();
   ev.forEach(function(e,i){setTimeout(function(){toast(e[0]+' — '+e[1])},i*2800)});
   S.feed=ev.map(function(e){return {t:e[0],b:e[1],p:e[2],ts:Date.now()/1000}}).concat(S.feed||[]).slice(0,30);renderFeed();
+  if($('railDot'))$('railDot').hidden=false;
   if(document.hidden){unseen+=ev.length;document.title='('+unseen+') '+document.title.replace(/^\(\d+\) /,'')}
   if(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'&&document.hidden){
     ev.forEach(function(e){try{var n=new Notification(e[0],{body:e[1],icon:'/app/premium-kit/emblem.png',tag:'asman-'+e[2]+'-'+e[1]});n.onclick=function(){window.focus();location.hash=e[2];n.close()}}catch(x){}});
@@ -231,7 +246,7 @@ function renderFeed(){
   el.innerHTML=f.length?f.map(function(e){var fi=FI[e.p]||FI.home;return '<div class="li click" data-go="'+e.p+'"><div class="tone t-'+fi[1]+'" style="width:34px;height:34px;border-radius:10px">'+ic(fi[0])+'</div><div class="t"><b>'+esc(e.t.replace(/^[^A-Za-z\u0400-\u04FFʻʼ‘’]+\s*/,''))+'</b><small>'+esc(e.b)+' · '+ago(e.ts)+'</small></div></div>'}).join(''):'<div class="muted small">Panel ochiq turganda yangi buyurtma, kassaga topshiriq, yangi mijoz va smena o‘zgarishlari shu yerda chiqadi.</div>';
   bindGo(el);
 }
-function themeIcon(){$('themeBtn').innerHTML=ic(document.documentElement.dataset.theme==='dark'?'sun':'moon')}
+function themeIcon(){var dk=document.documentElement.dataset.theme==='dark';$('themeBtn').innerHTML=ic(dk?'sun':'moon')+'<span class="lbl">'+(dk?'Yorug‘ mavzu':'To‘q mavzu')+'</span>'}
 $('themeBtn').onclick=function(){var d=document.documentElement;d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';store('rw-theme',d.dataset.theme);themeIcon();if(S.page)render()};
 themeIcon();
 document.addEventListener('keydown',function(e){
@@ -318,7 +333,7 @@ function areaChart(series,keys,colors,fmt,names){
   series.forEach(function(s,i){if(i%every===0||(i===n-1&&(n-1)%every>=every/2))out+='<text x="'+X(i)+'" y="'+(H-8)+'" text-anchor="middle">'+esc(s.day)+'</text>'});
   keys.forEach(function(k,j){var pts=series.map(function(s,i){return [X(i),Y(Number(s[k]||0))]}),line=smooth(pts,pt,H-pb);
     out+='<path d="'+line+' L'+pts[pts.length-1][0]+','+(H-pb)+' L'+pts[0][0]+','+(H-pb)+' Z" fill="url(#'+id+'g'+j+')"/>';
-    out+='<path d="'+line+'" fill="none" stroke="'+colors[j]+'" stroke-width="2" stroke-linecap="round"/>';
+    out+='<path class="ln" d="'+line+'" fill="none" stroke="'+colors[j]+'" stroke-width="2.2" stroke-linecap="round"/>';
     out+='<circle class="hdot" data-k="'+j+'" r="5" cx="-99" cy="-99" fill="'+colors[j]+'" stroke="var(--card-solid)" stroke-width="2.5"/>'});
   out+='<line class="cross" x1="-99" x2="-99" y1="'+pt+'" y2="'+(H-pb)+'"/>';
   CHARTS[id]={series:series,keys:keys,colors:colors,fmt:fmt,names:names||keys,X:X,Y:Y,n:n,W:W,pl:pl,pr:pr};
@@ -380,11 +395,10 @@ function agentIcon(a,on){var c=(AG_ST[a.status]||AG_ST.offline)[2];return L.divI
 /* ================= PAGES ================= */
 
 /* ----- Asosiy ----- */
-/* ----- Asosiy: Executive dashboard (filtrlar + KPI + dinamika) va jonli holat ----- */
+/* ----- Asosiy: Executive Dashboard V2 (1816 kompozitsiya + 1817 grafiklar) ----- */
 var EX=(function(){try{return Object.assign({period:'today',from:'',to:'',agent:'',region:'',currency:'all',group:'auto'},JSON.parse(store('rw-ex')||'{}'))}catch(e){return {period:'today',from:'',to:'',agent:'',region:'',currency:'all',group:'auto'}}})();
 var EX_PERIODS=[['today','Bugun'],['yesterday','Kecha'],['d7','7 kun'],['d30','30 kun'],['month','Joriy oy'],['custom','Davr'],['all','Umumiy']];
-var EX_KPI={realization:['📦','Realizatsiya','reports'],collected:['💰','Yig‘ilgan pul','cash'],debt:['🧾','Umumiy qarzdorlik','clients:debt'],
-  activeAgents:['🧭','Faol agentlar','agents'],newClients:['➕','Yangi mijozlar','clients:new'],visits:['👣','Tashriflar','reports']};
+var OPS={f:''};
 function exKey(){return JSON.stringify([EX.period,EX.from,EX.to,EX.agent,EX.region,EX.group])}
 async function loadEx(force){
   var key='ex'+exKey();if(!force&&S.cache[key])return S.cache[key];
@@ -397,35 +411,39 @@ function exDelta(k){
   var good=k.key==='debt'?d.pct<=0:d.pct>=0,cls=d.pct===0?'flat':good?'up':'down';
   return '<span class="delta '+cls+'">'+(d.pct>0?'↑':d.pct<0?'↓':'')+Math.abs(d.pct)+'%</span>';
 }
+function greet(){var h=new Date(Date.now()+5*3600e3).getUTCHours();return h<5?'Xayrli tun':h<11?'Xayrli tong':h<17?'Xayrli kun':'Xayrli kech'}
 function pageHome(page,force){
+  var name=(S.me&&S.me.name||'').split(' ')[0];
+  $('pageTitle').textContent=greet()+(name?', '+name:'');
+  var nd=new Date(Date.now()+5*3600e3),WD=['yakshanba','dushanba','seshanba','chorshanba','payshanba','juma','shanba'],MO=['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentyabr','oktyabr','noyabr','dekabr'];
+  $('pageSub').textContent=nd.getUTCDate()+'-'+MO[nd.getUTCMonth()]+' '+nd.getUTCFullYear()+', '+WD[nd.getUTCDay()];
   page.innerHTML=
    '<div class="toolbar" id="exBar">'+
-     '<div class="seg" id="exSeg">'+EX_PERIODS.map(function(p){return '<button data-p="'+p[0]+'" class="'+(EX.period===p[0]?'on':'')+'">'+p[1]+'</button>'}).join('')+'</div>'+
-     '<span id="exCustom" class="actions"'+(EX.period==='custom'?'':' hidden')+'><input type="date" id="exFrom" value="'+esc(EX.from||today())+'" max="'+today()+'" style="width:auto" aria-label="Boshlanish sanasi"><input type="date" id="exTo" value="'+esc(EX.to||today())+'" max="'+today()+'" style="width:auto" aria-label="Tugash sanasi"><button class="btn pri sm" id="exGo">Qo‘llash</button></span>'+
+     '<div class="seg" id="exSeg" role="tablist" aria-label="Davr">'+EX_PERIODS.map(function(p){return '<button role="tab" data-p="'+p[0]+'" class="'+(EX.period===p[0]?'on':'')+'" aria-selected="'+(EX.period===p[0])+'">'+p[1]+'</button>'}).join('')+'</div>'+
+     '<span id="exCustom" class="actions"'+(EX.period==='custom'?'':' hidden')+'><input type="date" id="exFrom" value="'+esc(EX.from||today())+'" max="'+today()+'" style="width:auto" aria-label="Boshlanish sanasi"><input type="date" id="exTo" value="'+esc(EX.to||today())+'" max="'+today()+'" style="width:auto" aria-label="Tugash sanasi"><button class="btn ink sm" id="exGo">Qo‘llash</button></span>'+
      '<select id="exRegion" aria-label="Hudud"><option value="">Barcha hududlar</option></select>'+
      '<select id="exAgent" aria-label="Agent"><option value="">Barcha agentlar</option></select>'+
      '<select id="exCur" aria-label="Valyuta" title="Yig‘ilgan pul qaysi valyutada ko‘rsatilsin">'+[['all','Pul: hammasi (USD)'],['usd','Naqd dollar'],['uzs','Naqd so‘m'],['card','Karta']].map(function(o){return '<option value="'+o[0]+'"'+(EX.currency===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+
      '<button class="btn sm" id="exReset" title="Filtrlarni tozalash">'+ic('x','sm')+' Tozalash</button>'+
      '<span class="grow"></span><span class="muted small" id="exLabel"></span>'+
    '</div>'+
-   '<div id="exBody"><div class="grid g6" style="margin-bottom:16px">'+'<div class="skel"></div>'.repeat(6)+'</div><div class="grid g2"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div></div>'+
-   '<div class="card-h" style="margin:26px 0 12px"><h3 style="font-size:16px">'+ic('bell')+' Jonli holat</h3><span class="muted small">Filtrdan qat’i nazar, hozirgi holat</span></div>'+
-   '<div id="liveBody">'+homeLive(S.dash)+'</div>';
+   '<div class="dash"><div class="dash-main" id="exBody">'+
+     '<div class="grid g4">'+'<div class="skel"></div>'.repeat(4)+'</div><div class="grid g3">'+'<div class="skel" style="height:86px"></div>'.repeat(3)+'</div><div class="skel" style="height:320px"></div>'+
+   '</div><aside class="dash-side" id="dashSide" aria-label="Faollik paneli">'+homeSide(S.dash)+'</aside></div>';
   var save=function(){store('rw-ex',JSON.stringify(EX))},reload=function(){save();exRender(true)};
-  $('exSeg').onclick=function(e){var b=e.target.closest('button');if(!b)return;$('exSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});
-    if(b.dataset.p==='custom'){$('exCustom').hidden=false;return}$('exCustom').hidden=true;EX.period=b.dataset.p;reload()};
+  $('exSeg').onclick=function(e){var b=e.target.closest('button');if(!b)return;$('exSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);x.setAttribute('aria-selected',x===b)});
+    if(b.dataset.p==='custom'){$('exCustom').hidden=false;$('exFrom').focus();return}$('exCustom').hidden=true;EX.period=b.dataset.p;reload()};
   $('exGo').onclick=function(){var f=$('exFrom').value,t=$('exTo').value;if(!f||!t){toast('Ikkala sanani tanlang',true);return}EX.period='custom';EX.from=f;EX.to=t;reload()};
   $('exRegion').onchange=function(){EX.region=this.value;reload()};
   $('exAgent').onchange=function(){EX.agent=this.value;reload()};
   $('exCur').onchange=function(){EX.currency=this.value;save();exRender(false)};
   $('exReset').onclick=function(){EX={period:'today',from:'',to:'',agent:'',region:'',currency:'all',group:'auto'};save();pageHome(page)};
-  bindGo($('liveBody'));bindAgentLinks($('liveBody'));bindClientLinks($('liveBody'));renderFeed();
+  bindSide();
   exRender(!!force);
 }
 async function exRender(force){
   var d;try{d=await loadEx(force)}catch(e){if(S.page!=='home')return;$('exBody').innerHTML=errState(e.message);$('exBody').querySelector('[data-retry]').onclick=function(){exRender(true)};return}
   if(S.page!=='home'||!$('exBody'))return;
-  // Filtr ro'yxatlarini serverdagi real agent/hudud nomlari bilan to'ldirish
   var fill=function(sel,items,cur,ph){sel.innerHTML='<option value="">'+ph+'</option>'+items.map(function(o){return '<option value="'+esc(o[0])+'"'+(String(cur)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')};
   fill($('exRegion'),d.options.regions.map(function(r){return [r.key,r.name]}),EX.region,'Barcha hududlar');
   fill($('exAgent'),d.options.agents.map(function(a){return [a.id,a.name]}),EX.agent,'Barcha agentlar');
@@ -433,65 +451,112 @@ async function exRender(force){
   var col=function(k){return d.series.map(function(x){return Number(x[k]||0)})},K={};d.kpis.forEach(function(k){K[k.key]=k});
   var c=d.collections,cur=EX.currency,coll=K.collected,collVal=usd(coll.value),collSub=exDelta(coll)+' oldingi davrga nisbatan';
   if(cur==='usd'){collVal=usd(c.cashUsd);collSub='Naqd dollarda olingan'}
-  else if(cur==='uzs'){collVal=uzs(c.cashUzs);collSub='≈ '+usd(c.cashUzsAsUsd)+' (to‘lov kunidagi kurs bilan)'}
+  else if(cur==='uzs'){collVal=uzs(c.cashUzs);collSub='≈ '+usd(c.cashUzsAsUsd)+' to‘lov kunidagi kurs bilan'}
   else if(cur==='card'){collVal=usd(c.cardUsd);collSub='Karta orqali (kassir tasdiqlagan)'}
-  var card=function(key,value,sub,sparkKey,color){var m=EX_KPI[key];return kpi(m[0],m[1],value,sub,'',m[2],sparkKey&&d.series.length>1?spark(col(sparkKey),color):'')};
-  var subOf=function(k,extra){return exDelta(k)+(k.prev!=null?' <span class="muted">oldin: '+(k.key==='debt'||k.key==='realization'||k.key==='collected'?usd(k.prev):num(k.prev))+'</span>':'')+(extra||'')};
-  var ag=d.agents.filter(function(a){return a.realizationUsd||a.paymentsUsd||a.visits}).slice(0,10),amax=Math.max.apply(null,ag.map(function(a){return Math.max(a.realizationUsd,a.paymentsUsd)}).concat([1]));
-  var groups=[['auto','Avto'],['day','Kunlik'],['week','Haftalik'],['month','Oylik']];
+  var prevTxt=function(k,money){return k.prev!=null?' <span class="muted">oldin '+(money?usd(k.prev):num(k.prev))+'</span>':''};
+  var sp=function(key,color){return d.series.length>1?spark(col(key),color):''};
+  var ac=d.agentsCash;
+  // Undiruv darajasi: yig'ilgan pul / realizatsiya (davr bo'yicha)
+  var rate=K.realization.value>0?Math.min(999,Math.round(coll.value/K.realization.value*100)):null;
+  var aging=d.debtAging,amax=Math.max.apply(null,aging.map(function(b){return b.usd}).concat([1])),atot=aging.reduce(function(a,b){return a+b.usd},0);
+  var regs=d.regionSales.filter(function(x){return x.realizationUsd>0}),rtot=regs.reduce(function(a,x){return a+x.realizationUsd},0),RC=[C.yellow,C.forest,C.orange,C.ink,C.pri,C.violet,C.cyan,C.gray];
+  var ag=d.agents.filter(function(a){return a.realizationUsd||a.paymentsUsd||a.visits}).slice(0,8),gmax=Math.max.apply(null,ag.map(function(a){return Math.max(a.realizationUsd,a.paymentsUsd)}).concat([1]));
+  var groups=[['auto','Avto'],['day','Kun'],['week','Hafta'],['month','Oy']];
+  var kcard=function(cls,icon,label,value,sub,go,sparkHtml){var m=EMO[icon]||[icon,'blue'];return '<div class="card kpi lift click '+cls+(sparkHtml?' has-spark':'')+'" data-go="'+go+'" tabindex="0" role="button">'+tone(m[0],m[1])+'<div><small>'+label+'</small><b>'+value+'</b><em>'+sub+'</em></div>'+(sparkHtml||'')+'</div>'};
   $('exBody').innerHTML=
-   '<div class="grid g6" style="margin-bottom:16px">'+
-     card('realization',usd(K.realization.value),subOf(K.realization),'realizationUsd','#2563EB')+
-     card('collected',collVal,cur==='all'?subOf(coll):collSub,cur==='all'?'paymentsUsd':null,'#16A34A')+
-     card('debt',usd(K.debt.value),exDelta(K.debt)+' davr boshiga nisbatan'+(d.advanceUsd?' <span class="muted">· avans '+usd(d.advanceUsd)+'</span>':''),'debtUsd','#DC2626')+
-     card('activeAgents',num(K.activeAgents.value),subOf(K.activeAgents))+
-     card('newClients',num(K.newClients.value),subOf(K.newClients))+
-     card('visits',num(K.visits.value),subOf(K.visits))+
+   '<div class="grid g4 kpis">'+
+     kcard('','📦','Realizatsiya',usd(K.realization.value),exDelta(K.realization)+prevTxt(K.realization,1),'reports',sp('realizationUsd',C.pri))+
+     kcard('','💰','Yig‘ilgan pul',collVal,cur==='all'?exDelta(coll)+prevTxt(coll,1):collSub,'cash',cur==='all'?sp('paymentsUsd',C.forest):'')+
+     kcard('c-orange','🧾','Umumiy qarzdorlik',usd(K.debt.value),exDelta(K.debt)+' davr boshiga nisbatan'+(d.advanceUsd?' · avans '+usd(d.advanceUsd):''),'clients:debt')+
+     kcard('c-ink','💵','Agentlardagi pul',usd(ac.cashUsd),'+ '+uzs(ac.cashUzs)+(ac.pendingUsd||ac.pendingUzs?' · kassirda kutilmoqda: '+usd(ac.pendingUsd)+(ac.pendingUzs?' + '+uzs(ac.pendingUzs):''):''),'cash')+
    '</div>'+
-   '<div class="grid g2" style="margin-bottom:16px">'+
-     '<div class="card"><div class="card-h"><h3>'+ic('trend')+' Savdo va pul yig‘ish</h3><div class="seg" id="exGrp">'+groups.map(function(g){return '<button data-g="'+g[0]+'" class="'+(EX.group===g[0]?'on':'')+'">'+g[1]+'</button>'}).join('')+'</div></div>'+
-       legend([['Realizatsiya','#2563EB'],['Yig‘ilgan pul','#16A34A']])+'<div style="margin-top:8px">'+areaChart(d.series,['realizationUsd','paymentsUsd'],['#2563EB','#16A34A'],usd,['Realizatsiya','Yig‘ilgan pul'])+'</div></div>'+
-     '<div class="card"><div class="card-h"><h3>'+ic('receipt')+' Qarzdorlik dinamikasi</h3><span class="muted small">Har '+({hour:'soat',day:'kun',week:'hafta',month:'oy'}[d.group]||'davr')+' oxiridagi umumiy qarz</span></div>'+
-       legend([['Umumiy qarz','#DC2626']])+'<div style="margin-top:8px">'+areaChart(d.series,['debtUsd'],['#DC2626'],usd,['Umumiy qarz'])+'</div></div>'+
+   '<div class="grid g3 kpis sm">'+
+     kcard('','🧭','Faol agentlar',num(K.activeAgents.value),exDelta(K.activeAgents)+prevTxt(K.activeAgents),'agents')+
+     kcard('','➕','Yangi mijozlar',num(K.newClients.value),exDelta(K.newClients)+prevTxt(K.newClients),'clients:new')+
+     kcard('','👣','Tashriflar',num(K.visits.value),exDelta(K.visits)+prevTxt(K.visits),'reports')+
    '</div>'+
+   '<div class="card"><div class="card-h"><div><h3>'+ic('trend')+' Savdo</h3><div class="stat-strip" style="margin-top:8px"><div><b style="font-size:28px">'+usd(K.realization.value)+'</b>'+(K.realization.delta&&K.realization.delta.kind==='pct'?'<span class="pill-badge'+(K.realization.delta.pct<0?' o':'')+'">'+(K.realization.delta.pct>=0?'+':'')+K.realization.delta.pct+'%</span>':'')+'<small>'+esc(r.label)+' realizatsiya · yig‘ilgan '+usd(coll.value)+'</small></div></div></div>'+
+     '<div class="acts"><div class="seg" id="exGrp">'+groups.map(function(g){return '<button data-g="'+g[0]+'" class="'+(EX.group===g[0]?'on':'')+'">'+g[1]+'</button>'}).join('')+'</div><button class="round-btn" data-go="reports" title="Hisobotga o‘tish">'+ic('out','sm')+'</button></div></div>'+
+     legend([['Realizatsiya',C.orange],['Yig‘ilgan pul',C.forest]])+'<div style="margin-top:8px">'+areaChart(d.series,['realizationUsd','paymentsUsd'],[C.orange,C.forest],usd,['Realizatsiya','Yig‘ilgan pul'])+'</div></div>'+
    '<div class="grid g-main">'+
-     '<div class="card"><div class="card-h"><h3>'+ic('chart')+' Agentlar samaradorligi</h3>'+legend([['Realizatsiya','#2563EB'],['Yig‘ilgan pul','#16A34A']])+'</div>'+
-       (ag.length?ag.map(function(a){return '<div class="hbar" data-agent="'+a.agentId+'"><span class="nm">'+esc(a.agent)+'</span><div style="display:grid;gap:4px"><div class="track"><i style="width:'+(Math.max(0,a.realizationUsd)/amax*100)+'%;background:#2563EB"></i></div><div class="track"><i style="width:'+(a.paymentsUsd/amax*100)+'%;background:#16A34A"></i></div></div><b>'+usd(a.realizationUsd)+' <span class="muted">/ '+usd(a.paymentsUsd)+(a.collectionPct!=null?' · '+Math.round(a.collectionPct)+'%':'')+'</span></b></div>'}).join(''):emptyState('Bu davrda agent faoliyati yo‘q','compass'))+'</div>'+
-     '<div class="card"><div class="card-h"><h3>'+ic('coins')+' Pul yig‘ish tarkibi</h3></div>'+
-       (c.cashUsd||c.cashUzsAsUsd||c.cardUsd?donut([['Naqd dollar',c.cashUsd,'#16A34A',usd(c.cashUsd)],['Naqd so‘m',c.cashUzsAsUsd,'#F59E0B',uzs(c.cashUzs)],['Karta',c.cardUsd,'#2563EB',usd(c.cardUsd)]],usd(coll.value),'jami'):emptyState('Bu davrda to‘lov yo‘q','coins'))+
-       '<p class="hint" style="margin-top:12px">So‘m to‘lovlar to‘lov kunidagi kelishilgan kurs bilan USD’da hisoblangan; so‘m summasi alohida ko‘rsatiladi. Qaytarilgan tovar: '+usd(c.returnsUsd)+'.</p></div>'+
-   '</div>';
+     '<div class="card"><div class="card-h"><div><h3>'+ic('clock')+' Qarzdorlik yoshi</h3><small class="muted">To‘lanmagan tovar, berilgan kunidan beri (FIFO)</small></div><button class="round-btn" data-go="clients:debt" title="Qarzdor mijozlar">'+ic('out','sm')+'</button></div>'+
+       (atot?'<div class="aging">'+aging.map(function(b,i){return '<div class="col'+(i===aging.length-1?' last':'')+'" title="'+esc(b.label)+' kun: '+usd(b.usd)+'"><i style="height:'+Math.max(3,b.usd/amax*100)+'%"></i></div>'}).join('')+'</div><div class="aging-x">'+aging.map(function(b){return '<span>'+esc(b.label)+'</span>'}).join('')+'</div>'+
+       '<div class="list aging-rows">'+aging.map(function(b,i){return '<div class="li'+(i===aging.length-1?' last':'')+'"><i></i><div class="t"><b>'+esc(b.label)+' kun</b></div><span class="muted small">'+b.clients+' mijoz</span>&nbsp;&nbsp;<b class="num">'+usd(b.usd)+'</b></div>'}).join('')+'</div>':emptyState('To‘lanmagan qarz yo‘q','checkc'))+'</div>'+
+     '<div class="card c-forest"><div class="card-h"><h3>'+ic('target')+' Undiruv darajasi</h3></div>'+
+       '<div class="quota">'+quotaRing(rate)+'</div><p class="small" style="margin:8px 0 0;opacity:.85;text-align:center">'+esc(r.label)+': yig‘ilgan '+usd(coll.value)+' / realizatsiya '+usd(K.realization.value)+'</p></div>'+
+   '</div>'+
+   '<div class="grid g2">'+
+     '<div class="card"><div class="card-h"><h3>'+ic('map')+' Hududlar bo‘yicha savdo</h3><span class="muted small">'+usd(rtot)+'</span></div>'+
+       (regs.length?'<div class="segbar">'+regs.slice(0,8).map(function(x,i){return '<i style="flex:'+Math.max(x.realizationUsd,rtot*.02)+';background:'+RC[i%RC.length]+'" title="'+esc(x.name)+': '+usd(x.realizationUsd)+'"></i>'}).join('')+'</div>'+
+       '<div class="list seglist">'+regs.slice(0,8).map(function(x,i){return '<div class="li"><i style="background:'+RC[i%RC.length]+'"></i><div class="t"><b>'+esc(x.name)+'</b></div><span class="muted small">'+Math.round(x.realizationUsd/rtot*100)+'% · pul '+usd(x.paymentsUsd)+'</span>&nbsp;&nbsp;<b class="num">'+usd(x.realizationUsd)+'</b></div>'}).join('')+'</div>':emptyState('Bu davrda savdo yo‘q','map'))+'</div>'+
+     '<div class="card"><div class="card-h"><h3>'+ic('chart')+' Agentlar KPI reytingi</h3>'+legend([['Realizatsiya',C.pri],['Pul',C.forest]])+'</div>'+
+       (ag.length?ag.map(function(a,i){return '<div class="hbar" data-agent="'+a.agentId+'"><span class="nm">'+(i+1)+'. '+esc(a.agent)+'</span><div style="display:grid;gap:4px"><div class="track"><i style="width:'+(Math.max(0,a.realizationUsd)/gmax*100)+'%;background:'+C.pri+'"></i></div><div class="track"><i style="width:'+(a.paymentsUsd/gmax*100)+'%;background:'+C.forest+'"></i></div></div><b>'+usd(a.realizationUsd)+(a.collectionPct!=null?' <span class="pill '+(a.collectionPct>=70?'p-ok':a.collectionPct>=40?'p-warn':'p-bad')+'">'+Math.round(a.collectionPct)+'%</span>':'')+'</b></div>'}).join(''):emptyState('Bu davrda agent faoliyati yo‘q','compass'))+'</div>'+
+   '</div>'+
+   '<div class="grid g2">'+
+     '<div class="card"><div class="card-h"><h3>'+ic('receipt')+' Qarzdorlik dinamikasi</h3><span class="muted small">Har '+({hour:'soat',day:'kun',week:'hafta',month:'oy'}[d.group]||'davr')+' oxirida</span></div>'+areaChart(d.series,['debtUsd'],[C.ink],usd,['Umumiy qarz'])+'</div>'+
+     '<div class="card"><div class="card-h"><h3>'+ic('compass')+' GPS monitoring</h3><button class="round-btn" data-go="agents" title="GPS markazga o‘tish">'+ic('out','sm')+'</button></div><div class="mini-map" id="miniMap"></div><div id="miniAg"></div></div>'+
+   '</div>'+
+   '<div class="card flush"><div class="card-h"><h3>'+ic('list')+' So‘nggi muhim operatsiyalar</h3><div class="acts"><div class="seg" id="opsSeg">'+[['','Hammasi'],['in','Kirim'],['out','Chiqim'],['pending','Kutilmoqda']].map(function(x){return '<button data-f="'+x[0]+'" class="'+(OPS.f===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div><button class="round-btn" data-go="cash" title="Moliyaga o‘tish">'+ic('out','sm')+'</button></div></div><div class="tbl-wrap" id="opsBody" style="margin-top:10px"></div></div>';
   $('exGrp').onclick=function(e){var b=e.target.closest('button');if(!b)return;EX.group=b.dataset.g;store('rw-ex',JSON.stringify(EX));exRender(false)};
-  bindGo($('exBody'));bindAgentLinks($('exBody'));
+  $('opsSeg').onclick=function(e){var b=e.target.closest('button');if(!b)return;OPS.f=b.dataset.f;$('opsSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});renderOps()};
+  $('exBody').querySelectorAll('[role=button][data-go]').forEach(function(el){el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}})});
+  bindGo($('exBody'));bindAgentLinks($('exBody'));renderOps();miniMap();
+  if($('calCard')){$('calCard').innerHTML=calendarHtml(d.calendar);bindSide()}
 }
-function homeLive(d){
-  var s=d.summary,c=d.cash;
-  var overdue=d.clients.filter(function(x){return x.age==='red'&&!x.blacklisted}).sort(function(a,b){return (b.days||0)-(a.days||0)});
+function quotaRing(p){
+  var v=p==null?0:Math.min(100,p),R=58,L=2*Math.PI*R,off=L*(1-v/100);
+  return '<svg viewBox="0 0 150 150" role="img" aria-label="Undiruv '+(p==null?'—':p+'%')+'"><circle cx="75" cy="75" r="'+R+'" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="12"/>'+
+    '<circle cx="75" cy="75" r="'+R+'" fill="none" stroke="'+C.yellow+'" stroke-width="12" stroke-linecap="round" stroke-dasharray="'+L+'" stroke-dashoffset="'+off+'" transform="rotate(-90 75 75)" style="transition:stroke-dashoffset .8s var(--ease)"/>'+
+    '<text x="75" y="80" text-anchor="middle" font-size="30" font-weight="600" fill="#fff">'+(p==null?'—':p+'%')+'</text><text x="75" y="100" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.75)">undirildi</text></svg>';
+}
+function renderOps(){
+  var el=$('opsBody');if(!el||!S.dash)return;
+  var ST={pending:['Kutilmoqda','p-warn'],accepted:['Qabul qilindi','p-ok'],rejected:['Rad etildi','p-bad'],expense:['Chiqim','p-bad']};
+  var rows=S.dash.transactions.filter(function(t){if(OPS.f==='in')return t.type==='handover';if(OPS.f==='out')return t.type==='expense';if(OPS.f==='pending')return t.state==='pending';return true}).slice(0,8);
+  el.innerHTML=rows.length?'<table class="ops"><thead><tr><th>Sana</th><th>Operatsiya</th><th>Kim</th><th class="right">Summa</th><th>Holat</th></tr></thead><tbody>'+rows.map(function(t){var h=t.type==='handover',st=ST[t.state]||[esc(t.state),''];
+    return '<tr><td class="num">'+dt(t.acceptedTs||t.ts)+'</td><td>'+(h?ic('in','sm')+' Kassaga topshiriq':ic('out','sm')+' '+esc(t.category))+(h&&t.amountUzs?' <small class="muted">'+uzs(t.amountUzs)+'</small>':'')+'</td><td><b>'+esc(h?t.agent:(t.recipient||'—'))+'</b>'+(t.cashier?'<br><small class="muted">'+esc(t.cashier)+'</small>':'')+'</td><td class="right num '+(h?(t.state==='accepted'?'ok':''):'bad')+'">'+(h?'+':'−')+usd(t.amountUsd)+'</td><td>'+pill('<span class="dot"></span>'+st[0],st[1])+'</td></tr>'}).join('')+'</tbody></table>':emptyState('Operatsiya yo‘q','list');
+}
+function miniMap(){
+  var el=$('miniMap');if(!el||!window.L)return;
+  if(S.maps.mini){try{S.maps.mini.remove()}catch(e){}}
+  var m=L.map(el,{zoomControl:false,attributionControl:false,dragging:true,scrollWheelZoom:false}).setView([40.45,71.6],9);
+  L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:19}).addTo(m);S.maps.mini=m;
+  var pts=[];S.dash.agents.forEach(function(a){if(a.lat==null)return;pts.push([a.lat,a.lon]);L.marker([a.lat,a.lon],{icon:agentIcon(a)}).addTo(m).bindTooltip(esc(a.name)+' · '+(a.lastGpsTs?ago(a.lastGpsTs):'GPS yo‘q')).on('click',function(){GPS.agent=a.id;gpsSave();location.hash='agents'})});
+  if(pts.length)m.fitBounds(pts,{padding:[30,30],maxZoom:13});setTimeout(function(){m.invalidateSize()},80);
+  var by={active:0,late:0,offline:0};S.dash.agents.forEach(function(a){by[a.status]=(by[a.status]||0)+1});
+  var stale=S.dash.agents.filter(function(a){return a.shiftOpen&&a.lastGpsTs&&Date.now()/1000-a.lastGpsTs>STALE}).length;
+  $('miniAg').innerHTML='<div class="actions">'+pill('<span class="dot"></span>Faol '+by.active,'p-ok')+pill('<span class="dot"></span>Kechikkan '+by.late,'p-warn')+pill('Yopiq '+by.offline)+(stale?pill(ic('alert','sm')+' GPS eskirgan: '+stale,'p-bad'):'')+'</div>';
+}
+/* O'ng panel (1816 Activity/Calendar): kassa, kalendar, diqqat, jonli lenta — filtrdan qat'i nazar hozirgi holat */
+function homeSide(d){
+  var s=d.summary,c=d.cash,cal=S.ex&&S.ex.calendar;
+  var overdue=d.clients.filter(function(x){return x.age==='red'&&!x.blacklisted});
   var pend=d.transactions.filter(function(t){return t.type==='handover'&&t.state==='pending'});
   var alerts='';
-  if(overdue.length)alerts+='<div class="alert r" data-go="clients:red"><div class="tone">'+ic('clock')+'</div><div><b>'+overdue.length+' ta mijozga 5+ kun tashrif yo‘q</b><small>Eng uzog‘i: '+esc(overdue[0].name)+' · '+(overdue[0].days||0)+' kun</small></div></div>';
-  if(pend.length)alerts+='<div class="alert y" data-go="cash"><div class="tone">'+ic('hourglass')+'</div><div><b>'+pend.length+' ta topshiriq kassir tasdig‘ini kutmoqda</b><small>Jami '+usd(s.pendingUsd)+'</small></div></div>';
-  if(d.warehouse.newOrders)alerts+='<div class="alert b" data-go="warehouse"><div class="tone">'+ic('box')+'</div><div><b>'+d.warehouse.newOrders+' ta yangi buyurtma</b><small>Ochiq: '+d.warehouse.openOrders+(d.warehouse.missingProducts?' · katalogda yo‘q: '+d.warehouse.missingProducts:'')+'</small></div></div>';
+  if(overdue.length)alerts+='<div class="alert r" data-go="clients:red"><div class="tone">'+ic('clock')+'</div><div><b>'+overdue.length+' mijozga 5+ kun tashrif yo‘q</b><small>Qizil — uzoq vaqt tashrif bo‘lmagan</small></div></div>';
+  if(pend.length)alerts+='<div class="alert y" data-go="cash"><div class="tone">'+ic('hourglass')+'</div><div><b>'+pend.length+' topshiriq tasdiq kutmoqda</b><small>Jami '+usd(s.pendingUsd)+'</small></div></div>';
+  if(d.warehouse.newOrders)alerts+='<div class="alert b" data-go="warehouse"><div class="tone">'+ic('box')+'</div><div><b>'+d.warehouse.newOrders+' yangi buyurtma</b><small>Ochiq: '+d.warehouse.openOrders+'</small></div></div>';
   if(!alerts)alerts=emptyState('Diqqat talab qiladigan holat yo‘q','checkc');
-  var cnt={fresh:0,yellow:0,red:0,scheduled:0,unknown:0};d.clients.forEach(function(x){cnt[x.age]=(cnt[x.age]||0)+1});
-  var parts=[['0–2 kun',cnt.fresh,'#16A34A'],['3–4 kun',cnt.yellow,'#F59E0B'],['5+ kun',cnt.red,'#DC2626'],['Rejada',cnt.scheduled,'#2563EB'],['Noma’lum',cnt.unknown,'#94A3B8']];
-  var agents=d.agents.slice().sort(function(a,b){return (b.shiftOpen-a.shiftOpen)||(b.done-a.done)||a.name.localeCompare(b.name)});
-  var maxDone=Math.max.apply(null,agents.map(function(a){return a.done}).concat([1]));
-  var rep={};(d.reports.today.agents||[]).forEach(function(r){rep[r.agentId]=r});
-  var agentCard=function(a){var st=AG_ST[a.status]||AG_ST.offline,r=rep[a.id]||{};
-    return '<div class="agent-card" data-agent="'+a.id+'"><div class="row"><span class="ring" style="--ring:'+st[2]+';--p:'+Math.round(a.done/maxDone*100)+'%">'+avatar(a.name,a.photoUrl)+'</span><div><b>'+esc(a.name)+'</b><small>'+(a.shiftOpen?'Smena '+hm(a.shiftStart)+' dan':'Smena yopiq')+' · '+(a.lastGpsTs?ago(a.lastGpsTs):'GPS yo‘q')+'</small></div>'+pill('<span class="dot"></span>'+st[0],st[1])+'</div>'+
-      '<div class="stats"><div><b>'+a.done+'</b><small>Tashrif</small></div><div><b>'+usd(r.deliveredUsd||0)+'</b><small>Tovar</small></div><div><b>'+usd(r.paymentsUsd||0)+'</b><small>To‘lov</small></div></div></div>'};
-  var debtors=d.clients.filter(function(x){return x.debtUsd>0}).sort(function(a,b){return b.debtUsd-a.debtUsd}).slice(0,7);
-  return '<div class="grid g-main" style="margin-bottom:16px">'+
-     '<div class="card hero"><div style="position:relative"><small>'+ic('wallet','sm')+' Umumiy kassa qoldig‘i</small><b class="big">'+usd(c.balanceUsd)+'</b><div class="muted small">Naqd va karta, USD ekvivalentida · 7 kunda sof '+usd(c.netWeekUsd)+'</div></div>'+
-       '<div class="hero-stats"><div><small>Bugun qabul</small><b>'+usd(c.acceptedTodayUsd)+'</b></div><div><small>Bugun xarajat</small><b>'+usd(c.expensesTodayUsd)+'</b></div><div style="cursor:pointer" data-go="cash"><small>Tasdiq kutmoqda</small><b>'+usd(s.pendingUsd)+' <span class="muted small">· '+s.pendingCount+'</span></b></div></div></div>'+
-     '<div class="card"><div class="card-h"><h3>'+ic('alert')+' Diqqat talab qiladi</h3></div>'+alerts+'<div class="card-h" style="margin:16px 0 4px"><h3>'+ic('bell')+' Jonli lenta</h3></div><div class="list" id="feed"></div></div>'+
-   '</div>'+
-   '<div class="grid g-main" style="margin-bottom:16px">'+
-     '<div class="card"><div class="card-h"><h3>'+ic('compass')+' Agentlar bugun</h3><a data-go="agents">Xaritada ›</a></div><div class="agent-grid">'+(agents.length?agents.map(agentCard).join(''):emptyState('Agent yo‘q','users'))+'</div></div>'+
-     '<div class="card"><div class="card-h"><h3>'+ic('store')+' Mijozlar holati</h3><a data-go="clients">Barchasi ›</a></div>'+donut(parts,num(d.clients.length),'mijoz')+'<p class="hint" style="margin-top:12px">Oxirgi tashrif yoki tovar berilganidan beri o‘tgan kun bo‘yicha.</p></div>'+
-   '</div>'+
-   '<div class="card"><div class="card-h"><h3>'+ic('receipt')+' Eng katta qarzdorlar</h3><a data-go="clients:debt">Barchasi ›</a></div><div class="list">'+(debtors.length?debtors.map(function(x){return '<div class="li click" data-client="'+x.id+'">'+(x.thumbUrl?'<span class="av sq" style="background-image:url(\''+esc(x.thumbUrl)+'\')"></span>':avatar(x.name,'','sq'))+'<div class="t"><b>'+esc(x.name)+'</b><small>'+esc(x.agent)+(x.region?' · '+esc(x.region):'')+(x.days!=null?' · '+x.days+' kun oldin':'')+'</small></div><b class="num bad">'+usd(x.debtUsd)+'</b></div>'}).join(''):emptyState('Qarzdor yo‘q','checkc'))+'</div></div>';
+  return '<div class="card hero"><div style="position:relative"><small>'+ic('wallet','sm')+' Umumiy kassa qoldig‘i</small><b class="big">'+usd(c.balanceUsd)+'</b><div class="muted small">Naqd va karta, USD ekvivalentida</div></div>'+
+      '<div class="hero-stats" style="grid-template-columns:1fr 1fr"><div><small>Bugun qabul</small><b>'+usd(c.acceptedTodayUsd)+'</b></div><div><small>Bugun xarajat</small><b>'+usd(c.expensesTodayUsd)+'</b></div></div></div>'+
+    '<div class="card" id="calCard">'+calendarHtml(cal)+'</div>'+
+    '<div class="card"><div class="card-h"><h3>'+ic('alert')+' Diqqat</h3></div>'+alerts+'</div>'+
+    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Jonli lenta</h3><span class="live" style="padding:4px 9px"><i></i>30 s</span></div><div class="list" id="feed"></div></div>';
+}
+function calendarHtml(cal){
+  if(!cal)return '<div class="card-h"><h3>'+ic('calendar')+' Kalendar</h3></div><div class="skel" style="height:220px;border:0"></div>';
+  var MN=['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentyabr','Oktyabr','Noyabr','Dekabr'];
+  var vals=Object.keys(cal.values).map(function(k){return cal.values[k].realizationUsd}),max=Math.max.apply(null,vals.concat([0]));
+  var t=today(),ym=cal.year+'-'+String(cal.month).padStart(2,'0'),sel=EX.period==='custom'&&EX.from===EX.to?EX.from:(EX.period==='today'?t:'');
+  var html='<div class="cal-head"><b>'+ic('calendar')+' '+MN[cal.month-1]+' '+cal.year+'</b><span class="muted small">kunlik realizatsiya</span></div><div class="cal">'+['Du','Se','Ch','Pa','Ju','Sh','Ya'].map(function(x){return '<span>'+x+'</span>'}).join('');
+  for(var i=0;i<cal.firstWeekday;i++)html+='<span></span>';
+  for(var dd=1;dd<=cal.days;dd++){var key=ym+'-'+String(dd).padStart(2,'0'),v=(cal.values[dd]||{}).realizationUsd||0,lv=v<=0?0:max?Math.ceil(v/max*3):0;
+    html+='<button data-day="'+key+'" class="'+(lv?'h'+lv:'')+(key===t?' today':'')+(key===sel?' sel':'')+'"'+(key>t?' disabled':'')+' title="'+key+(v?': '+usd(v):'')+'">'+dd+'</button>'}
+  return html+'</div><p class="hint" style="margin-top:10px">Kunni bosing — dashboard o‘sha kun bo‘yicha ko‘rsatiladi.</p>';
+}
+function bindSide(){
+  var side=$('dashSide');if(!side)return;bindGo(side);renderFeed();
+  side.querySelectorAll('[data-day]').forEach(function(b){b.onclick=function(){EX.period='custom';EX.from=EX.to=b.dataset.day;store('rw-ex',JSON.stringify(EX));pageHome($('page'))}});
 }
 function agentReportTable(rows){
   if(!rows||!rows.length)return '<div class="empty">Agentlar yo‘q</div>';
@@ -528,7 +593,7 @@ function pageAgents(page){
      '<div class="list" id="gpsList"></div></div>'+
    '<div class="gps-map"><div class="map" id="agMap"></div>'+
      '<div class="map-legend"><label><input type="checkbox" id="gpsCl"'+(GPS.clients?' checked':'')+'> Mijozlar</label>'+
-     [['#16A34A','0–2 kun'],['#F59E0B','3–4 kun'],['#DC2626','5+ kun'],['#2563EB','Rejada'],['#94A3B8','Noma’lum']].map(function(x){return '<span><i style="background:'+x[0]+'"></i>'+x[1]+'</span>'}).join('')+'</div></div>'+
+     [[C.forest,'0–2 kun'],[C.yellow,'3–4 kun'],[C.orange,'5+ kun'],[C.pri,'Rejada'],[C.gray,'Noma’lum']].map(function(x){return '<span><i style="background:'+x[0]+'"></i>'+x[1]+'</span>'}).join('')+'</div></div>'+
    '<div class="card gps-detail" id="gpsDetail"></div></div>';
   $('gpsQ').oninput=debounce(function(){GPS.q=this.value;gpsSave();gpsListRender()},150);
   $('gpsSt').onclick=function(e){var b=e.target.closest('button');if(!b)return;GPS.status=b.dataset.s;gpsSave();$('gpsSt').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});gpsListRender();gpsMarkers(true)};
@@ -570,11 +635,11 @@ function gpsClientLayer(rebuild){
   if(!GPS.clients)return;
   var grp=window.L&&L.markerClusterGroup?L.markerClusterGroup({showCoverageOnHover:false,maxClusterRadius:46,spiderfyOnMaxZoom:true,
     iconCreateFunction:function(cl){var ms=cl.getAllChildMarkers(),n=ms.length,c={fresh:0,yellow:0,red:0};ms.forEach(function(x){c[x.options.age]=(c[x.options.age]||0)+1});
-      var col=c.red?'#DC2626':c.yellow?'#F59E0B':'#16A34A',sz=n<10?34:n<50?40:48;
+      var col=c.red?C.orange:c.yellow?C.yellow:C.forest,sz=n<10?34:n<50?40:48;
       return L.divIcon({className:'',html:'<div class="ccl" style="--c:'+col+';width:'+sz+'px;height:'+sz+'px"><b>'+n+'</b>'+(c.red?'<i>'+c.red+'</i>':'')+'</div>',iconSize:[sz,sz]})}}):L.layerGroup();
   S.dash.clients.forEach(function(c){
     if(c.lat==null)return;if(GPS.agent&&c.agentId!==GPS.agent)return;if(GPS.region&&(c.region||'').trim()!==GPS.region)return;
-    var col=c.blacklisted?'#0F172A':(AGE[c.age]||AGE.unknown)[2];
+    var col=c.blacklisted?C.ink:(AGE[c.age]||AGE.unknown)[2];
     grp.addLayer(L.marker([c.lat,c.lon],{age:c.age,icon:L.divIcon({className:'',html:'<div class="cdot" style="background:'+col+'"></div>',iconSize:[14,14],iconAnchor:[7,7]})})
       .bindTooltip(esc(c.name)+' · '+(AGE[c.age]||AGE.unknown)[0]+(c.debtUsd>0?' · qarz '+usd(c.debtUsd):'')).on('click',function(){openClient(c.id)}));
   });
@@ -589,7 +654,7 @@ async function gpsDetail(){
     el.innerHTML='<div class="card-h"><h3>'+ic('compass')+' Umumiy holat</h3>'+(GPS.region?pill(esc(GPS.region),'p-pri'):'')+'</div>'+
      '<div class="grid g3" style="gap:8px;margin-bottom:14px"><div class="mini"><small>Faol</small><b class="ok">'+by.active+'</b></div><div class="mini"><small>Kechikkan</small><b class="warn">'+by.late+'</b></div><div class="mini"><small>Yopiq</small><b>'+by.offline+'</b></div></div>'+
      (stale.length?'<div class="banner">'+ic('alert','sm')+' '+stale.length+' agentdan GPS kechikmoqda: '+stale.map(function(a){return esc(a.name)+' ('+ago(a.lastGpsTs)+')'}).join(', ')+'</div>':'')+
-     '<div class="card-h" style="margin-top:6px"><h3>'+ic('store')+' Mijozlar ('+num(cl.length)+')</h3></div>'+donut([['0–2 kun',cnt.fresh,'#16A34A'],['3–4 kun',cnt.yellow,'#F59E0B'],['5+ kun',cnt.red,'#DC2626'],['Rejada',cnt.scheduled,'#2563EB'],['Noma’lum',cnt.unknown,'#94A3B8']],num(cl.length),'mijoz')+
+     '<div class="card-h" style="margin-top:6px"><h3>'+ic('store')+' Mijozlar ('+num(cl.length)+')</h3></div>'+donut([['0–2 kun',cnt.fresh,C.forest],['3–4 kun',cnt.yellow,C.yellow],['5+ kun',cnt.red,C.orange],['Rejada',cnt.scheduled,C.pri],['Noma’lum',cnt.unknown,C.gray]],num(cl.length),'mijoz')+
      '<p class="hint" style="margin-top:12px">Agentni tanlang: uning bugungi marshruti, tashriflari, savdosi va smena vaqtlari shu yerda chiqadi. GPS Telegram jonli lokatsiyasidan keladi va panel har 30 soniyada yangilanadi.</p>';
     if(S.gpsLayers&&S.gpsLayers.route)S.gpsLayers.route.clearLayers();return;
   }
@@ -614,9 +679,9 @@ async function gpsDetail(){
   $('gpsShift').innerHTML=dd.shifts.length?dd.shifts.map(function(sh){return hm(sh.start)+' – '+(sh.end?hm(sh.end):'<span class="ok">davom etmoqda</span>')}).join('<br>'):'<span class="muted">Bu kunda smena yo‘q</span>';
   var lay=S.gpsLayers&&S.gpsLayers.route,m=S.maps.agents;if(lay)lay.clearLayers();var bounds=[],km=0;
   dd.route.segments.forEach(function(sg,i){var pts=sg.map(function(p){return [p.lat,p.lon]});bounds=bounds.concat(pts);for(var j=1;j<sg.length;j++)km+=hav(sg[j-1],sg[j]);
-    if(lay){if(pts.length>1)L.polyline(pts,{color:'#2563EB',weight:4,opacity:.85}).addTo(lay).bindTooltip(hm(sg[0].ts)+' – '+hm(sg[sg.length-1].ts));
-      L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:'#16A34A',fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Boshlanish '+hm(sg[0].ts));
-      L.circleMarker(pts[pts.length-1],{radius:5,color:'#fff',fillColor:'#DC2626',fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Oxirgi nuqta '+hm(sg[sg.length-1].ts))}});
+    if(lay){if(pts.length>1)L.polyline(pts,{color:C.pri,weight:4,opacity:.85}).addTo(lay).bindTooltip(hm(sg[0].ts)+' – '+hm(sg[sg.length-1].ts));
+      L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:C.forest,fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Boshlanish '+hm(sg[0].ts));
+      L.circleMarker(pts[pts.length-1],{radius:5,color:'#fff',fillColor:C.orange,fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Oxirgi nuqta '+hm(sg[sg.length-1].ts))}});
   dd.visits.forEach(function(v){if(v.lat==null||!lay)return;bounds.push([v.lat,v.lon]);L.marker([v.lat,v.lon],{zIndexOffset:900,icon:L.divIcon({className:'',html:'<div class="vpin">'+ic('check','sm')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(lay).bindTooltip('Tashrif: '+esc(v.name)+' · '+hm(v.ts)).on('click',function(){openClient(v.clientId)})});
   if(m&&bounds.length)m.fitBounds(bounds.concat(a.lat!=null&&isToday?[[a.lat,a.lon]]:[]),{padding:[40,40],maxZoom:15});
   $('gpsInfo').innerHTML=num(dd.route.gpsTotal)+' GPS nuqta · ~'+num(km,1)+' km · '+dd.visitsTotal+' tashrif · '+dd.newClientsTotal+' yangi mijoz';
@@ -681,7 +746,7 @@ function renderAgent(a){
     if(!await confirmBox('Agentni bloklash','<p><b>'+esc(a.name)+'</b> botga kira olmaydi. Tarix saqlanadi.</p>'+(p.warning?'<p class="bad">'+esc(p.warning)+'</p>':''),'Bloklash',true))return;
     var r=await run(function(){return api('agent_deactivate_commit',{agentId:a.id,confirm:true})},'Agent bloklandi');if(r){S.dash=null;renderAgent(r.agent)}};
 }
-var RT_ST={visit:['#2563EB','Tashrif'],newc:['#16A34A','Yangi mijoz']};
+var RT_ST={visit:[C.pri,'Tashrif'],newc:[C.forest,'Yangi mijoz']};
 async function agentRouteMap(a){
   var seg=$('rtSeg'),day=$('rtDay');
   seg.onclick=function(e){var b=e.target.closest('button');if(!b)return;seg.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});day.hidden=b.dataset.r!=='day';drawRoute(a,b.dataset.r)};
@@ -705,7 +770,7 @@ async function drawRoute(a,mode){
     var r=await api('route',{agentId:a.id}).catch(function(e){info.textContent=e.message;return null});
     if(!r||S.maps.drawer!==m)return;
     var pts=r.points.map(function(p){return [p.lat,p.lon]});
-    if(pts.length>1){L.polyline(pts,{color:'#2563EB',weight:4,opacity:.85}).addTo(m);L.circleMarker(pts[0],{radius:6,color:'#fff',fillColor:'#16A34A',fillOpacity:1,weight:2}).addTo(m).bindTooltip('Boshlanish '+hm(r.points[0].ts));m.fitBounds(pts,{padding:[24,24]})}
+    if(pts.length>1){L.polyline(pts,{color:C.pri,weight:4,opacity:.85}).addTo(m);L.circleMarker(pts[0],{radius:6,color:'#fff',fillColor:C.forest,fillOpacity:1,weight:2}).addTo(m).bindTooltip('Boshlanish '+hm(r.points[0].ts));m.fitBounds(pts,{padding:[24,24]})}
     info.textContent=r.start?('Oxirgi smena: '+dt(r.start)+(r.end?' – '+hm(r.end):' (ochiq)')+' · '+pts.length+' GPS nuqta'):'Smena tarixi yo‘q';
     return;
   }
@@ -713,17 +778,17 @@ async function drawRoute(a,mode){
   if(mode==='day'){args.from=args.to=$('rtDay').value||today()}
   var d=await api('agent_period_detail',args).catch(function(e){info.textContent=e.message;return null});
   if(!d||S.maps.drawer!==m)return;
-  var colors=['#2563EB','#7C3AED','#0891B2','#EA580C','#0D9488','#E11D48'];
+  var colors=[C.pri,C.violet,C.cyan,C.orange,C.forest,C.orange];
   d.route.segments.forEach(function(sg,i){var pts=sg.map(function(p){return [p.lat,p.lon]});bounds=bounds.concat(pts);
     if(pts.length>1)L.polyline(pts,{color:colors[i%colors.length],weight:4,opacity:.85}).addTo(m).bindTooltip(hm(sg[0].ts)+' – '+hm(sg[sg.length-1].ts));
-    L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:'#16A34A',fillOpacity:1,weight:2}).addTo(m).bindTooltip('Boshlanish '+dt(sg[0].ts))});
+    L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:C.forest,fillOpacity:1,weight:2}).addTo(m).bindTooltip('Boshlanish '+dt(sg[0].ts))});
   var dot=function(x,kind){if(x.lat==null)return;bounds.push([x.lat,x.lon]);
     L.circleMarker([x.lat,x.lon],{radius:7,color:'#fff',weight:2,fillColor:RT_ST[kind][0],fillOpacity:.95}).addTo(m).bindTooltip(RT_ST[kind][1]+': '+esc(x.name)+' · '+hm(x.ts)).on('click',function(){openClient(x.clientId||x.id)})};
   d.visits.forEach(function(v){dot(v,'visit')});d.newClients.forEach(function(c){dot(c,'newc')});
   if(bounds.length)m.fitBounds(bounds,{padding:[24,24],maxZoom:16});
   var km=0;d.route.segments.forEach(function(sg){for(var i=1;i<sg.length;i++)km+=hav(sg[i-1],sg[i])});
   var lbl=String(d.label||'').split(' – ');info.innerHTML=esc(lbl.length===2&&lbl[0]===lbl[1]?lbl[0]:d.label)+' · '+num(d.route.gpsTotal)+' GPS nuqta'+(d.route.sampled?' ('+d.route.gpsShown+' tasi chizildi)':'')+' · ~'+num(km,1)+' km · '+d.visitsTotal+' tashrif · '+d.newClientsTotal+' yangi mijoz'+
-    ' &nbsp; '+legend([['Tashrif','#2563EB'],['Yangi mijoz','#16A34A']]).replace('class="legend"','class="legend" style="display:inline-flex"');
+    ' &nbsp; '+legend([['Tashrif',C.pri],['Yangi mijoz',C.forest]]).replace('class="legend"','class="legend" style="display:inline-flex"');
   var ev=d.visits.map(function(v){return {ts:v.ts,id:v.clientId,t:ic('walk','sm')+' '+(VISIT[v.status]||v.status||'Tashrif'),n:v.name,note:v.note}}).concat(d.newClients.map(function(c){return {ts:c.ts,id:c.id,t:ic('userplus','sm')+' Yangi mijoz',n:c.name,note:c.address}})).sort(function(x,y){return y.ts-x.ts});
   list.innerHTML=ev.length?'<div class="list" style="margin-top:10px;max-height:320px;overflow:auto">'+ev.map(function(e){return '<div class="li click" data-client="'+e.id+'"><div class="t"><b>'+esc(e.n)+'</b><small>'+e.t+' · '+dt(e.ts)+(e.note?' · '+esc(e.note):'')+'</small></div></div>'}).join('')+'</div>':'<div class="muted small" style="padding-top:8px">Bu davrda tashrif yoki yangi mijoz yo‘q.</div>';
   bindClientLinks(list);
@@ -902,7 +967,7 @@ function cashList(){
    '</tbody></table></div>'+(rows.length>400?'<div class="pager">Birinchi 400 ta ko‘rsatildi</div>':'');
   var cat={};rows.forEach(function(t){if(t.type==='expense')cat[t.category]=(cat[t.category]||0)+t.amountUsd});
   var list=Object.keys(cat).map(function(k){return [k,cat[k]]}).sort(function(a,b){return b[1]-a[1]}),total=list.reduce(function(s,x){return s+x[1]},0);
-  var PAL=['#2563EB','#7C3AED','#0891B2','#F59E0B','#DC2626','#16A34A','#DB2777','#94A3B8'];
+  var PAL=[C.pri,C.violet,C.cyan,C.yellow,C.orange,C.forest,C.orange,C.gray];
   $('ksBrk').innerHTML=list.length?donut(list.slice(0,7).concat(list.length>7?[['Boshqa',list.slice(7).reduce(function(a,x){return a+x[1]},0)]]:[]).map(function(x,i){return [x[0],Math.round(x[1]*100)/100,PAL[i],usd(x[1])]}),usd(total),'xarajat'):'<div class="empty">Bu davrda xarajat yo‘q</div>';
 }
 
@@ -929,10 +994,10 @@ async function pageReports(page,force){
      kpi('👣','Tashriflar',num(r.visits),'')+kpi('userplus','Yangi mijozlar',num(r.newClients),'')+
      kpi('⏱','Ish vaqti',num((r.workSeconds||0)/3600,1)+' soat',hours(r.workSeconds)+' · barcha agentlar')+kpi('🧭','Masofa',num(r.distanceKm,1)+' km','GPS bo‘yicha')+
    '</div>'+
-   '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Dinamika <span class="muted small">('+esc(r.seriesUnit||'')+')</span></h3>'+legend([['Realizatsiya','#2563EB'],['To‘lovlar','#16A34A']])+'</div>'+barChart(r.series,['deliveredUsd','paymentsUsd'],['#2563EB','#16A34A'],usd)+'</div>'+
+   '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Dinamika <span class="muted small">('+esc(r.seriesUnit||'')+')</span></h3>'+legend([['Realizatsiya',C.pri],['To‘lovlar',C.forest]])+'</div>'+barChart(r.series,['deliveredUsd','paymentsUsd'],[C.pri,C.forest],usd)+'</div>'+
    '<div class="card flush" style="margin-bottom:16px"><div class="card-h"><h3>Agentlar natijasi</h3></div><div class="tbl-wrap" style="margin-top:12px">'+agentReportTable(r.agents)+'</div></div>'+
    '<div class="grid g2">'+
-     '<div class="card flush"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3></div>'+(prod.length?'<div style="padding:16px 20px 4px">'+donut(prod.slice(0,6).map(function(p,i){return [p.name,Math.round(p.deliveredUsd*100)/100,['#2563EB','#7C3AED','#0891B2','#F59E0B','#16A34A','#DC2626'][i],usd(p.deliveredUsd)]}),usd(r.deliveredUsd),'realizatsiya')+'</div>':'')+'<div class="tbl-wrap" style="margin-top:12px">'+(prod.length?'<table><thead><tr><th>Mahsulot</th><th class="right">Dona</th><th class="right">Summa</th><th>Ulush</th></tr></thead><tbody>'+prod.map(function(p){return '<tr><td>'+esc(p.name)+'</td><td class="right num">'+num(p.deliveredQty)+'</td><td class="right num">'+usd(p.deliveredUsd)+'</td><td><div class="share"><i style="width:'+(p.sharePct||0)+'%"></i></div><small class="muted">'+(p.sharePct||0)+'%</small></td></tr>'}).join('')+'</tbody></table>':'<div class="empty">Bu davrda sotuv yo‘q</div>')+'</div></div>'+
+     '<div class="card flush"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3></div>'+(prod.length?'<div style="padding:16px 20px 4px">'+donut(prod.slice(0,6).map(function(p,i){return [p.name,Math.round(p.deliveredUsd*100)/100,[C.pri,C.violet,C.cyan,C.yellow,C.forest,C.orange][i],usd(p.deliveredUsd)]}),usd(r.deliveredUsd),'realizatsiya')+'</div>':'')+'<div class="tbl-wrap" style="margin-top:12px">'+(prod.length?'<table><thead><tr><th>Mahsulot</th><th class="right">Dona</th><th class="right">Summa</th><th>Ulush</th></tr></thead><tbody>'+prod.map(function(p){return '<tr><td>'+esc(p.name)+'</td><td class="right num">'+num(p.deliveredQty)+'</td><td class="right num">'+usd(p.deliveredUsd)+'</td><td><div class="share"><i style="width:'+(p.sharePct||0)+'%"></i></div><small class="muted">'+(p.sharePct||0)+'%</small></td></tr>'}).join('')+'</tbody></table>':'<div class="empty">Bu davrda sotuv yo‘q</div>')+'</div></div>'+
      '<div class="card"><div class="card-h"><h3>Kassa oqimi</h3></div><dl class="kv">'+
        '<dt>Naqd kirim</dt><dd class="num">'+uzs(cash.inCashUzs)+' · '+usd(cash.inCashUsd)+'</dd><dt>Karta kirim</dt><dd class="num">'+uzs(cash.inCardUzs)+' · '+usd(cash.inCardUsd)+'</dd>'+
        '<dt>Naqd chiqim</dt><dd class="num">'+uzs(cash.outCashUzs)+' · '+usd(cash.outCashUsd)+'</dd><dt>Karta chiqim</dt><dd class="num">'+uzs(cash.outCardUzs)+' · '+usd(cash.outCardUsd)+'</dd>'+
@@ -975,7 +1040,7 @@ function renderInsights(){
      kpi('🏪','Mijozlar',num(sm.clients),sm.rated+' baholangan · '+sm.prospects+' istiqbolli')+
    '</div>'+
    '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Mijozlar faolligi</h3><span class="muted small">Ball: faollik + to‘lov intizomi + o‘sish (0–100)</span></div>'+
-     '<div class="stack" style="margin-bottom:10px">'+[['active','#16A34A'],['low','#d98a06'],['passive','#e5384f']].map(function(g){return groups[g[0]]?'<i style="flex:'+groups[g[0]]+';background:'+g[1]+'"></i>':''}).join('')+'</div>'+
+     '<div class="stack" style="margin-bottom:10px">'+[['active',C.forest],['low','#d98a06'],['passive','#e5384f']].map(function(g){return groups[g[0]]?'<i style="flex:'+groups[g[0]]+';background:'+g[1]+'"></i>':''}).join('')+'</div>'+
      '<div class="actions">'+Object.keys(KGRP).map(function(k){return pill(KGRP[k][0]+' · '+(groups[k]||0),KGRP[k][1])}).join('')+
        [['new','Yangi'],['prospect','Istiqbolli'],['nobase','Asos yo‘q'],['insufficient','Ma’lumot kam'],['incomplete','Hisob to‘liq emas'],['blacklisted','Qora ro‘yxat']].map(function(x){return st[x[0]]?pill(x[1]+' · '+st[x[0]]):''}).join('')+'</div></div>'+
    '<div class="tabs" id="inTabs">'+tabs.map(function(t){return '<button data-t="'+t[0]+'" class="'+(IN.tab===t[0]?'on':'')+'">'+t[1]+' <span class="muted">'+t[2]+'</span></button>'}).join('')+'</div>'+

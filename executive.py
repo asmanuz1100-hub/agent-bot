@@ -169,6 +169,81 @@ def _debt_timeline(db, scope, points):
     return out
 
 
+AGING = ((0, 30, '0–30'), (31, 60, '31–60'), (61, 90, '61–90'), (91, None, '90+'))
+
+
+def _debt_aging(db, scope, as_of):
+    """Qarz yoshi (FIFO): to'lov va qaytarishlar eng eski yopilmagan tovar berishni yopadi.
+    Qolgan qism tovar berilgan kundan `as_of`gacha bo'lgan kunlar bo'yicha guruhlanadi.
+    Guruhlar yig'indisi = musbat qoldiqlar yig'indisi (umumiy qarz)."""
+    rows = db.execute("""SELECT e.client,e.ts,e.kind,e.amount_usd FROM events e JOIN clients c ON c.id=e.client
+        WHERE e.kind IN ('delivery','payment','return') AND e.ts<? ORDER BY e.client,e.ts,e.id""", (as_of,)).fetchall()
+    out = [{'label': b[2], 'minDays': b[0], 'maxDays': b[1], 'cents': 0, 'clients': set()} for b in AGING]
+    cur = None
+    queue = []   # [ts, qolgan sent]
+    credit = 0   # avans: keyingi tovar berishni yopadi
+
+    def flush(cid):
+        for ts, left in queue:
+            if left <= 0:
+                continue
+            days = max(0, (as_of - int(ts)) // DAY)
+            for b in out:
+                if days >= b['minDays'] and (b['maxDays'] is None or days <= b['maxDays']):
+                    b['cents'] += left
+                    b['clients'].add(cid)
+                    break
+    for r in rows:
+        cid = int(r['client'])
+        if cid not in scope.clients:
+            continue
+        if cid != cur:
+            if cur is not None:
+                flush(cur)
+            cur, queue, credit = cid, [], 0
+        cents = int(r['amount_usd'] or 0)
+        if r['kind'] == 'delivery':
+            use = min(credit, cents)
+            credit -= use
+            if cents - use > 0:
+                queue.append([int(r['ts']), cents - use])
+        else:
+            while cents > 0 and queue:
+                take = min(cents, queue[0][1])
+                queue[0][1] -= take
+                cents -= take
+                if queue[0][1] <= 0:
+                    queue.pop(0)
+            credit += cents
+    if cur is not None:
+        flush(cur)
+    return [{'label': b['label'], 'minDays': b['minDays'], 'maxDays': b['maxDays'],
+             'usd': _usd(b['cents']), 'clients': len(b['clients'])} for b in out]
+
+
+def _agents_cash(db, scope):
+    """Agentlardagi pul: dollar va so'm alohida (hech qachon qo'shilmaydi) va kassirda tasdiq kutayotgani."""
+    rows = db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()
+    out = {'cashUsd': 0, 'cashUzs': 0, 'pendingUsd': 0, 'pendingUzs': 0, 'agents': []}
+    for u in rows:
+        aid = int(u['id'])
+        if scope.agent is not None and aid != scope.agent:
+            continue
+        usd_c = core.cash_usd(db, aid)
+        som = core.cash_som(db, aid)
+        pend = db.execute("""SELECT COALESCE(SUM(CASE WHEN COALESCE(amount,0)=0 THEN amount_usd ELSE 0 END),0),
+            COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='pending'""", (aid,)).fetchone()
+        p_usd, p_uzs = int(pend[0] or 0), int(pend[1] or 0) // 100
+        out['cashUsd'] += usd_c; out['cashUzs'] += som; out['pendingUsd'] += p_usd; out['pendingUzs'] += p_uzs
+        if usd_c or som or p_usd or p_uzs:
+            out['agents'].append({'agentId': aid, 'agent': u['name'] or str(aid), 'cashUsd': _usd(usd_c), 'cashUzs': som,
+                                  'pendingUsd': _usd(p_usd), 'pendingUzs': p_uzs})
+    out['agents'].sort(key=lambda a: (-a['cashUsd'], -a['cashUzs'], a['agent']))
+    out['cashUsd'] = _usd(out['cashUsd']); out['pendingUsd'] = _usd(out['pendingUsd'])
+    out['regionApplies'] = False  # pul agentda turadi, hududga bog'lanmaydi
+    return out
+
+
 def _buckets(start, end, group):
     days = (end - start + DAY - 1) // DAY
     if group == 'auto':
@@ -261,6 +336,40 @@ def executive(db, period='today', date_from=None, date_to=None, agent=None, regi
                        'collectionPct': round(p * 100.0 / (d - r), 1) if d - r > 0 else None})
     agents.sort(key=lambda a: (-a['realizationUsd'], -a['paymentsUsd'], a['agent']))
 
+    # Hududlar bo'yicha savdo (tanlangan davr, mijoz hududi bo'yicha).
+    creg = {int(r['id']): r['region'] for r in db.execute('SELECT id,region FROM clients').fetchall()}
+    by_region = {}
+    for e in events:
+        if not scope.event_ok(e['agent'], e['client']) or e['client'] is None:
+            continue
+        raw = creg.get(int(e['client']))
+        if raw is None:
+            continue
+        key = region_key(raw) or ''
+        g = by_region.setdefault(key, {'key': key, 'name': (raw or '').strip() or 'Belgilanmagan', 'd': 0, 'r': 0, 'p': 0})
+        g[{'delivery': 'd', 'return': 'r', 'payment': 'p'}[e['kind']]] += int(e['amount_usd'] or 0)
+    region_sales = sorted(({'key': g['key'], 'name': g['name'], 'realizationUsd': _usd(g['d'] - g['r']), 'paymentsUsd': _usd(g['p'])}
+                           for g in by_region.values()), key=lambda x: (-x['realizationUsd'], x['name']))
+
+    # Oy kalendari (davr oxiri tushgan oy, kunma-kun realizatsiya va pul) — o'ng paneldagi kalendar uchun.
+    last = datetime.fromtimestamp(min(rng['end'], now + 1) - 1, TZ)
+    m0 = int(last.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
+    m1 = int((last.replace(day=1) + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
+    cal = {}
+    for e in db.execute("""SELECT agent,client,kind,amount_usd,ts FROM events
+            WHERE ts>=? AND ts<? AND kind IN ('delivery','return','payment')""", (m0, min(m1, now + 1))).fetchall():
+        if not scope.event_ok(e['agent'], e['client']):
+            continue
+        day = datetime.fromtimestamp(int(e['ts']), TZ).day
+        c = cal.setdefault(day, [0, 0])
+        if e['kind'] == 'payment':
+            c[1] += int(e['amount_usd'] or 0)
+        else:
+            c[0] += int(e['amount_usd'] or 0) * (1 if e['kind'] == 'delivery' else -1)
+    calendar = {'year': last.year, 'month': last.month, 'firstWeekday': datetime.fromtimestamp(m0, TZ).weekday(),
+                'days': (datetime.fromtimestamp(m1 - 1, TZ)).day,
+                'values': {str(k): {'realizationUsd': _usd(v[0]), 'paymentsUsd': _usd(v[1])} for k, v in cal.items()}}
+
     def kpi(key, cur_v, prev_v, money=True):
         return {'key': key, 'value': _usd(cur_v) if money else cur_v,
                 'prev': (_usd(prev_v) if money else prev_v) if prev_v is not None else None,
@@ -286,6 +395,8 @@ def executive(db, period='today', date_from=None, date_to=None, agent=None, regi
                         'cashUzsAsUsd': _usd(cur['paidCashUzsUsdCents']), 'cardUsd': _usd(cur['paidCardCents']),
                         'returnsUsd': _usd(cur['returnedCents']), 'grossDeliveredUsd': _usd(cur['deliveredCents'])},
         'series': series, 'agents': agents,
+        'debtAging': _debt_aging(db, scope, rng['end']), 'agentsCash': _agents_cash(db, scope),
+        'regionSales': region_sales, 'calendar': calendar,
         'options': {'agents': [{'id': k, 'name': v or str(k)} for k, v in sorted(names.items(), key=lambda kv: (kv[1] or '', kv[0]))],
                     'regions': [{'key': k, 'name': v} for k, v in sorted(regions.items(), key=lambda kv: kv[1])]},
     }

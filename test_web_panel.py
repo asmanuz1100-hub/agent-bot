@@ -98,16 +98,21 @@ class WebPanelDesignSystemTests(unittest.TestCase):
             return f.read()
 
     def test_spec_tokens_and_font(self):
+        # Design V2 palitrasi (1816/1817 referenslari): grafit navigatsiya, krem fon, ASMAN ko'k, semantik ranglar.
         css = self.read('app.css')
-        for token in ('--bg:#F8FAFC', '--card:#FFFFFF', '--pri:#2563EB', '--tx:#0F172A', '--mu:#64748B',
-                      '--line:#E2E8F0', '--ok:#16A34A', '--warn:#F59E0B', '--bad:#DC2626'):
+        for token in ('--nav:#191D23', '--bg:#F7F6F2', '--card:#FFFFFF', '--tx:#17221F', '--line:#E7E8E4',
+                      '--pri:#1F6BFF', '--forest:#246B57', '--yellow:#F3CF56', '--orange:#E46542'):
             self.assertIn(token, css)
+        self.assertIn(':root[data-theme="dark"]', css)
+        self.assertIn('prefers-reduced-motion', css)
         self.assertIn('family=Inter', self.read('index.html'))
 
     def test_light_theme_is_default_and_search_is_present(self):
         html = self.read('index.html')
         self.assertIn("getItem('rw-theme')||'light'", html)
         self.assertIn('id="gq"', html)
+        for el in ('id="rail"', 'id="railToggle"', 'id="nav"', 'id="railFeed"'):
+            self.assertIn(el, html)
 
     def test_navigation_uses_icons_not_emoji(self):
         js = self.read('app.js')
