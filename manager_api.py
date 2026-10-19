@@ -555,7 +555,9 @@ def dashboard(db, now=None):
     report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now),7*86400)
     report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now),30*86400)
     series=_daily_series(db,today,now,recent_visits)
-    total_debt=sum(int(v or 0) for v in debt_by_client.values())
+    # Qarz va avans alohida (Kassir va Tahlil bilan bir xil): avansdagi mijoz boshqalar qarzini kamaytirmaydi.
+    total_debt=sum(max(0,int(v or 0)) for v in debt_by_client.values())
+    total_advance=sum(max(0,-int(v or 0)) for v in debt_by_client.values())
     return {
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
         "warehouse":{"newOrders":int(db.execute("SELECT COUNT(*) FROM orders WHERE status='new'").fetchone()[0] or 0),
@@ -581,7 +583,7 @@ def dashboard(db, now=None):
                    "cashierExpensesTodayUsd":_usd(cash_expense_today),
                    "cashBalanceUsd":_usd(cash_balance),
                    "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0),
-                   "debtUsd":_usd(total_debt)},
+                   "debtUsd":_usd(total_debt),"advanceUsd":_usd(total_advance)},
         "reports":{"today":report_today,"week":report_week,"month":report_month,
                    "series":series}
     }
