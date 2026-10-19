@@ -53,13 +53,13 @@ Belgilar: ✅ tayyor · 🟡 qisman · ❌ yo‘q
 | Talab | Holat | Izoh |
 |---|---|---|
 | 6 ta KPI (realizatsiya, yig‘ilgan pul, qarz, faol agent, yangi mijoz, tashrif) | ✅ | real `dashboard` |
-| Oldingi davr bilan solishtirish, % | 🟡 | 3 ta KPI’da «kechaga nisbatan»; qolganlarida yo‘q |
-| Trend | 🟡 | 7 kunlik sparkline 3 ta KPI’da |
-| Kunlik / haftalik / oylik savdo | 🟡 | 7 kun bosh sahifada; hafta/oy `period_report`da |
+| Oldingi davr bilan solishtirish, % | ✅ Phase 2 | 6 ta KPI, teng oyna (bugun ↔ kecha shu soatgacha, oy ↔ o‘tgan oy shu kunlar) |
+| Trend | ✅ Phase 2 | realizatsiya, pul, qarz sparkline |
+| Kunlik / haftalik / oylik savdo | ✅ Phase 2 | soatlik/kunlik/haftalik/oylik guruhlash |
 | Pul yig‘ish dinamikasi | ✅ | `paymentsUsd` seriyasi |
-| Qarzdorlik dinamikasi | ❌ | tarixiy qarz seriyasi API’si yo‘q |
+| Qarzdorlik dinamikasi | ✅ Phase 2 | `executive` har bo‘lim oxiridagi musbat qoldiqlar |
 | Agentlar samaradorligi | ✅ | |
-| Filtrlar: sana, hudud, agent, valyuta, davr | ❌ | dashboardda filtr yo‘q (Hisobot/Tahlil’da davr va agent bor) |
+| Filtrlar: sana, hudud, agent, valyuta, davr | ✅ Phase 2 | davr: bugun/kecha/7/30/joriy oy/tanlangan/umumiy; valyuta faqat yig‘ilgan pulga (USD/UZS qo‘shilmaydi) |
 
 ### 4.2 GPS Control Center
 | Talab | Holat | Izoh |

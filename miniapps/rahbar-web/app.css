@@ -297,7 +297,8 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 
 /* Responsive: 1920 / 1440 / 1280 / 1024 / 768 / 390 */
 @media (min-width:1700px){.page{padding-left:36px;padding-right:36px}.g6-xl{grid-template-columns:repeat(6,minmax(0,1fr))}}
-@media (max-width:1440px){.g6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1360px){.g6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1600px){.g6 .kpi .tone{display:none}.g6 .kpi{padding:16px}}
 @media (max-width:1360px){.g-main{grid-template-columns:1fr}}
 @media (max-width:1180px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:1100px){.agents-layout{grid-template-columns:1fr;height:auto}.agents-layout .map{height:420px}.span2{grid-column:auto}.gsearch{width:min(320px,36vw)}}

@@ -15,6 +15,7 @@ import cashier_daily
 import customer_status as cs
 import manager_api
 import web_auth
+import executive
 import agent_api
 import analytics
 import cashier_api
@@ -3106,6 +3107,10 @@ def serve_webhook(db,base_url):
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':
                         data=manager_api.agent_detail(local,payload.get('agentId'))
+                    elif action=='executive':
+                        data=executive.executive(local,payload.get('period') or 'today',payload.get('from'),payload.get('to'),
+                                                 agent=payload.get('agentId'),region=payload.get('region') or None,
+                                                 group=payload.get('group') or 'auto')
                     elif action=='period_report':
                         data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
                     elif action=='agent_period_detail':
