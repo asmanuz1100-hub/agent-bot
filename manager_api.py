@@ -79,25 +79,79 @@ def _float_coord(lat, lon):
         return None, None
 
 
-def _cash_transactions(db, since):
+def cash_transactions(db,since,until=None):
+    """Kassa harakatlari (agentdan kirim, xarajat, agentga berilgan pul), yangisi birinchi."""
+    transactions = []
+    for h in _cash_transactions(db,since,until or 10**12):
+        transactions.append({
+            "id":int(h["id"]),"type":"handover",
+            "agent":h["agent_name"] or str(h["agent"]),"agentId":int(h["agent"]),
+            "cashier":h["cashier_name"] or (str(h["cashier"]) if h["cashier"] is not None else None),
+            "amountUsd":_usd(h["amount_usd"]),"amountUzs":_usd(h["amount"]),
+            "state":h["status"],"ts":int(h["ts"] or 0),
+            "acceptedTs":int(h["accepted_ts"] or 0) or None
+        })
+    for e in _cash_expenses(db,since,until or 10**12):
+        transactions.append({
+            "id":int(e["id"]),"type":"expense","state":"expense",
+            "cashier":e["cashier_name"] or str(e["cashier"]),
+            "amountUsd":_usd(e["amount_usd"]),
+            "amountUzs":int(e["amount_uzs"] or 0) if e["currency"]=="UZS" else 0,
+            "currency":e["currency"] or "USD","rateUzsPerUsd":int(e["rate_uzs_per_usd"] or 0),
+            "category":e["category"] or "Xarajat","recipient":e["recipient"] or "",
+            "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None,
+            "sourceType":"cashier_expense","payFrom":e["pay_from"] or "cash"
+        })
+    for f in _cash_agent_funds(db,since,until or 10**12):
+        amount_uzs=int(f["amount_uzs"] or 0)
+        transactions.append({
+            "id":int(f["id"]),"type":"expense","state":"expense",
+            "cashier":f["cashier_name"] or str(f["actor"]),
+            "amountUsd":_usd(f["amount_usd"]),
+            "amountUzs":amount_uzs,
+            "currency":"UZS" if amount_uzs else "USD",
+            "rateUzsPerUsd":int(f["rate_uzs_per_usd"] or 0),
+            "category":"👨‍💼 Agentga berildi",
+            "recipient":f["agent_name"] or str(f["agent"]),
+            "note":f["note"] or "",
+            "ts":int(f["ts"] or 0),"acceptedTs":None,
+            "sourceType":"agent_fund"
+        })
+    transactions.sort(key=lambda t:(int(t["acceptedTs"] or t["ts"] or 0),
+                                    1 if t.get("sourceType")=="agent_fund" else 0,
+                                    int(t["id"])),reverse=True)
+    transactions=transactions[:1200]
+    if until is not None:
+        transactions=[t for t in transactions if int(t["acceptedTs"] or t["ts"] or 0)<until or t["state"]=="pending"]
+    return transactions
+
+
+def cash_period(db,date_from,date_to,now=None):
+    """Moliya «Davr» filtri: tanlangan kunlar oralig'idagi kassa harakatlari."""
+    start,end,label=core.resolve_period('custom',date_from,date_to,int(time.time() if now is None else now))
+    rows=[t for t in cash_transactions(db,start,end) if int(t["acceptedTs"] or t["ts"] or 0)>=start or t["state"]=="pending"]
+    return {"start":start,"end":end,"label":label,"transactions":rows}
+
+
+def _cash_transactions(db, since, until=10**12):
     return db.execute("""SELECT h.id,h.agent,h.amount_usd,h.amount,h.status,
                h.ts,h.accepted_ts,h.cashier,u.name AS agent_name,
                cu.name AS cashier_name
         FROM handovers h
         LEFT JOIN users u ON u.id=h.agent
         LEFT JOIN users cu ON cu.id=h.cashier
-        WHERE (h.ts>=? OR h.status='pending') ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
-        (since,)).fetchall()
+        WHERE ((h.ts>=? AND COALESCE(h.accepted_ts,h.ts)<?) OR h.status='pending') ORDER BY h.ts DESC,h.id DESC LIMIT 800""",
+        (since,until)).fetchall()
 
 
-def _cash_expenses(db, since):
+def _cash_expenses(db, since, until=10**12):
     return db.execute("""SELECT e.id,e.cashier,e.amount_usd,e.category,e.recipient,e.note,
                e.ts,e.currency,e.amount_uzs,e.rate_uzs_per_usd,e.pay_from,u.name AS cashier_name
         FROM cashier_expenses e LEFT JOIN users u ON u.id=e.cashier
-        WHERE e.ts>=? ORDER BY e.ts DESC,e.id DESC LIMIT 800""",(since,)).fetchall()
+        WHERE e.ts>=? AND e.ts<? ORDER BY e.ts DESC,e.id DESC LIMIT 800""",(since,until)).fetchall()
 
 
-def _cash_agent_funds(db, since):
+def _cash_agent_funds(db, since, until=10**12):
     """Cash transferred from the cashier to an agent expense wallet.
 
     A topup leaves the cashier immediately, so manager cash reporting must show
@@ -110,8 +164,8 @@ def _cash_agent_funds(db, since):
         FROM agent_funds f
         LEFT JOIN users a ON a.id=f.agent
         LEFT JOIN users u ON u.id=f.actor
-        WHERE f.kind='topup' AND f.ts>=?
-        ORDER BY f.ts DESC,f.id DESC LIMIT 800""",(since,)).fetchall()
+        WHERE f.kind='topup' AND f.ts>=? AND f.ts<?
+        ORDER BY f.ts DESC,f.id DESC LIMIT 800""",(since,until)).fetchall()
 
 
 def _cash_period_totals(db,start,end):
@@ -502,46 +556,7 @@ def dashboard(db, now=None):
             "late":sum(1 for c in clients if c["agentId"]==uid and c["age"]=="red"),
             "clients":sum(1 for c in clients if c["agentId"]==uid)
         })
-    transactions = []
-    for h in _cash_transactions(db,since):
-        transactions.append({
-            "id":int(h["id"]),"type":"handover",
-            "agent":h["agent_name"] or str(h["agent"]),"agentId":int(h["agent"]),
-            "cashier":h["cashier_name"] or (str(h["cashier"]) if h["cashier"] is not None else None),
-            "amountUsd":_usd(h["amount_usd"]),"amountUzs":_usd(h["amount"]),
-            "state":h["status"],"ts":int(h["ts"] or 0),
-            "acceptedTs":int(h["accepted_ts"] or 0) or None
-        })
-    for e in _cash_expenses(db,since):
-        transactions.append({
-            "id":int(e["id"]),"type":"expense","state":"expense",
-            "cashier":e["cashier_name"] or str(e["cashier"]),
-            "amountUsd":_usd(e["amount_usd"]),
-            "amountUzs":int(e["amount_uzs"] or 0) if e["currency"]=="UZS" else 0,
-            "currency":e["currency"] or "USD","rateUzsPerUsd":int(e["rate_uzs_per_usd"] or 0),
-            "category":e["category"] or "Xarajat","recipient":e["recipient"] or "",
-            "note":e["note"] or "","ts":int(e["ts"] or 0),"acceptedTs":None,
-            "sourceType":"cashier_expense","payFrom":e["pay_from"] or "cash"
-        })
-    for f in _cash_agent_funds(db,since):
-        amount_uzs=int(f["amount_uzs"] or 0)
-        transactions.append({
-            "id":int(f["id"]),"type":"expense","state":"expense",
-            "cashier":f["cashier_name"] or str(f["actor"]),
-            "amountUsd":_usd(f["amount_usd"]),
-            "amountUzs":amount_uzs,
-            "currency":"UZS" if amount_uzs else "USD",
-            "rateUzsPerUsd":int(f["rate_uzs_per_usd"] or 0),
-            "category":"👨‍💼 Agentga berildi",
-            "recipient":f["agent_name"] or str(f["agent"]),
-            "note":f["note"] or "",
-            "ts":int(f["ts"] or 0),"acceptedTs":None,
-            "sourceType":"agent_fund"
-        })
-    transactions.sort(key=lambda t:(int(t["acceptedTs"] or t["ts"] or 0),
-                                    1 if t.get("sourceType")=="agent_fund" else 0,
-                                    int(t["id"])),reverse=True)
-    transactions=transactions[:1200]
+    transactions=cash_transactions(db,since)
     # Totals cover the full ledger, independent of the limited transaction list.
     cash_total,cash_expense_today=_cash_period_totals(db,today,now+1)
     cash_week,cash_expense_week=_cash_period_totals(db,week,now+1)
