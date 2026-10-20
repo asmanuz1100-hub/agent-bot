@@ -19,10 +19,12 @@ import branding
 import staff
 import ai_assistant
 import executive
+import sales
 import agent_api
 import analytics
 import cashier_api
 import warehouse_api
+import shop
 import full_backup
 import profiles
 import warehouse
@@ -63,6 +65,7 @@ MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v14')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
 WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v5')
+SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-savdo-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -780,6 +783,8 @@ def menu(db,u):
         rows.insert(0,['📱 Agent Mini App'])
     if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
         rows.insert(0,['📱 Кассир Mini App'])
+    if SHOP_MINIAPP_URL and r in ('admin','sales'):
+        rows.insert(0,['🛒 Savdo Mini App'])
     if WAREHOUSE_MINIAPP_URL:
         if r in ('admin','warehouse'):
             rows.insert(0,['📱 Омбор Mini App'])
@@ -1752,6 +1757,12 @@ def handle(db,update):
                  'asman.shift.end.v1':'⏹ Ишни тугатиш'}
         if payload not in actions:raise ValueError('Mini App сўрови нотўғри.')
         text=actions[payload]
+    if text=='🛒 Savdo Mini App':
+        if not SHOP_MINIAPP_URL:raise ValueError('Savdo Mini App manzili sozlanmagan.')
+        if r not in ('admin','sales'):raise ValueError('Savdo bo‘limiga ruxsat yo‘q.')
+        api('sendMessage',chat_id=u,text='🛒 Savdo bo‘limi · sotuv, chegirma, narxlar, qarz va to‘lovlar. Quyidagi tugmadan oching.',
+            reply_markup={'inline_keyboard':[[{'text':'🛒 Savdo ilovasini ochish','web_app':{'url':SHOP_MINIAPP_URL}}]]})
+        return
     if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
         if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
         if r in ('admin','warehouse'):
@@ -2375,13 +2386,15 @@ def menu_button_for(role):
         return {'type':'web_app','text':'Kassir app','web_app':{'url':CASHIER_MINIAPP_URL}}
     if role=='warehouse' and WAREHOUSE_MINIAPP_URL:
         return {'type':'web_app','text':'Ombor app','web_app':{'url':WAREHOUSE_MINIAPP_URL}}
+    if role=='sales' and SHOP_MINIAPP_URL:
+        return {'type':'web_app','text':'Savdo app','web_app':{'url':SHOP_MINIAPP_URL}}
     if role in ('agent','admin') and AGENT_MINIAPP_URL:
         return {'type':'web_app','text':'Agent app','web_app':{'url':AGENT_MINIAPP_URL}}
     return {'type':'commands'}
 
 def menu_button_users(db):
     try:
-        rows=[(int(r[0]),r[1]) for r in db.execute("SELECT id,role FROM users WHERE role IN ('admin','agent','cashier','warehouse')").fetchall()]
+        rows=[(int(r[0]),r[1]) for r in db.execute("SELECT id,role FROM users WHERE role IN ('admin','agent','cashier','warehouse','sales')").fetchall()]
         db.commit()
         return rows
     except Exception as e:
@@ -2755,6 +2768,40 @@ def serve_webhook(db,base_url):
                     if local is not None:local.rollback()
                     logging.exception('Cashier Mini App request failed')
                     answer_cashier(500,{'error':'Сақлаб бўлмади. Қайта уриниб кўринг.'})
+                finally:
+                    if local is not None and postgres:local.close()
+                return
+            if urlparse(self.path).path=='/api/shop':
+                def answer_shop(code,obj):
+                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                                'application/json; charset=utf-8')
+                try:
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 2<=length<=60000:raise ValueError('Invalid length')
+                    payload=json.loads(self.rfile.read(length))
+                    if not isinstance(payload,dict):raise ValueError('Invalid payload')
+                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                except (ValueError,TypeError):
+                    answer_shop(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
+                local=None
+                try:
+                    local=request_db()
+                    if role(local,actor) not in ('sales','admin'):
+                        answer_shop(403,{'error':'Savdo bo‘limiga ruxsat yo‘q.'});return
+                    data=shop.handle(local,actor,payload.get('action') or 'dashboard',payload)
+                    hand=data.pop('_handover',None)
+                    local.commit()
+                    if hand:
+                        try:notify_cashiers_handover(local,actor,hand[0],hand[1],currency=hand[2],amount_uzs=hand[3])
+                        except Exception:logging.exception('Shop handover notification failed')
+                    answer_shop(200,data)
+                except (ValueError,TypeError,OverflowError) as exc:
+                    if local is not None:local.rollback()
+                    answer_shop(400,{'error':str(exc)})
+                except Exception:
+                    if local is not None:local.rollback()
+                    logging.exception('Shop Mini App request failed')
+                    answer_shop(500,{'error':'Saqlab bo‘lmadi. Qayta urinib ko‘ring.'})
                 finally:
                     if local is not None and postgres:local.close()
                 return
@@ -3138,6 +3185,14 @@ def serve_webhook(db,base_url):
                         data=executive.executive(local,payload.get('period') or 'today',payload.get('from'),payload.get('to'),
                                                  agent=payload.get('agentId'),region=payload.get('region') or None,
                                                  group=payload.get('group') or 'auto')
+                    elif action=='shop':
+                        # Web panel Savdo bo'limi: shop.py huquqlarni o'zi tekshiradi (rahbar = bosh xodim huquqi,
+                        # sotuv/to'lov tanlangan savdo xodimi hisobiga yoziladi).
+                        data=shop.handle(local,actor,payload.get('op') or 'dashboard',payload)
+                        data.pop('_handover',None)
+                    elif action=='sales':
+                        data=sales.sales(local,payload.get('period') or 'month',payload.get('from'),payload.get('to'),
+                                         agent=payload.get('agentId'),region=payload.get('region') or None)
                     elif action=='period_report':
                         data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
                     elif action=='cash_period':

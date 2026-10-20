@@ -23,6 +23,7 @@ MOVE_LABELS={
     'issue':'🚚 Агентга берилди',
     'agent_return':'↩️ Агентдан қабул',
     'writeoff':'🗑 Брак / ҳисобдан чиқариш',
+    'shop_sale':'🛒 Савдо бўлими сотуви',
 }
 REQUEST_LABELS={'need':'📥 Товар сўрови','return':'↩️ Омборга қайтариш'}
 STATUS_LABELS={'pending':'⏳ Кутилмоқда','accepted':'✅ Қабул қилинди','rejected':'❌ Рад этилди'}
@@ -100,7 +101,7 @@ def to_units(pack,qty,unit='Дона'):
 
 def stock(db,pack):
     row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind IN ('in','agent_return') THEN qty
-        WHEN kind IN ('issue','writeoff') THEN -qty ELSE 0 END),0)
+        WHEN kind IN ('issue','writeoff','shop_sale') THEN -qty ELSE 0 END),0)
         FROM warehouse_moves WHERE pack=?""",(pack,)).fetchone()
     return int(row[0] or 0)
 

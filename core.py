@@ -469,6 +469,7 @@ def connect(path,initialize=True):
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
         import warehouse;warehouse.init(db)
+        import shop;shop.init(db)
         import web_auth;web_auth.init(db)
         db.commit()
         try:
@@ -540,6 +541,7 @@ def connect(path,initialize=True):
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
     import warehouse;warehouse.init(db)
+    import shop;shop.init(db)
     import web_auth;web_auth.init(db)
     db.commit()
     db.execute('PRAGMA journal_mode=WAL')
@@ -1189,7 +1191,8 @@ def record(db, actor, agent, client, kind, pack=0, qty=0, value=0, note='', sour
 
 def handover(db,a,value,source,currency='UZS',ts=None):
     role=db.execute('SELECT role FROM users WHERE id=?',(a,)).fetchone()
-    if not role or role[0]!='agent': raise ValueError('Фақат агент.')
+    # Savdo xodimi (role='sales') ham qo'lidagi naqd pulni shu yo'l bilan kassaga topshiradi (shop.py).
+    if not role or role[0] not in ('agent','sales'): raise ValueError('Фақат агент ёки савдо ходими.')
     lock_agent(db,a)
     if currency not in ('USD','UZS'):raise ValueError('Валюта нотўғри.')
     if isinstance(value,bool) or not isinstance(value,int):raise ValueError('Сумма нотўғри.')

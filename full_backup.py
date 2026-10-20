@@ -20,6 +20,7 @@ TABLES = (
     "return_allocations", "failed_updates", "role_audit", "client_edits",
     "client_visits", "collection_tasks", "delivery_edits", "processed", "meta",
     "products", "agent_features", "card_payments", "visit_stock", "orders", "order_items",
+    "shop_staff", "shop_prices", "shop_client_prices", "shop_clients", "shop_sales", "shop_sale_lines",
 )
 
 SECRET_NAMES = (
