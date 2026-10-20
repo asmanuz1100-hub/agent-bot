@@ -1329,12 +1329,13 @@ function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
 async function shLoad(){SH.d=await shApi('dashboard');if(!SH.seller){var t=(SH.d.team||[]).find(function(u){return u.level==='head'})||(SH.d.team||[])[0];SH.seller=t?String(t.id):''}return SH.d}
 async function pageSales(page,force){
   if(!SH.cart)SH.cart=shNewCart();
-  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['prices','Narxlar'],['team','Savdo jamoasi']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
+  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
   $('shTabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;SH.tab=b.dataset.t;pageSales(page)};
   if(!SH.d||force){try{await shLoad()}catch(e){$('shBody').innerHTML=errState(e.message);$('shBody').querySelector('[data-retry]').onclick=function(){pageSales(page,true)};return}}
   if(S.page!=='sales')return;
   var body=$('shBody');
-  ({report:salesReport,pos:shPos,prices:shPrices,team:shTeam})[SH.tab](body,force);
+  if(SH.tab==='team')SH.tab='report';
+  ({report:salesReport,pos:shPos,prices:shPrices})[SH.tab](body,force);
 }
 function shProduct(p){return (SH.d.products||[]).find(function(x){return x.pack===p})}
 function shPayload(){var c=SH.cart,p={clientId:c.client?c.client.id:null,note:c.note,items:c.items.map(function(i){var o={pack:i.pack,qty:i.qty};if(i.price!=null&&i.price!=='')o.price=i.price;return o})};
@@ -1443,7 +1444,7 @@ function shPrices(el){
 }
 function shTeam(el){
   var tm=SH.d.team||[],L=SH.d.permLabels||{},keys=Object.keys(L);
-  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('users')+' Savdo jamoasi · funksiyalar</h3><span class="muted small">Xodimlar soni cheklanmagan — yangisini «Xodimlar» bo‘limida «Savdo» rolida qo‘shing. Katakchani bosing — darhol saqlanadi.</span></div>'+
+  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('users')+' Savdo jamoasi · funksiyalar</h3><span class="muted small">Xodimlar soni cheklanmagan — yangisini yuqoridagi «Xodim qo‘shish» orqali «Savdo» rolida qo‘shing. Katakchani bosing — darhol saqlanadi.</span></div>'+
     '<div class="tbl-wrap" style="margin-top:12px">'+(tm.length?'<table><thead><tr><th>Xodim</th>'+keys.map(function(k){return '<th style="text-align:center;min-width:92px;white-space:normal;font-size:11.5px">'+esc(L[k])+'</th>'}).join('')+'<th class="right">Chegirma limiti %</th><th class="right">Bugun</th><th class="right">Qo‘lidagi pul</th></tr></thead><tbody>'+
     tm.map(function(u){return '<tr><td><b>'+esc(u.name)+'</b><br><button class="btn" style="min-height:26px;padding:0 8px;font-size:11.5px;margin-top:4px" data-all="'+u.id+'">'+(u.perms.length===keys.length?'Hammasini o‘chirish':'Hammasini yoqish')+'</button></td>'+
       keys.map(function(k){return '<td style="text-align:center"><input type="checkbox" data-u="'+u.id+'" data-k="'+k+'"'+(u.perms.indexOf(k)>=0?' checked':'')+' aria-label="'+esc(u.name+': '+L[k])+'" style="width:18px;height:18px"></td>'}).join('')+
@@ -1851,7 +1852,9 @@ function renderStaff(page,s){
       '<td>'+(x.active?pill('<span class="dot"></span>Faol','p-ok'):pill('<span class="dot"></span>Yopilgan','p-bad'))+'</td>'+
       '<td class="right"><div class="actions" style="justify-content:flex-end;flex-wrap:nowrap">'+acts+'</div></td></tr>'}).join('')
     :'<tr><td colspan="6">'+emptyState('Xodim topilmadi','users')+'</td></tr>')+
-   '</tbody></table></div><div class="pager"><span>Agent qatorini bossangiz — to‘liq karta (KPI, huquqlar, qoldiq). '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>';
+   '</tbody></table></div><div class="pager"><span>Agent qatorini bossangiz — to‘liq karta (KPI, huquqlar, qoldiq). '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>'+
+   (!ST.role||ST.role==='sales'?'<div id="stSales" style="margin-top:16px"></div>':'');
+  if($('stSales'))(SH.d?Promise.resolve(SH.d):shLoad()).then(function(){if($('stSales'))shTeam($('stSales'))}).catch(function(e){if($('stSales'))$('stSales').innerHTML=errState(e.message)});
   var re=function(){renderStaff(page,S.cache.staff)};
   page.querySelectorAll('.st-role').forEach(function(b){b.onclick=function(){ST.role=ST.role===b.dataset.role?'':b.dataset.role;re()}});
   $('stRole').onclick=function(e){var b=e.target.closest('button');if(!b)return;ST.role=b.dataset.r;re()};
@@ -1859,7 +1862,7 @@ function renderStaff(page,s){
   $('stOff').onchange=function(){ST.showOff=this.checked;re()};
   bindAgentLinks(page);
   var call=async function(action,args,ok){var r=await run(function(){return api(action,Object.assign({confirm:true},args))},ok);
-    if(r&&r.staff){S.cache.staff=r.staff;S.dash=null;re()}return r};
+    if(r&&r.staff){S.cache.staff=r.staff;S.dash=null;SH.d=null;re()}return r};
   var find=function(id){return all.find(function(x){return String(x.id)===String(id)})};
   $('stAdd').onclick=async function(){
     var opts=roles.filter(function(r){return r.key!=='admin'||P}).map(function(r){return [r.key,r.label]});
