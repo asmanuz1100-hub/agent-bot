@@ -555,7 +555,9 @@ def dashboard(db, now=None):
     report_week=_enrich_period_analysis(db,_period_report(db,week,now+1,staff,clients,recent_visits,now),7*86400)
     report_month=_enrich_period_analysis(db,_period_report(db,since,now+1,staff,clients,recent_visits,now),30*86400)
     series=_daily_series(db,today,now,recent_visits)
-    total_debt=sum(int(v or 0) for v in debt_by_client.values())
+    # Qarz va avans alohida (Kassir va Tahlil bilan bir xil): avansdagi mijoz boshqalar qarzini kamaytirmaydi.
+    total_debt=sum(max(0,int(v or 0)) for v in debt_by_client.values())
+    total_advance=sum(max(0,-int(v or 0)) for v in debt_by_client.values())
     return {
         "generatedTs":now,"todayStart":today,"timezone":"Asia/Tashkent","readOnly":True,
         "warehouse":{"newOrders":int(db.execute("SELECT COUNT(*) FROM orders WHERE status='new'").fetchone()[0] or 0),
@@ -581,7 +583,7 @@ def dashboard(db, now=None):
                    "cashierExpensesTodayUsd":_usd(cash_expense_today),
                    "cashBalanceUsd":_usd(cash_balance),
                    "pendingUsd":_usd(pending_total),"pendingCount":int(pending_count or 0),
-                   "debtUsd":_usd(total_debt)},
+                   "debtUsd":_usd(total_debt),"advanceUsd":_usd(total_advance)},
         "reports":{"today":report_today,"week":report_week,"month":report_month,
                    "series":series}
     }
@@ -1017,8 +1019,12 @@ def agent_period_detail(db, agent_id, period, now=None, date_from=None, date_to=
          (SELECT COUNT(*) FROM clients WHERE agent=? AND created_ts>=? AND created_ts<?),
          (SELECT COUNT(*) FROM client_visits WHERE actor=? AND ts>=? AND ts<?)""",
          (agent_id,start,end,agent_id,start,end)).fetchone()
+    # Smenalar (ish boshlash / tugatish): davr bilan kesishganlari, ochiq smenada end=None.
+    shift_rows=db.execute("""SELECT id,start,"end" AS end_ts FROM shifts
+        WHERE agent=? AND start<? AND COALESCE("end",?)>? ORDER BY start,id""",(agent_id,end,end,start)).fetchall()
+    shifts=[{"id":int(r["id"]),"start":int(r["start"]),"end":int(r["end_ts"]) if r["end_ts"] else None} for r in shift_rows]
     return {"agentId":agent_id,"agent":row["name"] or str(agent_id),
-            "period":period,"label":label,"start":start,"end":end,
+            "period":period,"label":label,"start":start,"end":end,"shifts":shifts,
             "route":{"segments":segments,"gpsTotal":gps_total,"gpsShown":len(gps),
                      "sampled":gps_total>len(gps)},
             "newClients":new_clients,"visits":visits,
@@ -1059,6 +1065,9 @@ def warehouse(db, status=None):
     status = str(status or 'open')
     if status == 'open':
         statuses = ('new', 'preparing', 'loaded')
+    elif status == 'all':
+        # Kanban: barcha statuslar bitta so'rovda (har status bo'yicha eng yangi buyurtmalar).
+        statuses = tuple(core.ORDER_STATUSES)
     elif status in core.ORDER_STATUSES:
         statuses = (status,)
     else:
@@ -1067,7 +1076,7 @@ def warehouse(db, status=None):
         FROM orders o LEFT JOIN users u ON u.id=o.agent LEFT JOIN clients c ON c.id=o.client
         WHERE o.status IN ({','.join('?' for _ in statuses)})
         ORDER BY CASE o.status WHEN 'new' THEN 0 WHEN 'preparing' THEN 1 WHEN 'loaded' THEN 2 ELSE 3 END, o.ts DESC, o.id DESC
-        LIMIT 200""", statuses).fetchall()
+        LIMIT ?""", statuses + ((400 if status == 'all' else 200),)).fetchall()
     orders = []
     for r in rows:
         v = core.order_view(db, r)

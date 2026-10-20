@@ -89,6 +89,37 @@ class WebAuthUnitTests(unittest.TestCase):
         self.assertEqual(web_auth.login(self.db, 'rahbar1', 'new-password-1')[0], 1)
 
 
+class WebPanelDesignSystemTests(unittest.TestCase):
+    """Phase 1: spetsifikatsiya ranglari, Inter shrifti, global qidiruv, emoji'siz menyu."""
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'miniapps', 'rahbar-web')
+
+    def read(self, name):
+        with open(os.path.join(self.base, name), encoding='utf-8') as f:
+            return f.read()
+
+    def test_spec_tokens_and_font(self):
+        # Design V2 palitrasi (1816/1817 referenslari): grafit navigatsiya, krem fon, ASMAN ko'k, semantik ranglar.
+        css = self.read('app.css')
+        for token in ('--nav:#191D23', '--bg:#F7F6F2', '--card:#FFFFFF', '--tx:#17221F', '--line:#E7E8E4',
+                      '--pri:#1F6BFF', '--forest:#246B57', '--yellow:#F3CF56', '--orange:#E46542'):
+            self.assertIn(token, css)
+        self.assertIn(':root[data-theme="dark"]', css)
+        self.assertIn('prefers-reduced-motion', css)
+        self.assertIn('family=Inter', self.read('index.html'))
+
+    def test_light_theme_is_default_and_search_is_present(self):
+        html = self.read('index.html')
+        self.assertIn("getItem('rw-theme')||'light'", html)
+        self.assertIn('id="gq"', html)
+        for el in ('id="rail"', 'id="railToggle"', 'id="nav"', 'id="railFeed"'):
+            self.assertIn(el, html)
+
+    def test_navigation_uses_icons_not_emoji(self):
+        js = self.read('app.js')
+        pages = js[js.index('var PAGES=['):js.index('];', js.index('var PAGES=['))]
+        self.assertNotRegex(pages, '[\U0001F300-\U0001FAFF\u2600-\u27BF]')
+
+
 class AgentRouteAnyDayTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -112,6 +143,13 @@ class AgentRouteAnyDayTests(unittest.TestCase):
         self.assertEqual(d['label'], '10.10.2026 – 10.10.2026')
         other = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-11', date_to='2026-10-11')
         self.assertEqual(other['route']['gpsTotal'], 0)
+
+    def test_shift_start_and_end_are_returned(self):
+        import manager_api
+        d = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-10', date_to='2026-10-10')
+        self.assertEqual(d['shifts'], [{'id': d['shifts'][0]['id'], 'start': self.day, 'end': self.day + 7200}])
+        empty = manager_api.agent_period_detail(self.db, 2, 'custom', now=self.now, date_from='2026-10-12', date_to='2026-10-12')
+        self.assertEqual(empty['shifts'], [])
 
     def test_custom_range_is_limited(self):
         import manager_api
@@ -224,6 +262,11 @@ class WebPanelHttpTests(unittest.TestCase):
         code, dash = self.post('/api/manager', token, action='dashboard')
         self.assertEqual(code, 200, dash)
         self.assertIn('summary', dash)
+        code, ex = self.post('/api/manager', token, action='executive', period='d7')
+        self.assertEqual(code, 200, ex)
+        self.assertEqual(len(ex['kpis']), 6)
+        code, bad = self.post('/api/manager', token, action='executive', period='year')
+        self.assertEqual(code, 400, bad)
         code, _ = self.post('/api/web', token, action='logout')
         self.assertEqual(code, 200)
         code, data = self.post('/api/manager', token, action='dashboard')

@@ -83,6 +83,25 @@ class ManagerApiTests(unittest.TestCase):
         route=manager_api.route(self.db,2,self.now)
         self.assertEqual(len(route['points']),1)
         self.assertEqual(route['points'][0]['lat'],40.541)
+    def test_total_debt_excludes_advances_like_cashier_and_insights(self):
+        # Mijoz A: 100$ qarz. Mijoz B: 30$ ortiqcha to'lagan (avans). Umumiy qarz 100$, avans 30$ — 70$ emas.
+        for cid in (201,202):
+            self.db.execute("INSERT INTO clients(id,agent,name,phone,created_ts) VALUES(?,2,'C',?,?)",(cid,f'+99890000{cid}',self.today))
+        ev=[(201,'delivery',10000),(202,'delivery',5000),(202,'payment',8000)]
+        for i,(cid,kind,usd) in enumerate(ev):
+            self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(2,2,?,?,0,0,0,?,'',?,?)",
+                            (cid,kind,usd,self.today+60+i,7000+i))
+        snap=manager_api.dashboard(self.db,self.now)
+        self.assertEqual(snap['summary']['debtUsd'],100)
+        self.assertEqual(snap['summary']['advanceUsd'],30)
+        import cashier_api
+        _,cashier_total=cashier_api._cashier_debtors(self.db)
+        self.assertEqual(cashier_total,10000)
+        import analytics
+        ins=analytics.insights(self.db,'month',now=self.now)
+        self.assertEqual(ins['summary']['debtCents'],10000)
+        self.assertEqual(ins['summary']['advanceCents'],3000)
+
     def test_dashboard_cash_pending_and_expense_details(self):
         self.db.execute("""INSERT INTO handovers(agent,amount_usd,status,ts)
                          VALUES(2,4000,'pending',?)""",(self.now-120,))
