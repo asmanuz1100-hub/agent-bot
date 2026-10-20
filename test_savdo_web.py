@@ -81,8 +81,12 @@ class SavdoWebHttpTests(unittest.TestCase):
             else:
                 os.environ[key] = value
 
-    def post(self, path, token=None, **payload):
-        headers = {'Content-Type': 'application/json', 'Origin': sorted(bot.SELF_MINIAPP_ORIGINS)[0]}
+    def post(self, path, token=None, native=False, **payload):
+        headers = {'Content-Type': 'application/json'}
+        if native:
+            headers['X-Asman-Client'] = 'mobile'
+        else:
+            headers['Origin'] = sorted(bot.SELF_MINIAPP_ORIGINS)[0]
         if token:
             headers['Authorization'] = 'Bearer ' + token
         req = urllib.request.Request(f'http://127.0.0.1:{self.port}{path}', json.dumps(payload).encode(), headers)
@@ -128,6 +132,22 @@ class SavdoWebHttpTests(unittest.TestCase):
         self.assertEqual(code, 200, data)
         code, dash = self.post('/api/shop', data['token'], action='dashboard')
         self.assertEqual(code, 200, dash)
+
+    def test_phone_app_logs_in_as_sales_only(self):
+        code, data = self.post('/api/web', native=True, action='login', login='sotuv', password=self.sales_pw, panel='savdo')
+        self.assertEqual(code, 200, data)
+        self.assertEqual(data['role'], 'sales')
+        code, dash = self.post('/api/shop', data['token'], native=True, action='dashboard')
+        self.assertEqual(code, 200, dash)
+        # Telefon ilovasi rahbar paneli login'idan foydalana olmaydi.
+        code, _ = self.post('/api/web', native=True, action='login', login='boss', password=self.admin_pw)
+        self.assertEqual(code, 403)
+        # Origin ham, belgi ham bo'lmasa — rad etiladi.
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/api/web', json.dumps({'action': 'login', 'panel': 'savdo'}).encode(),
+                                     {'Content-Type': 'application/json'})
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(e.exception.code, 403)
 
     def test_shop_rejects_missing_or_bad_token(self):
         self.assertEqual(self.post('/api/shop', 'x' * 43, action='dashboard')[0], 401)

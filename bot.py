@@ -2470,6 +2470,9 @@ def serve_webhook(db,base_url):
             }|SELF_MINIAPP_ORIGINS
             if origin not in allowed:return None
             return self._cors_headers(origin)
+        def _native_app(self):
+            # Android/iOS ilova brauzer emas: Origin yubormaydi, CORS qo'llanmaydi; faqat login sessiyasi bilan ishlaydi.
+            return not self.headers.get('Origin') and self.headers.get('X-Asman-Client')=='mobile'
         def _bearer_token(self):
             value=self.headers.get('Authorization','')
             return value[7:].strip() if value[:7].lower()=='bearer ' else ''
@@ -3007,6 +3010,8 @@ def serve_webhook(db,base_url):
                 return
             if urlparse(self.path).path=='/api/web':
                 headers=self._manager_headers()
+                native=headers is None and self._native_app()
+                if native:headers={}
                 if headers is None or self.path!='/api/web':
                     self._reply(403,b'Forbidden');return
                 def answer_web(code,obj):
@@ -3029,12 +3034,14 @@ def serve_webhook(db,base_url):
                     savdo_panel=payload.get('panel')=='savdo'
                     web_roles=('sales','admin') if savdo_panel else ('admin',)
                     web_denied='Bu panelga faqat savdo xodimi kira oladi.' if savdo_panel else 'Bu panelga faqat rahbar kira oladi.'
+                    if native and not savdo_panel:
+                        answer_web(403,{'error':'Ruxsat yo‘q.'});return
                     if action=='login':
                         uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
                         if role(local,uid) not in web_roles:
                             web_auth.logout(local,token);local.commit()
                             answer_web(403,{'error':web_denied});return
-                        data={'ok':True,'token':token}
+                        data={'ok':True,'token':token,'role':role(local,uid)}
                     elif action=='logout':
                         web_auth.logout(local,token);data={'ok':True}
                     elif action in ('me','change_password'):
