@@ -359,6 +359,30 @@ class WebPanelHttpTests(unittest.TestCase):
             bot.ADMINS.clear()
             bot.ADMINS.update(saved)
 
+    def test_stock_operations_primary_admin_only_on_web(self):
+        import warehouse
+        _, data = self.login()
+        token = data['token']
+        saved = set(bot.ADMINS)
+        try:
+            bot.ADMINS.discard(1)
+            code, d = self.post('/api/manager', token, action='stock', op='dashboard')
+            self.assertEqual(code, 200, d)
+            self.assertFalse(d['canOperate'])
+            code, d = self.post('/api/manager', token, action='stock', op='receive', pack=1, qty=5, unit='Дона', requestId='rcvtest001')
+            self.assertEqual(code, 400, d)
+            bot.ADMINS.add(1)
+            code, d = self.post('/api/manager', token, action='stock', op='receive', pack=1, qty=5, unit='Дона', requestId='rcvtest002')
+            self.assertEqual(code, 200, d)
+            self.assertTrue(d['canOperate'])
+            self.assertEqual(next(p['stock'] for p in d['products'] if p['pack'] == 1), 5)
+            self.assertIsNone(warehouse.WEB_PRIMARY_OPERATOR.get())   # bot/Mini App uchun qoida o'zgarmaydi
+            code, d = self.post('/api/manager', token, action='stock', op='hack')
+            self.assertEqual(code, 400, d)
+        finally:
+            bot.ADMINS.clear()
+            bot.ADMINS.update(saved)
+
     def test_foreign_origin_is_rejected(self):
         code, _ = self.post('/api/web', origin='https://evil.example', action='login', login='boss', password=self.password)
         self.assertEqual(code, 403)

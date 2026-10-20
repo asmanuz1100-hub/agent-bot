@@ -15,6 +15,9 @@ TZ=ZoneInfo('Asia/Tashkent')
 
 KEEPER_ROLES=('warehouse','admin')   # Ombor panelini ko‘radi
 OPERATOR_ROLES=('warehouse',)        # tovar harakatini faqat omborchi kiritadi
+# Istisno: asosiy rahbar web panel orqali (bot shu so'rov davomida ID ni o'rnatadi). Telegram bot/Mini App'ga ta'sir qilmaydi.
+import contextvars
+WEB_PRIMARY_OPERATOR=contextvars.ContextVar('web_primary_operator',default=None)
 MOVE_LABELS={
     'in':'📥 Кирим',
     'issue':'🚚 Агентга берилди',
@@ -71,6 +74,7 @@ def _require_keeper(db,actor):
         raise ValueError('Bu bo‘lim faqat omborchi yoki rahbar uchun.')
 
 def _require_operator(db,actor):
+    if _role(db,actor)=='admin' and WEB_PRIMARY_OPERATOR.get()==actor:return
     if _role(db,actor) not in OPERATOR_ROLES:
         raise ValueError('Tovar harakatini faqat omborchi kiritadi. Rahbar ombor panelini faqat ko‘radi.')
 

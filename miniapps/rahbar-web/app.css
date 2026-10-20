@@ -798,3 +798,23 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 :root[data-theme="dark"] .card.c-ink,:root[data-theme="dark"] .card.hero{background:linear-gradient(160deg,rgba(35,42,53,.9),rgba(26,32,41,.92));border-color:var(--line2)}
 .card.c-yellow{background:color-mix(in srgb,var(--card) 86%,transparent)}
 .period-c{flex-wrap:nowrap;align-items:center;gap:6px}.period-c input[type=date]{width:auto;min-height:32px;padding:0 8px;font-size:13px}@media (max-width:560px){.period-c{flex-wrap:wrap}}
+.kmore{all:unset;box-sizing:border-box;cursor:pointer;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;height:34px;border-radius:10px;font-size:13px;font-weight:500;color:var(--pri-tx);background:color-mix(in srgb,var(--pri) 8%,transparent);transition:background-color var(--t-fast)}
+.kmore:hover{background:var(--pri-soft)}.kmore:focus-visible{outline:2px solid var(--pri)}
+.kcol{max-height:none}
+.kcol:has(.kmore) .kbody,.kbody{max-height:calc(100vh - 340px)}
+/* Yig'ilgan sidebar: tekis ustun, brend matni joy olmaydi, badge — nuqta */
+.rail.mini .brand-txt{display:none}
+.rail.mini .side-head{gap:10px;min-height:0;padding:4px 0 8px;align-items:center}
+.rail.mini .side-nav{gap:6px}
+.rail.mini .nav-grp+.nav-grp{border-top:1px solid var(--line);padding-top:6px}
+.rail.mini .side-nav .badge{display:none}
+.rail.mini .side-nav button{width:100%}
+.rail.mini .side-nav button:has(.badge)::after{content:"";position:absolute;top:7px;right:12px;width:7px;height:7px;border-radius:50%;background:var(--c-red);box-shadow:0 0 0 2px var(--bg)}
+/* Eski CSS tooltiplar o'chiriladi — o'rniga JS suzuvchi tooltip (hech qayerda kesilmaydi) */
+.icon-btn[data-tip]:hover::after,.icon-btn[data-tip]:focus-visible::after,.rail.mini [data-tip]:hover::after,.rail.mini [data-tip]:focus-visible::after{content:none!important;display:none!important}
+.ftip{position:fixed;z-index:2000;pointer-events:none;white-space:nowrap;font:500 12px/1 Inter,sans-serif;color:#fff;background:rgba(17,24,39,.94);padding:7px 10px;border-radius:8px;box-shadow:var(--shadow-md);opacity:0;transform:translateY(2px);transition:opacity .14s var(--ease),transform .14s var(--ease)}
+.ftip.on{opacity:1;transform:none}
+:root[data-theme="dark"] .ftip{background:rgba(231,235,241,.96);color:#0E1116}
+.side-tog:focus:not(:focus-visible){outline:none}
+.rail.mini .side-head{flex:0 0 auto;height:auto;justify-content:flex-start}
+.rail.mini{display:flex;gap:6px}
