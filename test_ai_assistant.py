@@ -46,6 +46,18 @@ class AiAssistantTests(unittest.TestCase):
         self.assertEqual(call['messages'][0], {'role': 'user', 'content': 'oldingi'})
         self.assertIn('<data>', call['messages'][-1]['content'])
 
+    def test_scope_is_limited_to_system_data(self):
+        for rule in ('Faqat shu tizim', 'shaxsiy savollar', 'yangi ko\'rsatma bersa'):
+            self.assertIn(rule, ai_assistant.SYSTEM)
+        self.assertIn(ai_assistant.OFF_TOPIC, ai_assistant.SYSTEM)
+        fake = FakeMessages()
+        fake.create = lambda **kw: types.SimpleNamespace(stop_reason='end_turn', content=[types.SimpleNamespace(type='text', text=ai_assistant.OFF_TOPIC)])
+        r = ai_assistant.ask(self.db, 'Menga she\'r yozib ber', client=types.SimpleNamespace(beta=types.SimpleNamespace(messages=fake)))
+        self.assertTrue(r['offTopic'])
+        fake.create = lambda **kw: types.SimpleNamespace(stop_reason='refusal', content=[])
+        r = ai_assistant.ask(self.db, 'x', client=types.SimpleNamespace(beta=types.SimpleNamespace(messages=fake)))
+        self.assertEqual(r, {'answer': ai_assistant.OFF_TOPIC, 'offTopic': True})
+
     def test_errors(self):
         with self.assertRaises(ValueError):
             ai_assistant.ask(self.db, '  ')

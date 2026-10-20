@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
-<link rel="stylesheet" href="app.css?v=71">
+<link rel="stylesheet" href="app.css?v=72">
 <meta name="theme-color" content="#F5F7FA" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('rw-theme')||'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
@@ -52,7 +52,7 @@
         <div class="gsearch" role="search"><input id="gq" type="search" placeholder="Qidirish: mijoz, agent, telefon…" autocomplete="off" aria-label="Global qidiruv" aria-controls="gres"><kbd>Ctrl K</kbd><div id="gres" class="gres" role="listbox" hidden></div></div>
         <span class="grow"></span>
         <span id="updated" class="live" aria-live="polite"></span>
-        <button class="btn ai-btn" id="aiBtn" aria-label="AI yordamchi"></button>
+        <button class="as-btn" id="aiBtn" aria-label="Yordamchi (Ctrl J)" aria-expanded="false"><span class="orb sm" aria-hidden="true"><i></i><i></i><i></i></span><span class="lbl">Yordamchi</span></button>
         <button class="icon-btn ghost" id="railFeed" aria-label="Jonli lenta" data-tip="Jonli lenta"><i class="rail-dot" id="railDot" hidden></i></button>
         <button class="icon-btn ghost" id="refreshBtn" aria-label="Yangilash (R)" data-tip="Yangilash (R)"></button>
         <button class="icon-btn ghost" id="themeBtn" aria-label="Mavzuni almashtirish" data-tip="Mavzu"></button>
@@ -67,12 +67,21 @@
 <div id="drawerOv" class="drawer-ov"></div>
 <aside id="drawer" class="drawer" inert aria-label="Batafsil ma’lumot"><button class="drawer-x icon-btn" id="drawerX" aria-label="Yopish"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button><div id="drawerBody"></div></aside>
 
+<!-- Yordamchi (Siri uslubi): suzuvchi shisha panel + ekran chetidagi nur -->
+<div class="as-edge" id="asEdge" aria-hidden="true"></div>
+<section class="as-panel" id="asPanel" role="dialog" aria-modal="false" aria-label="Yordamchi" hidden>
+  <header class="as-head"><span class="orb" id="asOrb" aria-hidden="true"><i></i><i></i><i></i></span><div class="as-title"><b>Yordamchi</b><small id="asState">Savdo, agentlar, ombor va kassa bo‘yicha</small></div><button class="icon-btn ghost" id="asClose" aria-label="Yopish" data-tip="Yopish"></button></header>
+  <div class="as-log" id="aiLog" aria-live="polite"></div>
+  <div class="as-hints" id="aiHints"></div>
+  <form class="as-input" id="aiForm"><textarea id="aiQ" rows="1" maxlength="600" placeholder="Savolingiz…" aria-label="Savol"></textarea><button type="button" class="as-ic" id="aiSpk" aria-label="Javobni ovoz bilan o‘qish"></button><button type="button" class="as-mic" id="aiMic" aria-label="Ovoz bilan so‘rash"></button><button class="as-send" id="aiSend" aria-label="Yuborish"></button></form>
+</section>
+
 <!-- Modal -->
 <div id="modalOv" class="modal-ov" hidden><div class="modal" role="dialog" aria-modal="true"><div id="modalBody"></div></div></div>
 <div id="toast" class="toast" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
-<script src="app.js?v=71"></script>
+<script src="app.js?v=72"></script>
 </body>
 </html>

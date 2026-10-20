@@ -338,48 +338,53 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='r'||e.key==='R')refresh();
 });
 
-/* ---------- AI yordamchi: savol (matn yoki ovoz) → server joriy ma'lumot bilan Claude'dan javob oladi ---------- */
-var AI={msgs:[],busy:false,speak:store('rw-ai-speak')==='1',rec:null};
-var AI_HINTS=['Bugun nechta tovar sotildi?','Agentlar bugun qanday ishlayapti?','Omborda qanday o‘zgarishlar bor?','Kimda eng ko‘p qarz bor va nima qilish kerak?','Bu hafta o‘tgan haftadan yaxshimi?'];
-$('aiBtn').innerHTML=ic('sparkle','sm')+'<span>AI yordamchi</span>';
-$('aiBtn').onclick=openAi;
-function openAi(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  openDrawer('<div class="dh"><div class="tone t-blue">'+ic('sparkle','lg')+'</div><div><h2>AI yordamchi</h2><div class="muted">Savdo, agentlar, ombor, qarz va kassa bo‘yicha so‘rang — javob paneldagi joriy ma’lumotdan.</div></div></div>'+
-   '<div class="ai-log" id="aiLog" aria-live="polite"></div>'+
-   '<div class="ai-hints" id="aiHints">'+AI_HINTS.map(function(h){return '<button class="pill ai-hint">'+esc(h)+'</button>'}).join('')+'</div>'+
-   '<form class="ai-form" id="aiForm"><textarea id="aiQ" rows="2" maxlength="600" placeholder="Savol yozing yoki mikrofonni bosing…" aria-label="Savol"></textarea>'+
-   '<div class="ai-acts">'+(SR?'<button type="button" class="icon-btn" id="aiMic" aria-label="Ovoz bilan so‘rash" data-tip="Ovoz bilan so‘rash">'+ic('mic')+'</button>':'')+
-   '<button type="button" class="icon-btn'+(AI.speak?' on':'')+'" id="aiSpk" aria-pressed="'+AI.speak+'" aria-label="Javobni ovoz bilan o‘qish" data-tip="Javobni ovoz bilan o‘qish">'+ic('volume')+'</button>'+
-   '<span class="grow"></span><button class="btn pri" id="aiSend">'+ic('send','sm')+' Yuborish</button></div></form>'+
-   '<p class="hint" style="margin-top:8px">AI xato qilishi mumkin — muhim qarorlardan oldin raqamlarni tegishli bo‘limda tekshiring.</p>');
-  aiRender();
-  $('aiHints').onclick=function(e){var b=e.target.closest('.ai-hint');if(b)aiAsk(b.textContent)};
-  $('aiForm').onsubmit=function(e){e.preventDefault();aiAsk($('aiQ').value)};
-  $('aiQ').onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiAsk(this.value)}};
-  $('aiSpk').onclick=function(){AI.speak=!AI.speak;store('rw-ai-speak',AI.speak?'1':'0');this.classList.toggle('on',AI.speak);this.setAttribute('aria-pressed',AI.speak);if(!AI.speak&&window.speechSynthesis)speechSynthesis.cancel()};
-  if($('aiMic'))$('aiMic').onclick=function(){aiListen(SR,this)};
-  setTimeout(function(){$('aiQ')&&$('aiQ').focus()},60);
-}
-function aiRender(){var el=$('aiLog');if(!el)return;
-  el.innerHTML=AI.msgs.length?AI.msgs.map(function(m){return '<div class="ai-msg '+m.role+(m.err?' err':'')+'">'+(m.role==='assistant'?'<span class="ai-av">'+ic('sparkle','sm')+'</span>':'')+'<div>'+esc(m.text).replace(/\n/g,'<br>')+'</div></div>'}).join('')+(AI.busy?'<div class="ai-msg assistant"><span class="ai-av">'+ic('sparkle','sm')+'</span><div class="ai-typing"><i></i><i></i><i></i></div></div>':'')
-    :'<div class="empty"><span class="empty-ico">'+ic('sparkle')+'</span><span>Masalan: «Bugun nechta tovar sotildi?»</span></div>';
-  el.scrollTop=el.scrollHeight;if($('aiSend'))$('aiSend').disabled=AI.busy}
-async function aiAsk(q){q=String(q||'').trim();if(!q||AI.busy)return;if($('aiQ'))$('aiQ').value='';
-  var hist=AI.msgs.filter(function(m){return !m.err}).map(function(m){return {role:m.role,text:m.text}});
-  AI.msgs.push({role:'user',text:q});AI.busy=true;aiRender();
-  try{var r=await api('ai_ask',{question:q,history:hist});AI.msgs.push({role:'assistant',text:r.answer});aiSay(r.answer)}
-  catch(e){AI.msgs.push({role:'assistant',text:e.message,err:true})}
+/* ---------- Yordamchi (Siri uslubi): savol matn yoki ovoz bilan → server joriy ma'lumotdan javob beradi ----------
+   Faqat tizim ma'lumotlari bo'yicha; boshqa mavzular server tomonda rad etiladi (offTopic) va tarixga qo'shilmaydi. */
+var AI={msgs:[],busy:false,speak:store('rw-ai-speak')==='1',rec:null,open:false};
+var AI_HINTS=['Bugun nechta tovar sotildi?','Agentlar bugun qanday ishlayapti?','Omborda nima o‘zgardi?','Eng ko‘p qarz kimda?','Bu hafta o‘tgan haftadan yaxshimi?'];
+var SRC=window.SpeechRecognition||window.webkitSpeechRecognition;
+$('asClose').innerHTML=ic('x');$('aiSend').innerHTML=ic('send');$('aiMic').innerHTML=ic('mic');$('aiSpk').innerHTML=ic('volume');
+if(!SRC){$('aiMic').hidden=true}
+$('aiSpk').classList.toggle('on',AI.speak);$('aiSpk').setAttribute('aria-pressed',AI.speak);
+$('aiHints').innerHTML=AI_HINTS.map(function(h){return '<button type="button" class="as-hint">'+esc(h)+'</button>'}).join('');
+function aiState(st,txt){var p=$('asPanel');['listening','thinking','speaking'].forEach(function(k){p.classList.toggle(k,st===k)});
+  $('asEdge').classList.toggle('on',st==='listening'||st==='thinking');$('asEdge').classList.toggle('think',st==='thinking');
+  $('aiBtn').classList.toggle('busy',!!st);$('asState').textContent=txt||'Savdo, agentlar, ombor va kassa bo‘yicha'}
+function openAi(){if(AI.open)return closeAi();AI.open=true;var p=$('asPanel');p.hidden=false;p.classList.remove('closing');$('aiBtn').setAttribute('aria-expanded','true');aiRender();setTimeout(function(){$('aiQ').focus()},80)}
+function closeAi(){if(!AI.open)return;AI.open=false;if(AI.rec)AI.rec.abort();if(window.speechSynthesis)speechSynthesis.cancel();aiState('');var p=$('asPanel');p.classList.add('closing');$('aiBtn').setAttribute('aria-expanded','false');
+  setTimeout(function(){if(!AI.open){p.hidden=true;p.classList.remove('closing')}},matchMedia('(prefers-reduced-motion: reduce)').matches?0:220)}
+$('aiBtn').onclick=openAi;$('asClose').onclick=closeAi;
+document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&(e.key==='j'||e.key==='J')&&!$('shell').hidden){e.preventDefault();openAi()}else if(e.key==='Escape'&&AI.open&&$('modalOv').hidden){closeAi()}});
+$('aiHints').onclick=function(e){var b=e.target.closest('.as-hint');if(b)aiAsk(b.textContent)};
+$('aiForm').onsubmit=function(e){e.preventDefault();aiAsk($('aiQ').value)};
+$('aiQ').onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiAsk(this.value)}};
+$('aiQ').oninput=function(){this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px'};
+$('aiSpk').onclick=function(){AI.speak=!AI.speak;store('rw-ai-speak',AI.speak?'1':'0');this.classList.toggle('on',AI.speak);this.setAttribute('aria-pressed',AI.speak);if(!AI.speak&&window.speechSynthesis){speechSynthesis.cancel();aiState('')}};
+$('aiMic').onclick=function(){aiListen()};
+function aiRender(){var el=$('aiLog');
+  $('asPanel').classList.toggle('fresh',!AI.msgs.length&&!AI.busy);
+  el.innerHTML=AI.msgs.length?AI.msgs.map(function(m){return '<div class="as-msg '+m.role+(m.err?' err':'')+(m.off?' off':'')+'">'+esc(m.text).replace(/\n/g,'<br>')+'</div>'}).join('')+(AI.busy?'<div class="as-msg assistant typing"><i></i><i></i><i></i></div>':'')
+    :'<div class="as-hello"><b>Nima bilan yordam beray?</b><span>Savdo, agentlar, mijozlar, qarz, kassa yoki ombor haqida so‘rang.</span></div>';
+  el.scrollTop=el.scrollHeight;$('aiSend').disabled=AI.busy}
+async function aiAsk(q){q=String(q||'').trim();if(!q||AI.busy)return;$('aiQ').value='';$('aiQ').style.height='';
+  var hist=AI.msgs.filter(function(m){return !m.err&&!m.off}).map(function(m){return {role:m.role,text:m.text}});
+  AI.msgs.push({role:'user',text:q});AI.busy=true;aiState('thinking','O‘ylayapman…');aiRender();
+  try{var r=await api('ai_ask',{question:q,history:hist});
+    if(r.offTopic)AI.msgs[AI.msgs.length-1].off=true;
+    AI.msgs.push({role:'assistant',text:r.answer,off:!!r.offTopic});AI.busy=false;aiState('');aiSay(r.answer)}
+  catch(e){AI.msgs.push({role:'assistant',text:e.message,err:true});AI.busy=false;aiState('')}
   finally{AI.busy=false;aiRender()}}
 function aiSay(t){if(!AI.speak||!window.speechSynthesis)return;try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t.slice(0,1500));
-  var v=speechSynthesis.getVoices().find(function(x){return /^uz/i.test(x.lang)})||speechSynthesis.getVoices().find(function(x){return /^(ru|tr)/i.test(x.lang)});if(v){u.voice=v;u.lang=v.lang}else u.lang='uz-UZ';speechSynthesis.speak(u)}catch(e){}}
-function aiListen(SR,btn){
-  if(AI.rec){AI.rec.stop();return}
-  var r=new SR();r.lang='uz-UZ';r.interimResults=true;r.maxAlternatives=1;AI.rec=r;btn.classList.add('rec');btn.setAttribute('aria-label','Tinglash — to‘xtatish uchun bosing');
+  var vs=speechSynthesis.getVoices(),v=vs.find(function(x){return /^uz/i.test(x.lang)})||vs.find(function(x){return /^(ru|tr)/i.test(x.lang)});if(v){u.voice=v;u.lang=v.lang}else u.lang='uz-UZ';
+  u.onstart=function(){aiState('speaking','Gapiryapman…')};u.onend=u.onerror=function(){aiState('')};speechSynthesis.speak(u)}catch(e){}}
+function aiListen(){
+  if(!SRC)return;if(AI.rec){AI.rec.stop();return}
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  var r=new SRC();r.lang='uz-UZ';r.interimResults=true;r.maxAlternatives=1;AI.rec=r;aiState('listening','Tinglayapman…');$('aiMic').classList.add('rec');
   var fin='';r.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)fin+=e.results[i][0].transcript;else t+=e.results[i][0].transcript}$('aiQ').value=(fin+t).trim()};
-  r.onerror=function(e){toast(e.error==='not-allowed'?'Mikrofonga ruxsat berilmadi':'Ovozni tanib bo‘lmadi — yozib yuboring',true)};
-  r.onend=function(){AI.rec=null;btn.classList.remove('rec');btn.setAttribute('aria-label','Ovoz bilan so‘rash');if(fin.trim())aiAsk(fin)};
-  try{r.start()}catch(e){AI.rec=null;btn.classList.remove('rec')}}
+  r.onerror=function(e){if(e.error!=='aborted')toast(e.error==='not-allowed'?'Mikrofonga ruxsat berilmadi':'Ovozni tanib bo‘lmadi — yozib yuboring',true)};
+  r.onend=function(){AI.rec=null;$('aiMic').classList.remove('rec');if(!AI.busy)aiState('');if(fin.trim())aiAsk(fin)};
+  try{r.start()}catch(e){AI.rec=null;$('aiMic').classList.remove('rec');aiState('')}}
 
 /* ---------- raqamlar animatsiyasi: KPI qiymatlari 0 dan sanab chiqadi (faqat sahifa ochilganda) ---------- */
 function countUp(root){
