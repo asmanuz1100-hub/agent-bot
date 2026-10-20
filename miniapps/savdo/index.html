@@ -238,7 +238,8 @@ Object.assign(IC,{cash:'<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><ci
 let S=null,tab=null,busy=false,Q=null,qErr='',qTimer=0,pq='',cq='',clientsList=null;
 let cart=newCart();
 function newCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',rid:newRid()};}
-const head=()=>S&&S.me.level==='head';
+const can=p=>!!(S&&S.me.perms&&S.me.perms.indexOf(p)>=0);
+const admin=()=>S&&S.me.role==='admin';
 const product=p=>(S.products||[]).find(x=>x.pack===p);
 
 async function api(action,payload={}){
@@ -264,8 +265,10 @@ async function act(action,payload,okMsg,after){
 }
 
 /* ---------- navigation ---------- */
-function tabs(){return head()?[['sell','cart','Sotuv'],['history','receipt','Tarix'],['clients','users','Mijozlar'],['prices','tag','Narxlar'],['team','worker','Jamoa']]
-  :[['sell','cart','Sotuv'],['history','receipt','Tarix'],['clients','users','Mijozlar'],['cash','wallet','Kassa']];}
+function tabs(){const t=[['sell','cart','Sotuv'],['history','receipt','Tarix'],['clients','users','Mijozlar']];
+  if(can('prices'))t.push(['prices','tag','Narxlar']);
+  if(admin())t.push(['team','worker','Jamoa']);else t.push(['cash','wallet','Kassa']);
+  return t;}
 function go(t){tab=t;closeSheet();render();scrollTo(0,0);}
 function moveNi(){const nav=$('nav'),b=nav.querySelector('button.on'),ni=$('ni');if(!b)return;ni.style.width=b.offsetWidth+'px';ni.style.transform=`translate3d(${b.offsetLeft}px,0,0)`;}
 addEventListener('resize',moveNi);
@@ -282,16 +285,17 @@ function render(){
   $('rf').onclick=()=>load().catch(()=>{});
   $('th').onclick=toggleTheme;
   $('pf').onclick=()=>openSheet(`<h2>${box('user',C.blue)}${esc(S.me.name)}</h2><div class="sub">${roleName()} · ID ${esc(S.me.id)}</div>
-    ${head()?'':`<div class="tl"><span class="tx">Chegirma limiti</span><b>${S.me.maxDiscountPct}%</b></div><div class="tl"><span class="tx">Qarzga berish</span><b>${S.me.allowCredit?'Ruxsat bor':'Ruxsat yo‘q'}</b></div>`}
+    ${admin()?'':`<div class="tl"><span class="tx">Chegirma limiti</span><b>${S.me.maxDiscountPct}%</b></div>
+      <h3 style="margin:12px 0 4px;font-size:14px">Mening ruxsatlarim</h3>${Object.entries(S.permLabels||{}).map(([k,l])=>`<div class="tl"><span class="tx">${esc(l)}</span><b class="${can(k)?'ok':'mu'}">${can(k)?'ha':'yo‘q'}</b></div>`).join('')}`}
     <div class="tl"><span class="tx">Kassa kursi</span><b>${S.rate?num(S.rate)+' so‘m':'belgilanmagan'}</b></div>
     <div class="acts"><button class="btn g" id="cl">Yopish</button></div>`,s=>s.querySelector('#cl').onclick=closeSheet);
 }
-function roleName(){return S.me.role==='admin'?'Rahbar':head()?'Bosh savdo xodimi':'Ombor sotuvchisi';}
+function roleName(){return admin()?'Rahbar':S.me.level==='head'?'Bosh savdo xodimi':'Savdo xodimi';}
 function greet(){const h=new Date().getHours();return h<5?'Xayrli tun':h<11?'Xayrli tong':h<18?'Xayrli kun':'Xayrli kech';}
 function header(){
   const first=String(S.me.name||'').split(/\s+/)[0],t=S.today||{};
   const titles={history:'Sotuvlar tarixi',clients:'Mijozlar',cash:'Mening kassam',prices:'Narxlar',team:'Savdo jamoasi'};
-  const hero=tab==='sell'?`<div class="hero">${MT}<span class="live">● JONLI</span><small class="k">ASMAN · SAVDO${head()?' · BARCHA SOTUVCHILAR':''}</small>
+  const hero=tab==='sell'?`<div class="hero">${MT}<span class="live">● JONLI</span><small class="k">ASMAN · SAVDO${can('all_sales')?' · BARCHA SOTUVCHILAR':''}</small>
       <h1>${usd(t.totalUsd)} <u>bugun</u></h1><p>${num(t.count)} ta sotuv</p>
       <div class="two"><div class="hb"><small>Olingan pul</small><b class="ok">${usd(t.paidUsd)}</b></div><div class="hb"><small>Qarzga</small><b class="${t.debtUsd>0?'bad':''}">${usd(t.debtUsd)}</b></div></div></div>`:'';
   return `<div class="hd"><div class="br"><div class="lg"><img src="/app/premium-kit/logo.png" alt="ASMAN"><small>SAVDO</small></div>
@@ -316,7 +320,7 @@ function vSell(v){
   v.innerHTML=`<div class="c"><h3>Mijoz ${c?'<a id="cc">Almashtirish</a>':''}</h3>
       ${c?`<div class="tl">${box('user',C.blue,1)}<span class="tx"><b>${esc(c.name)}</b><br><small>${esc(c.phone||'')} · <span class="pill ${PT[ptype][1]}">${PT[ptype][0]} narx</span></small></span><b class="${c.debtUsd>0?'bad':'mu'}">${c.debtUsd>0?'qarz '+usd(c.debtUsd):'qarz yo‘q'}</b></div>`
         :`<div class="tl">${box('store',C.gray,1)}<span class="tx"><b>Chakana xaridor</b><br><small>faqat to‘liq to‘lov · qarzga berish uchun mijozni tanlang</small></span></div>
-          <div class="acts"><button class="btn g" id="pick">${I('search')}Mijoz tanlash</button><button class="btn g" id="newc">${I('uplus')}Yangi mijoz</button></div>`}</div>
+          <div class="acts"><button class="btn g" id="pick">${I('search')}Mijoz tanlash</button>${can('clients')?`<button class="btn g" id="newc">${I('uplus')}Yangi mijoz</button>`:''}</div>`}</div>
     <div class="c"><h3>Savatcha ${cart.items.length?'<a id="clr">Tozalash</a>':''}</h3><div id="cartL"></div></div>
     <div class="c" id="payC"></div>
     <div class="srch">${I('search')}<input id="pq" placeholder="Mahsulot qidirish" value="${esc(pq)}" autocomplete="off"></div>
@@ -338,7 +342,7 @@ function drawCart(){
   el.innerHTML=cart.items.map((i,k)=>{const p=product(i.pack)||{name:'#'+i.pack,stock:0},ql=Q&&Q.lines[k];
     return `<div class="tl" style="flex-wrap:wrap"><span class="tx"><b>${esc(p.name)}</b><br><small>${ql?usd(ql.priceUsd)+' × '+num(i.qty)+' = '+usd(ql.priceUsd*i.qty)+(ql.priceSource==='special'?' · maxsus':''):'…'}</small></span>
       <span class="qty" style="flex:0 0 150px"><button data-m="${k}" aria-label="Kamaytirish">−</button><input class="inp" inputmode="numeric" data-q="${k}" value="${i.qty}" aria-label="Miqdor"><button data-p="${k}" aria-label="Ko‘paytirish">+</button></span>
-      ${head()?`<span style="flex-basis:100%;display:flex;gap:8px;align-items:center;margin-top:6px"><small class="mu">Narx $</small><input class="inp" style="padding:8px" inputmode="decimal" data-pr="${k}" placeholder="${ql?ql.listPriceUsd:''}" value="${esc(i.price??'')}"></span>`:''}</div>`}).join('');
+      ${can('price')?`<span style="flex-basis:100%;display:flex;gap:8px;align-items:center;margin-top:6px"><small class="mu">Narx $</small><input class="inp" style="padding:8px" inputmode="decimal" data-pr="${k}" placeholder="${ql?ql.listPriceUsd:''}" value="${esc(i.price??'')}"></span>`:''}</div>`}).join('');
   const upd=(k,q)=>{const p=product(cart.items[k].pack);q=Math.max(0,Math.min(q,p?p.stock:q));if(!q)cart.items.splice(k,1);else cart.items[k].qty=q;render();requote();};
   el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>upd(+b.dataset.m,cart.items[+b.dataset.m].qty-1));
   el.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>upd(+b.dataset.p,cart.items[+b.dataset.p].qty+1));
@@ -351,9 +355,10 @@ function drawTotals(){
   const q=Q,tot=q?q.totalUsd:0,paidNow=cart.method==='cash_uzs'?(Number(cart.paidUzs)>0&&Number(cart.rate)>0?Math.round(Number(cart.paidUzs)/Number(cart.rate)*100)/100:0):Number(String(cart.paid).replace(',','.'))||0;
   const debt=Math.max(0,Math.round((tot-paidNow)*100)/100);
   el.innerHTML=`<h3>Chegirma va to‘lov</h3>
-    <div class="seg" id="dm"><button data-d="pct" class="${cart.dmode==='pct'?'on':''}">Chegirma %</button><button data-d="usd" class="${cart.dmode==='usd'?'on':''}">Chegirma $</button></div>
-    <input class="inp" id="disc" inputmode="decimal" placeholder="${cart.dmode==='pct'?(head()?'0':'0 – '+S.me.maxDiscountPct):'0.00'}" value="${esc(cart.discount)}">
-    ${head()?'':`<div class="hint">Sizning chegirma limitingiz: <b>${S.me.maxDiscountPct}%</b></div>`}
+    ${can('discount')||admin()?'':'<div class="hint">Sizda chegirma berish ruxsati yo‘q.</div>'}
+    <div class="seg" id="dm" ${can('discount')||admin()?'':'style="display:none"'}><button data-d="pct" class="${cart.dmode==='pct'?'on':''}">Chegirma %</button><button data-d="usd" class="${cart.dmode==='usd'?'on':''}">Chegirma $</button></div>
+    <input class="inp" id="disc" inputmode="decimal" ${can('discount')||admin()?'':'hidden'} placeholder="${cart.dmode==='pct'?'0 – '+S.me.maxDiscountPct:'0.00'}" value="${esc(cart.discount)}">
+    ${can('discount')&&!admin()?`<div class="hint">Sizning chegirma limitingiz: <b>${S.me.maxDiscountPct}%</b></div>`:''}
     <div style="margin-top:12px">
       <div class="tl"><span class="tx">Jami narx</span><b>${q?usd(q.subtotalUsd):'…'}</b></div>
       <div class="tl"><span class="tx">Jami chegirma${q&&q.discountPct?` <small>(${q.discountPct}%)</small>`:''}</span><b class="wa">${q?'−'+usd(q.discountUsd):'…'}</b></div>
@@ -412,10 +417,10 @@ function pickClient(){
     l.querySelectorAll('[data-c]').forEach(el=>el.onclick=()=>{cart.client=clientsList.find(c=>c.id===+el.dataset.c);closeSheet();render();requote();});}};
   openSheet(`<h2>${box('search',C.blue)}Mijoz tanlash</h2><div class="srch">${I('search')}<input id="psq" placeholder="Ism, do‘kon yoki telefon" autocomplete="off"></div>
     <div id="pl"><div class="empty">Yuklanmoqda…</div></div>
-    <div class="acts"><button class="btn g" id="wk">Chakana xaridor</button><button class="btn g" id="nc">${I('uplus')}Yangi mijoz</button></div>`,s=>{
+    <div class="acts"><button class="btn g" id="wk">Chakana xaridor</button>${can('clients')?`<button class="btn g" id="nc">${I('uplus')}Yangi mijoz</button>`:''}</div>`,s=>{
     let t=0;s.querySelector('#psq').oninput=e=>{q=e.target.value;clearTimeout(t);t=setTimeout(draw,250);};
     s.querySelector('#wk').onclick=()=>{cart.client=null;closeSheet();render();requote();};
-    s.querySelector('#nc').onclick=()=>newClient(true);draw();});
+    const nb=s.querySelector('#nc');if(nb)nb.onclick=()=>newClient(true);draw();});
 }
 function newClient(toCart){
   openSheet(`<h2>${box('uplus',C.green)}Yangi mijoz</h2>
@@ -423,7 +428,7 @@ function newClient(toCart){
     <label class="f">Do‘kon nomi</label><input class="inp" id="ns" maxlength="80" placeholder="ixtiyoriy">
     <label class="f">Telefon</label><input class="inp" id="np" inputmode="tel" value="+998">
     <label class="f">Hudud</label><input class="inp" id="nr" maxlength="60" placeholder="masalan, Qo‘qon">
-    ${head()?`<label class="f">Narx turi</label><div class="seg" id="nt2"><button data-v="retail" class="on">Chakana</button><button data-v="dealer">Diller</button></div>`:''}
+    ${can('dealer')?`<label class="f">Narx turi</label><div class="seg" id="nt2"><button data-v="retail" class="on">Chakana</button><button data-v="dealer">Diller</button></div>`:''}
     <div class="acts"><button class="btn g" id="cx">Bekor</button><button class="btn ok" id="ok">Saqlash</button></div>`,s=>{
     let pt='retail';const seg=s.querySelector('#nt2');if(seg)seg.onclick=e=>{const b=e.target.closest('button');if(!b)return;pt=b.dataset.v;seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));};
     s.querySelector('#cx').onclick=closeSheet;
@@ -435,9 +440,9 @@ function newClient(toCart){
 }
 function vClients(v){
   v.innerHTML=`<div class="srch">${I('search')}<input id="cq" placeholder="Ism, do‘kon yoki telefon" value="${esc(cq)}" autocomplete="off"></div>
-    <div class="acts" style="margin:-2px 0 12px"><button class="btn g" id="nc">${I('uplus')}Yangi mijoz</button></div><div id="cl2"><div class="empty">Yuklanmoqda…</div></div>`;
+    ${can('clients')?`<div class="acts" style="margin:-2px 0 12px"><button class="btn g" id="nc">${I('uplus')}Yangi mijoz</button></div>`:''}<div id="cl2"><div class="empty">Yuklanmoqda…</div></div>`;
   let t=0;$('cq').oninput=e=>{cq=e.target.value;clearTimeout(t);t=setTimeout(()=>draw(true),250);};
-  $('nc').onclick=()=>newClient(false);
+  if($('nc'))$('nc').onclick=()=>newClient(false);
   const draw=async(f)=>{if(f||!clientsList)await fetchClients(cq);const l=$('cl2');if(!l)return;
     const list=clientsList.slice().sort((a,b)=>b.debtUsd-a.debtUsd);
     l.innerHTML=list.map(clientRow).join('')||emptyBox('users','Mijoz topilmadi');
@@ -449,8 +454,8 @@ async function openClient(id){
   const c=d.client;
   openSheet(`<h2>${box('user',C.blue)}${esc(c.shopName||c.name)}</h2><div class="sub">${esc(c.name)} · ${esc(c.phone||'')} · <span class="pill ${PT[c.priceType][1]}">${PT[c.priceType][0]}</span></div>
     <div class="hb" style="margin:8px 0"><small>Joriy qarz</small><b class="${c.debtUsd>0?'bad':'ok'}">${usd(c.debtUsd)}</b></div>
-    <div class="acts"><button class="btn" id="sl">${I('cart')}Sotish</button>${c.debtUsd>0?`<button class="btn ok" id="pay">${I('cash')}Qarz to‘lovi</button>`:''}</div>
-    ${head()?`<label class="f">Narx turi</label><div class="seg" id="ptg"><button data-v="retail" class="${c.priceType==='retail'?'on':''}">Chakana</button><button data-v="dealer" class="${c.priceType==='dealer'?'on':''}">Diller</button></div>
+    <div class="acts"><button class="btn" id="sl">${I('cart')}Sotish</button>${c.debtUsd>0&&can('collect')?`<button class="btn ok" id="pay">${I('cash')}Qarz to‘lovi</button>`:''}</div>
+    ${can('special')?`<label class="f">Narx turi</label><div class="seg" id="ptg"><button data-v="retail" class="${c.priceType==='retail'?'on':''}">Chakana</button><button data-v="dealer" class="${c.priceType==='dealer'?'on':''}">Diller</button></div>
       <h3 style="margin:14px 0 6px;font-size:14.5px">Maxsus narxlar</h3>${d.special.map(x=>`<div class="tl"><span class="tx">${esc(x.name)}</span><b>${usd(x.priceUsd)}</b><button class="lnk" data-del="${x.pack}">o‘chirish</button></div>`).join('')||'<div class="hint">Maxsus narx yo‘q</div>'}
       <div class="two" style="margin-top:8px"><select class="inp" id="spk">${(S.products||[]).map(p=>`<option value="${p.pack}">${esc(p.name)}</option>`).join('')}</select><input class="inp" id="spv" inputmode="decimal" placeholder="Narx $"></div>
       <div class="acts"><button class="btn g" id="spa">Maxsus narx qo‘yish</button></div>`:''}
@@ -478,7 +483,7 @@ function collectSheet(c){
 }
 
 /* ---------- tarix ---------- */
-function saleRow(r){return `<div class="row" data-sale="${r.id}">${box('receipt',r.debtUsd>0?C.orange:C.green,1)}<div style="flex:1;min-width:0"><b style="font-size:14px">${esc(r.client)}</b><br><small class="mu">№ ${r.id} · ${when(r.ts)}${head()?' · '+esc(r.seller):''}</small></div>
+function saleRow(r){return `<div class="row" data-sale="${r.id}">${box('receipt',r.debtUsd>0?C.orange:C.green,1)}<div style="flex:1;min-width:0"><b style="font-size:14px">${esc(r.client)}</b><br><small class="mu">№ ${r.id} · ${when(r.ts)}${can('all_sales')?' · '+esc(r.seller):''}</small></div>
   <div class="am"><b>${usd(r.totalUsd)}</b><small class="${r.debtUsd>0?'bad':'ok'}">${r.debtUsd>0?'qarz '+usd(r.debtUsd):'to‘langan'}</small></div></div>`;}
 function vHistory(v){
   const t=S.today||{};
@@ -515,15 +520,15 @@ function vPrices(v){
 
 /* ---------- jamoa (bosh xodim) ---------- */
 function vTeam(v){
-  const tm=S.team||[];
-  v.innerHTML=tm.map(u=>`<div class="od" data-u="${u.id}"><div class="hdr"><div><b>${esc(u.name)}</b><small>${u.level==='head'?'Bosh savdo xodimi':'Ombor sotuvchisi'} · bugun ${num(u.todayCount)} ta · ${usd(u.todayUsd)}</small></div>
-      <span style="text-align:right"><b>${usd(u.cashUsd)}</b><br><small class="mu">${som(u.cashUzs)} qo‘lida</small></span></div>
-      ${u.level==='head'?'':`<div class="two" style="margin-top:8px"><div><label class="f" style="margin-top:0">Chegirma limiti %</label><input class="inp" inputmode="numeric" data-lim="${u.id}" value="${u.maxDiscountPct}"></div>
-        <div><label class="f" style="margin-top:0">Qarzga berish</label><div class="seg" style="margin:0" data-cr="${u.id}"><button data-v="1" class="${u.allowCredit?'on':''}">Ha</button><button data-v="0" class="${u.allowCredit?'':'on'}">Yo‘q</button></div></div></div>`}</div>`).join('')
-    ||emptyBox('worker','Savdo xodimlari yo‘q. Rahbar web paneldagi «Xodimlar» bo‘limidan «Savdo» rolida qo‘shing.');
-  const save=(id,lim,cr)=>act('set_staff',{userId:id,level:'seller',maxDiscountPct:lim,allowCredit:cr},'Saqlandi');
-  v.querySelectorAll('[data-lim]').forEach(i=>i.onchange=()=>{const u=tm.find(x=>x.id===+i.dataset.lim);save(u.id,i.value,u.allowCredit);});
-  v.querySelectorAll('[data-cr]').forEach(sg=>sg.onclick=e=>{const b=e.target.closest('button');if(!b)return;const u=tm.find(x=>x.id===+sg.dataset.cr);save(u.id,u.maxDiscountPct,b.dataset.v==='1');});
+  const tm=S.team||[],L=S.permLabels||{};
+  v.innerHTML=`<div class="ro">${I('sliders')} Har bir xodim uchun funksiyani bosib yoqing yoki o‘chiring. O‘zgarish darhol saqlanadi.</div>`+(tm.map(u=>`<div class="od"><div class="hdr"><div><b>${esc(u.name)}</b><small>bugun ${num(u.todayCount)} ta · ${usd(u.todayUsd)} · qo‘lida ${usd(u.cashUsd)}</small></div></div>
+      <div class="ch" style="flex-wrap:wrap;padding-top:8px">${Object.entries(L).map(([k,l])=>`<button class="${u.perms.indexOf(k)>=0?'on':''}" data-u="${u.id}" data-k="${k}">${esc(l)}</button>`).join('')}</div>
+      ${u.perms.indexOf('discount')>=0?`<label class="f" style="margin-top:0">Chegirma limiti %</label><input class="inp" inputmode="numeric" data-lim="${u.id}" value="${u.maxDiscountPct}">`:''}</div>`).join('')
+    ||emptyBox('worker','Savdo xodimlari yo‘q. Rahbar web paneldagi «Xodimlar» bo‘limidan «Savdo» rolida qo‘shing.'));
+  const save=(u,perms,lim)=>act('set_staff',{userId:u.id,perms,maxDiscountPct:lim},'Saqlandi');
+  v.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{const u=tm.find(x=>x.id===+b.dataset.u),k=b.dataset.k;
+    const perms=u.perms.indexOf(k)>=0?u.perms.filter(x=>x!==k):u.perms.concat([k]);save(u,perms,u.maxDiscountPct);});
+  v.querySelectorAll('[data-lim]').forEach(i=>i.onchange=()=>{const u=tm.find(x=>x.id===+i.dataset.lim);save(u,u.perms,i.value);});
 }
 
 /* ---------- sheet & theme ---------- */

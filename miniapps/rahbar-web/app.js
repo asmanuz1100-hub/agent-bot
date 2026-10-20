@@ -1349,7 +1349,7 @@ function shPos(el){
   el.innerHTML='<div class="grid g2" style="align-items:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))">'+
     '<div class="card flush" style="min-width:0"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3><input id="shPq" type="search" placeholder="Qidirish…" value="'+esc(SH.pq)+'" style="width:220px;max-width:100%"></div><div class="tbl-wrap" style="margin-top:12px;max-height:620px" id="shProds"></div></div>'+
     '<div style="min-width:0"><div class="card" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('users')+' Sotuvchi va mijoz</h3></div>'+
-      '<label class="small muted">Sotuv kimning nomidan (naqd pul shu xodim hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+' · '+(u.level==='head'?'bosh xodim':'sotuvchi')+'</option>'}).join('')+'</select>'+
+      '<label class="small muted">Sotuv kimning nomidan (naqd pul shu xodim hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select>'+
       '<div id="shClient" style="margin-top:12px"></div></div>'+
     '<div class="card flush" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('cart')+' Savatcha</h3>'+(c.items.length?'<button class="btn" id="shClr">Tozalash</button>':'')+'</div><div id="shCart" class="tbl-wrap" style="padding:0 20px 16px"></div></div>'+
     '<div class="card" id="shPay"></div></div></div>';
@@ -1442,18 +1442,19 @@ function shPrices(el){
     if(r)SH.d=r}});
 }
 function shTeam(el){
-  var tm=SH.d.team||[];
-  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('users')+' Savdo jamoasi</h3><span class="muted small">Yangi xodim — «Xodimlar» bo‘limida «Savdo» rolida</span></div><div class="tbl-wrap" style="margin-top:12px">'+(tm.length?
-    '<table><thead><tr><th>Xodim</th><th>Daraja</th><th class="right">Chegirma limiti %</th><th>Qarzga berish</th><th class="right">Bugun</th><th class="right">Qo‘lidagi pul</th></tr></thead><tbody>'+
-    tm.map(function(u){return '<tr><td><b>'+esc(u.name)+'</b></td><td><select data-lv="'+u.id+'" style="width:auto"><option value="seller"'+(u.level==='seller'?' selected':'')+'>Ombor sotuvchisi</option><option value="head"'+(u.level==='head'?' selected':'')+'>Bosh savdo xodimi</option></select></td>'+
-      '<td class="right">'+(u.level==='head'?'<span class="muted">cheksiz</span>':'<input data-lim="'+u.id+'" value="'+u.maxDiscountPct+'" inputmode="numeric" style="width:70px;text-align:right">')+'</td>'+
-      '<td>'+(u.level==='head'?'<span class="muted">ha</span>':'<select data-cr="'+u.id+'" style="width:auto"><option value="1"'+(u.allowCredit?' selected':'')+'>Ha</option><option value="0"'+(u.allowCredit?'':' selected')+'>Yo‘q</option></select>')+'</td>'+
+  var tm=SH.d.team||[],L=SH.d.permLabels||{},keys=Object.keys(L);
+  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('users')+' Savdo jamoasi · funksiyalar</h3><span class="muted small">Xodimlar soni cheklanmagan — yangisini «Xodimlar» bo‘limida «Savdo» rolida qo‘shing. Katakchani bosing — darhol saqlanadi.</span></div>'+
+    '<div class="tbl-wrap" style="margin-top:12px">'+(tm.length?'<table><thead><tr><th>Xodim</th>'+keys.map(function(k){return '<th style="text-align:center;min-width:92px;white-space:normal;font-size:11.5px">'+esc(L[k])+'</th>'}).join('')+'<th class="right">Chegirma limiti %</th><th class="right">Bugun</th><th class="right">Qo‘lidagi pul</th></tr></thead><tbody>'+
+    tm.map(function(u){return '<tr><td><b>'+esc(u.name)+'</b><br><button class="btn" style="min-height:26px;padding:0 8px;font-size:11.5px;margin-top:4px" data-all="'+u.id+'">'+(u.perms.length===keys.length?'Hammasini o‘chirish':'Hammasini yoqish')+'</button></td>'+
+      keys.map(function(k){return '<td style="text-align:center"><input type="checkbox" data-u="'+u.id+'" data-k="'+k+'"'+(u.perms.indexOf(k)>=0?' checked':'')+' aria-label="'+esc(u.name+': '+L[k])+'" style="width:18px;height:18px"></td>'}).join('')+
+      '<td class="right"><input data-lim="'+u.id+'" value="'+u.maxDiscountPct+'" inputmode="numeric" style="width:70px;text-align:right"'+(u.perms.indexOf('discount')>=0?'':' disabled')+'></td>'+
       '<td class="right num">'+num(u.todayCount)+' ta · '+usd(u.todayUsd)+'</td><td class="right num">'+usd(u.cashUsd)+'<br><small class="muted">'+uzs(u.cashUzs)+'</small></td></tr>'}).join('')+'</tbody></table>':emptyState('Savdo xodimlari yo‘q','users'))+'</div></div>';
-  function save(id){var u=tm.find(function(x){return x.id===id}),lv=el.querySelector('[data-lv="'+id+'"]').value,li=el.querySelector('[data-lim="'+id+'"]'),cr=el.querySelector('[data-cr="'+id+'"]');
-    run(function(){return shApi('set_staff',{userId:id,level:lv,maxDiscountPct:li?li.value:u.maxDiscountPct,allowCredit:cr?cr.value==='1':u.allowCredit})},'Saqlandi').then(function(r){if(r){SH.d=r;shTeam(el)}})}
-  el.querySelectorAll('[data-lv],[data-lim],[data-cr]').forEach(function(i){i.onchange=function(){save(+(i.dataset.lv||i.dataset.lim||i.dataset.cr))}});
+  function save(u,perms,lim){run(function(){return shApi('set_staff',{userId:u.id,perms:perms,maxDiscountPct:lim})},'Saqlandi').then(function(r){if(r)SH.d=r;shTeam(el)})}
+  el.querySelectorAll('[data-k]').forEach(function(i){i.onchange=function(){var u=tm.find(function(x){return x.id===+i.dataset.u}),k=i.dataset.k;
+    save(u,i.checked?u.perms.concat([k]):u.perms.filter(function(x){return x!==k}),u.maxDiscountPct)}});
+  el.querySelectorAll('[data-all]').forEach(function(b){b.onclick=function(){var u=tm.find(function(x){return x.id===+b.dataset.all});save(u,u.perms.length===keys.length?[]:keys,u.maxDiscountPct)}});
+  el.querySelectorAll('[data-lim]').forEach(function(i){i.onchange=function(){var u=tm.find(function(x){return x.id===+i.dataset.lim});save(u,u.perms,i.value)}});
 }
-
 /* ----- Savdo (Bito «Sotuvlar» kabi) ----- */
 var SL={period:'month',from:'',to:'',agent:'',q:'',kind:''};
 var SL_K={sold:['🛒','Savdo summasi'],net:['📦','Sof savdo'],returned:['🧾','Qaytarish'],checks:['receipt','Cheklar soni'],avgCheck:['💲','O‘rtacha chek'],qty:['box','Mahsulot soni']};

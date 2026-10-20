@@ -16,9 +16,9 @@ class ShopTests(unittest.TestCase):
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', [
             (ADMIN, 'admin', 'Rahbar'), (HEAD, 'sales', 'Bosh'), (S1, 'sales', 'Sotuvchi1'), (S2, 'sales', 'Sotuvchi2'),
             (KEEPER, 'warehouse', 'Omborchi'), (CASHIER, 'cashier', 'Kassir'), (AGENT, 'agent', 'Agent')])
-        shop.set_staff(self.db, ADMIN, HEAD, 'head')
-        shop.set_staff(self.db, HEAD, S1, 'seller', 5, True)
-        shop.set_staff(self.db, HEAD, S2, 'seller', 0, False)
+        shop.set_staff(self.db, ADMIN, HEAD, list(shop.PERMS), 100)
+        shop.set_staff(self.db, ADMIN, S1, list(shop.SELLER_PERMS), 5)
+        shop.set_staff(self.db, ADMIN, S2, ['retail'], 0)
         self.p1, self.p2 = list(core.PRODUCTS)[:2]
         shop.set_price(self.db, HEAD, self.p1, '10', '8')
         shop.set_price(self.db, HEAD, self.p2, '5', '4')
@@ -54,15 +54,15 @@ class ShopTests(unittest.TestCase):
     def test_seller_limits(self):
         with self.assertRaisesRegex(ValueError, 'limitingiz 5%'):
             self.sell(S1, self.client, [{'pack': self.p1, 'qty': 10}], discountPct='6', paid='94', method='cash_usd')
-        with self.assertRaisesRegex(ValueError, 'faqat bosh savdo'):
+        with self.assertRaisesRegex(ValueError, 'narxni o‘zgartirish ruxsati'):
             self.sell(S1, self.client, [{'pack': self.p1, 'qty': 1, 'price': '9'}], paid='9', method='cash_usd')
         with self.assertRaisesRegex(ValueError, 'qarzga berish ruxsati yo‘q'):
             self.sell(S2, self.client, [{'pack': self.p1, 'qty': 1}])
         with self.assertRaisesRegex(ValueError, 'Chakana xaridorga qarzga'):
             self.sell(S1, None, [{'pack': self.p1, 'qty': 1}], paid='5', method='cash_usd')
-        with self.assertRaisesRegex(ValueError, 'faqat bosh savdo'):
+        with self.assertRaisesRegex(ValueError, 'Narxlar ro‘yxati'):
             shop.set_price(self.db, S1, self.p1, '1', '1')
-        with self.assertRaisesRegex(ValueError, 'Diller mijozni faqat'):
+        with self.assertRaisesRegex(ValueError, 'Diller mijoz qo‘shish ruxsati'):
             shop.add_client(self.db, S1, 'Xasan', '+998909999999', price_type='dealer')
         r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 10}], discountPct='5', paid='95', method='cash_usd')
         self.assertEqual(r['totalUsd'], 95)
@@ -142,8 +142,38 @@ class ShopTests(unittest.TestCase):
     def test_access(self):
         with self.assertRaisesRegex(ValueError, 'ruxsat yo‘q'):
             shop.handle(self.db, AGENT, 'dashboard', {})
-        with self.assertRaisesRegex(ValueError, 'Bosh savdo xodimini faqat rahbar'):
-            shop.set_staff(self.db, HEAD, S1, 'head')
+        with self.assertRaisesRegex(ValueError, 'faqat rahbar'):
+            shop.set_staff(self.db, HEAD, S1, list(shop.PERMS))
+
+    def test_per_seller_permission_toggles(self):
+        # S2: faqat chakana — chegirma, qarz, diller, undirish, mijoz qo'shish yo'q.
+        with self.assertRaisesRegex(ValueError, 'chegirma berish ruxsati'):
+            self.sell(S2, None, [{'pack': self.p1, 'qty': 1}], discount='1', paid='9', method='cash_usd')
+        with self.assertRaisesRegex(ValueError, 'Diller sotuvi'):
+            self.sell(S2, self.dealer, [{'pack': self.p1, 'qty': 1}], paid='8', method='cash_usd')
+        with self.assertRaisesRegex(ValueError, 'Qarz undirish'):
+            shop.collect(self.db, S2, {'requestId': self.req(), 'clientId': self.client, 'paid': '1', 'method': 'cash_usd'})
+        with self.assertRaisesRegex(ValueError, 'Mijoz qo‘shish'):
+            shop.add_client(self.db, S2, 'Yangi', '+998901110000')
+        self.assertEqual(self.sell(S2, None, [{'pack': self.p1, 'qty': 1}], paid='10', method='cash_usd')['totalUsd'], 10)
+        # Rahbar S2 ga diller sotuvini ochadi, chakanani yopadi — soni cheklanmagan, har biri alohida.
+        shop.set_staff(self.db, ADMIN, S2, ['dealer', 'credit'], 0)
+        self.assertEqual(self.sell(S2, self.dealer, [{'pack': self.p1, 'qty': 1}])['totalUsd'], 8)
+        with self.assertRaisesRegex(ValueError, 'Chakana sotuv'):
+            self.sell(S2, None, [{'pack': self.p1, 'qty': 1}], paid='10', method='cash_usd')
+        st = shop.staff(self.db, S2)
+        self.assertEqual((st['perms'], st['maxDiscountPct'], st['allowCredit']), (['credit', 'dealer'], 0, True))
+        with self.assertRaisesRegex(ValueError, 'Ruxsatlar noto‘g‘ri'):
+            shop.set_staff(self.db, ADMIN, S2, ['hack'])
+
+    def test_legacy_rows_and_many_sellers(self):
+        self.db.execute("INSERT INTO users(id,role,name) VALUES(90,'sales','Eski bosh'),(91,'sales','Eski sotuvchi'),(92,'sales','Yangi')")
+        self.db.execute("INSERT INTO shop_staff(user_id,level,max_discount_pct,allow_credit) VALUES(90,'head',5,1),(91,'seller',3,0)")
+        self.assertEqual(set(shop.staff(self.db, 90)['perms']), set(shop.PERMS))
+        self.assertEqual(set(shop.staff(self.db, 91)['perms']), set(shop.SELLER_PERMS) - {'credit'})
+        self.assertEqual(set(shop.staff(self.db, 92)['perms']), set(shop.SELLER_PERMS))   # yozuvsiz — standart
+        team = shop.dashboard(self.db, ADMIN)['team']
+        self.assertEqual(len(team), 6)
 
 
 if __name__ == '__main__':
@@ -155,7 +185,7 @@ class ShopBotTests(unittest.TestCase):
         self.db = core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
                             [(1, 'admin', 'A'), (2, 'agent', 'B'), (3, 'cashier', 'C'), (50, 'sales', 'Bosh'), (5, 'warehouse', 'W')])
-        shop.set_staff(self.db, 1, 50, 'head')
+        shop.set_staff(self.db, 1, 50, list(shop.PERMS))
         self.db.commit()
 
     def tearDown(self):
