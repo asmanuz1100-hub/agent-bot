@@ -3116,6 +3116,16 @@ def serve_webhook(db,base_url):
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
                     elif action=='ai_ask':
                         data=ai_assistant.ask(local,payload.get('question'),payload.get('history'))
+                    elif action=='stock':
+                        # Ombor amallari web paneldan: Ombor Mini App bilan bir xil funksiya va tekshiruvlar (rahbar — KEEPER_ROLES ichida).
+                        op=str(payload.get('op') or 'dashboard')
+                        if op not in ('dashboard','receive','issue','writeoff','take_back','decide','moves'):
+                            raise ValueError('Ombor amali noto‘g‘ri.')
+                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if actor in ADMINS else None)
+                        try:data=warehouse_api.handle(local,actor,op,payload)
+                        finally:warehouse.WEB_PRIMARY_OPERATOR.reset(wh_tok)
+                        data['canOperate']=actor in ADMINS
+                        wh_notify=data.pop('_notify',None);data.pop('_orders',None)
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
@@ -3223,6 +3233,9 @@ def serve_webhook(db,base_url):
                     else:
                         answer(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
+                    for recipients,msg_text in (wh_notify if action=='stock' else None) or ():
+                        try:_safe_send_many(set(recipients)-{actor},msg_text)
+                        except Exception:logging.exception('Web warehouse notification failed')
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
                     attach_client_photo_urls(data)
