@@ -391,7 +391,7 @@ function aiListen(){
   r.onend=function(){AI.rec=null;$('aiMic').classList.remove('rec');if(!AI.busy)aiState('');if(fin.trim())aiAsk(fin)};
   try{r.start()}catch(e){AI.rec=null;$('aiMic').classList.remove('rec');aiState('')}}
 
-document.addEventListener('pointermove',function(e){var c=e.target.closest&&e.target.closest('.lift,.kpi.click');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')},{passive:true});
+document.addEventListener('pointermove',function(e){var c=e.target.closest&&e.target.closest('.lift,.kpi,.grid>.card');if(!c)return;var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')},{passive:true});
 /* Suzuvchi tooltip: faqat ikonkali tugmalar va yig'ilgan sidebar uchun (body'ga qo'shiladi, kesilmaydi) */
 (function(){var tip=document.createElement('div');tip.className='ftip';tip.setAttribute('aria-hidden','true');document.body.appendChild(tip);var tm;
   function want(el){return el&&el.dataset&&el.dataset.tip&&(el.closest('.rail.mini')||el.classList.contains('icon-btn'))}

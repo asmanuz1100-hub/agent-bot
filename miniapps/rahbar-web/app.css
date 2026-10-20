@@ -818,3 +818,11 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 .side-tog:focus:not(:focus-visible){outline:none}
 .rail.mini .side-head{flex:0 0 auto;height:auto;justify-content:flex-start}
 .rail.mini{display:flex;gap:6px}
+
+/* Hover barcha bo'limlarda: avval faqat bosiladigan kartalarda (.kpi.click/.lift) edi — Bosh sahifa va Xodimlardan boshqa joyda effekt yo'q edi */
+.kpi,.grid>.card{position:relative;transition:box-shadow var(--t) var(--ease),transform var(--t) var(--ease),border-color var(--t)}
+.kpi:hover,.grid>.card:not(:has(table,.leaflet-container)):hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--line2)}
+.kpi::after,.grid>.card::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.55),transparent 70%);transition:opacity var(--t)}
+:root[data-theme="dark"] .kpi::after,:root[data-theme="dark"] .grid>.card::after{background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.07),transparent 70%)}
+.kpi:hover::after,.grid>.card:hover::after{opacity:1}
