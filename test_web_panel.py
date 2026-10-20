@@ -320,6 +320,45 @@ class WebPanelHttpTests(unittest.TestCase):
             bot.ADMINS.clear()
             bot.ADMINS.update(saved)
 
+    def test_staff_roles_and_permissions(self):
+        _, data = self.login()
+        token = data['token']
+        saved = set(bot.ADMINS)
+        try:
+            bot.ADMINS.discard(1)
+            # oddiy rahbar: qo'shish mumkin, admin qo'shish/yopish/login — yo'q
+            code, d = self.post('/api/manager', token, action='staff_add', role='production', id=701, name='Usta', confirm=True)
+            self.assertEqual(code, 200, d)
+            code, d = self.post('/api/manager', token, action='staff_add', role='admin', id=702, name='A', confirm=True)
+            self.assertEqual(code, 403, d)
+            code, d = self.post('/api/manager', token, action='staff_deactivate', id=701, confirm=True)
+            self.assertEqual(code, 403, d)
+            bot.ADMINS.add(1)
+            for role, uid in (('sales', 703), ('warehouse', 704), ('admin', 705)):
+                code, d = self.post('/api/manager', token, action='staff_add', role=role, id=uid, name='X' + role, confirm=True)
+                self.assertEqual(code, 200, d)
+            roles = {x['id']: x['role'] for x in d['staff']['staff']}
+            self.assertEqual((roles[701], roles[703], roles[704], roles[705]), ('production', 'sales', 'warehouse', 'admin'))
+            code, d = self.post('/api/manager', token, action='staff_login_issue', id=704, confirm=True)
+            self.assertEqual(code, 400, d)   # web panel faqat admin uchun
+            code, d = self.post('/api/manager', token, action='staff_login_issue', id=705, login='ikkinchi', confirm=True)
+            self.assertEqual(code, 200, d)
+            code, lg = self.post('/api/web', action='login', login='ikkinchi', password=d['password'])
+            self.assertEqual(code, 200, lg)
+            code, d = self.post('/api/manager', token, action='staff_deactivate', id=705, confirm=True)
+            self.assertEqual(code, 200, d)
+            code, _ = self.post('/api/manager', lg['token'], action='dashboard')
+            self.assertEqual(code, 401)   # yopilgan admin sessiyasi bekor
+            code, d = self.post('/api/manager', token, action='staff_transfer', id=704, newId=714, confirm=True)
+            self.assertEqual(code, 200, d)
+            st = {x['id']: x['active'] for x in d['staff']['staff']}
+            self.assertEqual((st[704], st[714]), (False, True))
+            code, d = self.post('/api/manager', token, action='staff_deactivate', id=1, confirm=True)
+            self.assertEqual(code, 400, d)
+        finally:
+            bot.ADMINS.clear()
+            bot.ADMINS.update(saved)
+
     def test_foreign_origin_is_rejected(self):
         code, _ = self.post('/api/web', origin='https://evil.example', action='login', login='boss', password=self.password)
         self.assertEqual(code, 403)

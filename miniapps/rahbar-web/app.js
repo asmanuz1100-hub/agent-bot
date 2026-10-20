@@ -198,14 +198,14 @@ applyBrand();
 /* ---------- navigation ---------- */
 var PAGES=[
   ['home','home','Asosiy','Bugungi jonli holat',0,'Dashboard'],
-  ['agents','compass','GPS markaz','Agentlar joylashuvi, marshruti va mijozlar xaritasi',0,'GPS'],
-  ['team','users','Agentlar','KPI, balans, topshirish va faoliyat'],
+  ['team','users','Agentlar','KPI, pul, topshirish, GPS va marshrutlar'],
+  ['agents','compass','Agentlar','Jonli GPS xarita, marshrut va mijozlar',9],
   ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
   ['warehouse','orders','Buyurtmalar','Kanban, ro‘yxat, katalog va ombor qoldig‘i',0,'Buyurtmalar'],
   ['cash','wallet','Moliya va qarzdorlik','Kassa, agentlardagi pul, qarzdorlar, konvertatsiya',1,'Moliya'],
   ['reports','report','Hisobot','Davr bo‘yicha natijalar',1],
   ['insights','analytics','Tahlil','Bugungi reja, mijozlar reytingi va hududlar',1],
-  ['staff','staff','Xodimlar','Agentlar va kassirlar',2],
+  ['staff','staff','Xodimlar','Rollar, akkauntlar, login va parollar',2],
   ['settings','settings','Sozlamalar','Kompaniya, akkaunt va xavfsizlik',2]
 ];
 /* Guruhlar: barcha bo'limlar mavjud rahbar huquqlari doirasida (server /api/manager rolni tekshiradi). */
@@ -213,10 +213,14 @@ var NAV_GROUPS=['Ish jarayoni','Moliya va tahlil','Boshqaruv'];
 function renderNav(){
   var d=S.dash,badge={};
   if(d){badge.warehouse=d.warehouse&&d.warehouse.newOrders;badge.cash=d.summary&&d.summary.pendingCount}
-  $('nav').innerHTML=NAV_GROUPS.map(function(g,gi){return '<div class="nav-grp"><span class="lbl nav-h">'+g+'</span>'+PAGES.filter(function(p){return (p[4]||0)===gi}).map(function(p){var lb=p[5]||p[2];
-    return '<button data-p="'+p[0]+'" class="'+(S.page===p[0]?'on':'')+'"'+(S.page===p[0]?' aria-current="page"':'')+' data-tip="'+esc(lb)+'">'+ic(p[1])+'<span class="lbl">'+lb+'</span>'+(badge[p[0]]?'<span class="badge" aria-label="'+badge[p[0]]+' ta yangi">'+badge[p[0]]+'</span>':'')+'</button>'}).join('')+'</div>'}).join('')+'<i class="nav-ind" aria-hidden="true"></i>';
+  $('nav').innerHTML=NAV_GROUPS.map(function(g,gi){return '<div class="nav-grp"><span class="lbl nav-h">'+g+'</span>'+PAGES.filter(function(p){return (p[4]||0)===gi}).map(function(p){var lb=p[5]||p[2],cur=navKey()===p[0];
+    return '<button data-p="'+p[0]+'" class="'+(cur?'on':'')+'"'+(cur?' aria-current="page"':'')+' data-tip="'+esc(lb)+'">'+ic(p[1])+'<span class="lbl">'+lb+'</span>'+(badge[p[0]]?'<span class="badge" aria-label="'+badge[p[0]]+' ta yangi">'+badge[p[0]]+'</span>':'')+'</button>'}).join('')+'</div>'}).join('')+'<i class="nav-ind" aria-hidden="true"></i>';
   moveInd();
 }
+function navKey(){return S.page==='agents'?'team':S.page}
+/* Agentlar bo'limi ichidagi tablar: ro'yxat/KPI va jonli GPS xarita (avval alohida bo'limlar edi). */
+function agTabs(cur){return '<div class="seg ag-tabs" role="tablist" aria-label="Agentlar ko‘rinishi"><button role="tab" data-h="team" class="'+(cur==='team'?'on':'')+'" aria-selected="'+(cur==='team')+'">'+ic('users','sm')+' Ro‘yxat va KPI</button><button role="tab" data-h="agents" class="'+(cur==='agents'?'on':'')+'" aria-selected="'+(cur==='agents')+'">'+ic('map','sm')+' GPS xarita</button></div>'}
+function bindAgTabs(page){var t=page.querySelector('.ag-tabs');if(t)t.onclick=function(e){var b=e.target.closest('button');if(b&&b.dataset.h!==S.page)location.hash=b.dataset.h}}
 /* Faol bo'lim indikatori: silliq siljiydi (transform). */
 function moveInd(){var ind=document.querySelector('.nav-ind'),b=document.querySelector('#nav button.on');if(!ind)return;
   if(!b){ind.style.opacity=0;return}var n=$('nav'),prev=S.indY;
@@ -340,7 +344,7 @@ function gsearch(q){
   var ag=S.dash.agents.filter(function(a){return norm(a.name).indexOf(q)>=0||String(a.id)===q}).slice(0,5).map(function(a){return {k:'agent',id:a.id,t:a.name,s:(AG_ST[a.status]||AG_ST.offline)[0]+' · '+a.clients+' mijoz',ph:a.photoUrl}});
   var cl=S.dash.clients.filter(function(c){var hay=norm(c.name+' '+c.person+' '+c.address+' '+c.region+' '+c.agent);return hay.indexOf(q)>=0||(digits.length>=4&&String(c.phone||'').replace(/\D/g,'').indexOf(digits)>=0)}).slice(0,8)
     .map(function(c){return {k:'client',id:c.id,t:c.name,s:[c.region,c.agent,c.debtUsd>0?'qarz '+usd(c.debtUsd):''].filter(Boolean).join(' · '),ph:c.thumbUrl}});
-  var pg=PAGES.filter(function(p){return norm(p[2]).indexOf(q)>=0}).map(function(p){return {k:'page',id:p[0],t:p[2],s:p[3],icon:p[1]}});
+  var pg=PAGES.filter(function(p){return p[4]!==9&&norm(p[2]).indexOf(q)>=0}).map(function(p){return {k:'page',id:p[0],t:p[2],s:p[3],icon:p[1]}});
   GS.items=pg.concat(ag,cl);GS.sel=0;
   var row=function(it,i){return '<div class="it'+(i===GS.sel?' on':'')+'" data-i="'+i+'" role="option">'+(it.k==='page'?'<div class="tone t-blue" style="width:32px;height:32px">'+ic(it.icon)+'</div>':avatar(it.t,it.ph,it.k==='client'?'sq':''))+'<div class="t"><b>'+esc(it.t)+'</b><small>'+esc(it.s||'')+'</small></div></div>'};
   var html='',i=0,grp=function(name,arr){if(!arr.length)return;html+='<div class="grp">'+name+'</div>';arr.forEach(function(it){html+=row(it,i++)})};
@@ -665,7 +669,7 @@ function gpsAgents(){
 function pageAgents(page){
   var regions=Array.from(new Set(S.dash.clients.map(function(c){return (c.region||'').trim()}).filter(Boolean))).sort();
   if(GPS.agent&&!S.dash.agents.some(function(a){return a.id===GPS.agent}))GPS.agent=null;
-  page.innerHTML='<div class="gps">'+
+  page.innerHTML='<div class="toolbar">'+agTabs('agents')+'</div><div class="gps">'+
    '<div class="card gps-list"><div class="gps-tools"><input type="search" id="gpsQ" placeholder="Agent qidirish…" value="'+esc(GPS.q)+'">'+
      '<div class="seg" id="gpsSt">'+[['','Hammasi'],['active','Faol'],['late','Kechikkan'],['offline','Yopiq']].map(function(x){return '<button data-s="'+x[0]+'" class="'+(GPS.status===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
      '<select id="gpsRegion" aria-label="Hudud"><option value="">Barcha hududlar</option>'+regions.map(function(r){return '<option'+(GPS.region===r?' selected':'')+'>'+esc(r)+'</option>'}).join('')+'</select></div>'+
@@ -674,6 +678,7 @@ function pageAgents(page){
      '<div class="map-legend"><label><input type="checkbox" id="gpsCl"'+(GPS.clients?' checked':'')+'> Mijozlar</label>'+
      [[C.forest,'0–2 kun'],[C.yellow,'3–4 kun'],[C.orange,'5+ kun'],[C.pri,'Rejada'],[C.gray,'Noma’lum']].map(function(x){return '<span><i style="background:'+x[0]+'"></i>'+x[1]+'</span>'}).join('')+'</div></div>'+
    '<div class="card gps-detail" id="gpsDetail"></div></div>';
+  bindAgTabs(page);
   $('gpsQ').oninput=debounce(function(){GPS.q=this.value;gpsSave();gpsListRender()},150);
   $('gpsSt').onclick=function(e){var b=e.target.closest('button');if(!b)return;GPS.status=b.dataset.s;gpsSave();$('gpsSt').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});gpsListRender();gpsMarkers(true)};
   $('gpsRegion').onchange=function(){GPS.region=this.value;gpsSave();gpsListRender();gpsMarkers(true);gpsClientLayer(true);if(!GPS.agent)gpsDetail();gpsFitClients()};
@@ -892,7 +897,7 @@ async function pageTeam(page){
   var leaders=rows.slice().sort(function(x,y){return y.realization-x.realization}).filter(function(r){return r.realization>0}).slice(0,3),LC=['c-ink','',''];
   var th=function(k,label,cls){return '<th class="sort '+(cls||'')+(TM.sort===k?(TM.dir>0?' asc':' desc'):'')+'" data-k="'+k+'">'+label+'</th>'};
   page.innerHTML=
-   '<div class="toolbar"><div class="seg" id="tmP">'+[['today','Bugun'],['week','7 kun'],['month','30 kun']].map(function(x){return '<button data-p="'+x[0]+'" class="'+(TM.p===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+   '<div class="toolbar">'+agTabs('team')+'<div class="seg" id="tmP">'+[['today','Bugun'],['week','7 kun'],['month','30 kun']].map(function(x){return '<button data-p="'+x[0]+'" class="'+(TM.p===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
      '<input type="search" id="tmQ" placeholder="Agent qidirish…" value="'+esc(TM.q)+'"><span class="grow"></span>'+
      '<button class="btn sm" id="tmCmp"'+(TM.sel.length<2?' disabled':'')+'>'+ic('chart','sm')+' Taqqoslash ('+TM.sel.length+')</button><button class="btn sm" id="tmExp">'+ic('download','sm')+' Excel</button><button class="btn ink sm" id="tmAdd">'+ic('userplus','sm')+' Agent qo‘shish</button></div>'+
    '<div class="grid g4 kpis" style="margin-bottom:16px">'+
@@ -909,6 +914,7 @@ async function pageTeam(page){
       '<td class="right num">'+cashCell(usd(r.cashUsd),(r.cashUzs?'<br><small class="muted">'+uzs(r.cashUzs)+'</small>':'')+(r.pendingUsd?'<br><small class="warn">kutilmoqda '+usd(r.pendingUsd)+'</small>':''))+'</td>'+
       '<td class="right num">'+usd(r.handedUsd)+(r.handedUzs?'<br><small class="muted">'+uzs(r.handedUzs)+'</small>':'')+'</td><td class="right num '+(r.debt>0?'bad':'')+'">'+usd(r.debt)+'</td></tr>'}).join(''):'<tr><td colspan="12">'+emptyState('Agent topilmadi','users')+'</td></tr>')+
    '</tbody></table></div><div class="pager"><span>«Qo‘lidagi pul» — hozirgi holat; «Topshirildi» — tanlangan davrda kassir qabul qilgan pul; «Portfel qarzi» — agent mijozlarining musbat qoldiqlari.</span></div></div>';
+  bindAgTabs(page);
   $('tmP').onclick=function(e){var b=e.target.closest('button');if(!b)return;TM.p=b.dataset.p;pageTeam(page)};
   $('tmQ').oninput=debounce(function(){TM.q=this.value;pageTeam(page);var i=$('tmQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250);
   page.querySelectorAll('th.sort').forEach(function(h){h.onclick=function(){var k=h.dataset.k;if(TM.sort===k)TM.dir=-TM.dir;else{TM.sort=k;TM.dir=k==='name'?1:-1}pageTeam(page)}});
@@ -1445,32 +1451,69 @@ function renderWarehouse(page,w){
 }
 
 /* ----- Xodimlar ----- */
+/* Xodimlar: barcha rollar bitta joyda. Amallar mavjud huquqlarga mos: qo'shish/nom — har bir rahbar;
+   admin qo'shish, akkaunt almashtirish, yopish/ochish, web login — faqat asosiy rahbar (server ham tekshiradi). */
+var ST={role:'',q:'',showOff:false};
+var ROLE_ICON={admin:['shield','blue'],sales:['trend','cyan'],cashier:['coins','green'],agent:['compass','violet'],warehouse:['warehouse','amber'],production:['box','cyan']};
+var ROLE_NOTE={admin:'Web panel (login/parol) va Telegram bot',sales:'Hisob uchun rol — alohida ilova hali yo‘q',cashier:'Kassir Mini App (Telegram)',agent:'Agent Mini App (Telegram, GPS)',warehouse:'Ombor Mini App (Telegram)',production:'Hisob uchun rol — alohida ilova hali yo‘q'};
 async function pageStaff(page,force){
-  if(!S.cache.staff||force){page.innerHTML='<div class="loading">Xodimlar yuklanmoqda…</div>';var s=await run(function(){return api('staff_list')});if(!s)return;S.cache.staff=s}
+  if(!S.cache.staff||force){if(!S.cache.staff)page.innerHTML='<div class="grid g3">'+'<div class="skel"></div>'.repeat(6)+'</div>';
+    try{S.cache.staff=await api('staff_list')}catch(e){if(S.page!=='staff'||!TOKEN)return;page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){pageStaff(page,true)};return}}
   if(S.page!=='staff')return;renderStaff(page,S.cache.staff);
 }
 function renderStaff(page,s){
-  page.innerHTML='<div class="grid g2">'+
-   '<div class="card flush"><div class="card-h"><h3>Agentlar <span class="muted small">'+s.agents.filter(function(a){return a.active}).length+' faol</span></h3><button class="btn pri sm" id="stAddAgent">'+ic('plus')+' Agent qo‘shish</button></div><div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Agent</th><th>Telegram ID</th><th class="right">Mijoz</th><th>Holat</th></tr></thead><tbody>'+
-    s.agents.map(function(a){return '<tr class="click" data-agent="'+a.id+'"><td><div class="cell">'+avatar(a.name,a.photoUrl)+'<b>'+esc(a.name)+'</b></div></td><td class="num">'+a.id+'</td><td class="right num">'+a.clients+'</td><td>'+(a.active?(a.shiftOpen?pill('<span class="dot"></span>Smenada','p-ok'):pill('Faol','p-pri')):pill('Bloklangan','p-bad'))+'</td></tr>'}).join('')+'</tbody></table></div></div>'+
-   '<div class="card flush"><div class="card-h"><h3>Kassirlar</h3><button class="btn pri sm" id="stAddCash">'+ic('plus')+' Kassir qo‘shish</button></div><div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Kassir</th><th>Telegram ID</th><th class="right">Qabul</th><th>Oxirgi</th><th></th></tr></thead><tbody>'+
-    (s.cashiers.length?s.cashiers.map(function(c){return '<tr><td><div class="cell">'+avatar(c.name,c.photoUrl)+'<div class="t"><b>'+esc(c.name)+'</b><small>'+(c.active?'Faol':'Yopilgan')+'</small></div></div></td><td class="num">'+c.id+'</td><td class="right num">'+c.accepted+'</td><td class="num">'+(c.lastTs?dday(c.lastTs):'—')+'</td><td class="actions"><button class="btn sm" data-cr="'+c.id+'" aria-label="Kassir nomini o‘zgartirish" title="Nomini o‘zgartirish">'+ic('edit','sm')+'</button>'+(S.primary?(c.active?'<button class="btn sm" data-ct="'+c.id+'" aria-label="Kassir akkauntini almashtirish" title="Akkauntni almashtirish">'+ic('swap','sm')+'</button><button class="btn sm danger" data-cd="'+c.id+'">Yopish</button>':'<button class="btn sm" data-ca="'+c.id+'">Ochish</button>'):'')+'</td></tr>'}).join(''):'<tr><td colspan="5" class="empty">Kassir yo‘q</td></tr>')+'</tbody></table></div></div>'+
-   '</div>';
+  var all=s.staff||[],roles=s.roles||[],P=S.primary,cnt={'':0};
+  all.forEach(function(x){if(x.active){cnt[x.role]=(cnt[x.role]||0)+1;cnt['']++}});
+  var q=ST.q.trim().toLowerCase();
+  var rows=all.filter(function(x){return (!ST.role||x.role===ST.role)&&(ST.showOff||x.active)&&(!q||(x.name+' '+x.id+' '+x.webLogin).toLowerCase().indexOf(q)>=0)});
+  var off=all.filter(function(x){return !x.active&&(!ST.role||x.role===ST.role)}).length;
+  var act=function(k,id,icon,label,cls){return '<button class="icon-btn'+(cls?' '+cls:'')+'" data-act="'+k+'" data-id="'+id+'" aria-label="'+esc(label)+'" data-tip="'+esc(label)+'">'+ic(icon)+'</button>'};
+  page.innerHTML=
+   '<div class="grid g6 kpis-roles" style="margin-bottom:16px">'+roles.map(function(r){var t=ROLE_ICON[r.key]||['users','blue'];return '<button class="card kpi click st-role'+(ST.role===r.key?' on':'')+'" data-role="'+r.key+'">'+tone(t[0],t[1])+'<div><small>'+esc(r.label)+'</small><b>'+(cnt[r.key]||0)+'</b></div></button>'}).join('')+'</div>'+
+   '<div class="toolbar"><div class="seg" id="stRole">'+[['','Hammasi']].concat(roles.map(function(r){return [r.key,r.label]})).map(function(x){return '<button data-r="'+x[0]+'" class="'+(ST.role===x[0]?'on':'')+'">'+esc(x[1])+'<b>'+(cnt[x[0]]||0)+'</b></button>'}).join('')+'</div>'+
+    '<input type="search" id="stQ" placeholder="Ism, Telegram ID, login…" value="'+esc(ST.q)+'"><span class="grow"></span>'+
+    '<label class="chk"><input type="checkbox" id="stOff"'+(ST.showOff?' checked':'')+'> Yopilganlar ('+off+')</label>'+
+    '<button class="btn pri" id="stAdd">'+ic('userplus','sm')+' Xodim qo‘shish</button></div>'+
+   '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Xodim</th><th>Rol</th><th>Telegram ID</th><th>Web login</th><th>Holat</th><th class="right">Amallar</th></tr></thead><tbody>'+
+   (rows.length?rows.map(function(x){var t=ROLE_ICON[x.role]||['users','blue'],ag=x.role==='agent';
+     var acts=x.active?
+       act('rename',x.id,'edit','Nomini o‘zgartirish')+
+       (P&&x.role==='admin'&&!x.primary?act('login',x.id,'shield',x.webLogin?'Yangi parol berish':'Login va parol berish'):'')+
+       (P&&x.webLogin&&!x.primary?act('logout',x.id,'logout','Web kirishni o‘chirish'):'')+
+       (P&&x.role!=='admin'?act('transfer',x.id,'swap','Akkauntni almashtirish'):'')+
+       (P&&!x.primary?act('off',x.id,'ban','Akkauntni yopish','danger'):'')
+      :(P?act('on',x.id,'checkc','Qayta ochish'):'');
+     return '<tr'+(ag?' class="click" data-agent="'+x.id+'"':'')+'><td><div class="cell"><div class="tone t-'+t[1]+'" style="width:34px;height:34px">'+ic(t[0])+'</div><div class="t"><b>'+esc(x.name)+'</b><small>'+esc(ROLE_NOTE[x.role]||'')+'</small></div></div></td>'+
+      '<td>'+pill(esc(x.roleLabel)+(x.primary?' · asosiy':''),x.role==='admin'?'p-pri':'')+'</td><td class="num">'+x.id+'</td>'+
+      '<td>'+(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">—</span>')+'</td>'+
+      '<td>'+(x.active?pill('<span class="dot"></span>Faol','p-ok'):pill('<span class="dot"></span>Yopilgan','p-bad'))+'</td>'+
+      '<td class="right"><div class="actions" style="justify-content:flex-end;flex-wrap:nowrap">'+acts+'</div></td></tr>'}).join('')
+    :'<tr><td colspan="6">'+emptyState('Xodim topilmadi','users')+'</td></tr>')+
+   '</tbody></table></div><div class="pager"><span>Agent qatorini bossangiz — to‘liq karta (KPI, huquqlar, qoldiq). '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>';
+  var re=function(){renderStaff(page,S.cache.staff)};
+  page.querySelectorAll('.st-role').forEach(function(b){b.onclick=function(){ST.role=ST.role===b.dataset.role?'':b.dataset.role;re()}});
+  $('stRole').onclick=function(e){var b=e.target.closest('button');if(!b)return;ST.role=b.dataset.r;re()};
+  $('stQ').oninput=debounce(function(){ST.q=this.value;re();var i=$('stQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},200);
+  $('stOff').onchange=function(){ST.showOff=this.checked;re()};
   bindAgentLinks(page);
-  var done=function(r){if(r&&r.staff){S.cache.staff=r.staff;renderStaff(page,r.staff)}else pageStaff(page,true)};
-  $('stAddAgent').onclick=async function(){
-    var v=await formBox('Yangi agent',[{name:'id',label:'Telegram ID',required:true,placeholder:'123456789'},{name:'name',label:'Ismi',required:true}],'Davom etish','Agent botga /start yozib Telegram ID sini bilib oladi.');if(!v)return;
-    var p=await run(function(){return api('agent_add_preview',{id:v.id,name:v.name})});if(!p)return;
-    if(!await confirmBox('Agentni qo‘shish','<p><b>'+esc(p.name)+'</b> · ID '+esc(p.id)+'</p>'+(p.warning?'<p class="warn">'+esc(p.warning)+'</p>':''),'Qo‘shish'))return;
-    var r=await run(function(){return api('agent_add_commit',{id:v.id,name:v.name,confirm:true})},'Agent qo‘shildi');if(r){S.dash=null;pageStaff(page,true)}};
-  $('stAddCash').onclick=async function(){
-    var v=await formBox('Yangi kassir',[{name:'id',label:'Telegram ID',required:true},{name:'name',label:'Ismi',required:true}],'Qo‘shish');if(!v)return;
-    done(await run(function(){return api('cashier_add',{id:v.id,name:v.name,confirm:true})},'Kassir qo‘shildi'))};
-  var find=function(id){return s.cashiers.find(function(c){return String(c.id)===String(id)})};
-  page.querySelectorAll('[data-cr]').forEach(function(b){b.onclick=async function(){var c=find(b.dataset.cr);var v=await formBox('Kassir nomi',[{name:'name',label:'Yangi nom',value:c.name,required:true}]);if(!v)return;done(await run(function(){return api('cashier_rename',{cashierId:c.id,name:v.name,confirm:true})},'Saqlandi'))}});
-  page.querySelectorAll('[data-ct]').forEach(function(b){b.onclick=async function(){var c=find(b.dataset.ct);var v=await formBox('Kassir akkauntini almashtirish',[{name:'newId',label:'Yangi Telegram ID',required:true}],'Almashtirish',esc(c.name)+' yangi Telegram akkauntga o‘tadi.');if(!v)return;done(await run(function(){return api('cashier_transfer',{cashierId:c.id,newId:v.newId,confirm:true})},'Akkaunt almashtirildi'))}});
-  page.querySelectorAll('[data-cd]').forEach(function(b){b.onclick=async function(){var c=find(b.dataset.cd);if(!await confirmBox('Kassirni yopish','<p><b>'+esc(c.name)+'</b> botga kira olmaydi. Tarix saqlanadi.</p>','Yopish',true))return;done(await run(function(){return api('cashier_deactivate',{cashierId:c.id,confirm:true})},'Kassir yopildi'))}});
-  page.querySelectorAll('[data-ca]').forEach(function(b){b.onclick=async function(){var c=find(b.dataset.ca);if(!await confirmBox('Kassirni qayta ochish','<p><b>'+esc(c.name)+'</b> yana ishlay oladi.</p>','Ochish'))return;done(await run(function(){return api('cashier_activate',{cashierId:c.id,confirm:true})},'Kassir ochildi'))}});
+  var call=async function(action,args,ok){var r=await run(function(){return api(action,Object.assign({confirm:true},args))},ok);
+    if(r&&r.staff){S.cache.staff=r.staff;S.dash=null;re()}return r};
+  var find=function(id){return all.find(function(x){return String(x.id)===String(id)})};
+  $('stAdd').onclick=async function(){
+    var opts=roles.filter(function(r){return r.key!=='admin'||P}).map(function(r){return [r.key,r.label]});
+    var v=await formBox('Yangi xodim',[{name:'role',label:'Bo‘lim / rol',options:opts,value:ST.role&&opts.some(function(o){return o[0]===ST.role})?ST.role:'agent'},{name:'name',label:'Ismi',required:true},{name:'id',label:'Telegram ID',required:true,placeholder:'123456789'}],'Qo‘shish','Xodim botga /start yozib Telegram ID sini bilib oladi va sizga yuboradi.');
+    if(!v)return;await call('staff_add',{role:v.role,id:v.id,name:v.name},'Xodim qo‘shildi')};
+  page.querySelectorAll('[data-act]').forEach(function(b){b.onclick=async function(e){e.stopPropagation();var x=find(b.dataset.id);if(!x)return;var k=b.dataset.act;
+    if(k==='rename'){var v=await formBox('Nomini o‘zgartirish',[{name:'name',label:'Yangi ism',value:x.name,required:true}]);if(v)await call('staff_rename',{id:x.id,name:v.name},'Saqlandi')}
+    else if(k==='transfer'){var v2=await formBox('Akkauntni almashtirish',[{name:'newId',label:'Yangi Telegram ID',required:true}],'Almashtirish',esc(x.name)+' ('+esc(x.roleLabel)+') yangi Telegram akkauntga o‘tadi. Eski akkaunt yopiladi; mijozlar, qoldiq va tarix saqlanadi.');if(v2)await call('staff_transfer',{id:x.id,newId:v2.newId},'Akkaunt almashtirildi')}
+    else if(k==='off'){if(await confirmBox('Akkauntni yopish','<p><b>'+esc(x.name)+'</b> ('+esc(x.roleLabel)+') tizimga kira olmaydi. Tarix va hisoblar o‘chirilmaydi, keyin qayta ochish mumkin.</p>','Yopish',true))await call('staff_deactivate',{id:x.id},'Akkaunt yopildi')}
+    else if(k==='on'){if(await confirmBox('Qayta ochish','<p><b>'+esc(x.name)+'</b> yana ishlay oladi.</p>','Ochish'))await call('staff_activate',{id:x.id},'Akkaunt ochildi')}
+    else if(k==='logout'){if(await confirmBox('Web kirishni o‘chirish','<p><b>'+esc(x.name)+'</b> uchun login o‘chiriladi va barcha brauzerlardan chiqariladi.</p>','O‘chirish',true))await call('staff_login_revoke',{id:x.id},'Web kirish o‘chirildi')}
+    else if(k==='login'){var v3=await formBox(x.webLogin?'Yangi parol berish':'Login va parol berish',[{name:'login',label:'Login (bo‘sh qoldirsangiz — avtomatik)',value:x.webLogin||'',placeholder:'masalan: aziz.admin'}],'Parol yaratish','Eski parol va barcha kirishlar bekor qilinadi. Yangi parol faqat bir marta ko‘rsatiladi.');
+      if(!v3)return;var r=await call('staff_login_issue',{id:x.id,login:v3.login},'Parol yaratildi');
+      if(r&&r.password)modal('<h3>Kirish ma’lumotlari</h3><p class="muted">'+esc(x.name)+' uchun. Faqat hozir ko‘rinadi — xavfsiz yo‘l bilan yuboring.</p><dl class="kv" style="margin:14px 0"><dt>Sayt</dt><dd><code>'+esc(r.url)+'</code></dd><dt>Login</dt><dd><code>'+esc(r.login)+'</code></dd><dt>Parol</dt><dd><code id="pwShow">'+esc(r.password)+'</code></dd></dl><div class="foot"><button class="btn" id="pwCopy">'+ic('file','sm')+' Nusxalash</button><button class="btn pri" data-m="cancel">Tayyor</button></div>').then(function(){});
+      if($('pwCopy'))$('pwCopy').onclick=function(){try{navigator.clipboard.writeText('Sayt: '+r.url+'\nLogin: '+r.login+'\nParol: '+r.password);toast('Nusxalandi')}catch(err){toast('Nusxalab bo‘lmadi',true)}}}
+  }});
 }
 
 /* ----- Sozlamalar ----- */

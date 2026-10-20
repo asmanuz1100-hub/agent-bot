@@ -16,6 +16,7 @@ import customer_status as cs
 import manager_api
 import web_auth
 import branding
+import staff
 import executive
 import agent_api
 import analytics
@@ -1729,7 +1730,7 @@ def handle(db,update):
     m=update.get('message') or update.get('edited_message')
     if not m or m.get('chat',{}).get('type')!='private':return
     u=m['from']['id']; text=m.get('text','').strip(); r=role(db,u)
-    if r in ('disabled','cashier_disabled'):
+    if r=='disabled' or (r or '').endswith('_disabled'):
         if 'edited_message' not in update:send(u,'Бу аккаунтга кириш ёпилган. Асосий админга мурожаат қилинг.')
         return
     if not r:
@@ -3160,6 +3161,26 @@ def serve_webhook(db,base_url):
                         data={'ok':True,'agent':manager_api.agent_detail(local,payload.get('agentId'))}
                     elif action=='staff_list':
                         data=manager_api.staff_list(local)
+                        data.update(staff.staff_list(local,ADMINS))
+                    elif action in ('staff_add','staff_rename','staff_transfer','staff_deactivate','staff_activate',
+                                    'staff_login_issue','staff_login_revoke'):
+                        if payload.get('confirm') is not True:raise ValueError('Amalni tasdiqlang.')
+                        # Qo'shish/nom — har qanday rahbar (botdagi «Ходим» bilan bir xil); admin qo'shish va qolganlari — asosiy rahbar.
+                        primary_only=action not in ('staff_add','staff_rename') or (action=='staff_add' and payload.get('role')=='admin')
+                        if primary_only and actor not in ADMINS:
+                            answer(403,{'error':'Bu amal faqat asosiy rahbarga ruxsat.'});return
+                        uid=payload.get('id')
+                        data={'ok':True}
+                        if action=='staff_add':staff.add(local,actor,payload.get('role'),uid,payload.get('name'))
+                        elif action=='staff_rename':staff.rename(local,actor,uid,payload.get('name'))
+                        elif action=='staff_transfer':staff.transfer(local,actor,uid,payload.get('newId'),ADMINS)
+                        elif action=='staff_deactivate':staff.deactivate(local,actor,uid,ADMINS)
+                        elif action=='staff_activate':staff.activate(local,actor,uid)
+                        elif action=='staff_login_issue':
+                            login,password=staff.issue_login(local,actor,uid,payload.get('login'))
+                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL})
+                        else:staff.revoke_login(local,actor,uid)
+                        data['staff']=manager_api.staff_list(local);data['staff'].update(staff.staff_list(local,ADMINS))
                     elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
                         if payload.get('confirm') is not True:raise ValueError('Amalni tasdiqlang.')
                         if action in ('cashier_transfer','cashier_deactivate','cashier_activate') and actor not in ADMINS:
