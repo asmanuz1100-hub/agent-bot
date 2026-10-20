@@ -246,8 +246,9 @@ def _agents_cash(db, scope):
         aid = int(u['id'])
         if scope.agent is not None and aid != scope.agent:
             continue
-        usd_c = core.cash_usd(db, aid)
-        som = core.cash_som(db, aid)
+        # PostgreSQL SUM() Decimal qaytaradi — JSON uchun butun songa o'tkaziladi.
+        usd_c = int(core.cash_usd(db, aid))
+        som = int(core.cash_som(db, aid))
         pend = db.execute("""SELECT COALESCE(SUM(CASE WHEN COALESCE(amount,0)=0 THEN amount_usd ELSE 0 END),0),
             COALESCE(SUM(amount),0) FROM handovers WHERE agent=? AND status='pending'""", (aid,)).fetchone()
         p_usd, p_uzs = int(pend[0] or 0), int(pend[1] or 0) // 100

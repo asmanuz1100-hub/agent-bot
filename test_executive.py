@@ -197,6 +197,22 @@ class ExecutiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             manager_api.warehouse(self.db, 'bogus')
 
+    def test_postgres_decimal_sums_stay_json_serializable(self):
+        # Production (PostgreSQL) SUM() Decimal qaytaradi: executive javobi JSON'ga o'tishi shart.
+        import json
+        from decimal import Decimal
+        from unittest import mock
+        self.seed()
+        with mock.patch.object(core, 'cash_som', lambda db, a: Decimal('250000')), \
+             mock.patch.object(core, 'cash_usd', lambda db, a: Decimal('4000')):
+            d = executive.executive(self.db, 'today', now=self.now)
+        json.dumps(d)
+        self.assertEqual((d['agentsCash']['cashUsd'], d['agentsCash']['cashUzs']), (80, 500000))
+        import bot
+        self.assertEqual(json.loads(json.dumps({'a': Decimal('12'), 'b': Decimal('1.5')}, default=bot._json_number)), {'a': 12, 'b': 1.5})
+        with self.assertRaises(TypeError):
+            json.dumps({'x': object()}, default=bot._json_number)
+
     def test_read_only(self):
         self.seed()
         before = self.db.total_changes

@@ -1658,6 +1658,13 @@ WAREHOUSE_HELP=('''\n\n🧪 ТЕСТ РЕЖИМИ · фақат админ
 /wh_new НОМИ | КГ | НАРХ_USD [| БЛОКДА_ДОНА] — янги товар
 Кирим, агентга бериш, брак ва сўровларни омборчи Омборчи Mini App’да киритади.''')
 
+def _json_number(value):
+    """PostgreSQL SUM()/AVG() Decimal qaytaradi: JSON javobda oddiy son bo'lsin (boshqa turlar — xato)."""
+    from decimal import Decimal
+    if isinstance(value,Decimal):
+        return int(value) if value==value.to_integral_value() else float(value)
+    raise TypeError(f'Object of type {type(value).__name__} is not JSON serializable')
+
 WEB_PANEL_URL=f'{PUBLIC_BASE_URL}/app/rahbar-web/'
 
 def handle_web_password(db,u,r,text):
@@ -3004,7 +3011,7 @@ def serve_webhook(db,base_url):
                 if headers is None or self.path!='/api/manager':
                     self._reply(403,b'Forbidden');return
                 def answer(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8',headers)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
