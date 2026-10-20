@@ -1,0 +1,21 @@
+/* AIBI — Smart Business Platform · umumiy dizayn tokenlari (BALANCE · 09 Aurora).
+   Barcha ilovalar shu faylni ulaydi: ranglar, Aurora gradient, tipografiya va logotip bloki.
+   Ilovaning o'z ranglari (masalan --pri) faqat html.aibi sinfi bilan qayta belgilanadi. */
+:root{
+  --aibi-blue:#3882F6;--aibi-violet:#6366F1;--aibi-purple:#A855F7;--aibi-pink:#EC4899;
+  --aibi-navy:#0F172A;--aibi-white:#F8FAFC;
+  --aibi-aurora:linear-gradient(135deg,#3882F6 0%,#6366F1 38%,#A855F7 70%,#EC4899 100%);
+  --aibi-aurora-soft:linear-gradient(135deg,#3882F61f,#6366F11f 40%,#A855F71f 70%,#EC48991f);
+  --aibi-font:Inter,Manrope,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --aibi-radius:16px;--aibi-radius-sm:12px;
+}
+/* Logotip: belgi + «AIBI» so'zi (matn HTML'da — Telegram WebView shriftlari bilan aniq chiqadi). */
+.aibi-wm{display:inline-flex;align-items:center;gap:7px;font-family:var(--aibi-font);font-weight:800;font-size:19px;letter-spacing:.08em;line-height:1;color:inherit}
+.aibi-wm img{width:24px;height:24px;display:block;filter:none!important}
+.aibi-wm.sm{font-size:16px;gap:6px}.aibi-wm.sm img{width:20px;height:20px}
+.aibi-wm.lg{font-size:30px;gap:10px}.aibi-wm.lg img{width:40px;height:40px}
+.aibi-sub{font-family:var(--aibi-font);font-size:9px;font-weight:700;letter-spacing:.28em;text-transform:uppercase;opacity:.75}
+/* Ilova ranglari Aurora'ga (faqat html.aibi bo'lgan sahifalarda). */
+html.aibi{--pri:#3882F6;--grad:var(--aibi-aurora);--k:#6366F1}
+@media (prefers-color-scheme:dark){html.aibi:not([data-theme="light"]){--k:#A5B4FC}}
+html.aibi[data-theme="dark"]{--k:#A5B4FC}

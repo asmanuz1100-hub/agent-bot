@@ -1,0 +1,28 @@
+{
+ "name": "AIBI Dashboard",
+ "short_name": "AIBI",
+ "description": "AIBI — Smart Business Platform",
+ "start_url": "/app/rahbar-web/",
+ "scope": "/app/rahbar-web/",
+ "display": "standalone",
+ "background_color": "#0F172A",
+ "theme_color": "#0F172A",
+ "icons": [
+  {
+   "src": "/app/premium-kit/aibi/aibi-icon-dark-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "/app/premium-kit/aibi/aibi-icon-dark-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "/app/premium-kit/aibi/aibi-adaptive-foreground.png",
+   "sizes": "1024x1024",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
