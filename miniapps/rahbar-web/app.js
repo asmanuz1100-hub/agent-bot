@@ -1628,7 +1628,7 @@ function renderWarehouse(page,w){
    admin qo'shish, akkaunt almashtirish, yopish/ochish, web login — faqat asosiy rahbar (server ham tekshiradi). */
 var ST={role:'',q:'',showOff:false};
 var ROLE_ICON={admin:['shield','blue'],sales:['trend','cyan'],cashier:['coins','green'],agent:['compass','violet'],warehouse:['warehouse','amber'],production:['box','cyan']};
-var ROLE_NOTE={admin:'Web panel (login/parol) va Telegram bot',sales:'Hisob uchun rol — alohida ilova hali yo‘q',cashier:'Kassir Mini App (Telegram)',agent:'Agent Mini App (Telegram, GPS)',warehouse:'Ombor Mini App (Telegram)',production:'Hisob uchun rol — alohida ilova hali yo‘q'};
+var ROLE_NOTE={admin:'Web panel (login/parol) va Telegram bot',sales:'Savdo Mini App (Telegram): sotuv, chegirma, qarz, kassa',cashier:'Kassir Mini App (Telegram)',agent:'Agent Mini App (Telegram, GPS)',warehouse:'Ombor Mini App (Telegram)',production:'Hisob uchun rol — alohida ilova hali yo‘q'};
 async function pageStaff(page,force){
   if(!S.cache.staff||force){if(!S.cache.staff)page.innerHTML='<div class="grid g3">'+'<div class="skel"></div>'.repeat(6)+'</div>';
     try{S.cache.staff=await api('staff_list')}catch(e){if(S.page!=='staff'||!TOKEN)return;page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){pageStaff(page,true)};return}}

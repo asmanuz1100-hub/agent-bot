@@ -4,7 +4,7 @@ Mavjud qoidalar saqlanadi:
 - agent va kassir uchun core'dagi tayyor funksiyalar ishlatiladi (smena, qoldiq tekshiruvlari bilan);
 - admin qo'shish, akkaunt almashtirish, yopish va web login/parol — faqat asosiy rahbar (ADMINS) huquqi;
 - xodim qo'shish va nomini o'zgartirish — har qanday rahbar (botdagi «➕ Ходим» bilan bir xil).
-Savdo va ishlab chiqarish rollari hozircha ro'yxat/hisob uchun: ular uchun alohida ilova yo'q.
+Savdo roli — Savdo Mini App (shop.py); ishlab chiqarish roli hozircha faqat ro'yxat uchun.
 """
 import time
 
