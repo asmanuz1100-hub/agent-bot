@@ -1674,17 +1674,19 @@ def _json_number(value):
     raise TypeError(f'Object of type {type(value).__name__} is not JSON serializable')
 
 WEB_PANEL_URL=f'{PUBLIC_BASE_URL}/app/rahbar-web/'
+SAVDO_WEB_URL=f'{PUBLIC_BASE_URL}/app/savdo-web/'
 
 def handle_web_password(db,u,r,text):
-    """Rahbar web panel (kompyuter): login va bir martalik parol berish yoki o'chirish."""
-    if r!='admin':raise ValueError('Web panel faqat rahbar uchun.')
+    """Web panel (kompyuter): login va bir martalik parol. Rahbar — rahbar-web, savdo xodimi — savdo-web."""
+    if r not in ('admin','sales'):raise ValueError('Web panel faqat rahbar va savdo xodimi uchun.')
     if text=='/webyopish':
         web_auth.revoke(db,u)
         send(u,'🔒 Web panel akkaunti o‘chirildi, barcha kompyuterlardan chiqildi.\nQayta ochish: /webparol');return
     parts=text.split()
     if len(parts)>2:raise ValueError('Format: /webparol yoki /webparol LOGIN')
     login,password=web_auth.issue_password(db,u,parts[1] if len(parts)==2 else None)
-    send(u,f'💻 RAHBAR WEB PANEL\n\nSayt: {WEB_PANEL_URL}\nLogin: {login}\nParol: {password}\n\n'
+    title,url=('RAHBAR WEB PANEL',WEB_PANEL_URL) if r=='admin' else ('SAVDO WEB PANEL',SAVDO_WEB_URL)
+    send(u,f'💻 {title}\n\nSayt: {url}\nLogin: {login}\nParol: {password}\n\n'
            'Kirgach, «Sozlamalar»da parolni o‘zingiznikiga almashtiring. Bu xabarni hech kimga yubormang.\n'
            'Avvalgi kirishlar yopildi. Loginni o‘zgartirish: /webparol yangi_login · O‘chirish: /webyopish')
 
@@ -2780,12 +2782,18 @@ def serve_webhook(db,base_url):
                     if not 2<=length<=60000:raise ValueError('Invalid length')
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    bearer=self._bearer_token()
+                    actor=None if bearer and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_shop(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        # savdo-web (kompyuter): login/parol sessiyasi.
+                        try:actor=web_auth.session_user(local,bearer)
+                        except ValueError as e:
+                            local.commit();answer_shop(401,{'error':str(e),'relogin':True});return
                     if role(local,actor) not in ('sales','admin'):
                         answer_shop(403,{'error':'Savdo bo‘limiga ruxsat yo‘q.'});return
                     data=shop.handle(local,actor,payload.get('action') or 'dashboard',payload)
@@ -3017,11 +3025,15 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     action=payload.get('action')
                     token=self._bearer_token()
+                    # panel='savdo' — savdo-web: savdo xodimi va rahbar; aks holda faqat rahbar.
+                    savdo_panel=payload.get('panel')=='savdo'
+                    web_roles=('sales','admin') if savdo_panel else ('admin',)
+                    web_denied='Bu panelga faqat savdo xodimi kira oladi.' if savdo_panel else 'Bu panelga faqat rahbar kira oladi.'
                     if action=='login':
                         uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
-                        if role(local,uid)!='admin':
+                        if role(local,uid) not in web_roles:
                             web_auth.logout(local,token);local.commit()
-                            answer_web(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
+                            answer_web(403,{'error':web_denied});return
                         data={'ok':True,'token':token}
                     elif action=='logout':
                         web_auth.logout(local,token);data={'ok':True}
@@ -3029,8 +3041,8 @@ def serve_webhook(db,base_url):
                         try:uid=web_auth.session_user(local,token)
                         except ValueError as e:
                             local.commit();answer_web(401,{'error':str(e),'relogin':True});return
-                        if role(local,uid)!='admin':
-                            answer_web(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
+                        if role(local,uid) not in web_roles:
+                            answer_web(403,{'error':web_denied});return
                         if action=='change_password':
                             web_auth.change_password(local,uid,payload.get('old'),payload.get('new'),keep_token=token)
                         acc=web_auth.account(local,uid)
