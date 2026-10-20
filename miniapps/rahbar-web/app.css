@@ -176,7 +176,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:.6;cursor:not-allowed;b
 .side-ov{display:none}
 .menu-btn{display:none}
 .main{min-width:0;display:flex;flex-direction:column}
-.top{position:sticky;top:0;z-index:800;padding:10px 28px 0;background:linear-gradient(var(--bg) 55%,color-mix(in srgb,var(--bg) 0%,transparent))}
+header.top{position:sticky;top:0;z-index:800;padding:10px 28px 0;background:linear-gradient(var(--bg) 55%,color-mix(in srgb,var(--bg) 0%,transparent))}
 .top-row{display:flex;align-items:center;gap:8px;min-width:0;min-height:48px}
 .title-row{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:10px 0 4px}
 .title-row h1{font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1.15}
@@ -569,7 +569,7 @@ td.bad,td .bad,td.num.bad,td.num.bad b{color:var(--bad)}td.ok,td.num.ok{color:va
 .banner{display:flex;gap:10px;align-items:center;background:var(--info-soft);color:var(--pri-tx);border:1px solid color-mix(in srgb,var(--pri) 22%,transparent);border-radius:12px;padding:10px 14px;font-weight:500;margin-bottom:14px}
 
 /* ---------- Moslashuvchanlik: 1920 / 1440 / 1280 / 1024 / 768 / 390 ---------- */
-@media (min-width:1700px){.page,.top{padding-left:36px;padding-right:36px}}
+@media (min-width:1700px){.page{padding-left:36px;padding-right:36px}}
 @media (max-width:1600px){.g6 .kpi .tone{display:none}.g6 .kpi{padding:16px}}
 @media (max-width:1440px){.dash{grid-template-columns:minmax(0,1fr) 300px}}
 @media (max-width:1360px){.g-main{grid-template-columns:1fr}.g6{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -595,7 +595,7 @@ td.bad,td .bad,td.num.bad,td.num.bad b{color:var(--bad)}td.ok,td.num.ok{color:va
 }
 @media (max-width:860px){
   .page{padding:10px 16px 40px}
-  .top{padding:8px 16px 0}
+
   .gsearch kbd,.live span{display:none}
   .title-row h1{font-size:24px}
   .g2,.g3,.g4,.g6,.dash-side{grid-template-columns:1fr}.hero-stats{grid-template-columns:1fr}
@@ -714,3 +714,87 @@ td.bad,td .bad,td.num.bad,td.num.bad b{color:var(--bad)}td.ok,td.num.ok{color:va
 .br-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .br-grid .wide{grid-column:1/-1}
 @media (max-width:560px){.br-grid{grid-template-columns:1fr}}
+
+/* ===== V3.1 tuzatishlar ===== */
+/* Yuqori panel: faqat qidiruv qatori yopishqoq (shisha), sarlavha sahifa bilan siljiydi — kontent sarlavha ustiga chiqmaydi */
+header.top{display:contents}
+.top-row{position:sticky;top:0;z-index:800;padding:10px 28px;background:color-mix(in srgb,var(--bg) 72%,transparent);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid transparent;transition:border-color var(--t)}
+.title-row{padding:6px 28px 4px}
+@media (min-width:1700px){.top-row,.title-row{padding-left:36px;padding-right:36px}}
+@media (max-width:860px){.top-row{padding:8px 16px}.title-row{padding:4px 16px}}
+.dash-side{top:76px}
+
+/* Fon: yumshoq rangli "aura" — shisha yuzalar ostida rang ko'rinadi (kontrastga ta'sir qilmaydi) */
+body::before{content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;
+  background:radial-gradient(40vmax 30vmax at 12% 8%,rgba(0,122,255,.10),transparent 60%),
+             radial-gradient(36vmax 28vmax at 88% 18%,rgba(124,92,252,.09),transparent 60%),
+             radial-gradient(40vmax 30vmax at 70% 95%,rgba(14,165,183,.08),transparent 60%);animation:aura 40s ease-in-out infinite alternate}
+:root[data-theme="dark"] body::before{background:radial-gradient(40vmax 30vmax at 12% 8%,rgba(10,132,255,.14),transparent 60%),
+             radial-gradient(36vmax 28vmax at 88% 18%,rgba(160,139,255,.11),transparent 60%),
+             radial-gradient(40vmax 30vmax at 70% 95%,rgba(60,200,218,.08),transparent 60%)}
+@keyframes aura{to{transform:translate3d(-3vmax,2vmax,0) scale(1.05)}}
+body{background-color:var(--bg)}
+/* Shisha kartalar: yarim shaffof oq + blur; matn ostida deyarli oq fon (o'qilishi saqlanadi) */
+.card{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);
+  border-color:color-mix(in srgb,var(--line) 80%,transparent);box-shadow:0 1px 0 rgba(255,255,255,.6) inset,var(--shadow)}
+:root[data-theme="dark"] .card{box-shadow:0 1px 0 rgba(255,255,255,.04) inset,var(--shadow)}
+.c-orange{background:linear-gradient(0deg,var(--bad-soft),var(--bad-soft)),color-mix(in srgb,var(--card) 86%,transparent)}
+.c-forest{background:linear-gradient(0deg,var(--ok-soft),var(--ok-soft)),color-mix(in srgb,var(--card) 86%,transparent)}
+th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
+.tbl-clients .col-sticky{background:var(--card)}
+.seg{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+@media (max-width:860px){.card{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--card)}}
+
+/* Animatsiyalar: kartaning yorug'lik "sheen"i, jadval qatorlari ketma-ket, pill/badge paydo bo'lishi */
+.lift::after,.kpi.click::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.55),transparent 70%);transition:opacity var(--t)}
+:root[data-theme="dark"] .lift::after,:root[data-theme="dark"] .kpi.click::after{background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.07),transparent 70%)}
+.lift:hover::after,.kpi.click:hover::after{opacity:1}
+.page.enter tbody tr{animation:rise .4s var(--ease) backwards}
+.page.enter tbody tr:nth-child(2){animation-delay:.03s}.page.enter tbody tr:nth-child(3){animation-delay:.06s}.page.enter tbody tr:nth-child(4){animation-delay:.09s}
+.page.enter tbody tr:nth-child(5){animation-delay:.12s}.page.enter tbody tr:nth-child(n+6){animation-delay:.15s}
+.page.enter .li{animation:rise .4s var(--ease) backwards}
+.pill,.badge,.pill-badge,.delta{animation:pop-in .35s var(--spring) backwards}
+@keyframes pop-in{from{opacity:0;transform:scale(.85)}}
+.donut-legend div,.ag-row,.hbar{animation:rise .45s var(--ease) backwards}
+.donut-legend div:nth-child(2),.ag-row:nth-child(2),.hbar:nth-child(2){animation-delay:.05s}
+.donut-legend div:nth-child(3),.ag-row:nth-child(3),.hbar:nth-child(3){animation-delay:.1s}
+.donut-legend div:nth-child(n+4),.ag-row:nth-child(n+4),.hbar:nth-child(n+4){animation-delay:.15s}
+.icon-btn:hover .ico,.as-btn:hover .orb{transform:scale(1.08)}.icon-btn .ico{transition:transform var(--t) var(--spring)}
+#refreshBtn:active .ico{transform:rotate(-180deg);transition:transform .5s var(--ease)}
+
+/* Hududlar: yupqa segment chiziq */
+.segbar{height:10px;gap:3px;margin:6px 0 14px}
+.segbar i{border-radius:6px}
+
+/* Kassa: kategoriya ikonkasi */
+.cell.cat{gap:10px}.cell.cat .tone{width:30px;height:30px;border-radius:9px}
+
+/* Qarzdorlik yoshi: gorizontal, tushuntirishli */
+.aging-sum{margin:0 0 10px;color:var(--tx2)}
+.aging-stack{height:10px;margin-bottom:12px}
+.ag-neutral{background:var(--c-gray)}.ag-warn{background:var(--c-amber)}.ag-late{background:color-mix(in srgb,var(--c-amber) 45%,var(--c-red))}.ag-bad{background:var(--c-red)}
+.aging-list{display:grid}
+.ag-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:10px;row-gap:6px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.ag-row:last-child{border-bottom:0}
+.ag-dot{width:10px;height:10px;border-radius:3px}
+.ag-row .t b{display:block;font-weight:500}.ag-row .t small{color:var(--mu);font-size:12px}
+.ag-bar{grid-column:2/-1;height:6px;border-radius:6px;background:var(--soft);overflow:hidden}.ag-bar i{display:block;height:100%;border-radius:6px;transform-origin:left;animation:grow-x .8s var(--ease) both}
+
+/* Ombor kanbani: ustunlar ekranga sig'adi, ichida aylantiriladi; ixcham kartalar */
+.kanban{grid-template-columns:repeat(5,minmax(230px,1fr));align-items:stretch}
+.kcol{display:flex;flex-direction:column;min-height:0;max-height:calc(100vh - 300px);padding:10px}
+.kcol header{flex-wrap:nowrap;margin:2px 4px 10px;min-width:0}
+.kcol header b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.kcol header small{white-space:nowrap}
+.kbody{flex:1;overflow-y:auto;min-height:120px;gap:8px;padding:2px;scrollbar-width:thin;align-content:start}
+.kcard{padding:12px;gap:2px;border-radius:12px}
+.kc-title{font-size:14.5px}.kc-foot{margin-top:6px}.kc-foot b{font-size:16px}
+.kc-top .round-btn{width:24px;height:24px}
+@media (max-width:860px){.kcol{max-height:none}.kbody{overflow:visible}}
+/* To'q kartalar shaffof karta qoidasidan keyin qayta e'lon qilinadi (oq matn o'qilishi uchun) */
+.card.c-ink,.card.hero{background:linear-gradient(160deg,rgba(31,41,55,.94),rgba(17,24,39,.96));border-color:transparent}
+:root[data-theme="dark"] .card.c-ink,:root[data-theme="dark"] .card.hero{background:linear-gradient(160deg,rgba(35,42,53,.9),rgba(26,32,41,.92));border-color:var(--line2)}
+.card.c-yellow{background:color-mix(in srgb,var(--card) 86%,transparent)}
+.period-c{flex-wrap:nowrap;align-items:center;gap:6px}.period-c input[type=date]{width:auto;min-height:32px;padding:0 8px;font-size:13px}@media (max-width:560px){.period-c{flex-wrap:wrap}}

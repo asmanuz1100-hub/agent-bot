@@ -3130,6 +3130,8 @@ def serve_webhook(db,base_url):
                                                  group=payload.get('group') or 'auto')
                     elif action=='period_report':
                         data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
+                    elif action=='cash_period':
+                        data=manager_api.cash_period(local,payload.get('from'),payload.get('to'))
                     elif action=='agent_period_detail':
                         data=manager_api.agent_period_detail(local,payload.get('agentId'),payload.get('period'),
                                                              date_from=payload.get('from'),date_to=payload.get('to'))
