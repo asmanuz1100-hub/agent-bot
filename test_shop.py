@@ -116,6 +116,8 @@ class ShopTests(unittest.TestCase):
         self.assertEqual(k['realization'], 70)                        # 30 + 40
         self.assertEqual(k['collected'], 10)
         self.assertEqual(k['debt'], 60)
+        self.assertEqual(sum(a['realizationUsd'] for a in e['agents']), 70)           # savdo xodimlari ham jadvalda
+        self.assertEqual(e['agentsCash']['cashUsd'], 10)                              # S1 qo'lidagi naqd
         d = shop.handle(self.db, HEAD, 'dashboard', {})
         json.dumps(d)
         self.assertEqual(d['today']['totalUsd'], 70)
