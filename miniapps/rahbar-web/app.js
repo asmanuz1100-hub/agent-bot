@@ -79,7 +79,10 @@ var ICONS={
  palette:'<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
  user:'<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
- sliders:'<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>'
+ sliders:'<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+ mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+ volume:'<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+ send:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>'
 };
 function ic(name,cls){var p=ICONS[name];return p?'<svg class="ico '+(cls||'')+'" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>':''}
 /* Eski emoji belgilar → ikon va rang (KPI kartalar uchun). */
@@ -251,7 +254,7 @@ function route(){
   var p=(location.hash||'').slice(1)||'home';if(!PAGES.some(function(x){return x[0]===p}))p='home';
   S.page=p;var meta=PAGES.find(function(x){return x[0]===p});
   $('pageTitle').textContent=meta[2];$('pageSub').textContent=meta[3];document.title=meta[2]+' · '+brandName();
-  closeDrawer();renderNav();destroyMaps();
+  closeDrawer();renderNav();destroyMaps();S.routeTs=Date.now();
   var pg=$('page');pg.classList.remove('enter');void pg.offsetWidth;pg.classList.add('enter');var tr=$('pageTitle').parentNode;tr.classList.remove('enter');void tr.offsetWidth;tr.classList.add('enter');
   render();
 }
@@ -334,6 +337,61 @@ document.addEventListener('keydown',function(e){
   if(e.key==='/'){var s=document.querySelector('.page input[type=search]');if(s){e.preventDefault();s.focus()}}
   else if(e.key==='r'||e.key==='R')refresh();
 });
+
+/* ---------- AI yordamchi: savol (matn yoki ovoz) → server joriy ma'lumot bilan Claude'dan javob oladi ---------- */
+var AI={msgs:[],busy:false,speak:store('rw-ai-speak')==='1',rec:null};
+var AI_HINTS=['Bugun nechta tovar sotildi?','Agentlar bugun qanday ishlayapti?','Omborda qanday o‘zgarishlar bor?','Kimda eng ko‘p qarz bor va nima qilish kerak?','Bu hafta o‘tgan haftadan yaxshimi?'];
+$('aiBtn').innerHTML=ic('sparkle','sm')+'<span>AI yordamchi</span>';
+$('aiBtn').onclick=openAi;
+function openAi(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  openDrawer('<div class="dh"><div class="tone t-blue">'+ic('sparkle','lg')+'</div><div><h2>AI yordamchi</h2><div class="muted">Savdo, agentlar, ombor, qarz va kassa bo‘yicha so‘rang — javob paneldagi joriy ma’lumotdan.</div></div></div>'+
+   '<div class="ai-log" id="aiLog" aria-live="polite"></div>'+
+   '<div class="ai-hints" id="aiHints">'+AI_HINTS.map(function(h){return '<button class="pill ai-hint">'+esc(h)+'</button>'}).join('')+'</div>'+
+   '<form class="ai-form" id="aiForm"><textarea id="aiQ" rows="2" maxlength="600" placeholder="Savol yozing yoki mikrofonni bosing…" aria-label="Savol"></textarea>'+
+   '<div class="ai-acts">'+(SR?'<button type="button" class="icon-btn" id="aiMic" aria-label="Ovoz bilan so‘rash" data-tip="Ovoz bilan so‘rash">'+ic('mic')+'</button>':'')+
+   '<button type="button" class="icon-btn'+(AI.speak?' on':'')+'" id="aiSpk" aria-pressed="'+AI.speak+'" aria-label="Javobni ovoz bilan o‘qish" data-tip="Javobni ovoz bilan o‘qish">'+ic('volume')+'</button>'+
+   '<span class="grow"></span><button class="btn pri" id="aiSend">'+ic('send','sm')+' Yuborish</button></div></form>'+
+   '<p class="hint" style="margin-top:8px">AI xato qilishi mumkin — muhim qarorlardan oldin raqamlarni tegishli bo‘limda tekshiring.</p>');
+  aiRender();
+  $('aiHints').onclick=function(e){var b=e.target.closest('.ai-hint');if(b)aiAsk(b.textContent)};
+  $('aiForm').onsubmit=function(e){e.preventDefault();aiAsk($('aiQ').value)};
+  $('aiQ').onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiAsk(this.value)}};
+  $('aiSpk').onclick=function(){AI.speak=!AI.speak;store('rw-ai-speak',AI.speak?'1':'0');this.classList.toggle('on',AI.speak);this.setAttribute('aria-pressed',AI.speak);if(!AI.speak&&window.speechSynthesis)speechSynthesis.cancel()};
+  if($('aiMic'))$('aiMic').onclick=function(){aiListen(SR,this)};
+  setTimeout(function(){$('aiQ')&&$('aiQ').focus()},60);
+}
+function aiRender(){var el=$('aiLog');if(!el)return;
+  el.innerHTML=AI.msgs.length?AI.msgs.map(function(m){return '<div class="ai-msg '+m.role+(m.err?' err':'')+'">'+(m.role==='assistant'?'<span class="ai-av">'+ic('sparkle','sm')+'</span>':'')+'<div>'+esc(m.text).replace(/\n/g,'<br>')+'</div></div>'}).join('')+(AI.busy?'<div class="ai-msg assistant"><span class="ai-av">'+ic('sparkle','sm')+'</span><div class="ai-typing"><i></i><i></i><i></i></div></div>':'')
+    :'<div class="empty"><span class="empty-ico">'+ic('sparkle')+'</span><span>Masalan: «Bugun nechta tovar sotildi?»</span></div>';
+  el.scrollTop=el.scrollHeight;if($('aiSend'))$('aiSend').disabled=AI.busy}
+async function aiAsk(q){q=String(q||'').trim();if(!q||AI.busy)return;if($('aiQ'))$('aiQ').value='';
+  var hist=AI.msgs.filter(function(m){return !m.err}).map(function(m){return {role:m.role,text:m.text}});
+  AI.msgs.push({role:'user',text:q});AI.busy=true;aiRender();
+  try{var r=await api('ai_ask',{question:q,history:hist});AI.msgs.push({role:'assistant',text:r.answer});aiSay(r.answer)}
+  catch(e){AI.msgs.push({role:'assistant',text:e.message,err:true})}
+  finally{AI.busy=false;aiRender()}}
+function aiSay(t){if(!AI.speak||!window.speechSynthesis)return;try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t.slice(0,1500));
+  var v=speechSynthesis.getVoices().find(function(x){return /^uz/i.test(x.lang)})||speechSynthesis.getVoices().find(function(x){return /^(ru|tr)/i.test(x.lang)});if(v){u.voice=v;u.lang=v.lang}else u.lang='uz-UZ';speechSynthesis.speak(u)}catch(e){}}
+function aiListen(SR,btn){
+  if(AI.rec){AI.rec.stop();return}
+  var r=new SR();r.lang='uz-UZ';r.interimResults=true;r.maxAlternatives=1;AI.rec=r;btn.classList.add('rec');btn.setAttribute('aria-label','Tinglash — to‘xtatish uchun bosing');
+  var fin='';r.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)fin+=e.results[i][0].transcript;else t+=e.results[i][0].transcript}$('aiQ').value=(fin+t).trim()};
+  r.onerror=function(e){toast(e.error==='not-allowed'?'Mikrofonga ruxsat berilmadi':'Ovozni tanib bo‘lmadi — yozib yuboring',true)};
+  r.onend=function(){AI.rec=null;btn.classList.remove('rec');btn.setAttribute('aria-label','Ovoz bilan so‘rash');if(fin.trim())aiAsk(fin)};
+  try{r.start()}catch(e){AI.rec=null;btn.classList.remove('rec')}}
+
+/* ---------- raqamlar animatsiyasi: KPI qiymatlari 0 dan sanab chiqadi (faqat sahifa ochilganda) ---------- */
+function countUp(root){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches||Date.now()-(S.routeTs||0)>4000)return;
+  root.querySelectorAll('.kpi b, .stat-strip b, .hero b.big, .mini b, .hero-stats b').forEach(function(el){
+    if(el.dataset.cu||el.children.length)return;var txt=el.textContent,m=txt.match(/-?[\d  ]*\d(?:[.,]\d+)?/);if(!m)return;
+    var raw=m[0].replace(/[\s ]/g,'').replace(',','.'),to=parseFloat(raw);if(!isFinite(to)||Math.abs(to)<2)return;
+    var dec=(raw.split('.')[1]||'').length,pre=txt.slice(0,m.index),post=txt.slice(m.index+m[0].length),t0=performance.now(),D=700;el.dataset.cu=1;
+    var fmt=function(v){return pre+num(v,dec)+post};
+    (function step(t){var k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);el.textContent=fmt(to*e);if(k<1)requestAnimationFrame(step);else el.textContent=txt})(t0)});
+}
+new MutationObserver(function(){if(S.cuT)return;S.cuT=requestAnimationFrame(function(){S.cuT=0;countUp($('page'))})}).observe($('page'),{childList:true,subtree:true});
 
 /* ---------- global qidiruv (Ctrl/Cmd+K) ---------- */
 var GS={items:[],sel:0};

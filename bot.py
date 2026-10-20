@@ -17,6 +17,7 @@ import manager_api
 import web_auth
 import branding
 import staff
+import ai_assistant
 import executive
 import agent_api
 import analytics
@@ -3024,7 +3025,7 @@ def serve_webhook(db,base_url):
                     if not isinstance(payload,dict):
                         answer(400,{'error':'So‘rov noto‘g‘ri.'});return
                     # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
-                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save'):
+                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save','ai_ask'):
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     web_token=self._bearer_token()
                     actor=None if web_token and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
@@ -3113,6 +3114,8 @@ def serve_webhook(db,base_url):
                         try:notify_agent_order_status(local,oid)
                         except Exception:logging.exception('Order status notification failed order=%s',oid)
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='ai_ask':
+                        data=ai_assistant.ask(local,payload.get('question'),payload.get('history'))
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
