@@ -93,7 +93,7 @@ function toggleTheme(){var t=H.getAttribute('data-pmt')==='dark'?'light':'dark';
 applyTheme(themeOf(savedTheme()||'auto'));try{tg&&tg.onEvent&&tg.onEvent('themeChanged',function(){if((savedTheme()||'auto')==='auto')applyTheme(themeOf('auto'))})}catch(e){}
 /* Motion budget: lighter effects on weak devices / data saver; pause when the app is hidden */
 (function(){var n=navigator;if((n.deviceMemory&&n.deviceMemory<=2)||(n.hardwareConcurrency&&n.hardwareConcurrency<=4)||(n.connection&&n.connection.saveData))H.classList.add('pm-lite');D.addEventListener('visibilitychange',function(){H.classList.toggle('pm-paused',D.hidden)})})();
-var LOGO='<img class="lg-wm" src="/app/premium-kit/logo.png" alt="ASMAN">';
+var LOGO='<span class="aibi-wm"><img src="/app/premium-kit/aibi/aibi-mark.svg" alt="">AIBI</span>';
 function brand(sub,initial){return '<div class="br"><div class="lg">'+LOGO+'<small>'+sub+'</small></div><div class="rt"><i id="pmSync" role="button" aria-label="Yangilash">'+svg('refresh')+'</i><i id="pmTheme" role="button" aria-label="Mavzu">'+svg(H.getAttribute('data-pmt')==='dark'?'sun':'moon')+'</i><i class="pf" id="pmAvatar">'+initial+'</i></div></div>'}
 function iconBtns(){[].slice.call(D.querySelectorAll('.rt i[role=button]')).forEach(function(i){i.tabIndex=0;i.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();i.click()}})})}
 /* Count-up like Rahbar: animates the number inside an element once its value is set */
@@ -108,7 +108,7 @@ D.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.targe
 function enter(sec){if(!sec)return;sec.classList.remove('pm-in');void sec.offsetWidth;sec.classList.add('pm-in');clearTimeout(sec._pi);sec._pi=setTimeout(function(){sec.classList.remove('pm-in')},1100);
  [].forEach.call(sec.querySelectorAll('.report-trend-track i,.bar i,.report-client-bar i'),function(b,k){b.classList.remove('pm-grow','pm-growx');void b.offsetWidth;b.classList.add(b.closest('.report-trend-track')?'pm-grow':'pm-growx');b.style.animationDelay=Math.min(k,12)*40+'ms'})}
 /* Splash: animated ASMAN logo until the app has data (min 0.9s so the logo animation completes) */
-var spT0=performance.now(),sp=null;function splash(sub){sp=el('<div id="pmSp" role="status" aria-label="Yuklanmoqda"><img src="/app/premium-kit/emblem.png" alt="ASMAN"><small>'+sub+'</small><div class="ldbar"><i></i></div></div>');D.body.append(sp);H.classList.remove('pm-boot');setTimeout(function(){splashDone()},12000)}
+var spT0=performance.now(),sp=null;function splash(sub){sp=el('<div id="pmSp" role="status" aria-label="Yuklanmoqda"><img src="/app/premium-kit/aibi/aibi-mark.svg" alt="AIBI"><small>'+sub+'</small><div class="ldbar"><i></i></div></div>');D.body.append(sp);H.classList.remove('pm-boot');setTimeout(function(){splashDone()},12000)}
 function splashDone(){if(!sp||sp._x)return;sp._x=1;var w=Math.max(0,900-(performance.now()-spT0));setTimeout(function(){sp.classList.add('x');var s=D.querySelector('section.view.active')||D.getElementById('overview');enter(s);setTimeout(function(){countIn(D)},320);setTimeout(function(){sp.remove()},500)},w)}
 function ripple(sel){D.addEventListener('pointerdown',function(e){var t=e.target.closest&&e.target.closest(sel);if(!t)return;var r=t.getBoundingClientRect(),z=Math.max(r.width,r.height)*2,x=D.createElement('u');x.className='rp';x.style.cssText='width:'+z+'px;height:'+z+'px;left:'+(e.clientX-r.left-z/2)+'px;top:'+(e.clientY-r.top-z/2)+'px';t.appendChild(x);setTimeout(function(){x.remove()},700)})}
 function slider(nav,isOn){var ni=el('<i id="ni"></i>');nav.insertBefore(ni,nav.firstChild);var geo=null,raf=0;function measure(){geo=[].slice.call(nav.querySelectorAll('button')).map(function(b){return [b,b.offsetLeft,b.offsetWidth]});
@@ -126,7 +126,7 @@ function initials(s){s=String(s||'').replace(/^[^A-Za-zА-Яа-яЎўҚқҒғҲ�
 function agent(){
  var app=D.querySelector('.app'),hd=app&&app.querySelector(':scope>header');if(!hd)return;
  var greet=D.getElementById('greet'),desc=D.getElementById('headerDesc'),cmd=D.getElementById('homeCommand'),kp=D.querySelector('#page-home .kpis');
- var nh=el('<header class="hd" id="pmHd">'+brand('AGENT PANEL','A')+'<div class="gr" id="pmGr"></div><div class="hero" id="pmHero">'+MT+'<span class="live">● JONLI</span><small class="k">ASMAN · AGENT PANEL</small></div></header>');
+ var nh=el('<header class="hd" id="pmHd">'+brand('AGENT PANEL','A')+'<div class="gr" id="pmGr"></div><div class="hero" id="pmHero">'+MT+'<span class="live">● JONLI</span><small class="k">AIBI · AGENT</small></div></header>');
  nh.querySelector('#pmGr').append(greet,desc);
  // The badge follows the connection: offline the app shows the last saved copy, not live data.
  var live=nh.querySelector('.live');
@@ -166,7 +166,7 @@ function cashier(){
  var nh=el('<header class="hd" id="pmHd">'+brand('KASSA · CONTROL','K')+'<div class="gr" id="pmGr"></div></header>');
  var gr=nh.querySelector('#pmGr');if(idt)gr.append(idt);if(h1){var b=D.createElement('b');b.textContent='Kassa boshqaruvi';gr.append(b);h1.remove()}
  if(bal){var hero=el('<div class="hero" id="pmHero">'+MT+'</div>');var head=bal.querySelector('.balance-head'),st=bal.querySelector('.balance-status');if(st){st.classList.add('live');hero.append(st)}
-  hero.append(el('<small class="k">ASMAN · KASSA NAZORATI</small>'));if(head){var k=head.querySelector('small');if(k){var pp=D.createElement('p');pp.append(k);hero.append(pp)}head.remove()}
+  hero.append(el('<small class="k">AIBI · CASHIER</small>'));if(head){var k=head.querySelector('small');if(k){var pp=D.createElement('p');pp.append(k);hero.append(pp)}head.remove()}
   var gt=bal.querySelector('.grand-total');if(gt){gt.classList.add('pm-gt');hero.append(gt)}
   var p3=bal.querySelector('.pocket3');if(p3){p3.classList.add('three');[].slice.call(p3.children).forEach(function(d){d.classList.add('hb')});hero.append(p3)}
   var gb=D.getElementById('grandBalance');if(gb){gb.removeAttribute('style');gb.classList.add('pm-gb');hero.append(gb)}

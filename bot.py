@@ -60,12 +60,12 @@ def _miniapp_url(env_name,legacy_url,app,version):
     if SELF_HOSTED_MINIAPPS and (not value or urlparse(value).netloc in LEGACY_MINIAPP_HOSTS):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
-MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261002-selfhost-v1')
+MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261020-aibi-v1')
 MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261018-photo-v19')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v14')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261020-aibi-v1')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
-WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v5')
-SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-savdo-v2')
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261020-aibi-v1')
+SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-aibi-v1')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -89,7 +89,7 @@ def miniapp_response(path,query=''):
     if app=='rahbar' and rel=='index.html':
         # The old Rahbar Mini App is removed: old buttons and links open Rahbar Premium (Telegram data in the hash is kept).
         body=('<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-              '<title>ASMAN · Rahbar</title><style>html,body{margin:0;height:100%;background:#0e1621}</style></head><body>'
+              '<title>AIBI Manager</title><style>html,body{margin:0;height:100%;background:#0e1621}</style></head><body>'
               '<script>location.replace("/app/rahbar-premium/"+location.search+location.hash)</script></body></html>').encode()
         return 200,body,'text/html; charset=utf-8',{'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'}
     if '\x00' in rel or '\\' in rel or any(part in ('..','') or part.startswith('.') for part in rel.split('/')):
@@ -107,7 +107,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261011-premium-v3').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261020-aibi-v1').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.
@@ -2383,13 +2383,13 @@ def run_polling(db):
 def menu_button_for(role):
     """Chat pastidagi doimiy tugma: agent/admin — Agent ilovasi, kassir — Kassir ilovasi."""
     if role=='cashier' and CASHIER_MINIAPP_URL:
-        return {'type':'web_app','text':'Kassir app','web_app':{'url':CASHIER_MINIAPP_URL}}
+        return {'type':'web_app','text':'AIBI Cashier','web_app':{'url':CASHIER_MINIAPP_URL}}
     if role=='warehouse' and WAREHOUSE_MINIAPP_URL:
-        return {'type':'web_app','text':'Ombor app','web_app':{'url':WAREHOUSE_MINIAPP_URL}}
+        return {'type':'web_app','text':'AIBI Warehouse','web_app':{'url':WAREHOUSE_MINIAPP_URL}}
     if role=='sales' and SHOP_MINIAPP_URL:
-        return {'type':'web_app','text':'Savdo app','web_app':{'url':SHOP_MINIAPP_URL}}
+        return {'type':'web_app','text':'AIBI Savdo','web_app':{'url':SHOP_MINIAPP_URL}}
     if role in ('agent','admin') and AGENT_MINIAPP_URL:
-        return {'type':'web_app','text':'Agent app','web_app':{'url':AGENT_MINIAPP_URL}}
+        return {'type':'web_app','text':'AIBI Agent','web_app':{'url':AGENT_MINIAPP_URL}}
     return {'type':'commands'}
 
 def menu_button_users(db):

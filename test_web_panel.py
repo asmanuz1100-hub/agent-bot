@@ -257,7 +257,7 @@ class WebPanelHttpTests(unittest.TestCase):
     def test_panel_page_is_served(self):
         with urllib.request.urlopen(f'http://127.0.0.1:{self.port}/app/rahbar-web/', timeout=10) as r:
             body = r.read().decode()
-        self.assertIn('Boshqaruv paneli', body)
+        self.assertIn('AIBI Dashboard', body)
         self.assertNotIn('ASMAN', body)
         self.assertNotIn('telegram-web-app.js', body)
 

@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="uz">
+<html lang="uz" class="aibi">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>ASMAN · Ombor</title>
+<title>AIBI Warehouse</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
@@ -157,6 +157,7 @@ nav button i{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;hei
 .pfull{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}.pfull img{max-width:100%;max-height:100%;border-radius:14px}
 .pact{display:flex;gap:8px;margin:6px 0 10px}.pact label,.pact button{flex:1;text-align:center}.pact input{display:none}
 </style>
+<link rel="icon" href="/app/premium-kit/aibi/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="/app/premium-kit/aibi/aibi-icon-dark.svg"><link rel="apple-touch-icon" href="/app/premium-kit/aibi/aibi-icon-dark-180.png"><link rel="stylesheet" href="/app/premium-kit/aibi/aibi.css?v=1">
 </head>
 <body>
 <div class="app" id="app"></div>
@@ -164,7 +165,7 @@ nav button i{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;hei
 <div id="ov"></div>
 <div id="sh" role="dialog" aria-modal="true"></div>
 <div id="ts" role="status" aria-live="polite"></div>
-<div id="sp" role="status" aria-label="Yuklanmoqda"><img src="/app/premium-kit/emblem.png" alt="ASMAN"><small>OMBOR</small><div class="ldbar"><i></i></div></div>
+<div id="sp" role="status" aria-label="Yuklanmoqda"><img src="/app/premium-kit/aibi/aibi-mark.svg" alt="AIBI"><small>AIBI WAREHOUSE</small><div class="ldbar"><i></i></div></div>
 <script>
 'use strict';
 const tg=window.Telegram&&Telegram.WebApp;
@@ -300,7 +301,7 @@ function render(){
   $('rf').onclick=()=>load().catch(()=>{});
   $('th').onclick=toggleTheme;
   $('pf').onclick=()=>openSheet(`<h2>${box('user',C.blue)}${esc(S.me.name||'Foydalanuvchi')}</h2><div class="sub">${roleName()} · ID ${esc(S.me.id)}</div>
-    <div class="tl"><span class="tx">Ilova</span><b>ASMAN Ombor</b></div><div class="tl"><span class="tx">Ma’lumot yangilandi</span><b>${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</b></div>
+    <div class="tl"><span class="tx">Ilova</span><b>AIBI Warehouse</b></div><div class="tl"><span class="tx">Ma’lumot yangilandi</span><b>${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</b></div>
     ${keeper()&&!canOp()?'<div class="note">Rahbar ombor panelini faqat ko‘radi. Kirim, berish, qabul va brakni omborchi kiritadi.</div>':''}
     <div class="acts"><button class="btn g" id="cl">Yopish</button></div>`,s=>s.querySelector('#cl').onclick=closeSheet);
 }
@@ -313,15 +314,15 @@ function header(){
   let hero='';
   if(tab==='home'&&keeper()){
     const ps=activeProducts(),total=ps.reduce((s,p)=>s+Math.max(p.stock,0),0),zero=ps.filter(p=>p.stock<=0).length,t=S.today||{};
-    hero=`<div class="hero">${MT}<span class="live">● JONLI</span><small class="k">ASMAN · OMBOR MARKAZI</small><h1>${num(total)} <u>dona</u></h1>
+    hero=`<div class="hero">${MT}<span class="live">● JONLI</span><small class="k">AIBI · OMBOR MARKAZI</small><h1>${num(total)} <u>dona</u></h1>
       <p>Ombordagi jami tovar · ${ps.length} xil mahsulot${zero?`, ${zero} tasi tugagan`:''}</p>
       <div class="two"><div class="hb"><small>Bugun kirim</small><b class="ok">+${num(t.in||0)}</b></div><div class="hb"><small>Bugun agentlarga berildi</small><b>${num(t.issue||0)}</b></div></div></div>`;
   }else if(tab==='home'){
     const ps=S.products||[],total=ps.reduce((s,p)=>s+Math.max(p.stock,0),0),pend=(S.requests||[]).filter(r=>r.status==='pending').length;
-    hero=`<div class="hero">${MT}<small class="k">ASMAN · AGENT OMBORI</small><h1>${num(total)} <u>dona</u></h1><p>Qo‘limdagi tovar · ${ps.filter(p=>p.stock>0).length} xil mahsulot</p>
+    hero=`<div class="hero">${MT}<small class="k">AIBI · AGENT OMBORI</small><h1>${num(total)} <u>dona</u></h1><p>Qo‘limdagi tovar · ${ps.filter(p=>p.stock>0).length} xil mahsulot</p>
       <div class="two"><div class="hb"><small>Kutilayotgan so‘rov</small><b>${pend}</b></div><div class="hb"><small>Qabul qilingan</small><b class="ok">${(S.requests||[]).filter(r=>r.status==='accepted').length}</b></div></div></div>`;
   }
-  return `<div class="hd"><div class="br"><div class="lg"><img src="/app/premium-kit/logo.png" alt="ASMAN"><small>BUSINESS CONTROL</small></div>
+  return `<div class="hd"><div class="br"><div class="lg"><span class="aibi-wm"><img src="/app/premium-kit/aibi/aibi-mark.svg" alt="">AIBI</span><small>WAREHOUSE</small></div>
     <div class="rt"><button id="rf" aria-label="Yangilash">${I('refresh')}</button><button id="th" aria-label="Mavzu">${I(isDark()?'sun':'moon')}</button><button class="pf" id="pf" aria-label="Profil">${esc(initials(S.me.name))}</button></div></div>
     <div class="gr"><small>${d.getDate()} ${MO[d.getMonth()]} · ${tab==='home'?greet():esc(roleName())}</small><b>${tab==='home'?`Salom, ${esc(first)}${I('spark')}`:esc(titles[tab]||'')}</b></div>${hero}</div>`;
 }
@@ -596,7 +597,7 @@ try{applyTheme(localStorage.getItem('omborTheme')||(tg&&tg.colorScheme)||'');}ca
 function splashDone(){const sp=$('sp');if(!sp)return;sp.classList.add('x');setTimeout(()=>sp.remove(),500);}
 function splashFail(msg,retry){const sp=$('sp');if(!sp)return;sp.className='er';
   sp.innerHTML=`<div class="ercard"><b>Ombor panelini ochib bo‘lmadi</b><p></p>${retry?'<button class="btn" id="rt">Qayta urinish</button>':''}</div>`;
-  sp.querySelector('p').textContent=msg;if(retry)$('rt').onclick=()=>{sp.className='';sp.innerHTML='<img src="/app/premium-kit/emblem.png" alt="ASMAN"><small>OMBOR</small><div class="ldbar"><i></i></div>';start();};}
+  sp.querySelector('p').textContent=msg;if(retry)$('rt').onclick=()=>{sp.className='';sp.innerHTML='<img src="/app/premium-kit/aibi/aibi-mark.svg" alt="AIBI"><small>AIBI WAREHOUSE</small><div class="ldbar"><i></i></div>';start();};}
 function start(){load(true).then(splashDone).catch(e=>splashFail(e.message,true));}
 if(tg){tg.ready();tg.expand();try{tg.setHeaderColor(isDark()?'#0e1621':'#f1f2f6');}catch(e){}
   try{tg.BackButton.onClick(closeSheet);}catch(e){}}
