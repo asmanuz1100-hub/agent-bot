@@ -1065,6 +1065,9 @@ def warehouse(db, status=None):
     status = str(status or 'open')
     if status == 'open':
         statuses = ('new', 'preparing', 'loaded')
+    elif status == 'all':
+        # Kanban: barcha statuslar bitta so'rovda (har status bo'yicha eng yangi buyurtmalar).
+        statuses = tuple(core.ORDER_STATUSES)
     elif status in core.ORDER_STATUSES:
         statuses = (status,)
     else:
@@ -1073,7 +1076,7 @@ def warehouse(db, status=None):
         FROM orders o LEFT JOIN users u ON u.id=o.agent LEFT JOIN clients c ON c.id=o.client
         WHERE o.status IN ({','.join('?' for _ in statuses)})
         ORDER BY CASE o.status WHEN 'new' THEN 0 WHEN 'preparing' THEN 1 WHEN 'loaded' THEN 2 ELSE 3 END, o.ts DESC, o.id DESC
-        LIMIT 200""", statuses).fetchall()
+        LIMIT ?""", statuses + ((400 if status == 'all' else 200),)).fetchall()
     orders = []
     for r in rows:
         v = core.order_view(db, r)

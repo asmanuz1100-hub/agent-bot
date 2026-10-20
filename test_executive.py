@@ -34,10 +34,10 @@ class ExecutiveTests(unittest.TestCase):
     def seed(self):
         t, y = self.today + 7200, self.today - DAY + 7200
         self.ev(2, 10, 'delivery', 10000, y)          # kecha 100$
-        self.ev(2, 10, 'payment', 4000, y + 60)       # kecha 40$
+        self.ev(2, 10, 'payment', 4000, y + 60, method='cash')  # kecha 40$ naqd dollar
         self.ev(2, 10, 'delivery', 5000, t)           # bugun 50$
         self.ev(2, 10, 'return', 1000, t + 60)        # bugun qaytish 10$
-        self.ev(2, 10, 'payment', 2000, t + 120, uzs=250000)  # bugun 20$ so'mda
+        self.ev(2, 10, 'payment', 2000, t + 120, uzs=250000, method='cash')  # bugun 20$ so'mda (record_client_payment kabi)
         self.ev(3, 20, 'delivery', 3000, t)           # Vali bugun 30$
         self.ev(3, 20, 'payment', 5000, t + 60, method='card')  # 50$ karta → 20$ avans
         self.db.execute("INSERT INTO client_visits(client,actor,status,note,followup,ts) VALUES(10,2,'active','x',NULL,?)", (t,))
@@ -127,6 +127,75 @@ class ExecutiveTests(unittest.TestCase):
         self.assertIsNone(a['prevStart'])
         with self.assertRaises(ValueError):
             executive.resolve(self.db, 'year', now=self.now)
+
+    def test_debt_aging_fifo_sums_to_total_debt(self):
+        # Ali (C10): 45 kun oldin 100$, 10 kun oldin 50$, 5 kun oldin 120$ to'lov → FIFO: eski 100$ yopiladi,
+        # 10 kunlik 50$ dan 20$ yopiladi → 30$ qoladi (0–30 guruh).
+        self.ev(2, 10, 'delivery', 10000, self.today - 45 * DAY)
+        self.ev(2, 10, 'delivery', 5000, self.today - 10 * DAY)
+        self.ev(2, 10, 'payment', 12000, self.today - 5 * DAY)
+        # Vali (C20): 95 kun oldin 40$ to'lanmagan (90+), ortiqcha to'lov yo'q.
+        self.ev(3, 20, 'delivery', 4000, self.today - 95 * DAY)
+        d = executive.executive(self.db, 'today', now=self.now)
+        aging = {b['label']: b for b in d['debtAging']}
+        self.assertEqual(aging['0–30']['usd'], 30)
+        self.assertEqual(aging['90+']['usd'], 40)
+        self.assertEqual(aging['31–60']['usd'], 0)
+        self.assertEqual(sum(b['usd'] for b in d['debtAging']), self.k(d, 'debt')['value'])
+        self.assertEqual(aging['90+']['clients'], 1)
+
+    def test_advance_covers_later_delivery_in_aging(self):
+        self.ev(2, 10, 'payment', 3000, self.today - 40 * DAY)   # avans 30$
+        self.ev(2, 10, 'delivery', 5000, self.today - 20 * DAY)  # 50$ dan 30$ avans bilan yopiladi
+        d = executive.executive(self.db, 'today', now=self.now)
+        self.assertEqual(sum(b['usd'] for b in d['debtAging']), 20)
+        self.assertEqual(self.k(d, 'debt')['value'], 20)
+
+    def test_agents_cash_keeps_usd_and_uzs_apart(self):
+        self.seed()   # Ali: kecha 40$ naqd dollar, bugun 250 000 so'm; Vali: karta (agentda turmaydi)
+        self.db.execute("INSERT INTO handovers(agent,amount,amount_usd,status,cashier,source,ts) VALUES(2,0,1500,'pending',NULL,9001,?)", (self.today,))
+        d = executive.executive(self.db, 'today', now=self.now)
+        cash = d['agentsCash']
+        self.assertEqual(cash['cashUsd'], 40)
+        self.assertEqual(cash['cashUzs'], 250000)
+        self.assertEqual(cash['pendingUsd'], 15)
+        self.assertEqual([a['agentId'] for a in cash['agents']], [2])
+        only_vali = executive.executive(self.db, 'today', agent=3, now=self.now)['agentsCash']
+        self.assertEqual((only_vali['cashUsd'], only_vali['cashUzs']), (0, 0))
+
+    def test_region_sales_and_calendar(self):
+        self.seed()
+        d = executive.executive(self.db, 'today', now=self.now)
+        regs = {r['key']: r for r in d['regionSales']}
+        self.assertEqual(regs['qoqon']['realizationUsd'], 40)
+        self.assertEqual(regs['rishton']['realizationUsd'], 30)
+        self.assertEqual(sum(r['realizationUsd'] for r in d['regionSales']), self.k(d, 'realization')['value'])
+        cal = d['calendar']
+        self.assertEqual((cal['year'], cal['month'], cal['days']), (2026, 10, 31))
+        self.assertEqual(cal['values']['15']['realizationUsd'], 70)
+        self.assertEqual(cal['values']['14']['realizationUsd'], 100)
+
+    def test_conversions_are_listed_in_display_units(self):
+        self.db.execute("""INSERT INTO cashier_conversions(cashier,pay_from,from_currency,amount_from,amount_to,rate_uzs_per_usd,valuation_rate,usd_delta,note,source,ts)
+            VALUES(4,'cash','USD',10000,1270000,12700,12700,0,'',501,?)""", (self.today + 60,))
+        self.db.execute("""INSERT INTO cashier_conversions(cashier,pay_from,from_currency,amount_from,amount_to,rate_uzs_per_usd,valuation_rate,usd_delta,note,source,ts)
+            VALUES(4,'card','UZS',635000,5000,12700,12700,0,'',502,?)""", (self.today - 3 * DAY,))
+        d = executive.executive(self.db, 'today', now=self.now)
+        self.assertEqual(len(d['conversions']), 1)
+        c = d['conversions'][0]
+        self.assertEqual((c['from'], c['amountFrom'], c['to'], c['amountTo'], c['rate']), ('USD', 100, 'UZS', 1270000, 12700))
+        w = executive.executive(self.db, 'd7', now=self.now)['conversions']
+        self.assertEqual([(x['from'], x['amountFrom'], x['amountTo']) for x in w], [('USD', 100, 1270000), ('UZS', 635000, 50)])
+
+    def test_warehouse_all_statuses_for_kanban(self):
+        now = self.now
+        for i, st in enumerate(('new', 'preparing', 'loaded', 'delivered', 'rejected')):
+            self.db.execute("INSERT INTO orders(agent,client,status,note,source,ts,updated_ts) VALUES(2,10,?,'',?,?,?)", (st, 600 + i, now - i, now - i))
+        w = manager_api.warehouse(self.db, 'all')
+        self.assertEqual(sorted(o['status'] for o in w['orders']), sorted(('new', 'preparing', 'loaded', 'delivered', 'rejected')))
+        self.assertEqual(w['filter'], 'all')
+        with self.assertRaises(ValueError):
+            manager_api.warehouse(self.db, 'bogus')
 
     def test_read_only(self):
         self.seed()
