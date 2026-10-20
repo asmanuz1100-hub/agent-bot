@@ -3,7 +3,7 @@
 Run with Node 22 and Playwright 1.62.1:
 
 ```sh
-npm install --no-save --package-lock=false playwright@1.62.1
+npm install --no-save --package-lock=false playwright@1.62.1 axe-core@4.10.3
 npx playwright install chromium
 node tests/browser/webview.cjs
 ```
@@ -25,3 +25,12 @@ test client; open cashier expense review and cancel. Repeat on iOS/desktop.
 
 Optional SCREENSHOT_DIR writes screenshots for visual inspection. WEBVIEW_HTML
 can select a prior HTML revision to demonstrate regression failures.
+
+## Rahbar Web
+
+`node tests/browser/rahbar-web.cjs` starts `rahbar-web-server.py` (temporary SQLite with fake data, Telegram
+API disabled) and checks, in light and dark themes: login (wrong and right password), keyboard (Tab focus ring,
+Ctrl+K search → Enter opens a card → Escape closes, Enter on a KPI card, Enter/Escape on a Kanban card),
+axe-core WCAG 2 A/AA on all 10 pages (serious/critical violations fail the run), console errors, and horizontal
+overflow at 1440 / 1024 / 768 / 390 px. Screenshots and `axe.json` go to `test-results/rahbar-web/`.
+Map tiles and Google Fonts are stubbed; Leaflet and markercluster load from cdnjs.

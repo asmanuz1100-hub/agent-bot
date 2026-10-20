@@ -220,3 +220,6 @@ __marimo__/
 # ASMAN runtime data
 data/
 *.sqlite3*
+
+# Playwright screenshots / reports
+test-results/

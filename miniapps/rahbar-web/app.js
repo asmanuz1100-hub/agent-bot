@@ -179,7 +179,7 @@ function route(){
   $('pageTitle').textContent=meta[2];$('pageSub').textContent=meta[3];document.title='ASMAN · '+meta[2];
   closeDrawer();renderNav();destroyMaps();render();
 }
-function destroyMaps(){Object.keys(S.maps).forEach(function(k){if(k==='drawer')return;try{S.maps[k].remove()}catch(e){}delete S.maps[k]})}
+function destroyMaps(){Object.keys(S.maps).forEach(function(k){if(k==='drawer')return;var m=S.maps[k];delete S.maps[k];try{m.stop();m.off();m.remove()}catch(e){}})}
 async function render(force){
   var p=S.page,page=$('page');
   var needDash=['home','agents','clients','cash','insights','team'].indexOf(p)>=0;
@@ -302,8 +302,8 @@ function formBox(title,fields,okText,note){
     return '<label>'+esc(f.label)+input+'</label>'}).join('')+'</div><div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">'+esc(okText||'Saqlash')+'</button></div></form>');
 }
 async function run(fn,okMsg){try{var r=await fn();if(okMsg)toast(okMsg);return r}catch(e){toast(e.message,true);return null}}
-function openDrawer(html){$('drawerBody').innerHTML=html;$('drawer').classList.add('on');$('drawerOv').classList.add('on');$('drawer').setAttribute('aria-hidden','false');$('drawer').scrollTop=0}
-function closeDrawer(){$('drawer').classList.remove('on');$('drawerOv').classList.remove('on');$('drawer').setAttribute('aria-hidden','true');if(S.maps.drawer){try{S.maps.drawer.remove()}catch(e){}delete S.maps.drawer}}
+function openDrawer(html){$('drawerBody').innerHTML=html;$('drawer').classList.add('on');$('drawerOv').classList.add('on');$('drawer').inert=false;$('drawer').scrollTop=0}
+function closeDrawer(){$('drawer').classList.remove('on');$('drawerOv').classList.remove('on');$('drawer').inert=true;if(S.maps.drawer){try{S.maps.drawer.remove()}catch(e){}delete S.maps.drawer}}
 $('drawerOv').onclick=closeDrawer;$('drawerX').onclick=closeDrawer;
 function download(d){
   var bin=atob(d.base64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
@@ -338,7 +338,8 @@ function areaChart(series,keys,colors,fmt,names){
     out+='<circle class="hdot" data-k="'+j+'" r="5" cx="-99" cy="-99" fill="'+colors[j]+'" stroke="var(--card-solid)" stroke-width="2.5"/>'});
   out+='<line class="cross" x1="-99" x2="-99" y1="'+pt+'" y2="'+(H-pb)+'"/>';
   CHARTS[id]={series:series,keys:keys,colors:colors,fmt:fmt,names:names||keys,X:X,Y:Y,n:n,W:W,pl:pl,pr:pr};
-  return '<div class="chartbox" data-chart="'+id+'"><svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img">'+out+'</svg><div class="ctip"></div></div>';
+  var lbl=(names||keys).join(', ')+': '+series.length+' nuqta, '+esc(series[0].day)+' – '+esc(series[series.length-1].day)+'. Eng katta qiymat '+esc(fmt(max));
+  return '<div class="chartbox" data-chart="'+id+'"><svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+lbl+'"><title>'+lbl+'</title>'+out+'</svg><div class="ctip"></div></div>';
 }
 var barChart=function(series,keys,colors,fmt){return areaChart(series,keys,colors,fmt,keys.map(function(k){return {deliveredUsd:'Realizatsiya',paymentsUsd:'To‘lovlar',visits:'Tashriflar'}[k]||k}))};
 document.addEventListener('mousemove',function(e){
@@ -385,6 +386,7 @@ function bindGo(root){root.querySelectorAll('[data-go]').forEach(function(el){el
   location.hash=g[0]}})}
 
 /* ---------- maps ---------- */
+function safeInv(m,key,ms){setTimeout(function(){if(S.maps[key]===m&&m._container&&m._container.isConnected){try{m.invalidateSize()}catch(e){}}},ms)}
 function makeMap(el,key){
   if(!window.L){el.innerHTML='<div class="empty">Xarita yuklanmadi (internetni tekshiring).</div>';return null}
   var m=L.map(el,{zoomControl:true,attributionControl:true}).setView([40.45,71.6],9);
@@ -522,8 +524,8 @@ function miniMap(){
   if(S.maps.mini){try{S.maps.mini.remove()}catch(e){}}
   var m=L.map(el,{zoomControl:false,attributionControl:false,dragging:true,scrollWheelZoom:false}).setView([40.45,71.6],9);
   L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:19}).addTo(m);S.maps.mini=m;
-  var pts=[];S.dash.agents.forEach(function(a){if(a.lat==null)return;pts.push([a.lat,a.lon]);L.marker([a.lat,a.lon],{icon:agentIcon(a)}).addTo(m).bindTooltip(esc(a.name)+' · '+(a.lastGpsTs?ago(a.lastGpsTs):'GPS yo‘q')).on('click',function(){GPS.agent=a.id;gpsSave();location.hash='agents'})});
-  if(pts.length)m.fitBounds(pts,{padding:[30,30],maxZoom:13});setTimeout(function(){m.invalidateSize()},80);
+  var pts=[];S.dash.agents.forEach(function(a){if(a.lat==null)return;pts.push([a.lat,a.lon]);L.marker([a.lat,a.lon],{icon:agentIcon(a),title:a.name,alt:a.name}).addTo(m).bindTooltip(esc(a.name)+' · '+(a.lastGpsTs?ago(a.lastGpsTs):'GPS yo‘q')).on('click',function(){GPS.agent=a.id;gpsSave();location.hash='agents'})});
+  if(pts.length)m.fitBounds(pts,{padding:[30,30],maxZoom:13,animate:false});safeInv(m,'mini',80);
   var by={active:0,late:0,offline:0};S.dash.agents.forEach(function(a){by[a.status]=(by[a.status]||0)+1});
   var stale=S.dash.agents.filter(function(a){return a.shiftOpen&&a.lastGpsTs&&Date.now()/1000-a.lastGpsTs>STALE}).length;
   $('miniAg').innerHTML='<div class="actions">'+pill('<span class="dot"></span>Faol '+by.active,'p-ok')+pill('<span class="dot"></span>Kechikkan '+by.late,'p-warn')+pill('Yopiq '+by.offline)+(stale?pill(ic('alert','sm')+' GPS eskirgan: '+stale,'p-bad'):'')+'</div>';
@@ -601,7 +603,7 @@ function pageAgents(page){
   $('gpsRegion').onchange=function(){GPS.region=this.value;gpsSave();gpsListRender();gpsMarkers(true);gpsClientLayer(true);if(!GPS.agent)gpsDetail();gpsFitClients()};
   $('gpsCl').onchange=function(){GPS.clients=this.checked;gpsSave();gpsClientLayer(true)};
   var m=makeMap($('agMap'),'agents');S.agMarkers={};S.gpsLayers={};
-  if(m){S.gpsLayers.route=L.layerGroup().addTo(m);gpsClientLayer(false);gpsMarkers(true);setTimeout(function(){m.invalidateSize()},60)}
+  if(m){S.gpsLayers.route=L.layerGroup().addTo(m);gpsClientLayer(false);gpsMarkers(true);safeInv(m,'agents',60)}
   gpsListRender();gpsDetail();
 }
 function agentPopup(a){return '<b>'+esc(a.name)+'</b><br>'+(a.locationSource==='live'?'Jonli GPS':'Oxirgi ma’lum joy')+' · '+ago(a.lastGpsTs)}
@@ -626,7 +628,7 @@ function gpsMarkers(fit){
     if(a.lat==null||keep.indexOf(a.id)<0){if(mk){m.removeLayer(mk);delete S.agMarkers[a.id]}return}
     var icon=agentIcon(a,GPS.agent===a.id);
     if(mk){mk.setLatLng([a.lat,a.lon]);mk.setIcon(icon);mk.setPopupContent(agentPopup(a))}
-    else S.agMarkers[a.id]=L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:1000}).addTo(m).bindPopup(agentPopup(a)).on('click',function(){gpsSelect(a.id)});
+    else S.agMarkers[a.id]=L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:1000,title:a.name,alt:a.name}).addTo(m).bindPopup(agentPopup(a)).on('click',function(){gpsSelect(a.id)});
     pts.push([a.lat,a.lon])});
   if(fit&&!GPS.agent&&pts.length)m.fitBounds(pts,{padding:[50,50],maxZoom:13});
 }
@@ -641,7 +643,7 @@ function gpsClientLayer(rebuild){
   S.dash.clients.forEach(function(c){
     if(c.lat==null)return;if(GPS.agent&&c.agentId!==GPS.agent)return;if(GPS.region&&(c.region||'').trim()!==GPS.region)return;
     var col=c.blacklisted?C.ink:(AGE[c.age]||AGE.unknown)[2];
-    grp.addLayer(L.marker([c.lat,c.lon],{age:c.age,icon:L.divIcon({className:'',html:'<div class="cdot" style="background:'+col+'"></div>',iconSize:[14,14],iconAnchor:[7,7]})})
+    grp.addLayer(L.marker([c.lat,c.lon],{age:c.age,title:c.name+' — '+(AGE[c.age]||AGE.unknown)[0],alt:c.name,icon:L.divIcon({className:'',html:'<div class="cdot" style="background:'+col+'"></div>',iconSize:[14,14],iconAnchor:[7,7]})})
       .bindTooltip(esc(c.name)+' · '+(AGE[c.age]||AGE.unknown)[0]+(c.debtUsd>0?' · qarz '+usd(c.debtUsd):'')).on('click',function(){openClient(c.id)}));
   });
   S.gpsLayers.clients=grp.addTo(m);
@@ -683,7 +685,7 @@ async function gpsDetail(){
     if(lay){if(pts.length>1)L.polyline(pts,{color:C.pri,weight:4,opacity:.85}).addTo(lay).bindTooltip(hm(sg[0].ts)+' – '+hm(sg[sg.length-1].ts));
       L.circleMarker(pts[0],{radius:5,color:'#fff',fillColor:C.forest,fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Boshlanish '+hm(sg[0].ts));
       L.circleMarker(pts[pts.length-1],{radius:5,color:'#fff',fillColor:C.orange,fillOpacity:1,weight:2}).addTo(lay).bindTooltip('Oxirgi nuqta '+hm(sg[sg.length-1].ts))}});
-  dd.visits.forEach(function(v){if(v.lat==null||!lay)return;bounds.push([v.lat,v.lon]);L.marker([v.lat,v.lon],{zIndexOffset:900,icon:L.divIcon({className:'',html:'<div class="vpin">'+ic('check','sm')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(lay).bindTooltip('Tashrif: '+esc(v.name)+' · '+hm(v.ts)).on('click',function(){openClient(v.clientId)})});
+  dd.visits.forEach(function(v){if(v.lat==null||!lay)return;bounds.push([v.lat,v.lon]);L.marker([v.lat,v.lon],{zIndexOffset:900,title:'Tashrif: '+v.name,alt:v.name,icon:L.divIcon({className:'',html:'<div class="vpin">'+ic('check','sm')+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(lay).bindTooltip('Tashrif: '+esc(v.name)+' · '+hm(v.ts)).on('click',function(){openClient(v.clientId)})});
   if(m&&bounds.length)m.fitBounds(bounds.concat(a.lat!=null&&isToday?[[a.lat,a.lon]]:[]),{padding:[40,40],maxZoom:15});
   $('gpsInfo').innerHTML=num(dd.route.gpsTotal)+' GPS nuqta · ~'+num(km,1)+' km · '+dd.visitsTotal+' tashrif · '+dd.newClientsTotal+' yangi mijoz';
   var ev=dd.visits.map(function(v){return {ts:v.ts,id:v.clientId,t:VISIT[v.status]||v.status||'Tashrif',n:v.name,ic:'walk'}}).concat(dd.newClients.map(function(c){return {ts:c.ts,id:c.id,t:'Yangi mijoz',n:c.name,ic:'userplus'}})).sort(function(x,y){return y.ts-x.ts});
@@ -759,13 +761,13 @@ function drawerMap(a){
   if(S.maps.drawer){try{S.maps.drawer.remove()}catch(e){}}
   var m=L.map(el).setView(a.lat!=null?[a.lat,a.lon]:[40.45,71.6],a.lat!=null?14:9);
   L.tileLayer('/tiles/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(m);S.maps.drawer=m;
-  [120,320,600].forEach(function(t){setTimeout(function(){if(S.maps.drawer===m)m.invalidateSize()},t)});
+  [120,320,600].forEach(function(t){safeInv(m,'drawer',t)});
   return m;
 }
 async function drawRoute(a,mode){
   var m=drawerMap(a);if(!m)return;var info=$('drInfo'),list=$('drVisits');info.textContent='Yuklanmoqda…';list.innerHTML='';
   var bounds=[];
-  if(a.lat!=null&&(mode==='last'||mode==='today'))L.marker([a.lat,a.lon],{icon:agentIcon(Object.assign({status:a.shiftOpen?'active':'offline'},a))}).addTo(m).bindTooltip('Oxirgi joy · '+ago(a.lastGpsTs));
+  if(a.lat!=null&&(mode==='last'||mode==='today'))L.marker([a.lat,a.lon],{title:a.name,alt:a.name,icon:agentIcon(Object.assign({status:a.shiftOpen?'active':'offline'},a))}).addTo(m).bindTooltip('Oxirgi joy · '+ago(a.lastGpsTs));
   if(mode==='last'){
     if(!a.active){info.textContent='Agent bloklangan: oxirgi smena ko‘rsatilmaydi.';return}
     var r=await api('route',{agentId:a.id}).catch(function(e){info.textContent=e.message;return null});
@@ -857,9 +859,9 @@ function pageClients(page){
      stat('red','alert','Passiv',num(cnt.red),'5+ kun tashrifsiz',C.orange)+'<button class="st cl-stat'+(CL.debt==='debt'?' on':'')+'" data-debt="1"><span class="round-btn" style="color:'+C.orange+'">'+ic('receipt','sm')+'</span><div><b>'+usd(dsum)+'</b><small>'+num(dn)+' qarzdor</small></div></button>'+
    '</div></div>'+(d.clientsTruncated?'<div class="banner">Ro‘yxatda oxirgi '+num(d.clients.length)+' ta mijoz ko‘rsatilgan (jami '+num(d.clientCount)+'). To‘liq ro‘yxat uchun Excel eksportdan foydalaning.</div>':'')+
    '<div class="toolbar"><input type="search" id="clQ" placeholder="Qidirish: nom, telefon, manzil…  ( / )" value="'+esc(CL.q)+'">'+
-   '<select id="clAgent"><option value="">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'"'+(String(CL.agent)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>'}).join('')+'</select>'+
-   '<select id="clDebt">'+[['','Qarz: barchasi'],['debt','Qarzi bor'],['big','Qarz $100+'],['none','Qarzsiz'],['black','Qora ro‘yxat']].map(function(o){return '<option value="'+o[0]+'"'+(CL.debt===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+
-   (regions.length?'<select id="clRegion"><option value="">Barcha hududlar</option>'+regions.map(function(r){return '<option'+(CL.region===r?' selected':'')+'>'+esc(r)+'</option>'}).join('')+'</select>':'')+
+   '<select id="clAgent" aria-label="Agent"><option value="">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'"'+(String(CL.agent)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>'}).join('')+'</select>'+
+   '<select id="clDebt" aria-label="Qarz">'+[['','Qarz: barchasi'],['debt','Qarzi bor'],['big','Qarz $100+'],['none','Qarzsiz'],['black','Qora ro‘yxat']].map(function(o){return '<option value="'+o[0]+'"'+(CL.debt===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+
+   (regions.length?'<select id="clRegion" aria-label="Hudud"><option value="">Barcha hududlar</option>'+regions.map(function(r){return '<option'+(CL.region===r?' selected':'')+'>'+esc(r)+'</option>'}).join('')+'</select>':'')+
    '<span class="grow"></span><div class="seg" id="clView"><button data-v="table" class="'+(CL.view==='table'?'on':'')+'">'+ic('list')+' Jadval</button><button data-v="cards" class="'+(CL.view==='cards'?'on':'')+'">'+ic('store')+' Kartalar</button><button data-v="map" class="'+(CL.view==='map'?'on':'')+'">'+ic('map')+' Xarita</button></div>'+
    '</div>'+
    '<div class="toolbar"><div class="seg" id="clAge"></div><span class="grow"></span><span class="muted small" id="clCount"></span><button class="btn sm" id="clView2" title="Ekrandagi (filtrlangan) qatorlar">'+ic('download','sm')+' Excel</button><button class="btn sm" id="clXlsx" title="Barcha mijozlar, to‘liq hisobot">'+ic('file','sm')+' Hammasi</button><button class="btn sm" id="clPdf" title="Barcha mijozlar, PDF">'+ic('file','sm')+' PDF</button></div>'+
@@ -913,7 +915,7 @@ function clientsBody(){
     rows.forEach(function(c){if(c.lat==null)return;pts.push([c.lat,c.lon]);
       L.circleMarker([c.lat,c.lon],{radius:7,color:'#fff',weight:2,fillColor:c.blacklisted?'#111':(AGE[c.age]||AGE.unknown)[2],fillOpacity:.95}).addTo(m)
        .bindTooltip(esc(c.name)+(c.debtUsd>0?' · '+usd(c.debtUsd):'')).on('click',function(){openClient(c.id)})});
-    if(pts.length)m.fitBounds(pts,{padding:[30,30],maxZoom:15});setTimeout(function(){m.invalidateSize()},50);return;
+    if(pts.length)m.fitBounds(pts,{padding:[30,30],maxZoom:15,animate:false});safeInv(m,'clients',50);return;
   }
   sortedClients(rows);
   var pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));if(CL.page>=pages)CL.page=pages-1;
@@ -1138,7 +1140,7 @@ async function pageInsights(page,force){
   var agents=(S.dash?S.dash.agents:[]).slice().sort(function(a,b){return a.name.localeCompare(b.name)});
   page.innerHTML='<div class="toolbar"><div class="seg" id="inSeg">'+[['today','Bugun'],['week','7 kun'],['month','Shu oy'],['custom','Davr']].map(function(x){return '<button data-p="'+x[0]+'" class="'+(IN.period===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
    '<span id="inCustom"'+(IN.period==='custom'?'':' hidden')+' class="actions"><input type="date" id="inFrom" value="'+esc(IN.from||today())+'" style="width:auto"><input type="date" id="inTo" value="'+esc(IN.to||today())+'" style="width:auto"><button class="btn pri" id="inGo">Ko‘rsatish</button></span>'+
-   '<select id="inAgent"><option value="">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'"'+(String(IN.agent)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>'}).join('')+'</select>'+
+   '<select id="inAgent" aria-label="Agent"><option value="">Barcha agentlar</option>'+agents.map(function(a){return '<option value="'+a.id+'"'+(String(IN.agent)===String(a.id)?' selected':'')+'>'+esc(a.name)+'</option>'}).join('')+'</select>'+
    '<span class="grow"></span><span class="muted" id="inLabel"></span></div><div id="inBody"><div class="grid g4">'+'<div class="skel"></div>'.repeat(4)+'</div></div>';
   $('inSeg').onclick=function(e){var b=e.target.closest('button');if(!b)return;IN.period=b.dataset.p;if(IN.period==='custom'){$('inSeg').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});$('inCustom').hidden=false;return}IN.page=0;pageInsights(page)};
   $('inGo').onclick=function(){IN.from=$('inFrom').value;IN.to=$('inTo').value;IN.page=0;pageInsights(page)};
@@ -1227,7 +1229,7 @@ function exportRows(name,head,rows){
 var WH={status:'open',view:store('rw-whview')||'board',q:'',agent:''};
 /* Kanban ustunlari = backenddagi buyurtma statuslari (core.ORDER_STATUSES). Rang semantik. */
 var KB=[['new','Yangi','c-yellow',C.yellow],['preparing','Tayyorlanmoqda','c-ink',C.ink],['loaded','Agentga berildi','c-forest',C.forest],['delivered','Yetkazildi','',C.gray],['rejected','Rad etildi','c-orange',C.orange]];
-function whViewSeg(){return '<div class="seg" id="whView" role="tablist" aria-label="Ko‘rinish">'+[['board','layout','Board'],['list','list','Ro‘yxat va katalog']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(WH.view===v[0]?'on':'')+'">'+ic(v[1]==='layout'?'box':'list','sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
+function whViewSeg(){return '<div class="seg" id="whView" aria-label="Ko‘rinish">'+[['board','layout','Board'],['list','list','Ro‘yxat va katalog']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(WH.view===v[0]?'on':'')+'">'+ic(v[1]==='layout'?'box':'list','sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
 function bindWhView(page){var el=$('whView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;WH.view=b.dataset.v;store('rw-whview',WH.view);pageWarehouse(page,true)}}
 var NEXT={new:[['preparing','Tayyorlashga olish'],['rejected','Rad etish']],preparing:[['new','Yangiga qaytarish'],['rejected','Rad etish']],loaded:[['delivered','Yetkazildi']],rejected:[['new','Qayta ochish']],delivered:[]};
 async function pageWarehouse(page,force){
@@ -1346,7 +1348,7 @@ function renderStaff(page,s){
    '<div class="card flush"><div class="card-h"><h3>Agentlar <span class="muted small">'+s.agents.filter(function(a){return a.active}).length+' faol</span></h3><button class="btn pri sm" id="stAddAgent">'+ic('plus')+' Agent qo‘shish</button></div><div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Agent</th><th>Telegram ID</th><th class="right">Mijoz</th><th>Holat</th></tr></thead><tbody>'+
     s.agents.map(function(a){return '<tr class="click" data-agent="'+a.id+'"><td><div class="cell">'+avatar(a.name,a.photoUrl)+'<b>'+esc(a.name)+'</b></div></td><td class="num">'+a.id+'</td><td class="right num">'+a.clients+'</td><td>'+(a.active?(a.shiftOpen?pill('<span class="dot"></span>Smenada','p-ok'):pill('Faol','p-pri')):pill('Bloklangan','p-bad'))+'</td></tr>'}).join('')+'</tbody></table></div></div>'+
    '<div class="card flush"><div class="card-h"><h3>Kassirlar</h3><button class="btn pri sm" id="stAddCash">'+ic('plus')+' Kassir qo‘shish</button></div><div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Kassir</th><th>Telegram ID</th><th class="right">Qabul</th><th>Oxirgi</th><th></th></tr></thead><tbody>'+
-    (s.cashiers.length?s.cashiers.map(function(c){return '<tr><td><div class="cell">'+avatar(c.name,c.photoUrl)+'<div class="t"><b>'+esc(c.name)+'</b><small>'+(c.active?'Faol':'Yopilgan')+'</small></div></div></td><td class="num">'+c.id+'</td><td class="right num">'+c.accepted+'</td><td class="num">'+(c.lastTs?dday(c.lastTs):'—')+'</td><td class="actions"><button class="btn sm" data-cr="'+c.id+'">'+ic('edit','sm')+'</button>'+(S.primary?(c.active?'<button class="btn sm" data-ct="'+c.id+'">'+ic('swap','sm')+'</button><button class="btn sm danger" data-cd="'+c.id+'">Yopish</button>':'<button class="btn sm" data-ca="'+c.id+'">Ochish</button>'):'')+'</td></tr>'}).join(''):'<tr><td colspan="5" class="empty">Kassir yo‘q</td></tr>')+'</tbody></table></div></div>'+
+    (s.cashiers.length?s.cashiers.map(function(c){return '<tr><td><div class="cell">'+avatar(c.name,c.photoUrl)+'<div class="t"><b>'+esc(c.name)+'</b><small>'+(c.active?'Faol':'Yopilgan')+'</small></div></div></td><td class="num">'+c.id+'</td><td class="right num">'+c.accepted+'</td><td class="num">'+(c.lastTs?dday(c.lastTs):'—')+'</td><td class="actions"><button class="btn sm" data-cr="'+c.id+'" aria-label="Kassir nomini o‘zgartirish" title="Nomini o‘zgartirish">'+ic('edit','sm')+'</button>'+(S.primary?(c.active?'<button class="btn sm" data-ct="'+c.id+'" aria-label="Kassir akkauntini almashtirish" title="Akkauntni almashtirish">'+ic('swap','sm')+'</button><button class="btn sm danger" data-cd="'+c.id+'">Yopish</button>':'<button class="btn sm" data-ca="'+c.id+'">Ochish</button>'):'')+'</td></tr>'}).join(''):'<tr><td colspan="5" class="empty">Kassir yo‘q</td></tr>')+'</tbody></table></div></div>'+
    '</div>';
   bindAgentLinks(page);
   var done=function(r){if(r&&r.staff){S.cache.staff=r.staff;renderStaff(page,r.staff)}else pageStaff(page,true)};

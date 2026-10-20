@@ -5,12 +5,13 @@
 :root{
   --nav:#191D23;--nav-tx:#A9AFA9;--nav-hi:#2A2F37;
   --bg:#F7F6F2;--bg2:#EFEEE8;--card:#FFFFFF;--card-solid:#FFFFFF;--card-hi:#FBFAF7;
-  --tx:#17221F;--tx2:#3E4A45;--mu:#7A817C;--line:#E7E8E4;--line2:#D8DAD3;
+  --tx:#17221F;--tx2:#3E4A45;--mu:#5F6762;--line:#E7E8E4;--line2:#D8DAD3;
   --soft:#F3F2EC;--hover:#F6F5F0;
-  --pri:#1F6BFF;--pri2:#1857D6;--pri-soft:#E9F0FF;--pri-tx:#1650C4;
+  --pri:#1F6BFF;--pri2:#1857D6;--pri-soft:#E9F0FF;--pri-tx:#1650C4;--pri-btn:#1F6BFF;
+  --forest-card:#246B57;--orange-card:#BF4A26;
   --forest:#246B57;--forest-soft:#E4F0EB;--yellow:#F3CF56;--yellow-soft:#FCF4D6;--yellow-tx:#7A5C00;
   --orange:#E46542;--orange-soft:#FCEAE3;
-  --ok:#246B57;--ok-soft:#E4F0EB;--bad:#D2502E;--bad-soft:#FCEAE3;--warn:#C99A12;--warn-tx:#7A5C00;--warn-soft:#FCF4D6;
+  --ok:#246B57;--ok-soft:#E4F0EB;--bad:#B5401F;--bad-soft:#FCEAE3;--warn:#C99A12;--warn-tx:#7A5C00;--warn-soft:#FCF4D6;
   --cyan:#0E7490;--violet:#6D4FC2;
   --side-act:#E9F0FF;--side-act-tx:#1650C4;
   --shadow:0 1px 2px rgba(23,34,31,.04),0 2px 8px rgba(23,34,31,.04);
@@ -22,7 +23,8 @@
   --bg:#111315;--bg2:#16191C;--card:#1A1D21;--card-solid:#1A1D21;--card-hi:#20242A;
   --tx:#EDEDE8;--tx2:#C6C9C2;--mu:#8D938D;--line:#272B30;--line2:#343940;
   --soft:#16191C;--hover:#1F2328;
-  --pri:#4C8DFF;--pri2:#3B7BEF;--pri-soft:rgba(76,141,255,.15);--pri-tx:#9CC0FF;
+  --pri:#4C8DFF;--pri2:#3B7BEF;--pri-soft:rgba(76,141,255,.15);--pri-tx:#9CC0FF;--pri-btn:#2F6FE0;
+  --forest-card:#246B57;--orange-card:#BF4A26;
   --forest:#3E9C7F;--forest-soft:rgba(62,156,127,.16);--yellow:#F3CF56;--yellow-soft:rgba(243,207,86,.14);--yellow-tx:#F3CF56;
   --orange:#F07A58;--orange-soft:rgba(240,122,88,.15);
   --ok:#4FB394;--ok-soft:rgba(79,179,148,.15);--bad:#F07A58;--bad-soft:rgba(240,122,88,.15);--warn:#F3CF56;--warn-tx:#F3CF56;--warn-soft:rgba(243,207,86,.14);
@@ -70,7 +72,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0
 .btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;box-shadow:var(--shadow);transition:background .15s,border-color .15s,transform .12s var(--ease)}
 .btn:hover{background:var(--hover);border-color:var(--line2)}
 .btn:active{transform:scale(.98)}
-.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri{background:var(--pri-btn);border-color:var(--pri-btn);color:#fff}
 .btn.pri:hover{background:var(--pri2);border-color:var(--pri2)}
 .btn.ink{background:var(--nav);border-color:var(--nav);color:#fff}
 .btn.danger{color:var(--bad)}.btn.danger:hover{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
@@ -169,12 +171,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0
 .kpi.click{cursor:pointer}.kpi.click:hover,.lift:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(23,34,31,.09);border-color:var(--line2)}
 /* Semantik rangli kartalar (1817) */
 .c-yellow{background:var(--yellow);border-color:transparent;color:#17221F}
-.c-forest{background:var(--forest);border-color:transparent;color:#fff}
-.c-orange{background:var(--orange);border-color:transparent;color:#fff}
+.c-forest{background:var(--forest-card);border-color:transparent;color:#fff}
+.c-orange{background:var(--orange-card);border-color:transparent;color:#fff}
 .c-ink{background:var(--nav);border-color:transparent;color:#fff}
 :root[data-theme="dark"] .c-ink{background:#24282E}
-.c-yellow small,.c-yellow em,.c-yellow .muted{color:rgba(23,34,31,.7)!important}
-.c-forest small,.c-forest em,.c-forest .muted,.c-orange small,.c-orange em,.c-orange .muted,.c-ink small,.c-ink em,.c-ink .muted{color:rgba(255,255,255,.78)!important}
+.c-yellow small,.c-yellow em,.c-yellow .muted{color:#2E3A36!important}
+.c-forest small,.c-forest em,.c-forest .muted,.c-orange small,.c-orange em,.c-orange .muted,.c-ink small,.c-ink em,.c-ink .muted{color:#fff!important}
 .c-forest .tone,.c-orange .tone,.c-ink .tone{background:rgba(255,255,255,.14);color:#fff}
 .c-yellow .tone{background:rgba(23,34,31,.1);color:#17221F}
 .c-yellow .delta,.c-forest .delta,.c-orange .delta,.c-ink .delta{background:rgba(255,255,255,.22);color:inherit}
@@ -188,14 +190,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0
 .hero-stats>div{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:9px 11px}
 .hero-stats b{font-size:16px;font-weight:600;display:block;font-variant-numeric:tabular-nums}
 .delta{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;font-weight:600;padding:1px 7px;border-radius:999px}
-.delta.up{color:var(--forest);background:var(--forest-soft)}.delta.down{color:var(--orange);background:var(--orange-soft)}.delta.flat{color:var(--mu);background:var(--soft)}
+.delta.up{color:var(--ok);background:var(--forest-soft)}.delta.down{color:var(--orange);background:var(--orange-soft)}.delta.flat{color:var(--mu);background:var(--soft)}
 /* Katta raqamlar qatori (1817 "Sales Overview") */
 .stat-strip{display:flex;gap:28px;flex-wrap:wrap;align-items:center}
 .stat-strip .st{display:flex;gap:10px;align-items:center}
 .stat-strip b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .stat-strip small{display:block;color:var(--mu);font-size:12px}
-.pill-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;margin-left:6px;background:var(--forest);color:#fff;vertical-align:3px}
-.pill-badge.y{background:var(--yellow);color:#17221F}.pill-badge.o{background:var(--orange)}
+.pill-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;margin-left:6px;background:var(--forest-card);color:#fff;vertical-align:3px}
+.pill-badge.y{background:var(--yellow);color:#17221F}.pill-badge.o{background:var(--orange-card)}
 
 /* Toolbar */
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
@@ -235,7 +237,7 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 
 /* Pills */
 .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:500;white-space:nowrap;background:var(--soft);color:var(--tx2);border:1px solid var(--line)}
-.p-ok{background:var(--forest-soft);color:var(--forest);border-color:transparent}
+.p-ok{background:var(--forest-soft);color:var(--ok);border-color:transparent}
 .p-bad{background:var(--orange-soft);color:var(--bad);border-color:transparent}
 .p-warn{background:var(--yellow-soft);color:var(--yellow-tx);border-color:transparent}
 .p-pri{background:var(--pri-soft);color:var(--pri-tx);border-color:transparent}
@@ -259,6 +261,7 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 .chart .grid-l{stroke:var(--line)}
 .chart .cross{stroke:var(--line2);stroke-width:1;opacity:0}
 .chartbox.hov .cross{opacity:1}
+.chart .hdot{opacity:0;transition:opacity .12s}.chartbox.hov .hdot{opacity:1}
 .chart .ln{stroke-dasharray:var(--len,3000);stroke-dashoffset:var(--len,3000);animation:draw 1s var(--ease) forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
 .ctip{position:absolute;top:0;pointer-events:none;background:var(--card-solid);border:1px solid var(--line);border-radius:12px;padding:8px 11px;font-size:12px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .12s;white-space:nowrap;z-index:5;color:var(--tx)}
@@ -423,6 +426,7 @@ td.bad,td .bad,td.num.bad{color:var(--bad)}td.ok,td.num.ok{color:var(--ok)}td.mu
 .drawer-ov.on{opacity:1;pointer-events:auto}
 .drawer{position:fixed;top:10px;right:10px;bottom:10px;width:min(660px,calc(100vw - 20px));background:var(--bg);border:1px solid var(--line);border-radius:22px;transform:translateX(calc(100% + 20px));transition:transform .32s var(--ease);overflow:auto;padding:24px;z-index:1201;box-shadow:var(--shadow-lg)}
 .drawer.on{transform:none}
+.drawer:not(.on){visibility:hidden;transition:transform .32s var(--ease),visibility 0s .32s}
 .drawer-x{position:absolute;top:18px;right:18px}
 .dh{display:flex;gap:14px;align-items:center;margin:0 46px 18px 0}
 .dh h2{font-size:21px}.dh .muted{font-size:13px}
