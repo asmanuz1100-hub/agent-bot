@@ -240,7 +240,8 @@ def _conversions(db, start, end):
 
 def _agents_cash(db, scope):
     """Agentlardagi pul: dollar va so'm alohida (hech qachon qo'shilmaydi) va kassirda tasdiq kutayotgani."""
-    rows = db.execute("SELECT id,name FROM users WHERE role='agent' ORDER BY name,id").fetchall()
+    # Savdo xodimlari (role='sales') ham naqd pul ushlaydi va kassaga topshiradi.
+    rows = db.execute("SELECT id,name FROM users WHERE role IN ('agent','sales') ORDER BY name,id").fetchall()
     out = {'cashUsd': 0, 'cashUzs': 0, 'pendingUsd': 0, 'pendingUzs': 0, 'agents': []}
     for u in rows:
         aid = int(u['id'])
@@ -333,7 +334,8 @@ def executive(db, period='today', date_from=None, date_to=None, agent=None, regi
                        'returnsUsd': _usd(r), 'debtUsd': _usd(timeline[b][0])})
 
     # Agentlar samaradorligi (tanlangan davr).
-    names = {int(u['id']): u['name'] for u in db.execute("SELECT id,name FROM users WHERE role='agent'").fetchall()}
+    # Savdo xodimlarining sotuvi ham realizatsiyaga kiradi — jadval yig'indisi umumiy KPI bilan mos bo'lishi uchun.
+    names = {int(u['id']): u['name'] for u in db.execute("SELECT id,name FROM users WHERE role IN ('agent','sales')").fetchall()}
     perf = {}
     for e in events:
         if not scope.event_ok(e['agent'], e['client']) or int(e['agent'] or 0) not in names:
