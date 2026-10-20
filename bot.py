@@ -15,6 +15,9 @@ import cashier_daily
 import customer_status as cs
 import manager_api
 import web_auth
+import branding
+import staff
+import ai_assistant
 import executive
 import agent_api
 import analytics
@@ -1728,7 +1731,7 @@ def handle(db,update):
     m=update.get('message') or update.get('edited_message')
     if not m or m.get('chat',{}).get('type')!='private':return
     u=m['from']['id']; text=m.get('text','').strip(); r=role(db,u)
-    if r in ('disabled','cashier_disabled'):
+    if r=='disabled' or (r or '').endswith('_disabled'):
         if 'edited_message' not in update:send(u,'Бу аккаунтга кириш ёпилган. Асосий админга мурожаат қилинг.')
         return
     if not r:
@@ -2990,7 +2993,8 @@ def serve_webhook(db,base_url):
                             if v is not None:me['photoUrl']=user_photo_link(uid,version=v)
                         except Exception:
                             logging.warning('Own photo lookup failed')
-                        data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS}
+                        data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS,
+                              'brand':branding.get(local)}
                     else:
                         answer_web(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
@@ -3021,7 +3025,7 @@ def serve_webhook(db,base_url):
                     if not isinstance(payload,dict):
                         answer(400,{'error':'So‘rov noto‘g‘ri.'});return
                     # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
-                    if length>10_000 and payload.get('action')!='product_photo':
+                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save','ai_ask'):
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     web_token=self._bearer_token()
                     actor=None if web_token and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
@@ -3070,7 +3074,7 @@ def serve_webhook(db,base_url):
                         report=reports.reconciliation(local,actor,int(client_id))
                         raw=(reports.reconciliation_pdf(report) if fmt=='pdf'
                              else reports.reconciliation_xlsx(report))
-                        data={'filename':f'ASMAN-mijoz-{int(client_id)}-akt-sverka.{fmt}',
+                        data={'filename':f'{branding.file_prefix(local)}-mijoz-{int(client_id)}-akt-sverka.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
                     elif action=='all_clients_export':
@@ -3079,7 +3083,7 @@ def serve_webhook(db,base_url):
                             raise ValueError('Eksport formati noto‘g‘ri.')
                         raw=(reports.all_clients_pdf(local,actor) if fmt=='pdf'
                              else reports.all_clients_xlsx(local,actor))
-                        data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
+                        data={'filename':f'{branding.file_prefix(local)}-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
                     elif action=='warehouse':
@@ -3110,6 +3114,12 @@ def serve_webhook(db,base_url):
                         try:notify_agent_order_status(local,oid)
                         except Exception:logging.exception('Order status notification failed order=%s',oid)
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='ai_ask':
+                        data=ai_assistant.ask(local,payload.get('question'),payload.get('history'))
+                    elif action=='branding_save':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
+                        data={'ok':True,'brand':branding.save(local,payload.get('name'),payload.get('logo'),payload.get('details'))}
                     elif action=='agent_management':
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':
@@ -3154,6 +3164,26 @@ def serve_webhook(db,base_url):
                         data={'ok':True,'agent':manager_api.agent_detail(local,payload.get('agentId'))}
                     elif action=='staff_list':
                         data=manager_api.staff_list(local)
+                        data.update(staff.staff_list(local,ADMINS))
+                    elif action in ('staff_add','staff_rename','staff_transfer','staff_deactivate','staff_activate',
+                                    'staff_login_issue','staff_login_revoke'):
+                        if payload.get('confirm') is not True:raise ValueError('Amalni tasdiqlang.')
+                        # Qo'shish/nom — har qanday rahbar (botdagi «Ходим» bilan bir xil); admin qo'shish va qolganlari — asosiy rahbar.
+                        primary_only=action not in ('staff_add','staff_rename') or (action=='staff_add' and payload.get('role')=='admin')
+                        if primary_only and actor not in ADMINS:
+                            answer(403,{'error':'Bu amal faqat asosiy rahbarga ruxsat.'});return
+                        uid=payload.get('id')
+                        data={'ok':True}
+                        if action=='staff_add':staff.add(local,actor,payload.get('role'),uid,payload.get('name'))
+                        elif action=='staff_rename':staff.rename(local,actor,uid,payload.get('name'))
+                        elif action=='staff_transfer':staff.transfer(local,actor,uid,payload.get('newId'),ADMINS)
+                        elif action=='staff_deactivate':staff.deactivate(local,actor,uid,ADMINS)
+                        elif action=='staff_activate':staff.activate(local,actor,uid)
+                        elif action=='staff_login_issue':
+                            login,password=staff.issue_login(local,actor,uid,payload.get('login'))
+                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL})
+                        else:staff.revoke_login(local,actor,uid)
+                        data['staff']=manager_api.staff_list(local);data['staff'].update(staff.staff_list(local,ADMINS))
                     elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
                         if payload.get('confirm') is not True:raise ValueError('Amalni tasdiqlang.')
                         if action in ('cashier_transfer','cashier_deactivate','cashier_activate') and actor not in ADMINS:

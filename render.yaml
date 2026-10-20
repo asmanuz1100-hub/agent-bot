@@ -19,6 +19,8 @@ services:
         sync: false
       - key: ADMIN_IDS
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: DB_SCHEMA
         value: agentbot
       - key: DATABASE_URL

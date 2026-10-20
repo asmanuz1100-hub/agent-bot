@@ -4,53 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>ASMAN · Rahbar paneli</title>
-<link rel="icon" href="/app/premium-kit/emblem.png">
+<title>Boshqaruv paneli</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23007AFF'/%3E%3Crect x='8' y='8' width='7' height='9' rx='1.5' fill='white'/%3E%3Crect x='17' y='8' width='7' height='5' rx='1.5' fill='white' opacity='.75'/%3E%3Crect x='17' y='15' width='7' height='9' rx='1.5' fill='white'/%3E%3Crect x='8' y='19' width='7' height='5' rx='1.5' fill='white' opacity='.75'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
-<link rel="stylesheet" href="app.css?v=62">
-<meta name="theme-color" content="#F7F6F2">
+<link rel="stylesheet" href="app.css?v=72">
+<meta name="theme-color" content="#F5F7FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('rw-theme')||'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
 </head>
 <body>
 <!-- Kirish -->
 <div id="login" class="login" hidden>
   <form id="loginForm" class="login-card" autocomplete="on">
-    <img src="/app/premium-kit/logo.png" alt="ASMAN" class="login-logo">
-    <h1>Rahbar paneli</h1>
-    <p class="muted">Kompyuter uchun boshqaruv markazi</p>
+    <div class="login-brand"><span class="brand-mark" id="lgMark"></span><b id="lgBrand"></b></div>
+    <h1>Boshqaruv paneliga kirish</h1>
+    <p class="muted">Savdo, mijozlar, agentlar va moliya — bitta joyda</p>
     <label>Login<input id="lgLogin" name="username" autocomplete="username" required autofocus spellcheck="false" autocapitalize="off"></label>
     <label>Parol<input id="lgPass" name="password" type="password" autocomplete="current-password" required></label>
     <div id="lgErr" class="form-err" role="alert"></div>
-    <button class="btn pri block" id="lgBtn">Kirish</button>
+    <button class="btn pri block" id="lgBtn"><span>Kirish</span></button>
     <p class="hint">Login va parolni Telegram botdan oling: rahbar akkauntidan <code>/webparol</code> yozing.</p>
   </form>
 </div>
 
-<!-- Asosiy oyna: chapda grafit rail (amallar), yuqorida pill tablar (bo'limlar) -->
+<!-- Asosiy oyna: chapda shisha sidebar (bo'limlar), yuqorida amallar paneli -->
 <div id="shell" class="shell" hidden>
-  <aside class="rail" id="rail" aria-label="Tezkor amallar">
-    <button class="rail-logo" id="railToggle" title="Panelni kengaytirish / yig‘ish" aria-expanded="false"><img src="/app/premium-kit/emblem.png" alt="ASMAN"><span class="lbl"><b>ASMAN</b><small>Rahbar</small></span></button>
-    <div class="rail-items">
-      <button class="rail-btn" id="railSearch" title="Qidirish (Ctrl K)"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="lbl">Qidirish</span></button>
-      <button class="rail-btn" id="railFeed" title="Jonli lenta"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Jonli lenta</span><i class="rail-dot" id="railDot" hidden></i></button>
-      <button class="rail-btn" id="refreshBtn" title="Yangilash (R)"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg><span class="lbl">Yangilash</span></button>
-      <button class="rail-btn" id="railStaff" title="Xodimlar"><svg class="ico" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14a6 6 0 0 1 3.5 6"/></svg><span class="lbl">Xodimlar</span></button>
-      <button class="rail-btn" id="railSettings" title="Sozlamalar"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-2.8 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.8-1.2 2 2 0 1 1-2.8-2.8A1.7 1.7 0 0 0 3.3 13a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.8 2 2 0 1 1 2.8-2.8A1.7 1.7 0 0 0 10 2.2a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.8 1.2 2 2 0 1 1 2.8 2.8A1.7 1.7 0 0 0 20.8 9a2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.4 2z"/></svg><span class="lbl">Sozlamalar</span></button>
+  <div class="side-ov" id="sideOv"></div>
+  <aside class="rail" id="rail" aria-label="Asosiy navigatsiya">
+    <div class="side-head">
+      <span class="brand-mark" id="brandMark"></span>
+      <span class="lbl brand-txt"><b id="brandName">Boshqaruv paneli</b><small id="brandSub">Boshqaruv paneli</small></span>
+      <button class="side-tog icon-btn ghost" id="railToggle" aria-label="Panelni yig‘ish" data-tip="Panelni yig‘ish / kengaytirish" aria-expanded="true"></button>
     </div>
+    <button class="side-search" id="railSearch" aria-label="Qidirish (Ctrl K)" data-tip="Qidirish (Ctrl K)"></button>
+    <nav id="nav" class="side-nav" aria-label="Bo‘limlar"></nav>
     <div class="rail-foot">
-      <button class="rail-btn" id="themeBtn" title="Yorug‘ / to‘q mavzu"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="lbl">Mavzu</span></button>
-      <button class="rail-me" id="meBtn" title="Akkaunt"><span class="av" id="meAv"></span><span class="lbl"><b id="meName">—</b><small id="meRole">Rahbar</small></span></button>
+      <button class="rail-me" id="meBtn" aria-label="Akkaunt va sozlamalar"><span class="av" id="meAv"></span><span class="lbl"><b id="meName">—</b><small id="meRole">—</small></span></button>
     </div>
   </aside>
   <main class="main">
     <header class="top">
       <div class="top-row">
-        <nav id="nav" class="tabs-nav" aria-label="Bo‘limlar"></nav>
+        <button class="icon-btn ghost menu-btn" id="menuBtn" aria-label="Menyu" data-tip="Menyu"></button>
         <div class="gsearch" role="search"><input id="gq" type="search" placeholder="Qidirish: mijoz, agent, telefon…" autocomplete="off" aria-label="Global qidiruv" aria-controls="gres"><kbd>Ctrl K</kbd><div id="gres" class="gres" role="listbox" hidden></div></div>
-        <span id="updated" class="live"></span>
+        <span class="grow"></span>
+        <span id="updated" class="live" aria-live="polite"></span>
+        <button class="as-btn" id="aiBtn" aria-label="Yordamchi (Ctrl J)" aria-expanded="false"><span class="orb sm" aria-hidden="true"><i></i><i></i><i></i></span><span class="lbl">Yordamchi</span></button>
+        <button class="icon-btn ghost" id="railFeed" aria-label="Jonli lenta" data-tip="Jonli lenta"><i class="rail-dot" id="railDot" hidden></i></button>
+        <button class="icon-btn ghost" id="refreshBtn" aria-label="Yangilash (R)" data-tip="Yangilash (R)"></button>
+        <button class="icon-btn ghost" id="themeBtn" aria-label="Mavzuni almashtirish" data-tip="Mavzu"></button>
       </div>
       <div class="title-row"><div><h1 id="pageTitle">Asosiy</h1><small id="pageSub" class="muted"></small></div><div class="title-act" id="titleAct"></div></div>
     </header>
@@ -62,12 +67,21 @@
 <div id="drawerOv" class="drawer-ov"></div>
 <aside id="drawer" class="drawer" inert aria-label="Batafsil ma’lumot"><button class="drawer-x icon-btn" id="drawerX" aria-label="Yopish"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button><div id="drawerBody"></div></aside>
 
+<!-- Yordamchi (Siri uslubi): suzuvchi shisha panel + ekran chetidagi nur -->
+<div class="as-edge" id="asEdge" aria-hidden="true"></div>
+<section class="as-panel" id="asPanel" role="dialog" aria-modal="false" aria-label="Yordamchi" hidden>
+  <header class="as-head"><span class="orb" id="asOrb" aria-hidden="true"><i></i><i></i><i></i></span><div class="as-title"><b>Yordamchi</b><small id="asState">Savdo, agentlar, ombor va kassa bo‘yicha</small></div><button class="icon-btn ghost" id="asClose" aria-label="Yopish" data-tip="Yopish"></button></header>
+  <div class="as-log" id="aiLog" aria-live="polite"></div>
+  <div class="as-hints" id="aiHints"></div>
+  <form class="as-input" id="aiForm"><textarea id="aiQ" rows="1" maxlength="600" placeholder="Savolingiz…" aria-label="Savol"></textarea><button type="button" class="as-ic" id="aiSpk" aria-label="Javobni ovoz bilan o‘qish"></button><button type="button" class="as-mic" id="aiMic" aria-label="Ovoz bilan so‘rash"></button><button class="as-send" id="aiSend" aria-label="Yuborish"></button></form>
+</section>
+
 <!-- Modal -->
 <div id="modalOv" class="modal-ov" hidden><div class="modal" role="dialog" aria-modal="true"><div id="modalBody"></div></div></div>
 <div id="toast" class="toast" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
-<script src="app.js?v=60"></script>
+<script src="app.js?v=72"></script>
 </body>
 </html>
