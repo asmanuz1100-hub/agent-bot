@@ -1,0 +1,1 @@
+AIBI professional brand kit. Reconstructed editable SVG artwork inspired by the reference image; not the original source vector. PNG rasterized at labeled output resolutions. Square 1024x1024 files included. SVG can be scaled for production. Social platform marks are illustrative; check platform brand rules before use.

@@ -60,12 +60,12 @@ def _miniapp_url(env_name,legacy_url,app,version):
     if SELF_HOSTED_MINIAPPS and (not value or urlparse(value).netloc in LEGACY_MINIAPP_HOSTS):
         return f'{PUBLIC_BASE_URL}/app/{app}/?v={version}'
     return value or legacy_url
-MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261020-aibi-v2')
+MANAGER_MINIAPP_URL=_miniapp_url('MANAGER_MINIAPP_URL','https://asman-manager-miniapp-test.onrender.com/?v=20260925-manager-live-v1','rahbar','20261020-aibi-v3')
 MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-rahbar-uploaded-test.onrender.com/?v=20260930-realdata-test-v2','rahbar-premium','20261018-photo-v19')
-AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261020-aibi-v2')
+AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261020-aibi-v3')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
-WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261020-aibi-v2')
-SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-aibi-v2')
+WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261020-aibi-v3')
+SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-aibi-v3')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
@@ -107,7 +107,7 @@ def miniapp_response(path,query=''):
     headers={'Cache-Control':'no-cache' if fresh else 'public, max-age=3600',
              'X-Content-Type-Options':'nosniff'}
     return 200,target.read_bytes(),ctype,headers
-CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261020-aibi-v2').strip()
+CASHIER_MINIAPP_URL=(os.getenv('CASHIER_MINIAPP_URL') or (os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL') or 'https://asman-agent-test.onrender.com').rstrip('/')+'/cashier/?v=20261020-aibi-v3').strip()
 TZ=ZoneInfo('Asia/Tashkent')
 MAP_TTL_SECONDS=15*60
 BOT_USERNAME=''  # Populated from Telegram getMe at startup.

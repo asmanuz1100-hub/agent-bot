@@ -20,6 +20,8 @@ def _tile(path):
     side = min(w, h)
     im = im.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
     big = im.resize((side * 4, side * 4), Image.LANCZOS)
+    if big.getpixel((2, 2))[3] == 0:          # tayyor ikonka (burchaklari allaqachon shaffof) — kesmaymiz
+        return big
     inset = int(side * 4 * 0.035)          # plitka chetidagi taxta fonini kesib tashlaymiz
     mask = Image.new('L', big.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle([inset, inset, big.width - inset - 1, big.height - inset - 1],

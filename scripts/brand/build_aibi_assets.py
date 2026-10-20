@@ -13,6 +13,27 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUT = os.path.join(ROOT, 'miniapps', 'premium-kit', 'aibi')
 # Asl belgi (foydalanuvchi bergan dizayn rasmidan kesilgan, fon shaffof). Bo'lsa — geometriya o'rniga shu ishlatiladi.
 SOURCE = os.path.join(OUT, 'source', 'aibi-mark-source.png')
+# Professional brand kit'dagi vektor belgi (AIBI_Symbol_Transparent.svg). Bo'lsa — SVG'larda shu ishlatiladi.
+VECTOR = os.path.join(OUT, 'source', 'aibi-symbol.svg')
+
+
+def _source_img():
+    """Manba belgini shaffof chetlarsiz kvadratga keltiradi (belgi kvadratni to'liq egallaydi)."""
+    im = Image.open(SOURCE).convert('RGBA')
+    l, t, r, b = im.getbbox()
+    side = max(r - l, b - t)
+    cx, cy = (l + r) / 2, (t + b) / 2
+    box = (int(round(cx - side / 2)), int(round(cy - side / 2)), int(round(cx - side / 2)) + side, int(round(cy - side / 2)) + side)
+    return im.crop(box)
+
+
+def _vector_inner():
+    """Vektor belgining ichki qismi va uning (x, y, w, h) chegarasi."""
+    import re
+    src = open(VECTOR, encoding='utf-8').read()
+    inner = re.sub(r'^.*?<svg[^>]*>', '', src, flags=re.S)
+    inner = re.sub(r'</svg>\s*$', '', inner, flags=re.S)
+    return inner
 
 BLUE, VIOLET, PURPLE, PINK, NAVY, WHITE = '#3882F6', '#6366F1', '#A855F7', '#EC4899', '#0F172A', '#F8FAFC'
 INDIGO = '#312E81'                   # o'ng yuqori bo'lakning to'q tomoni
@@ -56,11 +77,15 @@ def _source_b64(px=256):
     import base64, io
     buf = io.BytesIO()
     # WebP (shaffof fon bilan) — PNG'dan ~5 baravar yengil; Telegram WebView (Android/iOS) qo'llaydi.
-    Image.open(SOURCE).convert('RGBA').resize((px, px), Image.LANCZOS).save(buf, 'WEBP', quality=92, method=6)
+    _source_img().resize((px, px), Image.LANCZOS).save(buf, 'WEBP', quality=92, method=6)
     return base64.b64encode(buf.getvalue()).decode()
 
 
 def mark_svg(prefix='a', with_defs=True):
+    if os.path.exists(VECTOR):
+        # Kit belgisi 1024 doskada ~104..920 oralig'ida; uni bizning 56..456 joyimizga joylaymiz.
+        return (f'<svg x="56" y="56" width="400" height="400" viewBox="104 104 816 816">'
+                f'{_vector_inner()}</svg>')
     if os.path.exists(SOURCE):
         # Belgi 512 birlikli doskada 56..456 oralig'ini egallaydi (geometriya bilan bir xil joy).
         return f'<image href="data:image/webp;base64,{_source_b64()}" x="56" y="56" width="400" height="400"/>'
@@ -81,7 +106,7 @@ def write_svgs():
                                + '<g transform="translate(256 256) scale(.78) translate(-256 -256)">' + mark_svg() + '</g></svg>',
     }
     word = ('<text x="{x}" y="300" font-family="Inter, Manrope, \'Segoe UI\', system-ui, -apple-system, sans-serif" '
-            'font-size="190" font-weight="800" letter-spacing="6" fill="{fill}">ΛIBI</text>'
+            'font-size="190" font-weight="800" letter-spacing="6" fill="{fill}">AIBI</text>'
             '<text x="{x}" y="368" font-family="Inter, Manrope, system-ui, sans-serif" font-size="33" font-weight="600" '
             'letter-spacing="8" fill="{sub}">SMART BUSINESS PLATFORM</text>')
     for mode, fill, sub in (('dark', WHITE, '#CBD5E1'), ('light', NAVY, '#475569')):
@@ -142,7 +167,7 @@ def _seg_mask(size, scale, name):
 def render_mark(px_size, ss=4):
     """512 birlikli doskada belgini px_size o'lchamda (shaffof fon) chizadi."""
     if os.path.exists(SOURCE):
-        return Image.open(SOURCE).convert('RGBA').resize((px_size, px_size), Image.LANCZOS)
+        return _source_img().resize((px_size, px_size), Image.LANCZOS)
     size = px_size * ss
     scale = size / 512.0
     work = max(256, min(size, 1024))       # gradientni kichikroq hisoblab kattalashtiramiz

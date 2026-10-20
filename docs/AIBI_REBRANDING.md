@@ -31,11 +31,12 @@ Generator: `python3 scripts/brand/build_aibi_assets.py` (Pillow). Bitta geometri
 - `telegram-profile-512.png` — BotFather profil rasmi
 - `preview.html` — barcha assetlar bitta sahifada
 
-Belgi foydalanuvchi bergan AIBI dizayn taxtasidan **kesib olingan** (`source/aibi-mark-source.png`,
-fon shaffof qilingan, ~227 px). Generator shu rasmdan barcha o'lchamlarni yasaydi; SVG fayllar ichida
-WebP (256 px) bor. 512–1024 px o'lchamlar kattalashtirilgan — App Store/Play Store uchun asl yuqori
-sifatli fayl (≥1024 px PNG yoki SVG) kelsa, uni `source/aibi-mark-source.png` o'rniga qo'yib,
-`python3 scripts/brand/build_aibi_assets.py` ni qayta ishga tushiring. So'z belgisi: «ΛIBI» (A chiziqchasiz).
+Belgi va ikonkalar — foydalanuvchi bergan **AIBI Professional Brand Kit**dan: vektor belgi
+`source/aibi-symbol.svg` (SVG'lar shu vektordan), shaffof 1024 PNG `source/aibi-mark-source.png`
+(PNG o'lchamlar shundan, chekka bo'shlig'i bilan), ilova ikonkalari `source/apps/*.png` (1024 px).
+Kit README'sida yozilganidek, bu asl manba emas — mos qayta chizilgan tahrirlanadigan vektor.
+Belgining o'ng tomonida ikki bo'lak tutashgan joyda ingichka pog'ona bor (kitning o'zida) — dizayner
+tuzatgan versiyani `source/`ga qo'yib, ikkala generatorni qayta ishga tushirish kifoya. So'z belgisi: «AIBI».
 
 ## Telegram BotFather (qo'lda, bot egasi bajaradi)
 `@username` o'zgartirilmaydi.
