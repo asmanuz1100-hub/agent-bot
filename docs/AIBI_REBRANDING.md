@@ -28,8 +28,11 @@ Generator: `python3 scripts/brand/build_aibi_assets.py` (Pillow). Bitta geometri
 - `aibi.css` — umumiy tokenlar: ranglar, Aurora gradient, shrift, `.aibi-wm` logotip bloki
 - `preview.html` — barcha assetlar bitta sahifada
 
-Belgi BALANCE · 09 Aurora dizayn taxtasidan qayta chizilgan. Asl vektor fayl kelsa, generatordagi
-`SEGMENTS`/`svg_paths()` unga moslanadi va barcha o'lchamlar qayta yaratiladi.
+Belgi foydalanuvchi bergan AIBI dizayn taxtasidan **kesib olingan** (`source/aibi-mark-source.png`,
+fon shaffof qilingan, ~227 px). Generator shu rasmdan barcha o'lchamlarni yasaydi; SVG fayllar ichida
+WebP (256 px) bor. 512–1024 px o'lchamlar kattalashtirilgan — App Store/Play Store uchun asl yuqori
+sifatli fayl (≥1024 px PNG yoki SVG) kelsa, uni `source/aibi-mark-source.png` o'rniga qo'yib,
+`python3 scripts/brand/build_aibi_assets.py` ni qayta ishga tushiring. So'z belgisi: «ΛIBI» (A chiziqchasiz).
 
 ## Telegram BotFather (qo'lda, bot egasi bajaradi)
 `@username` o'zgartirilmaydi.

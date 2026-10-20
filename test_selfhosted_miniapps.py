@@ -40,7 +40,7 @@ class SelfHostedMiniAppTests(unittest.TestCase):
         self.assertIn('dropOtherVersions', sw)  # old ?v= copies are removed
         html = (bot.MINIAPP_DIR / 'agent/index.html').read_text(encoding='utf-8')
         # Files cached by ?v= must be bumped when they change: the page has to point at the current premium kit.
-        self.assertIn('premium.js?v=20261020-aibi-v1', html)
+        self.assertIn('premium.js?v=20261020-aibi-v2', html)
 
     def test_redirect_adds_trailing_slash_and_keeps_query(self):
         code, _, _, headers = bot.miniapp_response('/app/agent', 'v=1')

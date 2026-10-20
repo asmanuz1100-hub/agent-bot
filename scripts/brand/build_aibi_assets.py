@@ -11,14 +11,18 @@ from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUT = os.path.join(ROOT, 'miniapps', 'premium-kit', 'aibi')
+# Asl belgi (foydalanuvchi bergan dizayn rasmidan kesilgan, fon shaffof). Bo'lsa — geometriya o'rniga shu ishlatiladi.
+SOURCE = os.path.join(OUT, 'source', 'aibi-mark-source.png')
 
 BLUE, VIOLET, PURPLE, PINK, NAVY, WHITE = '#3882F6', '#6366F1', '#A855F7', '#EC4899', '#0F172A', '#F8FAFC'
-C, R, GAP = 256.0, 200.0, 7.0        # 512 birlikli koordinata tizimi
+INDIGO = '#312E81'                   # o'ng yuqori bo'lakning to'q tomoni
+C, R, GAP = 256.0, 200.0, 0.0        # 512 birlikli koordinata tizimi; segmentlar tirqishsiz
+RADIUS = {'left': (R, R), 'tr': (R * 0.78, R), 'br': (R, R)}   # (rx, ry): o'ng yuqori bo'lak torroq ellips — «B» siluyeti
 # Segmentlar: (nom, gradient boshi (x,y), oxiri (x,y), ranglar)
 SEGMENTS = {
-    'left':  ((96, 80), (300, 470), (PINK, PURPLE, VIOLET)),
-    'tr':    ((300, 60), (460, 250), (BLUE, VIOLET)),
-    'br':    ((300, 270), (440, 450), (VIOLET, PURPLE, PINK)),
+    'left':  ((120, 70), (230, 450), (PINK, PURPLE, BLUE)),
+    'tr':    ((260, 100), (420, 250), (VIOLET, INDIGO)),
+    'br':    ((260, 260), (430, 440), (PURPLE, PINK)),
 }
 
 
@@ -29,14 +33,12 @@ def _edge(offset):
 
 
 def svg_paths():
-    y0, y1 = _edge(GAP)
-    xl, xr = C - GAP, C + GAP
-    xe = C + math.sqrt(R * R - GAP * GAP)
     f = lambda v: f'{v:.2f}'.rstrip('0').rstrip('.')
+    (lx, ly), (tx, ty), (bx, by) = RADIUS['left'], RADIUS['tr'], RADIUS['br']
     return {
-        'left': f'M{f(xl)} {f(y0)}A{R:g} {R:g} 0 0 0 {f(xl)} {f(y1)}Z',
-        'tr': f'M{f(xr)} {f(C - GAP)}V{f(y0)}A{R:g} {R:g} 0 0 1 {f(xe)} {f(C - GAP)}Z',
-        'br': f'M{f(xr)} {f(C + GAP)}H{f(xe)}A{R:g} {R:g} 0 0 1 {f(xr)} {f(y1)}Z',
+        'left': f'M{f(C)} {f(C - ly)}A{f(lx)} {f(ly)} 0 0 0 {f(C)} {f(C + ly)}Z',
+        'tr': f'M{f(C)} {f(C)}V{f(C - ty)}A{f(tx)} {f(ty)} 0 0 1 {f(C + tx)} {f(C)}Z',
+        'br': f'M{f(C)} {f(C)}H{f(C + bx)}A{f(bx)} {f(by)} 0 0 1 {f(C)} {f(C + by)}Z',
     }
 
 
@@ -50,7 +52,18 @@ def _grad_defs(prefix):
     return ''.join(out)
 
 
+def _source_b64(px=256):
+    import base64, io
+    buf = io.BytesIO()
+    # WebP (shaffof fon bilan) — PNG'dan ~5 baravar yengil; Telegram WebView (Android/iOS) qo'llaydi.
+    Image.open(SOURCE).convert('RGBA').resize((px, px), Image.LANCZOS).save(buf, 'WEBP', quality=92, method=6)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 def mark_svg(prefix='a', with_defs=True):
+    if os.path.exists(SOURCE):
+        # Belgi 512 birlikli doskada 56..456 oralig'ini egallaydi (geometriya bilan bir xil joy).
+        return f'<image href="data:image/webp;base64,{_source_b64()}" x="56" y="56" width="400" height="400"/>'
     p = svg_paths()
     body = ''.join(f'<path d="{p[n]}" fill="url(#{prefix}{n})"/>' for n in ('left', 'tr', 'br'))
     glow = ''.join(f'<path d="{p[n]}" fill="url(#{prefix}gl)"/>' for n in ('left', 'tr', 'br'))
@@ -68,7 +81,7 @@ def write_svgs():
                                + '<g transform="translate(256 256) scale(.78) translate(-256 -256)">' + mark_svg() + '</g></svg>',
     }
     word = ('<text x="{x}" y="300" font-family="Inter, Manrope, \'Segoe UI\', system-ui, -apple-system, sans-serif" '
-            'font-size="190" font-weight="800" letter-spacing="6" fill="{fill}">AIBI</text>'
+            'font-size="190" font-weight="800" letter-spacing="6" fill="{fill}">ΛIBI</text>'
             '<text x="{x}" y="368" font-family="Inter, Manrope, system-ui, sans-serif" font-size="33" font-weight="600" '
             'letter-spacing="8" fill="{sub}">SMART BUSINESS PLATFORM</text>')
     for mode, fill, sub in (('dark', WHITE, '#CBD5E1'), ('light', NAVY, '#475569')):
@@ -112,24 +125,24 @@ def _linear(size, scale, start, end, cols):
 def _seg_mask(size, scale, name):
     m = Image.new('L', (size, size), 0)
     d = ImageDraw.Draw(m)
-    s = lambda v: v * scale
-    box = [s(C - R), s(C - R), s(C + R), s(C + R)]
-    d.ellipse(box, fill=255)
-    g = s(GAP)
-    cx = s(C)
+    rx, ry = RADIUS[name][0] * scale, RADIUS[name][1] * scale
+    cx = C * scale
+    d.ellipse([cx - rx, cx - ry, cx + rx, cx + ry], fill=255)
     if name == 'left':
-        d.rectangle([cx - g, 0, size, size], fill=0)
+        d.rectangle([cx, 0, size, size], fill=0)
     elif name == 'tr':
-        d.rectangle([0, 0, cx + g, size], fill=0)
-        d.rectangle([0, cx - g, size, size], fill=0)
+        d.rectangle([0, 0, cx - 1, size], fill=0)
+        d.rectangle([0, cx, size, size], fill=0)
     else:
-        d.rectangle([0, 0, cx + g, size], fill=0)
-        d.rectangle([0, 0, size, cx + g], fill=0)
+        d.rectangle([0, 0, cx - 1, size], fill=0)
+        d.rectangle([0, 0, size, cx - 1], fill=0)
     return m
 
 
 def render_mark(px_size, ss=4):
     """512 birlikli doskada belgini px_size o'lchamda (shaffof fon) chizadi."""
+    if os.path.exists(SOURCE):
+        return Image.open(SOURCE).convert('RGBA').resize((px_size, px_size), Image.LANCZOS)
     size = px_size * ss
     scale = size / 512.0
     work = max(256, min(size, 1024))       # gradientni kichikroq hisoblab kattalashtiramiz
