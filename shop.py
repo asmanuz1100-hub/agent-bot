@@ -1,6 +1,7 @@
 """Savdo (do'kon / ombor savdosi) hisobi — Bito «Sotuv» formulasi asosida.
 
-Xodimlar (`users.role='sales'`, darajasi `shop_staff`da):
+Xodimlar (`users.role='sales'`, soni cheklanmagan). Har bir xodimning funksiyalarini rahbar alohida
+yoqadi/o'chiradi (`shop_staff.perms`, PERMS ro'yxati). Eski ikki daraja ruxsatlar to'plamiga aylantiriladi:
 - seller (ombor sotuvchisi): chakana narxda sotadi, limitgacha chegirma beradi, ruxsat bo'lsa qarzga beradi,
   naqd/karta pul oladi va kassaga topshiradi;
 - head (bosh savdo xodimi): hamma narsa — diller/chakana mijozlar, istalgan narx va chegirma,
@@ -23,13 +24,27 @@ import core
 import warehouse as wh
 
 LEVELS = ('seller', 'head')
+# Rahbar har bir savdo xodimi uchun alohida yoqadigan funksiyalar.
+PERMS = {
+    'retail': 'Chakana sotuv',
+    'dealer': 'Diller sotuvi',
+    'discount': 'Chegirma',
+    'price': 'Narxni o‘zgartirish',
+    'credit': 'Qarzga berish',
+    'collect': 'Qarz undirish',
+    'clients': 'Mijoz qo‘shish',
+    'prices': 'Narxlar ro‘yxati',
+    'special': 'Maxsus narx',
+    'all_sales': 'Barcha sotuvlarni ko‘rish',
+}
+SELLER_PERMS = ('retail', 'discount', 'credit', 'collect', 'clients')
 PRICE_TYPES = ('retail', 'dealer')
 METHODS = ('cash_usd', 'cash_uzs', 'card')
 DEFAULT_MAX_DISCOUNT_PCT = 5
 WALKIN_NAME = 'Chakana xaridor'
 
 SCHEMA = '''
-CREATE TABLE IF NOT EXISTS shop_staff(user_id INTEGER PRIMARY KEY, level TEXT NOT NULL DEFAULT 'seller', max_discount_pct INTEGER NOT NULL DEFAULT 5, allow_credit INTEGER NOT NULL DEFAULT 1, walkin_client INTEGER);
+CREATE TABLE IF NOT EXISTS shop_staff(user_id INTEGER PRIMARY KEY, level TEXT NOT NULL DEFAULT 'seller', max_discount_pct INTEGER NOT NULL DEFAULT 5, allow_credit INTEGER NOT NULL DEFAULT 1, walkin_client INTEGER, perms TEXT);
 CREATE TABLE IF NOT EXISTS shop_prices(pack INTEGER PRIMARY KEY, retail INTEGER NOT NULL DEFAULT 0, dealer INTEGER NOT NULL DEFAULT 0, updated_by INTEGER, updated_ts INTEGER);
 CREATE TABLE IF NOT EXISTS shop_client_prices(client INTEGER NOT NULL, pack INTEGER NOT NULL, price INTEGER NOT NULL, updated_by INTEGER, updated_ts INTEGER, PRIMARY KEY(client,pack));
 CREATE TABLE IF NOT EXISTS shop_clients(client INTEGER PRIMARY KEY, price_type TEXT NOT NULL DEFAULT 'retail');
@@ -49,6 +64,11 @@ def init(db):
                 db.execute(stmt)
     else:
         db.executescript(SCHEMA)
+    # Birinchi versiyada perms ustuni yo'q edi.
+    if isinstance(db, core.PostgresDB):
+        db.execute('ALTER TABLE shop_staff ADD COLUMN IF NOT EXISTS perms TEXT')
+    elif 'perms' not in [r[1] for r in db.execute('PRAGMA table_info(shop_staff)').fetchall()]:
+        db.execute('ALTER TABLE shop_staff ADD COLUMN perms TEXT')
 
 
 # ---------- yordamchilar ----------
@@ -89,46 +109,70 @@ def _source(actor, request_id, index=0):
     return 10 ** 16 + int.from_bytes(hashlib.sha256(raw).digest()[:7], 'big')
 
 
+def _perms_of(row):
+    if row is None:
+        return set(SELLER_PERMS)
+    raw = row['perms']
+    if raw is None:   # eski yozuv: darajadan
+        if row['level'] == 'head':
+            return set(PERMS)
+        base = set(SELLER_PERMS)
+        if not int(row['allow_credit'] if row['allow_credit'] is not None else 1):
+            base.discard('credit')
+        return base
+    return {p for p in str(raw).split(',') if p in PERMS}
+
+
 def staff(db, uid):
-    """{'level','maxDiscountPct','allowCredit'} yoki None. Admin — head huquqi bilan."""
+    """{'perms','maxDiscountPct',...} yoki None. Rahbar — barcha funksiyalar."""
     row = db.execute('SELECT role,name FROM users WHERE id=?', (uid,)).fetchone()
     if not row or row[0] not in ('sales', 'admin'):
         return None
     if row[0] == 'admin':
-        return {'id': int(uid), 'name': row[1] or str(uid), 'role': 'admin', 'level': 'head',
-                'maxDiscountPct': 100, 'allowCredit': True}
-    s = db.execute('SELECT level,max_discount_pct,allow_credit FROM shop_staff WHERE user_id=?', (uid,)).fetchone()
-    level = s['level'] if s and s['level'] in LEVELS else 'seller'
-    return {'id': int(uid), 'name': row[1] or str(uid), 'role': 'sales', 'level': level,
-            'maxDiscountPct': 100 if level == 'head' else int(s['max_discount_pct'] if s else DEFAULT_MAX_DISCOUNT_PCT),
-            'allowCredit': True if level == 'head' else bool(int(s['allow_credit'] if s else 1))}
+        perms = set(PERMS)
+        pct = 100
+    else:
+        s = db.execute('SELECT level,max_discount_pct,allow_credit,perms FROM shop_staff WHERE user_id=?', (uid,)).fetchone()
+        perms = _perms_of(s)
+        pct = int(s['max_discount_pct']) if s and s['max_discount_pct'] is not None else DEFAULT_MAX_DISCOUNT_PCT
+        if 'discount' not in perms:
+            pct = 0
+    return {'id': int(uid), 'name': row[1] or str(uid), 'role': row[0], 'perms': sorted(perms),
+            'maxDiscountPct': pct, 'allowCredit': 'credit' in perms,
+            'level': 'head' if row[0] == 'admin' or perms == set(PERMS) else 'seller'}
 
 
-def _require(db, actor, head=False):
+def can(s, perm):
+    return perm in s['perms']
+
+
+def _require(db, actor, perm=None):
     s = staff(db, actor)
     if not s:
         raise ValueError('Savdo bo‘limiga ruxsat yo‘q.')
-    if head and s['level'] != 'head':
-        raise ValueError('Bu amalni faqat bosh savdo xodimi bajaradi.')
+    if perm and not can(s, perm):
+        raise ValueError(f'Sizda «{PERMS[perm]}» ruxsati yo‘q. Rahbarga murojaat qiling.')
     return s
 
 
-def set_staff(db, actor, uid, level, max_discount_pct=DEFAULT_MAX_DISCOUNT_PCT, allow_credit=True):
-    """Rahbar yoki bosh savdo xodimi: sotuvchi darajasi va limitlari."""
+def set_staff(db, actor, uid, perms, max_discount_pct=DEFAULT_MAX_DISCOUNT_PCT):
+    """Faqat rahbar: savdo xodimining funksiyalarini yoqish/o'chirish va chegirma limiti."""
     a = db.execute('SELECT role FROM users WHERE id=?', (actor,)).fetchone()
-    if not a or (a[0] != 'admin' and (staff(db, actor) or {}).get('level') != 'head'):
-        raise ValueError('Savdo xodimlarini faqat rahbar yoki bosh savdo xodimi sozlaydi.')
+    if not a or a[0] != 'admin':
+        raise ValueError('Savdo xodimlarining ruxsatlarini faqat rahbar o‘zgartiradi.')
     target = db.execute('SELECT role FROM users WHERE id=?', (uid,)).fetchone()
     if not target or target[0] != 'sales':
         raise ValueError('Savdo xodimi topilmadi.')
-    if level not in LEVELS:
-        raise ValueError('Daraja noto‘g‘ri.')
-    if level == 'head' and a[0] != 'admin':
-        raise ValueError('Bosh savdo xodimini faqat rahbar tayinlaydi.')
+    if isinstance(perms, str):
+        perms = [p for p in perms.split(',') if p]
+    if not isinstance(perms, (list, tuple, set)) or any(p not in PERMS for p in perms):
+        raise ValueError('Ruxsatlar noto‘g‘ri.')
     pct = _int(max_discount_pct, 'Chegirma limiti', 0, 100)
-    db.execute('''INSERT INTO shop_staff(user_id,level,max_discount_pct,allow_credit) VALUES(?,?,?,?)
+    perms = sorted(set(perms))
+    level = 'head' if set(perms) == set(PERMS) else 'seller'
+    db.execute('''INSERT INTO shop_staff(user_id,level,max_discount_pct,allow_credit,perms) VALUES(?,?,?,?,?)
         ON CONFLICT(user_id) DO UPDATE SET level=excluded.level,max_discount_pct=excluded.max_discount_pct,
-        allow_credit=excluded.allow_credit''', (uid, level, pct, 1 if allow_credit else 0))
+        allow_credit=excluded.allow_credit,perms=excluded.perms''', (uid, level, pct, 1 if 'credit' in perms else 0, ','.join(perms)))
 
 
 # ---------- narxlar ----------
@@ -145,7 +189,7 @@ def prices(db):
 
 
 def set_price(db, actor, pack, retail=None, dealer=None):
-    _require(db, actor, head=True)
+    _require(db, actor, 'prices')
     pack = _int(pack, 'Mahsulot')
     if pack not in core.PRODUCTS:
         raise ValueError('Mahsulot noto‘g‘ri.')
@@ -160,7 +204,7 @@ def set_price(db, actor, pack, retail=None, dealer=None):
 
 def set_client_price(db, actor, client, pack, price):
     """Mijozga maxsus narx (price bo'sh/0 — o'chirish)."""
-    _require(db, actor, head=True)
+    _require(db, actor, 'special')
     client = _client(db, client)['id']
     pack = _int(pack, 'Mahsulot')
     if pack not in core.PRODUCTS:
@@ -176,7 +220,7 @@ def set_client_price(db, actor, client, pack, price):
 
 
 def set_client_type(db, actor, client, price_type):
-    _require(db, actor, head=True)
+    _require(db, actor, 'special')
     client = _client(db, client)['id']
     if price_type not in PRICE_TYPES:
         raise ValueError('Narx turi noto‘g‘ri.')
@@ -234,7 +278,7 @@ def _walkin_ids(db):
 
 
 def add_client(db, actor, name, phone, shop_name='', region='', address='', price_type='retail'):
-    s = _require(db, actor)
+    s = _require(db, actor, 'clients')
     name = str(name or '').strip()
     if not 2 <= len(name) <= 80:
         raise ValueError('Mijoz ismini yozing (2–80 belgi).')
@@ -247,8 +291,8 @@ def add_client(db, actor, name, phone, shop_name='', region='', address='', pric
         raise ValueError('Bu telefon bilan mijoz bor — qidiruvdan tanlang.')
     if price_type not in PRICE_TYPES:
         raise ValueError('Narx turi noto‘g‘ri.')
-    if price_type == 'dealer' and s['level'] != 'head':
-        raise ValueError('Diller mijozni faqat bosh savdo xodimi qo‘shadi.')
+    if price_type == 'dealer' and not can(s, 'dealer'):
+        raise ValueError('Diller mijoz qo‘shish ruxsati yo‘q.')
     cur = db.execute("""INSERT INTO clients(agent,name,shop_name,phone,address,region,comment,created_ts,map_only)
         VALUES(?,?,?,?,?,?,'Savdo bo‘limi',?,1) RETURNING id""",
                      (actor, name, str(shop_name or '').strip()[:80] or name, phone,
@@ -353,8 +397,8 @@ def quote(db, actor, payload):
         price = base
         if it.get('price') not in (None, ''):
             price = _cents(it.get('price'), 'Narx')
-            if price != base and s['level'] != 'head':
-                raise ValueError(f'{core.product_name(pack)}: narxni faqat bosh savdo xodimi o‘zgartiradi.')
+            if price != base and not can(s, 'price'):
+                raise ValueError(f'{core.product_name(pack)}: sizda narxni o‘zgartirish ruxsati yo‘q.')
         if price <= 0:
             raise ValueError(f'{core.product_name(pack)}: narx belgilanmagan. Bosh savdo xodimi narx qo‘ysin.')
         lines.append({'pack': pack, 'name': core.product_name(pack), 'qty': qty, 'listPrice': base,
@@ -378,9 +422,16 @@ def quote(db, actor, payload):
         raise ValueError('Chegirma jami summadan katta bo‘lishi mumkin emas.')
     list_total = sum(l['qty'] * l['listPrice'] for l in lines)
     total = subtotal - discount
-    eff_pct = (list_total - total) * 100.0 / list_total if list_total else 0
-    if s['level'] != 'head' and eff_pct > s['maxDiscountPct'] + 1e-9:
-        raise ValueError(f"Chegirma {eff_pct:.1f}% — sizning limitingiz {s['maxDiscountPct']}%. Bosh savdo xodimiga murojaat qiling.")
+    # Narxni o'zgartirish ruxsati bo'lsa, tanlangan narx asos; aks holda ro'yxat narxi (yashirin chegirma ham limitga kiradi).
+    basis = subtotal if can(s, 'price') else list_total
+    eff_pct = (basis - total) * 100.0 / basis if basis else 0
+    if s['role'] != 'admin' and eff_pct > s['maxDiscountPct'] + 1e-9:
+        if not can(s, 'discount'):
+            raise ValueError('Sizda chegirma berish ruxsati yo‘q.')
+        raise ValueError(f"Chegirma {eff_pct:.1f}% — sizning limitingiz {s['maxDiscountPct']}%. Rahbarga murojaat qiling.")
+    need_perm = 'dealer' if ptype == 'dealer' else 'retail'
+    if not can(s, need_perm):
+        raise ValueError(f'Sizda «{PERMS[need_perm]}» ruxsati yo‘q.')
     # Chegirmani qatorlarga taqsimlash (oxirgi qator qoldiqni oladi).
     left = discount
     for i, l in enumerate(lines):
@@ -414,7 +465,7 @@ def sell(db, actor, payload):
     debt = q['total'] - paid
     if q['walkin'] and debt > 0:
         raise ValueError('Chakana xaridorga qarzga berib bo‘lmaydi: mijozni tanlang yoki to‘liq to‘lov oling.')
-    if debt > 0 and not s['allowCredit']:
+    if debt > 0 and not can(s, 'credit'):
         raise ValueError('Sizga qarzga berish ruxsati yo‘q. To‘liq to‘lov oling.')
     note = str(payload.get('note') or '').strip()
     if len(note) > 300:
@@ -443,7 +494,7 @@ def sell(db, actor, payload):
 
 def collect(db, actor, payload):
     """Mijoz qarzini undirish (sotuvsiz to'lov)."""
-    s = _require(db, actor)
+    s = _require(db, actor, 'collect')
     src = _source(actor, payload.get('requestId'))
     if db.execute('SELECT 1 FROM events WHERE source=?', (src,)).fetchone():
         return {'ok': True, 'duplicate': True}
@@ -509,7 +560,7 @@ def dashboard(db, actor, now=None):
                  'dealerUsd': table[p]['dealer'] / 100, 'stock': stock.get(p, 0)}
                 for p in core.PRODUCTS if p not in core.INACTIVE_PRODUCTS]
     products.sort(key=lambda x: (x['stock'] <= 0, x['name']))
-    mine = s['level'] != 'head'
+    mine = not can(s, 'all_sales')
     where, args = ('WHERE ts>=?', [day0]) if not mine else ('WHERE ts>=? AND seller=?', [day0, actor])
     rows = db.execute(f'SELECT id,total,paid FROM shop_sales {where} ORDER BY ts DESC,id DESC', args).fetchall()
     today = {'count': len(rows), 'totalUsd': sum(int(r['total']) for r in rows) / 100,
@@ -525,17 +576,18 @@ def dashboard(db, actor, now=None):
         cash = {'usd': core.cash_usd(db, actor) / 100, 'uzs': int(core.cash(db, actor)) // 100,
                 'pendingUsd': int(pend_usd or 0) / 100, 'pendingUzs': int(pend_uzs or 0) // 100}
     team = None
-    if s['level'] == 'head':
+    if can(s, 'all_sales'):
         team = []
         for u in db.execute("SELECT id,name FROM users WHERE role='sales' ORDER BY name,id").fetchall():
             st = staff(db, int(u['id']))
             r = db.execute('SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(paid),0) FROM shop_sales WHERE seller=? AND ts>=?',
                            (int(u['id']), day0)).fetchone()
-            team.append({'id': int(u['id']), 'name': u['name'] or str(u['id']), 'level': st['level'],
+            team.append({'id': int(u['id']), 'name': u['name'] or str(u['id']), 'level': st['level'], 'perms': st['perms'],
                          'maxDiscountPct': st['maxDiscountPct'], 'allowCredit': st['allowCredit'],
                          'todayCount': int(r[0] or 0), 'todayUsd': int(r[1] or 0) / 100, 'todayPaidUsd': int(r[2] or 0) / 100,
                          'cashUsd': core.cash_usd(db, int(u['id'])) / 100, 'cashUzs': int(core.cash(db, int(u['id']))) // 100})
-    return {'me': {k: s[k] for k in ('id', 'name', 'role', 'level', 'maxDiscountPct', 'allowCredit')},
+    return {'me': {k: s[k] for k in ('id', 'name', 'role', 'level', 'perms', 'maxDiscountPct', 'allowCredit')},
+            'permLabels': PERMS,
             'rate': core.cashier_rate(db), 'products': products, 'today': today, 'recent': recent,
             'cash': cash, 'team': team, 'generatedTs': now}
 
@@ -599,7 +651,7 @@ def handle(db, actor, action, payload):
         set_client_type(db, actor, payload.get('clientId'), payload.get('priceType'))
         return client_card(db, actor, payload.get('clientId'))
     elif action == 'set_staff':
-        set_staff(db, actor, _int(payload.get('userId'), 'Xodim', 1), payload.get('level') or 'seller',
-                  payload.get('maxDiscountPct', DEFAULT_MAX_DISCOUNT_PCT), bool(payload.get('allowCredit', True)))
+        set_staff(db, actor, _int(payload.get('userId'), 'Xodim', 1), payload.get('perms') or [],
+                  payload.get('maxDiscountPct', DEFAULT_MAX_DISCOUNT_PCT))
     out.update(dashboard(db, actor))
     return out

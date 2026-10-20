@@ -65,7 +65,7 @@ MANAGER_PREMIUM_TEST_URL=_miniapp_url('MANAGER_PREMIUM_TEST_URL','https://asman-
 AGENT_MINIAPP_URL=_miniapp_url('AGENT_MINIAPP_URL','https://asman-agent-miniapp-v2-test.onrender.com/?v=20260928-offline-v3','agent','20261018-photo-v14')
 # Омбор Mini App (омборчи + агент сўровлари) is always served by this service.
 WAREHOUSE_MINIAPP_URL=_miniapp_url('WAREHOUSE_MINIAPP_URL','','ombor','20261018-photo-v5')
-SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-savdo-v1')
+SHOP_MINIAPP_URL=_miniapp_url('SHOP_MINIAPP_URL','','savdo','20261020-savdo-v2')
 SELF_MINIAPP_ORIGINS={o for o in (_url_origin(PUBLIC_BASE_URL),_url_origin(MANAGER_MINIAPP_URL),
                       _url_origin(MANAGER_PREMIUM_TEST_URL),_url_origin(AGENT_MINIAPP_URL)) if o}
 _MINIAPP_TYPES={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
