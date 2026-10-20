@@ -245,6 +245,8 @@ class ManagerApiTests(unittest.TestCase):
         self.assertEqual(first['returnedQty'],1)
         self.assertEqual(first['returnedUsd'],10)
         self.assertAlmostEqual(first['sharePct'],34.6,places=1)
+        # Ulushlar bitta bazadan: jami 100%, diagramma ham shu sharePct dan foydalanadi.
+        self.assertAlmostEqual(sum(p['sharePct'] for p in day['products']),100,delta=0.2)
         self.assertEqual(day['topProduct'],'Грунтовка 7/1 — 1 кг')
         # "sold" amount is intentionally not added to financial realization.
         self.assertEqual(sum(p['deliveredUsd'] for p in day['products']),260)

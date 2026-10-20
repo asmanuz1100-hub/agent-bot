@@ -15,6 +15,7 @@ import cashier_daily
 import customer_status as cs
 import manager_api
 import web_auth
+import branding
 import executive
 import agent_api
 import analytics
@@ -2990,7 +2991,8 @@ def serve_webhook(db,base_url):
                             if v is not None:me['photoUrl']=user_photo_link(uid,version=v)
                         except Exception:
                             logging.warning('Own photo lookup failed')
-                        data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS}
+                        data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS,
+                              'brand':branding.get(local)}
                     else:
                         answer_web(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
@@ -3021,7 +3023,7 @@ def serve_webhook(db,base_url):
                     if not isinstance(payload,dict):
                         answer(400,{'error':'So‘rov noto‘g‘ri.'});return
                     # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
-                    if length>10_000 and payload.get('action')!='product_photo':
+                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save'):
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     web_token=self._bearer_token()
                     actor=None if web_token and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
@@ -3110,6 +3112,10 @@ def serve_webhook(db,base_url):
                         try:notify_agent_order_status(local,oid)
                         except Exception:logging.exception('Order status notification failed order=%s',oid)
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
+                    elif action=='branding_save':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
+                        data={'ok':True,'brand':branding.save(local,payload.get('name'),payload.get('logo'))}
                     elif action=='agent_management':
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':

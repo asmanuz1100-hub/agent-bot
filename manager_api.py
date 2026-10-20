@@ -214,9 +214,10 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
         item["deliveredQty"]=item.get("grossDeliveredQty",0)-item["returnedQty"]
         item["deliveredUsd"]=_usd(item.pop("_gross",0)-item.pop("_ret",0))
     product_list=list(products.values())
-    product_total=sum(float(p["deliveredUsd"] or 0) for p in product_list)
+    # Ulush bazasi — musbat realizatsiyali mahsulotlar jami (diagramma va jadval bir xil bazadan foydalanadi).
+    product_total=sum(max(0.0,float(p["deliveredUsd"] or 0)) for p in product_list)
     for p in product_list:
-        p["sharePct"]=round((float(p["deliveredUsd"] or 0)/product_total*100) if product_total else 0,1)
+        p["sharePct"]=round((max(0.0,float(p["deliveredUsd"] or 0))/product_total*100) if product_total else 0,1)
     product_list.sort(key=lambda p:(p["deliveredUsd"],p["deliveredQty"],-p["pack"]),reverse=True)
     top_product=product_list[0]["name"] if product_list and product_list[0]["deliveredUsd"]>0 else None
 

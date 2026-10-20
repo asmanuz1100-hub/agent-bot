@@ -1,4 +1,5 @@
 """Rahbar web paneli (kompyuter): login/parol, sessiya va /api/manager orqali ishlash."""
+import base64
 import json
 import os
 import socket
@@ -98,14 +99,21 @@ class WebPanelDesignSystemTests(unittest.TestCase):
             return f.read()
 
     def test_spec_tokens_and_font(self):
-        # Design V2 palitrasi (1816/1817 referenslari): grafit navigatsiya, krem fon, ASMAN ko'k, semantik ranglar.
+        # Design V3: oq kartalar, sovuq kulrang fon, #007AFF aksent, semantik ranglar, alohida to'q mavzu.
         css = self.read('app.css')
-        for token in ('--nav:#191D23', '--bg:#F7F6F2', '--card:#FFFFFF', '--tx:#17221F', '--line:#E7E8E4',
-                      '--pri:#1F6BFF', '--forest:#246B57', '--yellow:#F3CF56', '--orange:#E46542'):
+        for token in ('--bg:#F5F7FA', '--card:#FFFFFF', '--tx:#111827', '--mu-spec:#64748B', '--pri:#007AFF',
+                      '--c-green:', '--c-red:', '--c-amber:', 'backdrop-filter'):
             self.assertIn(token, css)
         self.assertIn(':root[data-theme="dark"]', css)
         self.assertIn('prefers-reduced-motion', css)
         self.assertIn('family=Inter', self.read('index.html'))
+        # Iliq/krem fon qaytmasin
+        for warm in ('#F7F6F2', '#F4EEDC', '#EFEEE8'):
+            self.assertNotIn(warm, css)
+
+    def test_no_hardcoded_brand_in_interface(self):
+        for name in ('index.html', 'app.js', 'app.css'):
+            self.assertNotIn('ASMAN', self.read(name), name)
 
     def test_light_theme_is_default_and_search_is_present(self):
         html = self.read('index.html')
@@ -249,7 +257,8 @@ class WebPanelHttpTests(unittest.TestCase):
     def test_panel_page_is_served(self):
         with urllib.request.urlopen(f'http://127.0.0.1:{self.port}/app/rahbar-web/', timeout=10) as r:
             body = r.read().decode()
-        self.assertIn('Rahbar paneli', body)
+        self.assertIn('Boshqaruv paneli', body)
+        self.assertNotIn('ASMAN', body)
         self.assertNotIn('telegram-web-app.js', body)
 
     def test_login_then_use_manager_api(self):
@@ -285,6 +294,31 @@ class WebPanelHttpTests(unittest.TestCase):
     def test_non_admin_cannot_log_in(self):
         code, data = self.login('ali', self.agent_password)
         self.assertEqual(code, 403, data)
+
+    def test_branding_only_primary_admin_can_change(self):
+        _, data = self.login()
+        token = data['token']
+        code, me = self.post('/api/web', token, action='me')
+        self.assertEqual(me['brand'], {'name': '', 'logo': ''})
+        saved = set(bot.ADMINS)
+        try:
+            bot.ADMINS.discard(1)
+            code, data = self.post('/api/manager', token, action='branding_save', name='X')
+            self.assertEqual(code, 403, data)
+            bot.ADMINS.add(1)
+            logo = 'data:image/png;base64,' + base64.b64encode(b'\x89PNG fake').decode()
+            code, data = self.post('/api/manager', token, action='branding_save', name='  Namuna   Savdo ', logo=logo)
+            self.assertEqual(code, 200, data)
+            self.assertEqual(data['brand'], {'name': 'Namuna Savdo', 'logo': logo})
+            code, data = self.post('/api/manager', token, action='branding_save', logo='data:image/svg+xml;base64,PHN2Zz4=')
+            self.assertEqual(code, 400, data)
+            code, me = self.post('/api/web', token, action='me')
+            self.assertEqual(me['brand']['name'], 'Namuna Savdo')
+            code, data = self.post('/api/manager', token, action='branding_save', name='', logo='')
+            self.assertEqual(data['brand'], {'name': '', 'logo': ''})
+        finally:
+            bot.ADMINS.clear()
+            bot.ADMINS.update(saved)
 
     def test_foreign_origin_is_rejected(self):
         code, _ = self.post('/api/web', origin='https://evil.example', action='login', login='boss', password=self.password)
