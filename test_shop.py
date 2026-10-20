@@ -128,6 +128,17 @@ class ShopTests(unittest.TestCase):
         self.assertEqual(wh.stock(self.db, self.p1), 100)
         self.assertIsNone(self.db.execute('SELECT 1 FROM shop_sales').fetchone())
 
+    def test_admin_web_sale_on_behalf_of_seller(self):
+        with self.assertRaisesRegex(ValueError, 'savdo xodimi nomidan'):
+            self.sell(ADMIN, self.client, [{'pack': self.p1, 'qty': 1}])
+        with self.assertRaisesRegex(ValueError, 'Faol savdo xodimini'):
+            self.sell(ADMIN, self.client, [{'pack': self.p1, 'qty': 1}], sellerId=AGENT)
+        r = self.sell(ADMIN, self.client, [{'pack': self.p1, 'qty': 2, 'price': '9'}], sellerId=S2, paid='18', method='cash_usd')
+        self.assertEqual((r['sellerId'], r['totalUsd']), (S2, 18))      # rahbar narxni o'zgartira oladi
+        self.assertEqual(core.cash_usd(self.db, S2), 1800)              # pul tanlangan sotuvchida
+        ev = self.db.execute("SELECT actor,agent FROM events WHERE kind='delivery'").fetchone()
+        self.assertEqual((ev[0], ev[1]), (ADMIN, S2))
+
     def test_access(self):
         with self.assertRaisesRegex(ValueError, 'ruxsat yo‘q'):
             shop.handle(self.db, AGENT, 'dashboard', {})

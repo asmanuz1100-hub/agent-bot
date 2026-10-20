@@ -301,10 +301,27 @@ def _payment(db, payload, total_limit):
     return cents, method, uzs, rate
 
 
-def _insert_payment(db, actor, client, cents, method, uzs, rate, note, source, ts):
+def _seller(db, actor, payload):
+    """Sotuv kimning hisobiga yoziladi: savdo xodimi — o'zi; rahbar (web panel) — tanlangan savdo xodimi.
+
+    Naqd pul o'sha xodim qo'lida hisoblanadi va u kassaga topshiradi."""
+    s = _require(db, actor)
+    if s['role'] == 'sales':
+        return actor
+    raw = payload.get('sellerId')
+    if raw in (None, '', 0, '0'):
+        raise ValueError('Sotuv qaysi savdo xodimi nomidan ekanini tanlang.')
+    sid = _int(raw, 'Savdo xodimi', 1)
+    r = db.execute('SELECT role FROM users WHERE id=?', (sid,)).fetchone()
+    if not r or r[0] != 'sales':
+        raise ValueError('Faol savdo xodimini tanlang.')
+    return sid
+
+
+def _insert_payment(db, actor, agent, client, cents, method, uzs, rate, note, source, ts):
     db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
         VALUES(?,?,?,'payment',0,0,0,?,?,?,?,?,?,?)""",
-               (actor, actor, client, cents, note, ts, source, 'card' if method == 'card' else 'cash', uzs, rate))
+               (actor, agent, client, cents, note, ts, source, 'card' if method == 'card' else 'cash', uzs, rate))
 
 
 # ---------- sotuv ----------
@@ -386,7 +403,8 @@ def sell(db, actor, payload):
     old = db.execute('SELECT id FROM shop_sales WHERE source=?', (src,)).fetchone()
     if old:
         return receipt(db, int(old[0]))
-    core.lock_agent(db, actor)
+    who = _seller(db, actor, payload)
+    core.lock_agent(db, who)
     wh._lock_warehouse(db)
     q = quote(db, actor, payload)
     s = q['staff']
@@ -401,25 +419,25 @@ def sell(db, actor, payload):
     note = str(payload.get('note') or '').strip()
     if len(note) > 300:
         raise ValueError('Izoh 300 belgidan oshmasin.')
-    cid = walkin_client(db, actor) if q['walkin'] else q['client']['id']
+    cid = walkin_client(db, who) if q['walkin'] else q['client']['id']
     ts = int(time.time())
     cur = db.execute('''INSERT INTO shop_sales(seller,client,price_type,subtotal,discount,total,paid,pay_method,paid_uzs,fx_rate,note,ts,source)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',
-                     (actor, cid, q['priceType'], q['subtotal'], q['discount'], q['total'], paid, method, uzs, rate, note, ts, src))
+                     (who, cid, q['priceType'], q['subtotal'], q['discount'], q['total'], paid, method, uzs, rate, note, ts, src))
     sale = int(cur.fetchone()[0])
     tag = f'Savdo #{sale}' + (f' | {note}' if note else '')
     for i, l in enumerate(q['lines'], 1):
         db.execute('''INSERT INTO shop_sale_lines(sale,pack,qty,list_price,price,discount,total) VALUES(?,?,?,?,?,?,?)''',
                    (sale, l['pack'], l['qty'], l['listPrice'], l['price'], l['discount'], l['total']))
-        wh._move(db, actor, 'shop_sale', l['pack'], l['qty'], agent=actor, note=tag, source=_source(actor, payload.get('requestId'), 100 + i))
+        wh._move(db, actor, 'shop_sale', l['pack'], l['qty'], agent=who, note=tag, source=_source(actor, payload.get('requestId'), 100 + i))
         db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
-            VALUES(?,?,?,'delivery',?,?,0,?,?,?,?)''', (actor, actor, cid, l['pack'], l['qty'], l['total'], tag, ts,
+            VALUES(?,?,?,'delivery',?,?,0,?,?,?,?)''', (actor, who, cid, l['pack'], l['qty'], l['total'], tag, ts,
                                                          _source(actor, payload.get('requestId'), 200 + i)))
         db.execute('''INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
-            VALUES(?,?,?,'sold',?,?,0,?,?,?,?)''', (actor, actor, cid, l['pack'], l['qty'], l['total'], tag, ts,
+            VALUES(?,?,?,'sold',?,?,0,?,?,?,?)''', (actor, who, cid, l['pack'], l['qty'], l['total'], tag, ts,
                                                      _source(actor, payload.get('requestId'), 300 + i)))
     if paid:
-        _insert_payment(db, actor, cid, paid, method, uzs, rate, tag, _source(actor, payload.get('requestId'), 1), ts)
+        _insert_payment(db, actor, who, cid, paid, method, uzs, rate, tag, _source(actor, payload.get('requestId'), 1), ts)
     return receipt(db, sale)
 
 
@@ -430,7 +448,8 @@ def collect(db, actor, payload):
     if db.execute('SELECT 1 FROM events WHERE source=?', (src,)).fetchone():
         return {'ok': True, 'duplicate': True}
     client = _client(db, payload.get('clientId'))
-    core.lock_agent(db, actor)
+    who = _seller(db, actor, payload)
+    core.lock_agent(db, who)
     debt = core.client_debt_usd(db, client['id'])
     if debt <= 0:
         raise ValueError('Bu mijozda qarz yo‘q.')
@@ -438,7 +457,7 @@ def collect(db, actor, payload):
     if not cents:
         raise ValueError('To‘lov summasini kiriting.')
     note = str(payload.get('note') or '').strip()[:300]
-    _insert_payment(db, actor, client['id'], cents, method, uzs, rate, 'Savdo: qarz to‘lovi' + (f' | {note}' if note else ''), src, int(time.time()))
+    _insert_payment(db, actor, who, client['id'], cents, method, uzs, rate, 'Savdo: qarz to‘lovi' + (f' | {note}' if note else ''), src, int(time.time()))
     return {'ok': True, 'clientId': client['id'], 'paidUsd': cents / 100, 'debtUsd': (debt - cents) / 100, 'level': s['level']}
 
 

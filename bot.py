@@ -3185,6 +3185,11 @@ def serve_webhook(db,base_url):
                         data=executive.executive(local,payload.get('period') or 'today',payload.get('from'),payload.get('to'),
                                                  agent=payload.get('agentId'),region=payload.get('region') or None,
                                                  group=payload.get('group') or 'auto')
+                    elif action=='shop':
+                        # Web panel Savdo bo'limi: shop.py huquqlarni o'zi tekshiradi (rahbar = bosh xodim huquqi,
+                        # sotuv/to'lov tanlangan savdo xodimi hisobiga yoziladi).
+                        data=shop.handle(local,actor,payload.get('op') or 'dashboard',payload)
+                        data.pop('_handover',None)
                     elif action=='sales':
                         data=sales.sales(local,payload.get('period') or 'month',payload.get('from'),payload.get('to'),
                                          agent=payload.get('agentId'),region=payload.get('region') or None)
