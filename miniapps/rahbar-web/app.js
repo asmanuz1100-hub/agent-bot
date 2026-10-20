@@ -193,7 +193,7 @@ function roleLabel(){return S.primary?'Asosiy rahbar':'Rahbar'}
 var BRAND=(function(){try{return JSON.parse(store('rw-brand')||'{}')||{}}catch(e){return {}}})();
 function brandName(){return BRAND.name||'AIBI Dashboard'}
 function fileSlug(){var n=String(BRAND.name||'').toLowerCase().replace(/[^a-z0-9Ѐ-ӿ]+/gi,'-').replace(/^-+|-+$/g,'');return n||'hisobot'}
-function brandMark(){return BRAND.logo?'<img src="'+esc(BRAND.logo)+'" alt="">':'<img src="/app/premium-kit/aibi/aibi-icon-dark.svg" alt="AIBI">'}
+function brandMark(){return BRAND.logo?'<img src="'+esc(BRAND.logo)+'" alt="">':'<img src="/app/premium-kit/aibi/aibi-icon-dark.svg?v=3" alt="AIBI">'}
 function applyBrand(b){
   if(b){BRAND={name:b.name||'',logo:b.logo||'',details:b.details||{}};store('rw-brand',JSON.stringify(BRAND))}
   $('brandName').textContent=brandName();$('brandSub').textContent=BRAND.name?'AIBI Dashboard':'Smart Business Platform';

@@ -4,7 +4,7 @@
    - Files with ?v= in the URL never change, so they come from the cache; older versions are dropped.
    - Map tiles go to their own cache, capped at TILE_LIMIT, so a phone's storage does not fill up.
    - /api/ requests are never cached. */
-const CACHE_NAME="asman-agent-shell-20261020-aibi-v1";
+const CACHE_NAME="asman-agent-shell-20261020-aibi-v3";
 const TILE_CACHE="asman-agent-tiles-v1";
 const TILE_LIMIT=400;
 const SHELL=[

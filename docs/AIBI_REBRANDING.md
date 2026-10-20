@@ -26,16 +26,23 @@ Generator: `python3 scripts/brand/build_aibi_assets.py` (Pillow). Bitta geometri
 - `aibi-adaptive-foreground.png`, `aibi-adaptive-background.png` — Android adaptive icon
 - `aibi-splash.png`, `favicon.ico` (16/32/64)
 - `aibi.css` — umumiy tokenlar: ranglar, Aurora gradient, shrift, `.aibi-wm` logotip bloki
+- `apps/{agent,manager,cashier,warehouse,dashboard}-{192,180,64,32}.png` va `.ico` — har bir ilovaning o'z ikonkasi
+  (foydalanuvchi to'plamidan, `python3 scripts/brand/build_app_icons.py`)
+- `telegram-profile-512.png` — BotFather profil rasmi
 - `preview.html` — barcha assetlar bitta sahifada
 
-Belgi BALANCE · 09 Aurora dizayn taxtasidan qayta chizilgan. Asl vektor fayl kelsa, generatordagi
-`SEGMENTS`/`svg_paths()` unga moslanadi va barcha o'lchamlar qayta yaratiladi.
+Belgi va ikonkalar — foydalanuvchi bergan **AIBI Professional Brand Kit**dan: vektor belgi
+`source/aibi-symbol.svg` (SVG'lar shu vektordan), shaffof 1024 PNG `source/aibi-mark-source.png`
+(PNG o'lchamlar shundan, chekka bo'shlig'i bilan), ilova ikonkalari `source/apps/*.png` (1024 px).
+Kit README'sida yozilganidek, bu asl manba emas — mos qayta chizilgan tahrirlanadigan vektor.
+Belgining o'ng tomonida ikki bo'lak tutashgan joyda ingichka pog'ona bor (kitning o'zida) — dizayner
+tuzatgan versiyani `source/`ga qo'yib, ikkala generatorni qayta ishga tushirish kifoya. So'z belgisi: «AIBI».
 
 ## Telegram BotFather (qo'lda, bot egasi bajaradi)
 `@username` o'zgartirilmaydi.
 1. @BotFather → `/mybots` → botni tanlang.
 2. **Edit Bot → Edit Name** → `AIBI` (yoki `AIBI Agent`).
-3. **Edit Bot → Edit Botpic** → `miniapps/premium-kit/aibi/aibi-icon-dark-512.png` yuboring.
+3. **Edit Bot → Edit Botpic** → `miniapps/premium-kit/aibi/telegram-profile-512.png` yuboring (dizayn to'plamidagi Telegram profil ikonkasi).
 4. **Edit Bot → Edit About** → `AIBI — Smart Business Platform. Savdo, mijozlar, ombor va kassa bitta joyda.`
 5. **Edit Bot → Edit Description** → bot ochilganda ko'rinadigan matn (ixtiyoriy).
 6. Agar Mini App'lar BotFather'da alohida ro'yxatdan o'tgan bo'lsa (`/myapps`): har birining nomi va

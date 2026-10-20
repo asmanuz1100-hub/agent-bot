@@ -294,10 +294,10 @@ html.pm-paused #sp .ldbar i{animation-play-state:paused}
 .fl select{width:100%;min-height:44px;border:0;background:var(--soft);color:var(--tx);font:inherit}
 .fl select:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 #clReset{width:100%;min-height:44px}
-</style><link rel="icon" href="/app/premium-kit/aibi/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="/app/premium-kit/aibi/aibi-icon-dark.svg"><link rel="apple-touch-icon" href="/app/premium-kit/aibi/aibi-icon-dark-180.png"><link rel="stylesheet" href="/app/premium-kit/aibi/aibi.css?v=1">
+</style><link rel="icon" href="/app/premium-kit/aibi/apps/manager.ico?v=2" sizes="any"><link rel="icon" type="image/png" sizes="192x192" href="/app/premium-kit/aibi/apps/manager-192.png?v=2"><link rel="apple-touch-icon" href="/app/premium-kit/aibi/apps/manager-180.png?v=2"><link rel="stylesheet" href="/app/premium-kit/aibi/aibi.css?v=1">
 </head><body><div class="app" id="app"></div><nav id="nav"></nav><div id="ov" onclick="closeS()"></div><div id="sh"></div><div id="ts"></div>
 <script>
-const B=`<div class="br"><div class="lg"><span class="aibi-wm"><img src="/app/premium-kit/aibi/aibi-mark.svg" alt="">AIBI</span><small>BUSINESS CONTROL</small></div><div class="rt"><i onclick="sync(this)">⟳</i><i class="pf" onclick="thm()">R</i></div></div>`;
+const B=`<div class="br"><div class="lg"><span class="aibi-wm" role="img" aria-label="AIBI"><img src="/app/premium-kit/aibi/aibi-mark.svg?v=3" alt="">AIBI</span><small>BUSINESS CONTROL</small></div><div class="rt"><i onclick="sync(this)">⟳</i><i class="pf" onclick="thm()">R</i></div></div>`;
 const kp=(i,t,v,s,cl='',act='')=>`<div class="c kp" style="margin:0${act?';cursor:pointer':''}" ${act?`onclick="${act}"`:''}><div class="ic">${i}</div><div><small>${t}</small><b>${v}</b><em class="${cl}">${s}</em></div></div>`;
 const cols={"5+ kun":['bad','p-bad'],"0–2 kun":['ok','p-ok'],"3–4 kun":['warn','p-wa'],"Rejada":['pri','p-pri']};
 const CL=[["Otabek market","Bag'dod","Chakana savdo",120,"5+ kun"],["Sardor shop","Buvayda","Oziq-ovqat",0,"0–2 kun"],["Azizbek do'kon","Furqat","Maishiy tovarlar",45,"Rejada"],["Kamola savdo","Rishton","Qurilish mollari",15.5,"3–4 kun"],["Nur savdo","Toshloq","Chakana savdo",8,"0–2 kun"]];
@@ -491,7 +491,7 @@ function initYmap(){
     return m});
 }
 /* Map is intentionally deferred until the visible tab is opened. */
-document.body.insertAdjacentHTML('afterbegin','<div id="sp"><img id="sp-badge" src="/app/premium-kit/aibi/aibi-mark.svg" alt="AIBI"><small>AIBI MANAGER</small></div>');
+document.body.insertAdjacentHTML('afterbegin','<div id="sp"><img id="sp-badge" src="/app/premium-kit/aibi/aibi-mark.svg?v=3" alt="AIBI"><small>AIBI MANAGER</small></div>');
 (function(){const d=document.documentElement;document.addEventListener('visibilitychange',()=>d.classList.toggle('pm-paused',document.hidden))})();
 /* Splash: the animated logo stays only until real data arrives (min 0.9s so the logo animation finishes), no fixed 1.7s wait */
 go(0);sp.classList.add('ld');sp.insertAdjacentHTML('beforeend','<div class="ldbar"><i></i></div>');sp.setAttribute('role','status');sp.setAttribute('aria-label','Ma’lumotlar yuklanmoqda');
