@@ -711,3 +711,6 @@ td.bad,td .bad,td.num.bad,td.num.bad b{color:var(--bad)}td.ok,td.num.ok{color:va
 .hbar:nth-child(2) .track i{animation-delay:.05s}.hbar:nth-child(3) .track i{animation-delay:.1s}.hbar:nth-child(4) .track i{animation-delay:.15s}.hbar:nth-child(5) .track i{animation-delay:.2s}
 .grid>.card{animation:rise var(--t-slow) var(--ease) backwards}
 .grid>.card:nth-child(2){animation-delay:.04s}.grid>.card:nth-child(3){animation-delay:.08s}.grid>.card:nth-child(4){animation-delay:.12s}.grid>.card:nth-child(n+5){animation-delay:.16s}
+.br-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.br-grid .wide{grid-column:1/-1}
+@media (max-width:560px){.br-grid{grid-template-columns:1fr}}

@@ -191,7 +191,7 @@ function brandName(){return BRAND.name||'Boshqaruv paneli'}
 function fileSlug(){var n=String(BRAND.name||'').toLowerCase().replace(/[^a-z0-9Ѐ-ӿ]+/gi,'-').replace(/^-+|-+$/g,'');return n||'hisobot'}
 function brandMark(){return BRAND.logo?'<img src="'+esc(BRAND.logo)+'" alt="">':ic('grid')}
 function applyBrand(b){
-  if(b){BRAND={name:b.name||'',logo:b.logo||''};store('rw-brand',JSON.stringify(BRAND))}
+  if(b){BRAND={name:b.name||'',logo:b.logo||'',details:b.details||{}};store('rw-brand',JSON.stringify(BRAND))}
   $('brandName').textContent=brandName();$('brandSub').textContent=BRAND.name?'Boshqaruv paneli':'Biznes boshqaruvi';
   $('brandMark').innerHTML=brandMark();$('lgMark').innerHTML=brandMark();$('lgBrand').textContent=brandName();
   ['brandMark','lgMark'].forEach(function(id){$(id).classList.toggle('has-logo',!!BRAND.logo)});
@@ -1580,15 +1580,19 @@ function renderStaff(page,s){
 }
 
 /* ----- Sozlamalar ----- */
+var BR_FIELDS=[['legalName','Yuridik nomi',160,1],['inn','STIR (INN)',20],['phone','Telefon',80],['address','Manzil',240,1],['bank','Bank rekvizitlari (h/r, bank, MFO)',240,1],['director','Rahbar F.I.Sh.',120]];
 function pageSettings(page){
   var me=S.me||{};
   var canBrand=S.primary;
   page.innerHTML='<div class="grid g2" style="max-width:1080px">'+
    '<form class="card" id="brForm"><div class="card-h"><h3>'+ic('building')+' Kompaniya</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div>'+
     '<div class="brand-edit"><span class="brand-mark xl'+(BRAND.logo?' has-logo':'')+'" id="brPrev">'+brandMark()+'</span><div class="form" style="display:grid;gap:10px;flex:1;min-width:0">'+
-    '<label>Kompaniya nomi<input name="name" maxlength="60" value="'+esc(BRAND.name)+'" placeholder="Masalan: kompaniyangiz nomi"'+(canBrand?'':' disabled')+'></label>'+
+    '<label>Brend nomi (panelda)<input name="name" maxlength="60" value="'+esc(BRAND.name)+'" placeholder="Masalan: kompaniyangiz nomi"'+(canBrand?'':' disabled')+'></label>'+
     (canBrand?'<div class="actions"><label class="btn sm file-btn">'+ic('upload','sm')+' Logotip yuklash<input type="file" id="brFile" accept="image/png,image/jpeg,image/webp" hidden></label><button type="button" class="btn sm" id="brClear"'+(BRAND.logo?'':' disabled')+'>'+ic('trash','sm')+' Logotipni olib tashlash</button></div>':'')+
-    '</div></div><p class="hint" style="margin-top:12px">Nom va logotip yon panel, kirish oynasi va brauzer sarlavhasida ko‘rinadi. PNG/JPEG/WebP, 200 KB gacha, kvadrat rasm tavsiya etiladi.'+(canBrand?'':' O‘zgartirish — asosiy rahbar huquqi.')+'</p>'+
+    '</div></div>'+
+    '<div class="card-h" style="margin:18px 0 8px"><h3>'+ic('file')+' Hujjat rekvizitlari</h3><small class="muted">akt sverka (PDF, Excel)</small></div>'+
+    '<div class="form br-grid">'+BR_FIELDS.map(function(f){var v=(BRAND.details||{})[f[0]]||'';return '<label'+(f[3]?' class="wide"':'')+'>'+f[1]+'<input name="d_'+f[0]+'" maxlength="'+f[2]+'" value="'+esc(v)+'"'+(canBrand?'':' disabled')+'></label>'}).join('')+'</div>'+
+    '<p class="hint" style="margin-top:12px">Hujjat sarlavhasida yuridik nom (bo‘lmasa brend nomi) va rekvizitlar chiqadi; rahbar F.I.Sh. imzo qatoriga yoziladi. Bo‘sh qolsa, hujjatlar avvalgidek chiqadi. Nom va logotip yon panel, kirish oynasi va brauzer sarlavhasida ham ko‘rinadi. PNG/JPEG/WebP, 200 KB gacha, kvadrat rasm tavsiya etiladi.'+(canBrand?'':' O‘zgartirish — asosiy rahbar huquqi.')+'</p>'+
     (canBrand?'<div class="actions" style="margin-top:14px"><button class="btn pri" id="brSave">Saqlash</button></div>':'')+'</form>'+
    '<div class="card"><div class="dh" style="margin-right:0">'+avatar(me.name,me.photoUrl,'lg')+'<div><h2>'+esc(me.name||'—')+'</h2><div class="muted">'+roleLabel()+' · Telegram ID '+esc(me.id)+'</div></div></div>'+
     '<dl class="kv"><dt>Web login</dt><dd><b>'+esc(S.login)+'</b></dd><dt>Telefon</dt><dd>'+esc(me.phone||'—')+'</dd></dl>'+
@@ -1613,7 +1617,7 @@ function pageSettings(page){
       var rd=new FileReader();rd.onload=function(){logo=rd.result;$('brPrev').innerHTML='<img src="'+esc(logo)+'" alt="">';$('brPrev').classList.add('has-logo');$('brClear').disabled=false};rd.readAsDataURL(f)};
     $('brClear').onclick=function(){logo='';$('brPrev').innerHTML=ic('grid');$('brPrev').classList.remove('has-logo');this.disabled=true};
     $('brForm').onsubmit=async function(e){e.preventDefault();var b=$('brSave');b.disabled=true;
-      var r=await run(function(){return api('branding_save',{name:$('brForm').elements.name.value,logo:logo})},'Kompaniya ma’lumotlari saqlandi');
+      var r=await run(function(){return api('branding_save',{name:$('brForm').elements.name.value,logo:logo,details:BR_FIELDS.reduce(function(o,f){o[f[0]]=$('brForm').elements['d_'+f[0]].value;return o},{})})},'Kompaniya ma’lumotlari saqlandi');
       b.disabled=false;if(r&&r.brand){applyBrand(r.brand);document.title=$('pageTitle').textContent+' · '+brandName()}}}
   $('stLogout').onclick=async function(){await auth('logout').catch(function(){});TOKEN='';store('rw-token',null);S.dash=null;S.cache={};showLogin()};
   $('tgNotify').onclick=async function(){var b=this;

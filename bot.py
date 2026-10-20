@@ -3074,7 +3074,7 @@ def serve_webhook(db,base_url):
                         report=reports.reconciliation(local,actor,int(client_id))
                         raw=(reports.reconciliation_pdf(report) if fmt=='pdf'
                              else reports.reconciliation_xlsx(report))
-                        data={'filename':f'ASMAN-mijoz-{int(client_id)}-akt-sverka.{fmt}',
+                        data={'filename':f'{branding.file_prefix(local)}-mijoz-{int(client_id)}-akt-sverka.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
                     elif action=='all_clients_export':
@@ -3083,7 +3083,7 @@ def serve_webhook(db,base_url):
                             raise ValueError('Eksport formati noto‘g‘ri.')
                         raw=(reports.all_clients_pdf(local,actor) if fmt=='pdf'
                              else reports.all_clients_xlsx(local,actor))
-                        data={'filename':f'ASMAN-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
+                        data={'filename':f'{branding.file_prefix(local)}-barcha-mijozlar-{datetime.now(TZ).strftime("%Y-%m-%d")}.{fmt}',
                               'mime':'application/pdf' if fmt=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'base64':base64.b64encode(raw).decode('ascii')}
                     elif action=='warehouse':
@@ -3119,7 +3119,7 @@ def serve_webhook(db,base_url):
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
-                        data={'ok':True,'brand':branding.save(local,payload.get('name'),payload.get('logo'))}
+                        data={'ok':True,'brand':branding.save(local,payload.get('name'),payload.get('logo'),payload.get('details'))}
                     elif action=='agent_management':
                         data=manager_api.agent_management(local)
                     elif action=='agent_detail':

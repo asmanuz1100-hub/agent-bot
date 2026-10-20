@@ -647,13 +647,44 @@ def reconciliation(db,actor,client,start=None,end=None):
             if extra:label=f"{label} ({extra})"
         rows.append({'id':e['id'],'time':datetime.fromtimestamp(e['ts'],TZ).strftime('%d.%m.%Y %H:%M'),'kind':label,
                      'paid_uzs':int(e['paid_uzs'] or 0),'fx_rate':int(e['fx_rate'] or 0),'pay_method':e['pay_method'] or '','pack':e['pack'],'qty':e['qty'],'charge':charge,'credit':credit,'balance':balance,'usd_charge':usd_charge,'usd_credit':usd_credit,'usd_balance':usd_balance})
-    return {'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
+    return {'issuer':_issuer(db),'client':rowdict(c),'start':start,'end':end,'opening':opening,'closing':balance,'sales':sales,'payments':payments,'usd_opening':usd_opening,'usd_closing':usd_balance,'usd_sales':usd_sales,'usd_payments':usd_payments,'usd_returns':usd_returns,'opening_stock':initial,'closing_stock':stocks,'rows':rows}
+
+def _issuer(db):
+    import branding
+    try:return branding.document_issuer(db)
+    except Exception:
+        return {'name':branding.DEFAULT_DOCUMENT_NAME,'lines':[],'logo':'','director':''}
+
+def _issuer_of(r):
+    return r.get('issuer') or {'name':'ASMAN SILICAT','lines':[],'logo':'','director':''}
+
+def _xlsx_issuer(ws,iss):
+    from openpyxl.styles import Alignment,Font
+    if iss['lines']:
+        ws.merge_cells('A2:H2');ws['A2']=' · '.join(iss['lines'])
+        ws['A2'].font=Font(size=9,color='38515E');ws['A2'].alignment=Alignment(horizontal='center',wrap_text=True);ws.row_dimensions[2].height=30
+
+def _pdf_head(iss,title_text,title_style,small_style):
+    """Logotip (bo'lsa), sarlavha va kompaniya rekvizitlari."""
+    import base64
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image,Paragraph,Spacer
+    out=[]
+    logo=iss.get('logo') or ''
+    if logo.startswith('data:image/') and ';base64,' in logo:
+        try:
+            img=Image(io.BytesIO(base64.b64decode(logo.split(',',1)[1])),width=16*mm,height=16*mm,kind='proportional')
+            img.hAlign='CENTER';out+=[img,Spacer(1,2*mm)]
+        except Exception:pass
+    out.append(Paragraph(escape(title_text),title_style))
+    if iss['lines']:out.append(Paragraph(escape(' · '.join(iss['lines'])),small_style))
+    return out
 
 def reconciliation_xlsx(r):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment,Font,PatternFill,Border,Side
-    c=r['client'];wb=Workbook();ws=wb.active;ws.title='Акт сверка'
-    ws.merge_cells('A1:H1');ws['A1']='ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА'
+    c=r['client'];iss=_issuer_of(r);wb=Workbook();ws=wb.active;ws.title='Акт сверка'
+    ws.merge_cells('A1:H1');ws['A1']=f"{iss['name']} — МИЖОЗ АКТ СВЕРКА";_xlsx_issuer(ws,iss)
     ws['A1'].font=Font(bold=True,size=15,color='FFFFFF');ws['A1'].fill=PatternFill('solid',fgColor='123747')
     ws['A1'].alignment=Alignment(horizontal='center',vertical='center');ws.row_dimensions[1].height=28
     details=[
@@ -701,7 +732,7 @@ def reconciliation_pdf(r):
     from reportlab.platypus import SimpleDocTemplate,Table,TableStyle,Paragraph,Spacer
     font=_pdf_font();out=io.BytesIO();c=r['client'];esc=lambda value:escape(str(value or '—'),quote=True)
     doc=SimpleDocTemplate(out,pagesize=landscape(A4),leftMargin=10*mm,rightMargin=10*mm,topMargin=10*mm,bottomMargin=10*mm,
-                          title='ASMAN SILICAT — Мижоз акт сверка')
+                          title=f"{_issuer_of(r)['name']} — Мижоз акт сверка")
     styles=getSampleStyleSheet();title=ParagraphStyle('ClientActTitle',parent=styles['Title'],fontName=font,fontSize=15,leading=19,textColor=colors.HexColor('#123747'),alignment=TA_CENTER)
     normal=ParagraphStyle('ClientActNormal',parent=styles['BodyText'],fontName=font,fontSize=7.5,leading=10)
     right=ParagraphStyle('ClientActRight',parent=normal,alignment=TA_RIGHT)
@@ -723,7 +754,8 @@ def reconciliation_pdf(r):
               if stock_packs else [[Paragraph('Товар қолдиғи йўқ',normal),Paragraph('0',right)]])
     stock_table=Table(stock,colWidths=[90*mm,30*mm])
     stock_table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#123747')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.25,colors.HexColor('#D8E2E7')),('PADDING',(0,0),(-1,-1),5)]))
-    story=[Paragraph('ASMAN SILICAT — МИЖОЗ АКТ СВЕРКА',title),Spacer(1,3*mm),info_table,Spacer(1,4*mm),operations,Spacer(1,4*mm),stock_table,Spacer(1,3*mm),Paragraph('Масъул ходим: ____________________     Мижоз: ____________________',normal)]
+    iss=_issuer_of(r);small=ParagraphStyle('Issuer',parent=normal,fontSize=8,leading=10,alignment=TA_CENTER,textColor=colors.HexColor('#38515E'))
+    story=_pdf_head(iss,f"{iss['name']} — МИЖОЗ АКТ СВЕРКА",title,small)+[Spacer(1,3*mm),info_table,Spacer(1,4*mm),operations,Spacer(1,4*mm),stock_table,Spacer(1,3*mm),Paragraph(('Раҳбар: '+escape(iss['director'])+' ____________________     ' if iss['director'] else '')+'Масъул ходим: ____________________     Мижоз: ____________________',normal)]
     doc.build(story);return out.getvalue()
 
 
@@ -756,8 +788,8 @@ def all_clients_xlsx(db,actor):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment,Font,PatternFill,Border,Side
     rows=all_clients_statement_rows(db,actor)
-    wb=Workbook();ws=wb.active;ws.title='Барча мижозлар'
-    ws.merge_cells('A1:H1');ws['A1']='ASMAN SILICAT — БАРЧА МИЖОЗЛАР АКТ СВЕРКА'
+    iss=_issuer(db);wb=Workbook();ws=wb.active;ws.title='Барча мижозлар'
+    ws.merge_cells('A1:H1');ws['A1']=f"{iss['name']} — БАРЧА МИЖОЗЛАР АКТ СВЕРКА";_xlsx_issuer(ws,iss)
     ws['A1'].font=Font(bold=True,size=15,color='FFFFFF');ws['A1'].fill=PatternFill('solid',fgColor='123747')
     ws['A1'].alignment=Alignment(horizontal='center',vertical='center');ws.row_dimensions[1].height=28
     headers=['№','Мижоз номи','Магазин номи','Манзил','Телефон','Агент','Олган товарлари','Қарзи, USD']
@@ -807,7 +839,7 @@ def all_clients_pdf(db,actor):
     from reportlab.platypus import SimpleDocTemplate,Table,TableStyle,Paragraph,Spacer
     rows=all_clients_statement_rows(db,actor);font=_pdf_font();out=io.BytesIO()
     doc=SimpleDocTemplate(out,pagesize=landscape(A4),leftMargin=9*mm,rightMargin=9*mm,topMargin=10*mm,bottomMargin=10*mm,
-                          title='ASMAN SILICAT — Барча мижозлар акт сверка')
+                          title=f"{_issuer(db)['name']} — Барча мижозлар акт сверка")
     styles=getSampleStyleSheet();title=ParagraphStyle('AsmanTitle',parent=styles['Title'],fontName=font,fontSize=15,leading=19,textColor=colors.HexColor('#123747'),alignment=TA_CENTER)
     normal=ParagraphStyle('AsmanNormal',parent=styles['BodyText'],fontName=font,fontSize=7.4,leading=10)
     right=ParagraphStyle('AsmanRight',parent=normal,alignment=TA_RIGHT)
@@ -820,7 +852,8 @@ def all_clients_pdf(db,actor):
     table=Table(data,colWidths=[8*mm,29*mm,29*mm,43*mm,27*mm,27*mm,68*mm,22*mm],repeatRows=1)
     table.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),font),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#087F8C')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-2),0.25,colors.HexColor('#D8E2E7')),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FDECEF')),('SPAN',(0,-1),(6,-1)),('ALIGN',(7,1),(7,-1),'RIGHT'),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
     generated=datetime.now(TZ).strftime('%d.%m.%Y %H:%M')
-    story=[Paragraph('ASMAN SILICAT — БАРЧА МИЖОЗЛАР АКТ СВЕРКА',title),Spacer(1,4*mm),table,Spacer(1,3*mm),Paragraph(f'Мижозлар: {len(rows)} та · Тузилган вақт: {generated} · Тошкент вақти',normal)]
+    iss=_issuer(db);small=ParagraphStyle('Issuer',parent=normal,fontSize=8,leading=10,alignment=TA_CENTER,textColor=colors.HexColor('#38515E'))
+    story=_pdf_head(iss,f"{iss['name']} — БАРЧА МИЖОЗЛАР АКТ СВЕРКА",title,small)+[Spacer(1,4*mm),table,Spacer(1,3*mm),Paragraph(f'Мижозлар: {len(rows)} та · Тузилган вақт: {generated} · Тошкент вақти',normal)]
     doc.build(story);return out.getvalue()
 
 def m(x):return f'{x/100:,.2f}'.replace(',',' ')

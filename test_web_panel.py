@@ -299,7 +299,7 @@ class WebPanelHttpTests(unittest.TestCase):
         _, data = self.login()
         token = data['token']
         code, me = self.post('/api/web', token, action='me')
-        self.assertEqual(me['brand'], {'name': '', 'logo': ''})
+        self.assertEqual((me['brand']['name'], me['brand']['logo']), ('', ''))
         saved = set(bot.ADMINS)
         try:
             bot.ADMINS.discard(1)
@@ -309,13 +309,13 @@ class WebPanelHttpTests(unittest.TestCase):
             logo = 'data:image/png;base64,' + base64.b64encode(b'\x89PNG fake').decode()
             code, data = self.post('/api/manager', token, action='branding_save', name='  Namuna   Savdo ', logo=logo)
             self.assertEqual(code, 200, data)
-            self.assertEqual(data['brand'], {'name': 'Namuna Savdo', 'logo': logo})
+            self.assertEqual((data['brand']['name'], data['brand']['logo']), ('Namuna Savdo', logo))
             code, data = self.post('/api/manager', token, action='branding_save', logo='data:image/svg+xml;base64,PHN2Zz4=')
             self.assertEqual(code, 400, data)
             code, me = self.post('/api/web', token, action='me')
             self.assertEqual(me['brand']['name'], 'Namuna Savdo')
             code, data = self.post('/api/manager', token, action='branding_save', name='', logo='')
-            self.assertEqual(data['brand'], {'name': '', 'logo': ''})
+            self.assertEqual((data['brand']['name'], data['brand']['logo']), ('', ''))
         finally:
             bot.ADMINS.clear()
             bot.ADMINS.update(saved)
