@@ -19,6 +19,7 @@ import branding
 import staff
 import ai_assistant
 import executive
+import sales
 import agent_api
 import analytics
 import cashier_api
@@ -3184,6 +3185,9 @@ def serve_webhook(db,base_url):
                         data=executive.executive(local,payload.get('period') or 'today',payload.get('from'),payload.get('to'),
                                                  agent=payload.get('agentId'),region=payload.get('region') or None,
                                                  group=payload.get('group') or 'auto')
+                    elif action=='sales':
+                        data=sales.sales(local,payload.get('period') or 'month',payload.get('from'),payload.get('to'),
+                                         agent=payload.get('agentId'),region=payload.get('region') or None)
                     elif action=='period_report':
                         data=manager_api.period_report(local,payload.get('period'),payload.get('from'),payload.get('to'))
                     elif action=='cash_period':
