@@ -209,6 +209,7 @@ var PAGES=[
   ['agents','compass','Agentlar','Jonli GPS xarita, marshrut va mijozlar',9],
   ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
   ['warehouse','orders','Buyurtmalar','Kanban, ro‘yxat, katalog va ombor qoldig‘i',0,'Buyurtmalar'],
+  ['supply','warehouse','Ta’minot','Ta’minotchilar, xarid, xom ashyo va ishlab chiqarish',0,'Ta’minot'],
   ['sales','cart','Savdo','Sotuvlar, cheklar, top mahsulot va mijozlar',0],
   ['cash','wallet','Moliya va qarzdorlik','Kassa, agentlardagi pul, qarzdorlar, konvertatsiya',1,'Moliya'],
   ['reports','report','Hisobot','Davr bo‘yicha natijalar',1],
@@ -272,7 +273,7 @@ async function render(force){
     try{await loadDash()}catch(e){if(TOKEN){page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){render(true)}}return}
     if(S.page!==p)return;
   }
-  ({home:pageHome,team:pageTeam,agents:pageAgents,clients:pageClients,cash:pageCash,sales:pageSales,reports:pageReports,insights:pageInsights,warehouse:pageWarehouse,staff:pageStaff,settings:pageSettings})[p](page,force);
+  ({home:pageHome,team:pageTeam,agents:pageAgents,clients:pageClients,cash:pageCash,sales:pageSales,reports:pageReports,insights:pageInsights,warehouse:pageWarehouse,supply:pageSupply,staff:pageStaff,settings:pageSettings})[p](page,force);
 }
 async function loadDash(){S.dash=await api('dashboard');S.loadedTs=Date.now();stamp();renderNav();return S.dash}
 function stamp(){var u=$('updated');u.className='live';u.innerHTML=S.loadedTs?'<i></i>Jonli<span> · '+new Date(S.loadedTs).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span>':''}
@@ -1652,6 +1653,122 @@ function exportRows(name,head,rows){
   var url=URL.createObjectURL(new Blob([buf],{type:'text/csv;charset=utf-16le'})),a=document.createElement('a');
   a.href=url;a.download=name+'-'+today()+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},4000);
   toast(num(rows.length)+' qator yuklab olindi');
+}
+
+/* ----- Ta'minot: ta'minotchilar, xarid, xom ashyo, ishlab chiqarish (server: purchases.py) ----- */
+var SP={view:store('rw-spview')||'suppliers',q:''};
+function cents(n){return usd((n||0)/100)}
+function spViewSeg(){return '<div class="seg" id="spView" aria-label="Ko‘rinish">'+[['suppliers','building','Ta’minotchilar'],['materials','box','Xom ashyo'],['purchases','receipt','Xaridlar'],['production','sliders','Ishlab chiqarish']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(SP.view===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
+async function pageSupply(page,force){
+  if(!S.cache.supply||force){if(!S.cache.supply)page.innerHTML='<div class="toolbar">'+spViewSeg()+'</div><div class="grid g4">'+'<div class="skel"></div>'.repeat(4)+'</div>';
+    try{S.cache.supply=await api('supply',{op:'dashboard'})}catch(e){if(S.page==='supply'){page.innerHTML='<div class="toolbar">'+spViewSeg()+'</div>'+errState(e.message);bindSpView(page);page.querySelector('[data-retry]').onclick=function(){pageSupply(page,true)}}return}}
+  if(S.page!=='supply')return;renderSupply(page,S.cache.supply);
+}
+function bindSpView(page){var el=$('spView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;SP.view=b.dataset.v;store('rw-spview',SP.view);renderSupply(page,S.cache.supply)}}
+function spLines(lines){return lines.map(function(l){return esc(l.name)+' — '+esc(l.qty)+' '+esc(l.unit)+' × '+cents(l.price)}).join('<br>')}
+function renderSupply(page,d){
+  if(!d)return pageSupply(page,true);
+  var sm=d.summary,can=!!d.canOperate,v=SP.view,body='';
+  if(v==='suppliers'){
+    body='<div class="card flush"><div class="card-h"><h3>'+ic('building')+' Ta’minotchilar</h3><span class="muted small">Qarz = xaridlar − to‘lovlar. Qatorni bosing — akt sverka</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Nomi</th><th>Telefon</th><th>Izoh</th><th class="right">Bizning qarz</th>'+(can?'<th class="right">Amal</th>':'')+'</tr></thead><tbody>'+
+      (d.suppliers.length?d.suppliers.map(function(s){return '<tr class="click" data-led="'+s.id+'"><td><b>'+esc(s.name)+'</b></td><td class="num">'+(s.phone?'<a href="tel:'+esc(s.phone)+'">'+esc(s.phone)+'</a>':'<span class="muted">—</span>')+'</td><td class="muted small">'+esc(s.note)+'</td><td class="right num'+(s.debt>0?' bad':'')+'">'+cents(s.debt)+'</td>'+
+        (can?'<td class="right"><div class="actions" style="justify-content:flex-end"><button class="btn sm pri" data-pay="'+s.id+'"'+(s.debt>0?'':' disabled')+'>'+ic('coins','sm')+' To‘lash</button><button class="btn sm" data-sedit="'+s.id+'" aria-label="Tahrirlash">'+ic('edit','sm')+'</button></div></td>':'')+'</tr>'}).join('')
+      :'<tr><td colspan="5">'+emptyState('Hali ta’minotchi yo‘q. «Ta’minotchi qo‘shish» tugmasini bosing.','building')+'</td></tr>')+'</tbody></table></div></div>';
+  }else if(v==='materials'){
+    body='<div class="grid g-main"><div class="card flush"><div class="card-h"><h3>'+ic('box')+' Xom ashyo qoldig‘i</h3><span class="muted small">Minimal qoldiqdan kam bo‘lsa qizil</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Nomi</th><th class="right">Omborda</th><th class="right">Minimal</th>'+(can?'<th class="right">Amal</th>':'')+'</tr></thead><tbody>'+
+      (d.materials.length?d.materials.map(function(m){return '<tr><td><b>'+esc(m.name)+'</b>'+(m.low?' '+pill('kam qoldi','p-bad'):'')+'</td><td class="right num'+(m.low||m.stockMilli<=0?' bad':'')+'">'+esc(m.stock)+' '+esc(m.unitLabel)+'</td><td class="right num muted">'+(m.min!=='0'?esc(m.min)+' '+esc(m.unitLabel):'—')+'</td>'+
+        (can?'<td class="right"><div class="actions" style="justify-content:flex-end"><button class="btn sm" data-muse="'+m.id+'">'+ic('out','sm')+' Sarf</button><button class="btn sm danger" data-mwo="'+m.id+'">'+ic('trash','sm')+' Brak</button><button class="btn sm" data-medit="'+m.id+'" aria-label="Tahrirlash">'+ic('edit','sm')+'</button></div></td>':'')+'</tr>'}).join('')
+      :'<tr><td colspan="4">'+emptyState('Hali xom ashyo yo‘q. «Xom ashyo qo‘shish» tugmasini bosing.','box')+'</td></tr>')+'</tbody></table></div></div>'+
+      '<div class="card"><div class="card-h"><h3>'+ic('list')+' Xom ashyo harakati</h3></div><div class="list">'+(d.materialMoves.length?d.materialMoves.map(function(m){var t=m.kind==='in'?['in','t-green','+']:m.kind==='use'?['out','t-blue','−']:['trash','t-red','−'];
+        return '<div class="li"><span class="tone '+t[1]+'" style="width:32px;height:32px;border-radius:9px">'+ic(t[0],'sm')+'</span><div class="t"><b>'+esc(m.label)+' · '+t[2]+esc(m.qty)+' '+esc(m.unit)+'</b><small>'+esc(m.name)+(m.note?' · '+esc(m.note):'')+(m.actorName?' · '+esc(m.actorName):'')+'</small></div><small class="muted num">'+ago(m.ts)+'</small></div>'}).join(''):emptyState('Harakat yo‘q','list'))+'</div></div></div>';
+  }else if(v==='purchases'){
+    body='<div class="card flush"><div class="card-h"><h3>'+ic('receipt')+' Oxirgi xaridlar</h3><span class="muted small">Mahsulot omborga, xom ashyo xom ashyo omboriga avtomatik kirim bo‘ladi</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>№</th><th>Sana</th><th>Ta’minotchi</th><th>Tarkibi</th><th class="right">Summa</th></tr></thead><tbody>'+
+      (d.purchases.length?d.purchases.map(function(p){return '<tr><td class="num">#'+p.id+'</td><td class="num">'+dt(p.ts)+'</td><td><b>'+esc(p.supplierName)+'</b>'+(p.note?'<br><small class="muted">'+esc(p.note)+'</small>':'')+'</td><td class="small">'+spLines(p.lines)+'</td><td class="right num"><b>'+cents(p.total)+'</b></td></tr>'}).join('')
+      :'<tr><td colspan="5">'+emptyState('Hali xarid kiritilmagan.','receipt')+'</td></tr>')+'</tbody></table></div></div>';
+  }else{
+    body='<div class="card flush"><div class="card-h"><h3>'+ic('sliders')+' Ishlab chiqarish</h3><span class="muted small">Xom ashyo sarflanadi, tayyor mahsulot omborga kirim bo‘ladi</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>№</th><th>Sana</th><th>Mahsulot</th><th class="right">Miqdor</th><th>Kim</th></tr></thead><tbody>'+
+      (d.productions.length?d.productions.map(function(p){return '<tr><td class="num">#'+p.id+'</td><td class="num">'+dt(p.ts)+'</td><td><b>'+esc(p.name)+'</b>'+(p.note?'<br><small class="muted">'+esc(p.note)+'</small>':'')+'</td><td class="right num">'+num(p.qty)+' dona</td><td class="muted">'+esc(p.actorName)+'</td></tr>'}).join('')
+      :'<tr><td colspan="5">'+emptyState('Hali ishlab chiqarish kiritilmagan.','sliders')+'</td></tr>')+'</tbody></table></div></div>';
+  }
+  page.innerHTML='<div class="toolbar">'+spViewSeg()+'<span class="grow"></span>'+(can?
+      '<button class="btn pri" data-sop="purchase">'+ic('cart','sm')+' Yangi xarid</button><button class="btn" data-sop="produce">'+ic('sliders','sm')+' Ishlab chiqarish</button>'+
+      '<button class="btn" data-sop="supplier_add">'+ic('plus','sm')+' Ta’minotchi</button><button class="btn" data-sop="material_add">'+ic('plus','sm')+' Xom ashyo</button>'
+      :'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish — amallarni asosiy rahbar kiritadi</span>')+'</div>'+
+    '<div class="grid g4 kpis" style="margin-bottom:16px">'+
+      kpi('dollar','Ta’minotchilarga qarz',cents(sm.totalDebt),sm.suppliers+' ta ta’minotchi',sm.totalDebt>0?'bad':'')+
+      kpi('cart','Shu oy xarid',cents(sm.monthBought),'')+kpi('coins','Shu oy to‘langan',cents(sm.monthPaid),'kassadan')+
+      kpi('box','Kam qolgan xom ashyo',num(sm.lowMaterials),sm.materials+' xil xom ashyo',sm.lowMaterials?'bad':'')+'</div>'+body;
+  bindSpView(page);
+  page.querySelectorAll('[data-led]').forEach(function(tr){tr.onclick=function(e){if(e.target.closest('button,a'))return;openLedger(+tr.dataset.led)}});
+  var call=async function(op,args,msg){try{var r=await api('supply',Object.assign({op:op,requestId:rid()},args));S.cache.supply=r;S.cache.stock=null;S.cache.wh=null;S.cache.whAll=null;toast(msg);renderSupply(page,r);return r}catch(e){toast(e.message,true);return null}};
+  var supOpts=d.suppliers.map(function(s){return [s.id,s.name+(s.debt>0?' — qarz '+cents(s.debt):'')]});
+  var prodOpts=d.products.map(function(p){return [p.pack,p.name+' — omborda '+num(p.stock)]});
+  page.querySelectorAll('[data-sop]').forEach(function(b){b.onclick=async function(){var op=b.dataset.sop,v;
+    if(op==='supplier_add'){v=await formBox('Yangi ta’minotchi',[{name:'name',label:'Nomi',required:true},{name:'phone',label:'Telefon',placeholder:'+998…'},{name:'note',label:'Izoh (nima yetkazadi, shartlar)'}],'Qo‘shish');if(v)call(op,v,'Ta’minotchi qo‘shildi')}
+    else if(op==='material_add'){v=await formBox('Yangi xom ashyo',[{name:'name',label:'Nomi',required:true},{name:'unit',label:'O‘lchov birligi',options:d.units},{name:'minQty',label:'Minimal qoldiq (ixtiyoriy)',type:'number',step:'any'}],'Qo‘shish','Qoldiq shu miqdordan kamaysa, panelda ogohlantirish chiqadi.');if(v){v.minQty=v.minQty||'';call(op,v,'Xom ashyo qo‘shildi')}}
+    else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}purchaseForm(d,call)}
+    else{if(!prodOpts.length){toast('Faol mahsulot yo‘q.',true);return}produceForm(d,prodOpts,call)}}});
+  page.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=async function(){var s=d.suppliers.find(function(x){return x.id===+b.dataset.pay});
+    var v=await formBox('To‘lov: '+s.name,[{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true,value:(s.debt/100).toFixed(2)},{name:'payFrom',label:'Qayerdan',options:[['cash','Kassa — naqd'],['card','Kassa — karta']]},{name:'note',label:'Izoh'}],'To‘lash','Joriy qarz: '+cents(s.debt)+'. Summa kassadan xarajat bo‘lib chiqadi.');
+    if(v)call('pay',Object.assign(v,{supplierId:s.id}),'To‘lov saqlandi')}});
+  page.querySelectorAll('[data-sedit]').forEach(function(b){b.onclick=async function(){var s=d.suppliers.find(function(x){return x.id===+b.dataset.sedit});
+    var v=await formBox('Ta’minotchini tahrirlash',[{name:'name',label:'Nomi',required:true,value:s.name},{name:'phone',label:'Telefon',value:s.phone},{name:'note',label:'Izoh',value:s.note}],'Saqlash');if(v)call('supplier_edit',Object.assign(v,{supplierId:s.id}),'Saqlandi')}});
+  page.querySelectorAll('[data-medit]').forEach(function(b){b.onclick=async function(){var m=d.materials.find(function(x){return x.id===+b.dataset.medit});
+    var v=await formBox('Xom ashyoni tahrirlash',[{name:'name',label:'Nomi',required:true,value:m.name},{name:'minQty',label:'Minimal qoldiq ('+m.unitLabel+')',type:'number',step:'any',value:m.min==='0'?'':m.min}],'Saqlash');if(v)call('material_edit',Object.assign(v,{materialId:m.id}),'Saqlandi')}});
+  page.querySelectorAll('[data-muse],[data-mwo]').forEach(function(b){b.onclick=async function(){var wo=!!b.dataset.mwo,m=d.materials.find(function(x){return x.id===+(b.dataset.muse||b.dataset.mwo)});
+    var v=await formBox((wo?'Brak / hisobdan chiqarish: ':'Sarf: ')+m.name,[{name:'qty',label:'Miqdor ('+m.unitLabel+')',type:'number',step:'any',required:true},{name:'note',label:wo?'Sabab':'Izoh',required:wo}],wo?'Hisobdan chiqarish':'Saqlash','Omborda: '+esc(m.stock)+' '+esc(m.unitLabel));
+    if(v)call(wo?'material_writeoff':'material_use',Object.assign(v,{materialId:m.id}),'Saqlandi')}});
+}
+function lineRow(i,opts){return '<div class="sp-line" data-i="'+i+'"><select name="item_'+i+'" aria-label="Mahsulot yoki xom ashyo">'+opts+'</select><input name="qty_'+i+'" type="number" step="any" min="0" placeholder="Miqdor" aria-label="Miqdor" required><input name="price_'+i+'" type="number" step="0.01" min="0" placeholder="Narx $" aria-label="Bir birlik narxi, USD" required><button type="button" class="icon-btn ghost" data-rm aria-label="Qatorni o‘chirish">'+ic('x','sm')+'</button></div>'}
+function itemOpts(d,withProducts){
+  var m=d.materials.map(function(x){return '<option value="m:'+x.id+'">'+esc(x.name)+' ('+esc(x.unitLabel)+')</option>'}).join('');
+  var p=withProducts?d.products.map(function(x){return '<option value="p:'+x.pack+'">'+esc(x.name)+' (dona)</option>'}).join(''):'';
+  return (m?'<optgroup label="Xom ashyo">'+m+'</optgroup>':'')+(p?'<optgroup label="Tayyor mahsulot">'+p+'</optgroup>':'');
+}
+function bindLines(box,opts,first){var n=first;
+  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',lineRow(n++,opts));sumLines(box)};
+  box.addEventListener('click',function(e){var b=e.target.closest('[data-rm]');if(!b)return;var rows=box.querySelectorAll('.sp-line');if(rows.length>1){b.closest('.sp-line').remove();sumLines(box)}});
+  box.addEventListener('input',function(){sumLines(box)});
+}
+function sumLines(box){var t=0;box.querySelectorAll('.sp-line').forEach(function(r){var q=parseFloat(r.querySelector('[name^=qty_]').value)||0,p=r.querySelector('[name^=price_]');p=p?parseFloat(p.value)||0:0;t+=q*p});var el=box.querySelector('[data-total]');if(el)el.textContent=usd(Math.round(t*100)/100)}
+function collectLines(v,kind){var out=[];Object.keys(v).forEach(function(k){var m=/^item_(\d+)$/.exec(k);if(!m)return;var i=m[1],it=String(v[k]).split(':'),row={qty:v['qty_'+i]};
+  if(kind==='purchase')row.price=v['price_'+i];if(it[0]==='m')row.material=+it[1];else row.pack=+it[1];out.push(row)});return out}
+async function purchaseForm(d,call){
+  var opts=itemOpts(d,true);
+  var p=modal('<form class="sp-form"><h3>Yangi xarid</h3><p class="muted">Har qatorda bir birlik narxi (USD): mahsulot uchun 1 dona, xom ashyo uchun 1 kg / litr / …</p><div class="form">'+
+    '<label>Ta’minotchi<select name="supplierId">'+d.suppliers.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join('')+'</select></label>'+
+    '<div class="sp-lines">'+lineRow(0,opts)+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Qator qo‘shish</button>'+
+    '<label>Izoh (hujjat raqami, partiya)<input name="note" maxlength="300"></label><div class="sp-total">Jami: <b data-total>$0</b></div></div>'+
+    '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">Xaridni saqlash</button></div></form>');
+  bindLines($('modalBody'),opts,1);
+  var v=await p;if(!v)return;
+  call('purchase',{supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid saqlandi');
+}
+async function produceForm(d,prodOpts,call){
+  var opts=itemOpts(d,false);
+  if(!opts){toast('Avval xom ashyo qo‘shing va xarid qiling.',true);return}
+  var row=function(i){return lineRow(i,opts).replace(/<input name="price_[^>]*>/,'')};
+  var p=modal('<form class="sp-form"><h3>Ishlab chiqarish</h3><p class="muted">Sarflangan xom ashyo ombordan chiqadi, tayyor mahsulot omborga kirim bo‘ladi.</p><div class="form">'+
+    '<label>Tayyor mahsulot<select name="pack">'+prodOpts.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>'}).join('')+'</select></label>'+
+    '<label>Miqdor (dona)<input name="pack_qty" type="number" min="1" step="1" required></label>'+
+    '<b class="small">Sarflangan xom ashyo</b><div class="sp-lines sp-noprice">'+row(0)+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Xom ashyo qo‘shish</button>'+
+    '<label>Izoh (smena, partiya)<input name="note" maxlength="300"></label></div>'+
+    '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">Saqlash</button></div></form>');
+  var box=$('modalBody'),n=1;
+  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',row(n++))};
+  box.addEventListener('click',function(e){var b=e.target.closest('[data-rm]');if(b&&box.querySelectorAll('.sp-line').length>1)b.closest('.sp-line').remove()});
+  var v=await p;if(!v)return;
+  call('produce',{pack:+v.pack,qty:+v.pack_qty,note:v.note,inputs:collectLines(v,'produce')},'Ishlab chiqarish saqlandi');
+}
+async function openLedger(id){
+  openDrawer(drawerSkel());
+  var r=await run(function(){return api('supply',{op:'ledger',supplierId:id})});if(!r){closeDrawer();return}
+  var s=r.supplier;
+  openDrawer('<div class="dh"><span class="tone t-violet" style="width:60px;height:60px;border-radius:18px">'+ic('building','lg')+'</span><div><h2>'+esc(s.name)+'</h2><small class="muted">'+(s.phone?esc(s.phone)+' · ':'')+'Akt sverka</small></div></div>'+
+    '<div class="grid g3" style="margin:14px 0">'+kpi('dollar','Bizning qarz',cents(r.debt),'',r.debt>0?'bad':'')+'</div>'+
+    '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Sana</th><th>Hujjat</th><th class="right">Xarid</th><th class="right">To‘lov</th></tr></thead><tbody>'+
+    (r.items.length?r.items.map(function(i){var buy=i.type==='purchase';return '<tr><td class="num">'+dt(i.ts)+'</td><td>'+(buy?'<b>Xarid #'+i.id+'</b><br><small class="muted">'+spLines(i.lines)+'</small>':'<b>To‘lov #'+i.id+'</b><br><small class="muted">'+(i.payFrom==='card'?'Karta':'Naqd')+'</small>')+(i.note?'<br><small class="muted">'+esc(i.note)+'</small>':'')+'</td><td class="right num">'+(buy?cents(i.amount):'')+'</td><td class="right num ok">'+(buy?'':cents(i.amount))+'</td></tr>'}).join('')
+      :'<tr><td colspan="4">'+emptyState('Harakat yo‘q','list')+'</td></tr>')+'</tbody></table></div></div>');
 }
 
 /* ----- Ombor ----- */

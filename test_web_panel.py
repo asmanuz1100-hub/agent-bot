@@ -359,6 +359,43 @@ class WebPanelHttpTests(unittest.TestCase):
             bot.ADMINS.clear()
             bot.ADMINS.update(saved)
 
+    def test_supply_section_primary_admin_writes_others_read(self):
+        _, data = self.login()
+        token = data['token']
+        saved = set(bot.ADMINS)
+        try:
+            bot.ADMINS.discard(1)
+            code, d = self.post('/api/manager', token, action='supply', op='dashboard')
+            self.assertEqual(code, 200, d)
+            self.assertFalse(d['canOperate'])
+            code, d = self.post('/api/manager', token, action='supply', op='supplier_add', name='Web zavod', requestId='supweb0001')
+            self.assertEqual(code, 400, d)
+            bot.ADMINS.add(1)
+            code, d = self.post('/api/manager', token, action='supply', op='supplier_add', name='Web zavod', requestId='supweb0002')
+            self.assertEqual(code, 200, d)
+            self.assertTrue(d['canOperate'])
+            sid = d['supplierId']
+            code, d = self.post('/api/manager', token, action='supply', op='material_add', name='Web bo‘r', unit='kg', requestId='supweb0003')
+            self.assertEqual(code, 200, d)
+            mid = d['materialId']
+            lines = [{'material': mid, 'qty': '12.5', 'price': '0.4'}, {'pack': 1, 'qty': 3, 'price': '1.5'}]
+            for _ in range(2):   # bir xil requestId qayta yuborilsa ikki marta yozilmaydi
+                code, d = self.post('/api/manager', token, action='supply', op='purchase', supplierId=sid, lines=lines, requestId='supweb0004')
+                self.assertEqual(code, 200, d)
+            self.assertEqual(next(s['debt'] for s in d['suppliers'] if s['id'] == sid), 950)
+            self.assertEqual(next(m['stock'] for m in d['materials'] if m['id'] == mid), '12.5')
+            code, d = self.post('/api/manager', token, action='supply', op='produce', pack=1, qty=2,
+                                inputs=[{'material': mid, 'qty': '2.5'}], requestId='supweb0005')
+            self.assertEqual(code, 200, d)
+            self.assertEqual(next(m['stock'] for m in d['materials'] if m['id'] == mid), '10')
+            code, d = self.post('/api/manager', token, action='supply', op='ledger', supplierId=sid)
+            self.assertEqual((code, d['debt']), (200, 950))
+            code, d = self.post('/api/manager', token, action='supply', op='hack')
+            self.assertEqual(code, 400, d)
+        finally:
+            bot.ADMINS.clear()
+            bot.ADMINS.update(saved)
+
     def test_stock_operations_primary_admin_only_on_web(self):
         import warehouse
         _, data = self.login()

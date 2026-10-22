@@ -231,6 +231,9 @@ header.top{position:sticky;top:0;z-index:800;padding:10px 28px 0;background:line
 .dash-main{container-type:inline-size}
 @container (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @container (max-width:560px){.kpis,.kpis.sm{grid-template-columns:1fr!important}}
+/* .dash-main tashqarisidagi sahifalar (Ombor, Ta'minot) uchun: konteyner yo'q, ekran kengligiga qaraymiz */
+@media (max-width:900px){.page>.kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media (max-width:520px){.page>.kpis{grid-template-columns:1fr!important}}
 .kpi em{font-style:normal;font-size:12px;color:var(--mu)}
 .kpi.has-spark{flex-wrap:wrap;padding-bottom:12px}
 .kpi.has-spark>div:nth-child(2){flex:1;min-width:0}
@@ -826,3 +829,10 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
   background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.55),transparent 70%);transition:opacity var(--t)}
 :root[data-theme="dark"] .kpi::after,:root[data-theme="dark"] .grid>.card::after{background:radial-gradient(240px 120px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.07),transparent 70%)}
 .kpi:hover::after,.grid>.card:hover::after{opacity:1}
+
+/* Ta'minot: xarid / ishlab chiqarish qatorlari */
+.sp-form .sp-lines{display:grid;gap:8px}
+.sp-line{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center}
+.sp-noprice .sp-line{grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
+.sp-total{text-align:right;font-size:14px;color:var(--tx2)}.sp-total b{color:var(--tx);font-size:16px}
+@media (max-width:520px){.sp-line{grid-template-columns:1fr 1fr auto}.sp-line select{grid-column:1/-1}.sp-noprice .sp-line{grid-template-columns:1fr auto}}

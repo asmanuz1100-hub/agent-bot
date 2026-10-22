@@ -28,6 +28,7 @@ import shop
 import full_backup
 import profiles
 import warehouse
+import purchases
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -3192,6 +3193,14 @@ def serve_webhook(db,base_url):
                         finally:warehouse.WEB_PRIMARY_OPERATOR.reset(wh_tok)
                         data['canOperate']=actor in ADMINS
                         wh_notify=data.pop('_notify',None);data.pop('_orders',None)
+                    elif action=='supply':
+                        # Ta'minot (ta'minotchi, xarid, xom ashyo, ishlab chiqarish) faqat web paneldan.
+                        # Ko'rish — barcha rahbarlar, yozish — faqat asosiy rahbar (ombor amallari kabi).
+                        op=str(payload.get('op') or 'dashboard')
+                        if op in purchases.WRITE_OPS and actor not in ADMINS:
+                            raise ValueError('Ta’minot amallarini faqat asosiy rahbar kiritadi.')
+                        data=purchases.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
+                        data['canOperate']=actor in ADMINS
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return

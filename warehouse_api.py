@@ -10,10 +10,8 @@ import time
 
 import core
 import warehouse as wh
-import purchases
 
-KEEPER_ACTIONS=('dashboard','receive','issue','writeoff','decide','take_back','orders','order_status','moves',
-               'suppliers','supplier_add','purchase','supplier_ledger')
+KEEPER_ACTIONS=('dashboard','receive','issue','writeoff','decide','take_back','orders','order_status','moves')
 ORDER_FILTERS=('open','new','preparing','loaded','delivered','rejected')
 AGENT_ACTIONS=('my','request')
 
@@ -167,8 +165,6 @@ def handle(db,actor,action,payload):
     if action=='dashboard':return keeper_dashboard(db,actor,order_filter)
     if action not in KEEPER_ACTIONS:raise ValueError('Amal noto‘g‘ri.')
     if action=='orders':return {'orders':order_list(db,payload.get('status'))}
-    if action=='suppliers':return purchases.suppliers(db,actor)
-    if action=='supplier_ledger':return purchases.ledger(db,actor,_int(payload.get('supplier'),'Ta’minotchi'))
     if action=='moves':
         kind=payload.get('kind') or None
         if kind is not None and kind not in wh.MOVE_LABELS:raise ValueError('Harakat turi noto‘g‘ri.')
@@ -180,23 +176,7 @@ def handle(db,actor,action,payload):
     source=_source(actor,payload)
     notify=[]
     orders=[]
-    if action=='supplier_add':
-        sid=purchases.add_supplier(db,actor,payload.get('name'),payload.get('phone'),_note(payload),source=source)
-        result={'supplier':sid,**purchases.suppliers(db,actor)}
-    elif action=='purchase':
-        sid=_int(payload.get('supplier'),'Ta’minotchi')
-        raw=payload.get('lines')
-        if not isinstance(raw,list):raise ValueError('Mahsulotlar ro‘yxati noto‘g‘ri.')
-        lines=[]
-        for item in raw:
-            if not isinstance(item,dict):raise ValueError('Mahsulotlar ro‘yxati noto‘g‘ri.')
-            pack=_pack(item);qty=_qty(item,pack)
-            # Narx bir dona uchun USD da (masalan "2.35"); core.money uni centga aylantiradi.
-            price=core.money(item.get('price'))
-            lines.append((pack,qty,price))
-        pid=purchases.record_purchase(db,actor,sid,lines,_note(payload),source=source)
-        result={'purchase':pid,**purchases.suppliers(db,actor)}
-    elif action=='receive':
+    if action=='receive':
         pack=_pack(payload);qty=_qty(payload,pack)
         move=wh.receive(db,actor,pack,qty,_note(payload),source=source)
         result={'move':move}
