@@ -469,6 +469,7 @@ def connect(path,initialize=True):
         _backfill_unbilled_deliveries(db)
         _backfill_existing_client_regions_once(db)
         import warehouse;warehouse.init(db)
+        import purchases;purchases.init(db)
         import shop;shop.init(db)
         import web_auth;web_auth.init(db)
         db.commit()
@@ -541,6 +542,7 @@ def connect(path,initialize=True):
     _backfill_unbilled_deliveries(db)
     _backfill_existing_client_regions_once(db)
     import warehouse;warehouse.init(db)
+    import purchases;purchases.init(db)
     import shop;shop.init(db)
     import web_auth;web_auth.init(db)
     db.commit()
@@ -1540,13 +1542,14 @@ def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
     """
     raise ValueError('Кассир қўлда кирим қила олмайди. Кирим фақат агент пул топшириб, кассир тасдиқлаганда тушади.')
 
-def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD',pay_from='cash',amount_uzs=None):
+def add_cashier_expense(db,actor,amount_usd,category,recipient,note,source,pocket='USD',pay_from='cash',amount_uzs=None,system_category=False):
     identity=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not identity or identity[0] not in ('cashier','admin'):
         raise ValueError('Харажатни фақат кассир ёки админ киритиши мумкин.')
     if not isinstance(amount_usd,int) or isinstance(amount_usd,bool) or amount_usd<=0:
         raise ValueError('Харажат суммаси нотўғри.')
-    if category not in cashier_expense_categories():
+    # system_category: purchases.py writes its own category, never offered in the manual list.
+    if category not in cashier_expense_categories() and not system_category:
         raise ValueError('Харажат турини рўйхатдан танланг.')
     if not isinstance(recipient,str) or not recipient.strip() or len(recipient)>200:
         raise ValueError('Кимга ёки нима учун берилганини киритинг (1–200 белги).')

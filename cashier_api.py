@@ -9,6 +9,7 @@ import core
 import cashier_pending
 import cashier_daily
 import manager_api
+import purchases
 
 
 def require_cashier(db, actor):
@@ -181,7 +182,8 @@ def dashboard(db, actor):
             'debtSummary':{'count':len(debtors),'totalUsd':total_debt,
                            'assignedCount':sum(1 for x in debtors if x['task'])},
             'conversions': [dict(x) for x in db.execute("SELECT * FROM cashier_conversions ORDER BY ts DESC,id DESC LIMIT 100").fetchall()],
-            'categories': list(core.cashier_expense_categories()), 'daily': cashier_daily.report(db)}
+            'categories': list(core.cashier_expense_categories()), 'daily': cashier_daily.report(db),
+            'suppliers': purchases.suppliers(db, actor)}
 
 
 def period_report(db, actor, payload):
@@ -260,7 +262,7 @@ def review(db, actor, hid):
 
 def mutate(db, actor, action, payload):
     require_cashier(db, actor)
-    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject', 'convert'):
+    if action not in ('accept', 'reject', 'expense', 'rate', 'fund', 'assign_debt', 'card_confirm', 'card_reject', 'convert', 'supplier_pay'):
         raise ValueError('Амал нотўғри.')
     rid = payload.get('requestId', '')
     if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,96}', rid):
@@ -353,6 +355,15 @@ def mutate(db, actor, action, payload):
         cid,amount,target,rate=core.add_cashier_conversion(db,actor,str(payload.get('payFrom') or 'cash'),
             currency,payload.get('amount'),payload.get('rate'),payload.get('note',''),source)
         notify['text']=f"💱 КОНВЕРТАЦИЯ #{cid} · {currency} → {'UZS' if currency=='USD' else 'USD'}\nКурс: {rate:,} сўм\nКассир: {require_cashier(db,actor)}"
+    elif action == 'supplier_pay':
+        try:sid=int(payload.get('supplierId') or 0)
+        except (TypeError,ValueError):raise ValueError('Ta’minotchi noto‘g‘ri.')
+        pay_from = str(payload.get('payFrom') or 'cash').lower()
+        amount = core.money(payload.get('amount'))
+        pid = purchases.pay_supplier(db, actor, sid, amount, payload.get('note', ''), source, pay_from=pay_from)
+        name = db.execute('SELECT name FROM suppliers WHERE id=?', (sid,)).fetchone()[0]
+        notify['text'] = (f"🏭 ТАЪМИНОТЧИГА ТЎЛОВ #{pid}\n{name} · {cashier_pending.usd(amount)} USD\n"
+                          f"Қолган қарз: {cashier_pending.usd(purchases.balance(db, sid))} USD\nКассир: {require_cashier(db,actor)}")
     elif action == 'expense':
         currency = payload.get('currency')
         args = (payload.get('category'), payload.get('recipient'), payload.get('note', ''), source)
