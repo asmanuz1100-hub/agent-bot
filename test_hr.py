@@ -102,7 +102,7 @@ class HrTests(unittest.TestCase):
         exp=self.db.execute("SELECT category,currency,amount_uzs,recipient FROM cashier_expenses ORDER BY id").fetchall()
         self.assertEqual([tuple(r)[:3] for r in exp],[(hr.SALARY_CATEGORY,'UZS',1000000),(hr.SALARY_CATEGORY,'UZS',2300000)])
         self.assertIn('Karim Usta',exp[0]['recipient'])
-        self.assertEqual(self.call('overview')['totals']['paid'],3300000)
+        self.assertEqual(self.call('overview')['money']['UZS']['paid'],3300000)
 
     def test_pay_needs_cash_and_rate(self):
         wid=self.worker()
@@ -148,6 +148,63 @@ class HrTests(unittest.TestCase):
         self.call('attendance_set',id=wid,day='2026-10-14',status='present')
         self.call('pay_add',id=wid,kind='bonus',amount='1000')
         self.assertEqual(hr.payroll_row(self.db,wid,'2026-10')['due'],3001000)
+
+    def test_usd_worker_paid_in_usd_and_uzs(self):
+        wid=self.worker('Dollar usta',salary='600',currency='USD')
+        w=self.call('worker',id=wid)['worker']
+        self.assertEqual((w['currency'],w['salary'],w['payroll']['currency']),('USD',60000,'USD'))
+        self.cash(20000000)                      # kurs 12 500
+        self.call('pay_add',id=wid,kind='bonus',amount='50.50',note='reja')
+        self.call('pay_add',id=wid,kind='advance',amount='100')                                  # $100 naqd dollar
+        self.call('pay_add',id=wid,kind='advance',amount='1250000',payCurrency='UZS',expectedRate='12500')  # = $100
+        p=self.call('worker',id=wid)['worker']['payroll']
+        self.assertEqual((p['due'],p['paid'],p['remaining']),(65050,20000,45050))
+        with self.assertRaises(ValueError):self.call('pay_add',id=wid,kind='salary',amount='450.51')
+        w=self.call('pay_add',id=wid,kind='salary',amount='450.50')['worker']
+        self.assertEqual(w['payroll']['remaining'],0)
+        uzs=next(x for x in w['payments'] if x['paidCurrency']=='UZS')
+        self.assertEqual((uzs['amount'],uzs['paidAmount'],uzs['rate']),(10000,1250000,12500))
+        exp=self.db.execute('SELECT currency,amount_usd,amount_uzs FROM cashier_expenses ORDER BY id').fetchall()
+        self.assertEqual([tuple(r) for r in exp],[('USD',10000,0),('UZS',10000,1250000),('USD',45050,0)])
+        o=self.call('overview')
+        self.assertEqual((o['money']['USD']['paid'],o['money']['UZS']['paid']),(65050,0))
+        with self.assertRaises(ValueError):self.call('worker_add',name='X',salary='1.001',currency='USD')
+        with self.assertRaises(ValueError):self.call('worker_add',name='Y',currency='EUR')
+
+    def test_uzs_worker_paid_in_usd(self):
+        wid=self.worker()                         # 3 000 000 so'm
+        self.cash(5000000)
+        self.call('pay_add',id=wid,kind='advance',amount='40',payCurrency='USD',expectedRate='12500')
+        self.assertEqual(self.call('worker',id=wid)['worker']['payroll']['advance'],500000)
+
+    def test_currency_change_only_before_payments(self):
+        wid=self.worker()
+        with self.assertRaises(ValueError):       # valyuta o'zgarsa oylik ham kerak
+            self.call('worker_save',id=wid,name='Karim Usta',currency='USD')
+        self.call('worker_save',id=wid,name='Karim Usta',currency='USD',salary='300')
+        w=self.call('worker',id=wid)['worker']
+        self.assertEqual((w['currency'],w['salary'],len(w['salaryHistory'])),('USD',30000,1))
+        self.call('pay_add',id=wid,kind='bonus',amount='10')
+        with self.assertRaises(ValueError):
+            self.call('worker_save',id=wid,name='Karim Usta',currency='UZS',salary='1000000')
+
+    def test_migrates_uzs_only_columns(self):
+        # Jonli bazadagi oldingi versiya: hr_w_salary.salary_uzs, hr_w_pay.amount_uzs, hr_workers.currency yo'q.
+        big='BIGINT' if isinstance(self.db,core.PostgresDB) else 'INTEGER'
+        for t in ('hr_w_pay','hr_w_salary','hr_w_attendance','hr_workers'):self.db.execute(f'DROP TABLE {t}')
+        pk='BIGSERIAL PRIMARY KEY' if big=='BIGINT' else 'INTEGER PRIMARY KEY'
+        self.db.execute(f"CREATE TABLE hr_workers(id {pk}, name TEXT NOT NULL, position TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', hire_date TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', passport TEXT NOT NULL DEFAULT '', emergency TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', active {big} NOT NULL DEFAULT 1, actor {big}, ts {big} NOT NULL, updated_ts {big} NOT NULL DEFAULT 0)")
+        self.db.execute(f"CREATE TABLE hr_w_salary(worker_id {big} NOT NULL, from_month TEXT NOT NULL, salary_uzs {big} NOT NULL CHECK(salary_uzs>=0), actor {big}, ts {big} NOT NULL, PRIMARY KEY(worker_id,from_month))")
+        self.db.execute(f"CREATE TABLE hr_w_attendance(worker_id {big} NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', actor {big}, ts {big} NOT NULL, PRIMARY KEY(worker_id,day))")
+        self.db.execute(f"CREATE TABLE hr_w_pay(id {pk}, worker_id {big} NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs {big} NOT NULL CHECK(amount_uzs>0), note TEXT NOT NULL DEFAULT '', expense {big}, actor {big}, ts {big} NOT NULL, source {big} UNIQUE)")
+        self.db.execute("INSERT INTO hr_workers(name,ts) VALUES('Eski',1)")
+        self.db.execute("INSERT INTO hr_w_salary(worker_id,from_month,salary_uzs,ts) VALUES(1,'2026-10',2000000,1)")
+        self.db.execute("INSERT INTO hr_w_pay(worker_id,kind,month,amount_uzs,note,ts) VALUES(1,'bonus','2026-10',5000,'',1)")
+        hr.init(self.db);hr.init(self.db)        # ikki marta — idempotent
+        self.db.commit()
+        p=self.call('worker',id=1)['worker']['payroll']
+        self.assertEqual((p['currency'],p['salary'],p['bonus']),('UZS',2000000,5000))
+        self.worker('Yangi',salary='100',currency='USD')
 
 if __name__=='__main__':
     unittest.main()

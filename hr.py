@@ -5,13 +5,16 @@ Admin, kassir, savdo, ombor va agent kabi tizim foydalanuvchilari staff.py da bo
 
 - Oylik tarix bilan saqlanadi (hr_w_salary: qaysi oydan boshlab qancha), shuning uchun oylik
   o'zgarsa o'tgan oylar hisobi o'zgarmaydi.
-- Oylik hisob (so'mda): hisoblandi = oylik + bonus − jarima; to'landi = avans + oylik to'lovi.
-  Avans va oylik to'lovi kassadan «👷 Иш ҳақи» xarajati bo'lib chiqadi (core.add_cashier_expense_uzs).
+- Har ishchining oylik valyutasi bor: so'm (butun so'm) yoki dollar (sent). Oylik, bonus, jarima va
+  qoldiq shu valyutada: hisoblandi = oylik + bonus − jarima; to'landi = avans + oylik to'lovi.
+- Avans va oylik to'lovi kassadan «👷 Иш ҳақи» xarajati bo'lib chiqadi, so'mda ham, dollarda ham
+  berilishi mumkin; boshqa valyutada berilsa kassa kursi bo'yicha ishchi valyutasiga o'giriladi.
 Yozuvlar o'chirilmaydi; ishchi ishdan ketsa «yopiladi», tarixi saqlanadi.
 """
 import re
 import time
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 import core
@@ -24,17 +27,39 @@ WORKED=('present','late')
 PAY_KINDS={'bonus':'Bonus','penalty':'Jarima','advance':'Avans','salary':'Oylik to‘lovi'}
 CASH_KINDS=('advance','salary')
 MAX_SOM=10**10
+CURRENCIES={'UZS':'so‘m','USD':'$'}
 _PHONE=re.compile(r'\+?[0-9][0-9 ()-]{6,22}')
 
 SCHEMA='''
-CREATE TABLE IF NOT EXISTS hr_workers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, position TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', hire_date TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', passport TEXT NOT NULL DEFAULT '', emergency TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, actor INTEGER, ts INTEGER NOT NULL, updated_ts INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS hr_w_salary(worker_id INTEGER NOT NULL, from_month TEXT NOT NULL, salary_uzs INTEGER NOT NULL CHECK(salary_uzs>=0), actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,from_month));
+CREATE TABLE IF NOT EXISTS hr_workers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, position TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', hire_date TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', passport TEXT NOT NULL DEFAULT '', emergency TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, actor INTEGER, ts INTEGER NOT NULL, updated_ts INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'UZS');
+CREATE TABLE IF NOT EXISTS hr_w_salary(worker_id INTEGER NOT NULL, from_month TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>=0), actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,from_month));
 CREATE TABLE IF NOT EXISTS hr_w_attendance(worker_id INTEGER NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,day));
-CREATE TABLE IF NOT EXISTS hr_w_pay(id INTEGER PRIMARY KEY, worker_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs INTEGER NOT NULL CHECK(amount_uzs>0), note TEXT NOT NULL DEFAULT '', expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
+CREATE TABLE IF NOT EXISTS hr_w_pay(id INTEGER PRIMARY KEY, worker_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), paid_currency TEXT NOT NULL DEFAULT '', paid_amount INTEGER NOT NULL DEFAULT 0, rate INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
 CREATE INDEX IF NOT EXISTS idx_hr_w_attendance_day ON hr_w_attendance(day);
 CREATE INDEX IF NOT EXISTS idx_hr_w_pay_month ON hr_w_pay(month,worker_id);
 '''
 PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGSERIAL PRIMARY KEY').replace(' INTEGER',' BIGINT')
+
+
+def _cols(db,table):
+    if isinstance(db,PostgresDB):
+        return {r[0] for r in db.execute('''SELECT column_name FROM information_schema.columns
+            WHERE table_schema=current_schema() AND table_name=?''',(table,)).fetchall()}
+    return {r[1] for r in db.execute(f'PRAGMA table_info({table})').fetchall()}
+
+
+def _migrate(db):
+    """Valyutasiz birinchi sxema (so'm ustunlari) -> valyutali sxema. Ma'lumot saqlanadi, eski yozuvlar so'mda."""
+    big='BIGINT' if isinstance(db,PostgresDB) else 'INTEGER'
+    if 'currency' not in _cols(db,'hr_workers'):
+        db.execute("ALTER TABLE hr_workers ADD COLUMN currency TEXT NOT NULL DEFAULT 'UZS'")
+    if 'salary_uzs' in _cols(db,'hr_w_salary'):
+        db.execute('ALTER TABLE hr_w_salary RENAME COLUMN salary_uzs TO amount')
+    cols=_cols(db,'hr_w_pay')
+    if 'amount_uzs' in cols:
+        db.execute('ALTER TABLE hr_w_pay RENAME COLUMN amount_uzs TO amount')
+    for col,ddl in (('paid_currency',"TEXT NOT NULL DEFAULT ''"),('paid_amount',f'{big} NOT NULL DEFAULT 0'),('rate',f'{big} NOT NULL DEFAULT 0')):
+        if col not in cols:db.execute(f'ALTER TABLE hr_w_pay ADD COLUMN {col} {ddl}')
 
 
 def init(db):
@@ -43,6 +68,7 @@ def init(db):
             if stmt.strip():db.execute(stmt)
     else:
         db.executescript(SCHEMA)
+    _migrate(db)
 
 
 # ---------- yordamchilar ----------
@@ -82,12 +108,26 @@ def _month_days(month):
     return date(y,m,1),date(y+(m==12),m%12+1,1)
 
 
-def _som(value,label='Summa'):
-    s=str(value if value is not None else '').replace(' ','').replace(',','')
-    if not s.isdecimal():raise ValueError(f'{label}: butun so‘m kiriting.')
-    n=int(s)
-    if not 0<n<=MAX_SOM:raise ValueError(f'{label}: 1 dan {MAX_SOM:,} gacha.'.replace(',',' '))
+def _money(value,currency,label='Summa',allow_zero=False):
+    """So'm -> butun so'm; dollar -> sent (ko'pi bilan 2 kasr)."""
+    s=str(value if value is not None else '').replace(' ','')
+    if currency=='UZS':
+        s=s.replace(',','')
+        if not s.isdecimal():raise ValueError(f'{label}: butun so‘m kiriting.')
+        n=int(s)
+    else:
+        try:d=Decimal(s.replace(',','.'))*100
+        except InvalidOperation:raise ValueError(f'{label}: dollarda kiriting (masalan 250 yoki 250.50).')
+        if not d.is_finite() or d!=d.to_integral_value():raise ValueError(f'{label}: ko‘pi bilan 2 kasr xona.')
+        n=int(d)
+    if not (0 if allow_zero else 1)<=n<=MAX_SOM:raise ValueError(f'{label} noto‘g‘ri.')
     return n
+
+
+def _currency(value):
+    c=str(value or 'UZS').upper()
+    if c not in CURRENCIES:raise ValueError('Valyuta noto‘g‘ri: so‘m yoki dollar.')
+    return c
 
 
 def _text(value,label,limit,required=False):
@@ -106,7 +146,7 @@ def _worker(db,wid):
 
 
 def salary_for(db,wid,month):
-    row=db.execute('''SELECT salary_uzs FROM hr_w_salary WHERE worker_id=? AND from_month<=?
+    row=db.execute('''SELECT amount FROM hr_w_salary WHERE worker_id=? AND from_month<=?
         ORDER BY from_month DESC LIMIT 1''',(wid,month)).fetchone()
     return int(row[0]) if row else 0
 
@@ -125,9 +165,20 @@ def _fields(payload):
 
 def _apply_salary(db,actor,wid,payload,now):
     if payload.get('salary') in (None,''):return
-    s=str(payload.get('salary')).replace(' ','')
-    if not s.isdecimal() or int(s)>MAX_SOM:raise ValueError('Oylik: butun so‘m kiriting.')
-    set_salary(db,actor,wid,int(s),payload.get('salaryFrom'),now=now)
+    cur=_worker(db,wid)['currency']
+    set_salary(db,actor,wid,_money(payload.get('salary'),cur,'Oylik',allow_zero=True),payload.get('salaryFrom'),now=now)
+
+
+def _set_currency(db,wid,payload):
+    """Valyutani faqat pul yozuvi bo'lmaganda o'zgartirish mumkin; oylik tarixi yangi valyutada qayta kiritiladi."""
+    if payload.get('currency') in (None,''):return
+    cur=_currency(payload.get('currency'))
+    if _worker(db,wid)['currency']==cur:return
+    if db.execute('SELECT 1 FROM hr_w_pay WHERE worker_id=? LIMIT 1',(wid,)).fetchone():
+        raise ValueError('Bu ishchiga to‘lov yozilgan — oylik valyutasini o‘zgartirib bo‘lmaydi.')
+    if payload.get('salary') in (None,''):raise ValueError('Valyuta o‘zgarsa, oylikni yangi valyutada kiriting.')
+    db.execute('DELETE FROM hr_w_salary WHERE worker_id=?',(wid,))
+    db.execute('UPDATE hr_workers SET currency=? WHERE id=?',(cur,wid))
 
 
 def add_worker(db,actor,payload,now=None):
@@ -136,9 +187,9 @@ def add_worker(db,actor,payload,now=None):
     if db.execute('SELECT 1 FROM hr_workers WHERE LOWER(name)=LOWER(?) AND active=1',(f['name'],)).fetchone():
         raise ValueError('Bu ismli faol ishchi bor. Familiyasini ham yozing.')
     ts=_now(now)
-    wid=int(db.execute('''INSERT INTO hr_workers(name,position,phone,hire_date,birth_date,address,passport,emergency,note,actor,ts,updated_ts)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(f['name'],f['position'],f['phone'],f['hire_date'],f['birth_date'],
-        f['address'],f['passport'],f['emergency'],f['note'],actor,ts,ts)).fetchone()[0])
+    wid=int(db.execute('''INSERT INTO hr_workers(name,position,phone,hire_date,birth_date,address,passport,emergency,note,actor,ts,updated_ts,currency)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(f['name'],f['position'],f['phone'],f['hire_date'],f['birth_date'],
+        f['address'],f['passport'],f['emergency'],f['note'],actor,ts,ts,_currency(payload.get('currency')))).fetchone()[0])
     _apply_salary(db,actor,wid,payload,ts)
     return wid
 
@@ -153,6 +204,7 @@ def save_worker(db,actor,wid,payload,now=None):
     db.execute('''UPDATE hr_workers SET name=?,position=?,phone=?,hire_date=?,birth_date=?,address=?,passport=?,emergency=?,note=?,
         actor=?,updated_ts=? WHERE id=?''',(f['name'],f['position'],f['phone'],f['hire_date'],f['birth_date'],f['address'],
         f['passport'],f['emergency'],f['note'],actor,ts,wid))
+    _set_currency(db,wid,payload)
     _apply_salary(db,actor,wid,payload,ts)
 
 
@@ -169,8 +221,8 @@ def set_salary(db,actor,wid,amount,from_month=None,now=None):
     core._require_admin(db,actor)
     month=_month(from_month,now)
     if db.execute('SELECT 1 FROM hr_w_salary WHERE worker_id=?',(wid,)).fetchone() and salary_for(db,wid,month)==amount:return
-    db.execute('''INSERT INTO hr_w_salary(worker_id,from_month,salary_uzs,actor,ts) VALUES(?,?,?,?,?)
-        ON CONFLICT(worker_id,from_month) DO UPDATE SET salary_uzs=excluded.salary_uzs,actor=excluded.actor,ts=excluded.ts''',
+    db.execute('''INSERT INTO hr_w_salary(worker_id,from_month,amount,actor,ts) VALUES(?,?,?,?,?)
+        ON CONFLICT(worker_id,from_month) DO UPDATE SET amount=excluded.amount,actor=excluded.actor,ts=excluded.ts''',
         (wid,month,amount,actor,_now(now)))
 
 
@@ -215,44 +267,63 @@ def _att_summary(days):
 
 # ---------- oylik ----------
 
-def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='cash',expected_rate=None,now=None):
+def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='cash',expected_rate=None,
+            pay_currency=None,now=None):
+    """Bonus/jarima — ishchi valyutasida. Avans/oylik — kassadan pay_currency da (bo'sh bo'lsa ishchi valyutasi)."""
     core._require_admin(db,actor)
-    w=_worker(db,wid);wid=int(w['id'])
+    w=_worker(db,wid);wid=int(w['id']);cur=w['currency']
     if not w['active']:raise ValueError('Bu ishchi yopilgan. Avval qayta oching.')
     if kind not in PAY_KINDS:raise ValueError('To‘lov turi noto‘g‘ri.')
     month=_month(month,now)
-    amount=_som(amount)
     note=_text(note,'Izoh',300)
     if kind=='penalty' and not note:raise ValueError('Jarima sababini yozing.')
     if source is not None:
         old=db.execute('SELECT id FROM hr_w_pay WHERE source=?',(source,)).fetchone()
         if old:return int(old[0])
-    expense=None
+    paid_cur=_currency(pay_currency or cur) if kind in CASH_KINDS else cur
+    paid=_money(amount,paid_cur)
+    expense=None;rate=0;credited=paid
     if kind in CASH_KINDS:
         if not isinstance(source,int) or source<=0:raise ValueError('Operatsiya ID noto‘g‘ri.')
+        if paid_cur!=cur or paid_cur=='UZS':
+            rate=core.cashier_rate(db)
+            if rate is None:raise ValueError('Avval kassada 1 USD kursini belgilang.')
+            if expected_rate is not None and rate!=expected_rate:raise ValueError('Kassa kursi o‘zgargan. Qayta kiriting.')
+        if paid_cur!=cur:
+            # so'm -> sent yoki sent -> so'm, kassa kursi bo'yicha
+            credited=core.som_to_usd_cents(paid,rate) if paid_cur=='UZS' else int((Decimal(paid)*rate/100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
         if kind=='salary':
             left=payroll_row(db,wid,month)['remaining']
-            if amount>left:raise ValueError(f'Qolgan oylik {left:,} so‘m. Undan ko‘p to‘lab bo‘lmaydi.'.replace(',',' '))
+            if credited>left:raise ValueError(f'Qolgan oylik {fmt(left,cur)}. Undan ko‘p to‘lab bo‘lmaydi.')
         label=f"{w['name']} · {PAY_KINDS[kind]} {month}"
-        expense,_,_=core.add_cashier_expense_uzs(db,actor,amount,SALARY_CATEGORY,label,note,source,
-                                                 expected_rate=expected_rate,pay_from=pay_from)
-    return int(db.execute('''INSERT INTO hr_w_pay(worker_id,kind,month,amount_uzs,note,expense,actor,ts,source)
-        VALUES(?,?,?,?,?,?,?,?,?) RETURNING id''',(wid,kind,month,amount,note,expense,actor,_now(now),source)).fetchone()[0])
+        if paid_cur=='UZS':
+            expense,_,_=core.add_cashier_expense_uzs(db,actor,paid,SALARY_CATEGORY,label,note,source,
+                                                     expected_rate=rate,pay_from=pay_from)
+        else:
+            expense=core.add_cashier_expense(db,actor,paid,SALARY_CATEGORY,label,note,source,pay_from=pay_from)
+    return int(db.execute('''INSERT INTO hr_w_pay(worker_id,kind,month,amount,paid_currency,paid_amount,rate,note,expense,actor,ts,source)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(wid,kind,month,credited,paid_cur,paid,rate,note,expense,actor,_now(now),source)).fetchone()[0])
+
+
+def fmt(n,cur):
+    return f"{n:,} so‘m".replace(',',' ') if cur=='UZS' else f"${n/100:,.2f}".replace(',',' ')
 
 
 def payroll_row(db,wid,month):
     sums={k:0 for k in PAY_KINDS}
-    for r in db.execute('SELECT kind,COALESCE(SUM(amount_uzs),0) FROM hr_w_pay WHERE worker_id=? AND month=? GROUP BY kind',(wid,month)).fetchall():
+    for r in db.execute('SELECT kind,COALESCE(SUM(amount),0) FROM hr_w_pay WHERE worker_id=? AND month=? GROUP BY kind',(wid,month)).fetchall():
         sums[r[0]]=int(r[1] or 0)
     base=salary_for(db,wid,month)
     due=base+sums['bonus']-sums['penalty']
     paid=sums['advance']+sums['salary']
-    return {'salary':base,'bonus':sums['bonus'],'penalty':sums['penalty'],'advance':sums['advance'],
+    cur=(db.execute('SELECT currency FROM hr_workers WHERE id=?',(wid,)).fetchone() or ['UZS'])[0]
+    return {'currency':cur,'salary':base,'bonus':sums['bonus'],'penalty':sums['penalty'],'advance':sums['advance'],
             'paidSalary':sums['salary'],'due':due,'paid':paid,'remaining':due-paid}
 
 
 def pay_list(db,wid,month):
-    return [{'id':int(r['id']),'kind':r['kind'],'label':PAY_KINDS.get(r['kind'],r['kind']),'amount':int(r['amount_uzs']),
+    return [{'id':int(r['id']),'kind':r['kind'],'label':PAY_KINDS.get(r['kind'],r['kind']),'amount':int(r['amount']),
+             'paidCurrency':r['paid_currency'] or '','paidAmount':int(r['paid_amount'] or 0),'rate':int(r['rate'] or 0),
              'note':r['note'] or '','cash':r['expense'] is not None,'actorName':r['actor_name'] or '','ts':int(r['ts'])}
             for r in db.execute('''SELECT p.*,u.name AS actor_name FROM hr_w_pay p LEFT JOIN users u ON u.id=p.actor
                 WHERE p.worker_id=? AND p.month=? ORDER BY p.id DESC''',(wid,month)).fetchall()]
@@ -271,15 +342,16 @@ def overview(db,month=None,day=None,closed=False,now=None):
     out=[]
     for r in rows:
         wid=int(r['id'])
-        out.append({'id':wid,'name':r['name'],'position':r['position'] or '','phone':r['phone'] or '','active':bool(r['active']),
+        out.append({'id':wid,'name':r['name'],'currency':r['currency'] or 'UZS','position':r['position'] or '','phone':r['phone'] or '','active':bool(r['active']),
                     'hireDate':r['hire_date'] or '','attendance':_att_summary(att.get(wid,{})),
                     'day':att_day.get(wid,{}).get(d.isoformat()),'payroll':payroll_row(db,wid,month)})
     act=[x for x in out if x['active']]
-    tot=lambda k:sum(x['payroll'][k] for x in act)
+    money={c:{k:sum(x['payroll'][k] for x in act if x['currency']==c) for k in ('salary','due','paid','remaining')}
+           for c in CURRENCIES}
     return {'month':month,'day':d.isoformat(),'workers':out,
             'statuses':[[k,v] for k,v in ATTENDANCE.items()],'payKinds':[[k,v] for k,v in PAY_KINDS.items()],
-            'totals':{'due':tot('due'),'paid':tot('paid'),'remaining':tot('remaining'),'salary':tot('salary'),
-                      'present':sum(1 for x in act if x['day'] and x['day']['status'] in WORKED),
+            'money':money,'currencies':[[k,v] for k,v in CURRENCIES.items()],
+            'totals':{'present':sum(1 for x in act if x['day'] and x['day']['status'] in WORKED),
                       'absent':sum(1 for x in act if x['day'] and x['day']['status']=='absent'),
                       'unmarked':sum(1 for x in act if not x['day']),'count':len(act),
                       'closed':int(db.execute('SELECT COUNT(*) FROM hr_workers WHERE active=0').fetchone()[0] or 0)},
@@ -296,13 +368,14 @@ def worker(db,wid,month=None,now=None):
         mark=days.get(d.isoformat())
         cal.append({'day':d.isoformat(),'dow':d.weekday(),'future':d>t,**(mark or {'status':'','note':''})})
         d+=timedelta(days=1)
-    return {'id':wid,'name':w['name'],'active':bool(w['active']),'card':_card(db,w),'salary':salary_for(db,wid,this_month(now)),
+    return {'id':wid,'name':w['name'],'active':bool(w['active']),'currency':w['currency'] or 'UZS',
+            'canChangeCurrency':not db.execute('SELECT 1 FROM hr_w_pay WHERE worker_id=? LIMIT 1',(wid,)).fetchone(),'card':_card(db,w),'salary':salary_for(db,wid,this_month(now)),
             'month':month,'calendar':cal,'attendance':_att_summary(days),'payroll':payroll_row(db,wid,month),
             'payments':pay_list(db,wid,month),
-            'salaryHistory':[{'from':r['from_month'],'amount':int(r['salary_uzs'])} for r in
-                             db.execute('SELECT from_month,salary_uzs FROM hr_w_salary WHERE worker_id=? ORDER BY from_month DESC',(wid,)).fetchall()],
+            'salaryHistory':[{'from':r['from_month'],'amount':int(r['amount'])} for r in
+                             db.execute('SELECT from_month,amount FROM hr_w_salary WHERE worker_id=? ORDER BY from_month DESC',(wid,)).fetchall()],
             'statuses':[[k,v] for k,v in ATTENDANCE.items()],'payKinds':[[k,v] for k,v in PAY_KINDS.items()],
-            'cashRate':core.cashier_rate(db)}
+            'currencies':[[k,v] for k,v in CURRENCIES.items()],'cashRate':core.cashier_rate(db)}
 
 
 # ---------- web panel amallari ----------
@@ -337,5 +410,5 @@ def handle(db,actor,op,payload,source=None,now=None):
         rate=payload.get('expectedRate')
         rate=int(rate) if str(rate or '').isdecimal() else None
         add_pay(db,actor,wid,payload.get('kind'),payload.get('amount'),month,payload.get('note'),source=source,
-                pay_from=str(payload.get('payFrom') or 'cash'),expected_rate=rate,now=now)
+                pay_from=str(payload.get('payFrom') or 'cash'),expected_rate=rate,pay_currency=payload.get('payCurrency'),now=now)
     return {'worker':worker(db,wid,month,now=now)}

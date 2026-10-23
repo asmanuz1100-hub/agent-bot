@@ -4,7 +4,7 @@ Mavjud qoidalar saqlanadi:
 - agent va kassir uchun core'dagi tayyor funksiyalar ishlatiladi (smena, qoldiq tekshiruvlari bilan);
 - admin qo'shish, akkaunt almashtirish, yopish va web login/parol — faqat asosiy rahbar (ADMINS) huquqi;
 - xodim qo'shish va nomini o'zgartirish — har qanday rahbar (botdagi «➕ Ходим» bilan bir xil).
-Savdo roli — Savdo Mini App (shop.py); ishlab chiqarish roli hozircha faqat ro'yxat uchun.
+Savdo roli — Savdo Mini App (shop.py). Sex ishchilari tizimdan foydalanmaydi — ular hr.py da.
 """
 import time
 
@@ -17,13 +17,12 @@ ROLES = {
     'cashier': 'Kassir',
     'agent': 'Agent',
     'warehouse': 'Ombor',
-    'production': 'Ishlab chiqarish',
 }
 # Yopilgan holat nomlari (agent va kassir uchun eski nomlar saqlanadi)
 DISABLED = {'agent': 'disabled', 'cashier': 'cashier_disabled', 'admin': 'admin_disabled',
-            'sales': 'sales_disabled', 'warehouse': 'warehouse_disabled', 'production': 'production_disabled'}
+            'sales': 'sales_disabled', 'warehouse': 'warehouse_disabled'}
 ACTIVE_OF = {v: k for k, v in DISABLED.items()}
-GENERIC = ('sales', 'warehouse', 'production')   # alohida qoidasi yo'q rollar
+GENERIC = ('sales', 'warehouse')   # alohida qoidasi yo'q rollar
 
 
 def _audit(db, actor, old_id, new_id, action):

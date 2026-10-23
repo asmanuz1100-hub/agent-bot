@@ -58,7 +58,7 @@ def _role(db,uid):
 
 
 def _require_viewer(db,actor):
-    if _role(db,actor) not in ('warehouse','admin','cashier','production'):
+    if _role(db,actor) not in ('warehouse','admin','cashier'):
         raise ValueError('Bu bo‘lim faqat omborchi, kassir yoki rahbar uchun.')
 
 
