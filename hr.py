@@ -175,15 +175,27 @@ def _apply_salary(db,actor,wid,payload,now):
     set_salary(db,actor,wid,_money(payload.get('salary'),cur,'Oylik',allow_zero=True),payload.get('salaryFrom'),now=now)
 
 
-def _set_currency(db,wid,payload):
-    """Valyutani faqat pul yozuvi bo'lmaganda o'zgartirish mumkin; oylik tarixi yangi valyutada qayta kiritiladi."""
+def currency_lock(db,wid,now=None):
+    """Valyutani nima to'sadi (None — o'zgartirish mumkin). Hisoblangan oylik tarixi o'chirilmaydi va
+    eski summaga yangi valyuta yozilmaydi: o'tgan oyga oylik hisoblangan bo'lsa valyuta o'zgarmaydi."""
+    if db.execute('SELECT 1 FROM hr_w_pay WHERE worker_id=? LIMIT 1',(wid,)).fetchone():
+        return 'Bu ishchiga to‘lov yoki bonus/jarima yozilgan — oylik valyutasini o‘zgartirib bo‘lmaydi.'
+    if db.execute('SELECT 1 FROM hr_w_salary WHERE worker_id=? AND from_month<? AND amount>0 LIMIT 1',(wid,this_month(now))).fetchone():
+        return ('O‘tgan oylarga oylik hisoblangan — valyutani o‘zgartirsa eski qarz buziladi. '
+                'Avval qolgan oylikni to‘lab, ishchini yoping va yangi valyutada yangi kartochka oching.')
+    return None
+
+
+def _set_currency(db,wid,payload,now=None):
+    """Valyuta faqat hisob tarixi yo'q ishchida o'zgaradi (joriy/kelgusi oy oyligi yangi valyutada qayta kiritiladi)."""
     if payload.get('currency') in (None,''):return
     cur=_currency(payload.get('currency'))
     if _worker(db,wid)['currency']==cur:return
-    if db.execute('SELECT 1 FROM hr_w_pay WHERE worker_id=? LIMIT 1',(wid,)).fetchone():
-        raise ValueError('Bu ishchiga to‘lov yozilgan — oylik valyutasini o‘zgartirib bo‘lmaydi.')
+    why=currency_lock(db,wid,now)
+    if why:raise ValueError(why)
     if payload.get('salary') in (None,''):raise ValueError('Valyuta o‘zgarsa, oylikni yangi valyutada kiriting.')
-    db.execute('DELETE FROM hr_w_salary WHERE worker_id=?',(wid,))
+    # faqat hali hisoblanmagan (joriy va kelgusi oy) yozuvlar — o'tgan oylarda summa yo'q yoki 0
+    db.execute('DELETE FROM hr_w_salary WHERE worker_id=? AND from_month>=?',(wid,this_month(now)))
     db.execute('UPDATE hr_workers SET currency=? WHERE id=?',(cur,wid))
 
 
@@ -210,7 +222,7 @@ def save_worker(db,actor,wid,payload,now=None):
     db.execute('''UPDATE hr_workers SET name=?,department=?,position=?,phone=?,hire_date=?,birth_date=?,address=?,passport=?,emergency=?,note=?,
         actor=?,updated_ts=? WHERE id=?''',(f['name'],f['department'],f['position'],f['phone'],f['hire_date'],f['birth_date'],f['address'],
         f['passport'],f['emergency'],f['note'],actor,ts,wid))
-    _set_currency(db,wid,payload)
+    _set_currency(db,wid,payload,now)
     _apply_salary(db,actor,wid,payload,ts)
 
 
@@ -229,7 +241,12 @@ def set_active(db,actor,wid,active,now=None):
     month=this_month(now)
     if active:
         last=db.execute('SELECT amount FROM hr_w_salary WHERE worker_id=? AND amount>0 ORDER BY from_month DESC LIMIT 1',(wid,)).fetchone()
-        if last:set_salary(db,actor,wid,int(last[0]),month,now=now)
+        if last:
+            set_salary(db,actor,wid,int(last[0]),month,now=now)
+            # Shu oyda yopilib qayta ochilsa, yopishda yozilgan kelgusi «0» hali kuchga kirmagan — tiklanadi.
+            # Yozuv o'chirilmaydi: summa, kim va qachon yangilanadi.
+            db.execute('UPDATE hr_w_salary SET amount=?,actor=?,ts=? WHERE worker_id=? AND from_month>? AND amount=0',
+                       (int(last[0]),actor,_now(now),wid,month))
     elif db.execute('SELECT 1 FROM hr_w_salary WHERE worker_id=?',(wid,)).fetchone():
         set_salary(db,actor,wid,0,next_month(month),now=now)
     db.execute('UPDATE hr_workers SET active=? WHERE id=?',(1 if active else 0,wid))
@@ -290,9 +307,14 @@ def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='ca
     """Bonus/jarima — ishchi valyutasida. Avans/oylik — kassadan pay_currency da (bo'sh bo'lsa ishchi valyutasi)."""
     core._require_admin(db,actor)
     w=_worker(db,wid);wid=int(w['id']);cur=w['currency']
-    if not w['active']:raise ValueError('Bu ishchi yopilgan. Avval qayta oching.')
     if kind not in PAY_KINDS:raise ValueError('To‘lov turi noto‘g‘ri.')
     month=_month(month,now)
+    if not w['active']:
+        # Ishdan ketgan: yangi avans yo'q; qolgan oylikni to'lash (yakuniy hisob) va ishlagan oyi uchun
+        # bonus/jarima mumkin. Yangi oylik hisoblanmaydi (yopishda keyingi oydan 0).
+        if kind=='advance':raise ValueError('Ishdan ketgan ishchiga avans berilmaydi. Qolgan oylikni «Oylik to‘lovi» bilan to‘lang.')
+        if kind in ('bonus','penalty') and salary_for(db,wid,month)<=0:
+            raise ValueError('Ishchi bu oyda ishlamagan — bonus/jarima faqat ishlagan oyiga yoziladi.')
     note=_text(note,'Izoh',300)
     if kind=='penalty' and not note:raise ValueError('Jarima sababini yozing.')
     if source is not None:
@@ -408,7 +430,7 @@ def worker(db,wid,month=None,now=None):
         cal.append({'day':d.isoformat(),'dow':d.weekday(),'future':d>t,**(mark or {'status':'','note':''})})
         d+=timedelta(days=1)
     return {'id':wid,'name':w['name'],'active':bool(w['active']),'currency':w['currency'] or 'UZS',
-            'canChangeCurrency':not db.execute('SELECT 1 FROM hr_w_pay WHERE worker_id=? LIMIT 1',(wid,)).fetchone(),'card':_card(db,w),'salary':salary_for(db,wid,this_month(now)),
+            'canChangeCurrency':currency_lock(db,wid,now) is None,'currencyLock':currency_lock(db,wid,now) or '','card':_card(db,w),'salary':salary_for(db,wid,this_month(now)),
             'month':month,'calendar':cal,'attendance':_att_summary(days),'payroll':payroll_row(db,wid,month),
             'payments':pay_list(db,wid,month),
             'salaryHistory':[{'from':r['from_month'],'amount':int(r['amount'])} for r in

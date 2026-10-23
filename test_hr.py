@@ -66,7 +66,7 @@ class HrTests(unittest.TestCase):
         self.assertEqual(self.call('overview')['workers'],[])
         o=self.call('overview',closed=True)
         self.assertEqual((len(o['workers']),o['totals']['closed'],o['totals']['count']),(1,1,0))
-        with self.assertRaises(ValueError):self.call('pay_add',id=wid,kind='bonus',amount='1000')
+        with self.assertRaises(ValueError):self.call('pay_add',id=wid,kind='advance',amount='1000')
         self.call('worker_open',id=wid)
         self.assertEqual(len(self.call('overview')['workers']),1)
 
@@ -255,6 +255,42 @@ class HrTests(unittest.TestCase):
         hr.set_active(self.db,1,wid,True,now=self.at('2026-10'));self.db.commit()
         p=hr.payroll_row(self.db,wid,'2026-10')
         self.assertEqual((p['carry'],p['salary'],p['remaining']),(1000000,1000000,2000000))   # avgust to'lanmagan + oktabr
+
+    def test_left_worker_final_salary_paid_without_reopening(self):
+        # A: ishdan ketgan ishchiga qolgan oylik to'lanadi, yangi oylik va avans yo'q
+        wid=self.worker('Yakuniy',salary='4000000',salaryFrom='2026-09')
+        self.cash(20000000)
+        self.call('worker_close',id=wid)
+        p=hr.payroll_row(self.db,wid,'2026-10')
+        self.assertEqual(p['remaining'],8000000)                     # sentabr + oktabr
+        with self.assertRaises(ValueError):self.pay(wid,'advance','1000','2026-10')
+        with self.assertRaises(ValueError):self.pay(wid,'salary','8000001','2026-10')
+        self.assertEqual(self.pay(wid,'salary','8000000','2026-10')['remaining'],0)
+        self.assertFalse(self.call('worker',id=wid)['worker']['active'])
+        self.assertEqual(hr.payroll_row(self.db,wid,'2026-11')['remaining'],0)   # noyabrdan hisoblanmaydi
+        with self.assertRaises(ValueError):self.pay(wid,'bonus','1000','2026-11')
+
+    def test_close_and_reopen_same_month_keeps_next_salary(self):
+        # B: 10-oktabr yopildi, 20-oktabr qayta olindi — noyabr 0 emas, tarix saqlanadi
+        wid=self.worker('Qaytgan',salary='4000000')
+        hr.set_active(self.db,1,wid,False,now=self.at('2026-10'));self.db.commit()
+        hr.set_active(self.db,1,wid,True,now=self.at('2026-10')+86400*5);self.db.commit()
+        self.assertEqual((hr.salary_for(self.db,wid,'2026-10'),hr.salary_for(self.db,wid,'2026-11'),hr.salary_for(self.db,wid,'2027-01')),
+                         (4000000,4000000,4000000))
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM hr_w_salary WHERE worker_id=?',(wid,)).fetchone()[0],2)
+        # keyingi oyda qayta yopilsa yana to'xtaydi
+        hr.set_active(self.db,1,wid,False,now=self.at('2026-11'));self.db.commit()
+        self.assertEqual(hr.salary_for(self.db,wid,'2026-12'),0)
+
+    def test_currency_change_blocked_when_history_accrued(self):
+        # C: sentabrdan 4 mln, to'lov yo'q, oktabrda dollarga almashtirish — qarz saqlanadi
+        wid=self.worker('Tarix',salary='4000000',salaryFrom='2026-09')
+        w=self.call('worker',id=wid)['worker']
+        self.assertFalse(w['canChangeCurrency']);self.assertIn('O‘tgan oylarga',w['currencyLock'])
+        with self.assertRaises(ValueError):
+            self.call('worker_save',id=wid,name='Tarix',currency='USD',salary='300')
+        p=hr.payroll_row(self.db,wid,'2026-10')
+        self.assertEqual((p['currency'],p['carry']),('UZS',4000000))
 
     def test_mixed_currency_rounding_uses_stored_rate(self):
         wid=self.worker('Dollarchi',salary='100',currency='USD')
