@@ -20,6 +20,7 @@ Sotuvchi qo'lidagi pul `core.cash_usd`/`core.cash` bilan hisoblanadi va `core.ha
 import hashlib
 import time
 
+import branding
 import core
 import warehouse as wh
 
@@ -633,7 +634,7 @@ def dashboard(db, actor, now=None):
             'permLabels': PERMS,
             'rate': core.cashier_rate(db), 'products': products, 'today': today, 'recent': recent,
             'cash': cash, 'team': team, 'sellers': (sellers or []) + [{'id': u['id'], 'name': u['name']} for u in (team or [])],
-            'generatedTs': now}
+            'brand': branding.get(db), 'generatedTs': now}
 
 
 def client_card(db, actor, client):

@@ -1568,6 +1568,30 @@ async function shSave(){
   SH.d=r;SH.cart=shNewCart();SH.q=null;S.cache={};shReceipt(r.receipt);shPos($('shBody'));
 }
 function shCancelNote(x,what){return x?'<div class="bad small" style="margin:8px 0">'+ic('ban','sm')+' Bekor qilingan '+dt(x.ts)+' · '+esc(x.who)+' · «'+esc(x.reason)+'»'+(x.replacedBy?' — o‘rniga '+what+' № '+x.replacedBy:'')+'</div>':''}
+// 80 mm termo-printer uchun chek; kompaniya nomi/logotipi/rekvizitlari brending sozlamasidan
+function shPrintReceipt(r){
+  var d=BRAND.details||{},name=BRAND.name||d.legalName||'',logo=BRAND.logo||'',PMN={cash_usd:'Naqd $',cash_uzs:'Naqd so‘m',card:'Karta'};
+  function row(a,b,c){return '<tr class="'+(c||'')+'"><td>'+a+'</td><td class="r">'+b+'</td></tr>'}
+  var html='<!doctype html><html><head><meta charset="utf-8"><title>Chek '+r.id+'</title><style>'+
+    '@page{size:80mm auto;margin:3mm}body{font:12px/1.35 monospace;width:74mm;margin:0 auto;color:#000}'+
+    'h1{font-size:15px;text-align:center;margin:0 0 2px}.c{text-align:center}hr{border:0;border-top:1px dashed #000;margin:5px 0}'+
+    'table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:1px 0}.r{text-align:right;white-space:nowrap}'+
+    '.b td{font-weight:bold;font-size:14px}.s{font-size:11px;color:#333}</style></head><body>'+
+    (logo?'<div class="c"><img src="'+esc(logo)+'" style="max-width:40mm;max-height:22mm"></div>':'')+
+    (name?'<div class="c"><b style="font-size:14px">'+esc(name)+'</b></div>':'')+
+    (d.address||d.phone?'<div class="c s">'+esc(d.address||'')+(d.address&&d.phone?'<br>':'')+(d.phone?'Tel: '+esc(d.phone):'')+'</div>':'')+(logo||name?'<hr>':'')+
+    '<h1>CHEK № '+r.id+'</h1><div class="c">'+dt(r.ts)+'</div><hr>'+
+    '<div>Mijoz: <b>'+esc(r.client)+'</b>'+(r.phone?'<br>Tel: '+esc(r.phone):'')+'</div><div>Sotuvchi: '+esc(r.seller)+'</div><hr>'+
+    '<table>'+r.lines.map(function(l){return row(esc(l.name)+'<div class="s">'+num(l.qty)+' × '+usd(l.priceUsd)+(l.discountUsd?' · −'+usd(l.discountUsd):'')+'</div>',usd(l.totalUsd))}).join('')+'</table><hr>'+
+    '<table>'+(r.discountUsd?row('Jami narx',usd(r.subtotalUsd))+row('Chegirma','−'+usd(r.discountUsd)):'')+row('JAMI',usd(r.totalUsd),'b')+
+    row('To‘langan'+(r.method&&PMN[r.method]?' ('+PMN[r.method]+')':''),usd(r.paidUsd)+(r.paidUzs?'<br>'+uzs(r.paidUzs):''))+
+    (r.debtUsd>0?row('Qoldiq (qarz)',usd(r.debtUsd),'b'):'')+'</table>'+
+    (r.note?'<hr><div>Izoh: '+esc(r.note)+'</div>':'')+(r.cancelled?'<hr><div class="c"><b>BEKOR QILINGAN</b></div>':'')+
+    '<hr><div class="c">Xaridingiz uchun rahmat!</div></body></html>';
+  var fr=document.createElement('iframe');fr.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  document.body.appendChild(fr);var w=fr.contentWindow;w.document.open();w.document.write(html);w.document.close();
+  setTimeout(function(){w.focus();w.print();setTimeout(function(){fr.remove()},60000)},logo?600:250);
+}
 function shReceipt(r){
   var live=!r.cancelled;
   var p=modal('<form><h3>Sotuv № '+r.id+(live?'':' '+pill('Bekor qilingan','p-bad'))+'</h3><div class="muted small">'+dt(r.ts)+' · '+esc(r.seller)+' · '+esc(r.client)+(r.phone?' · '+esc(r.phone):'')+'</div>'+shCancelNote(r.cancelled,'sotuv')+
@@ -1575,7 +1599,8 @@ function shReceipt(r){
     r.lines.map(function(l){return '<tr><td>'+esc(l.name)+'</td><td class="right num">'+num(l.qty)+'</td><td class="right num">'+usd(l.priceUsd)+'</td><td class="right num">'+(l.discountUsd?usd(l.discountUsd):'—')+'</td><td class="right num">'+usd(l.totalUsd)+'</td></tr>'}).join('')+'</tbody></table></div>'+
     '<dl class="kv"><dt>Jami narx</dt><dd class="num">'+usd(r.subtotalUsd)+'</dd><dt>Jami chegirma</dt><dd class="num">−'+usd(r.discountUsd)+'</dd><dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+usd(r.totalUsd)+'</b></dd><dt>To‘langan</dt><dd class="num ok">'+usd(r.paidUsd)+(r.paidUzs?' · '+uzs(r.paidUzs):'')+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(r.debtUsd>0?'bad':'ok')+'"><b>'+usd(r.debtUsd)+'</b></dd></dl>'+
     '<div class="foot">'+(live?'<button type="button" class="btn danger" id="rcDel">'+ic('trash','sm')+' O‘chirish</button><button type="button" class="btn" id="rcEdit">'+ic('edit','sm')+' Tahrirlash</button>':'')+
-    '<button type="button" class="btn" onclick="window.print()">'+ic('download','sm')+' Chop etish</button><button type="button" class="btn pri" data-m="cancel">Yopish</button></div></form>');
+    '<button type="button" class="btn" id="rcPrint">'+ic('download','sm')+' Chop etish</button><button type="button" class="btn pri" data-m="cancel">Yopish</button></div></form>');
+  $('rcPrint').onclick=function(){shPrintReceipt(r)};
   if(!live)return p;
   $('rcEdit').onclick=function(){closeModal(null);shEditSale(r)};
   $('rcDel').onclick=async function(){closeModal(null);
