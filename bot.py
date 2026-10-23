@@ -1728,6 +1728,24 @@ def handle_web_password(db,u,r,text):
            'Kirgach, «Sozlamalar»da parolni o‘zingiznikiga almashtiring. Bu xabarni hech kimga yubormang.\n'
            'Avvalgi kirishlar yopildi. Loginni o‘zgartirish: /webparol yangi_login · O‘chirish: /webyopish')
 
+# Mobil ilova faqat savdo uchun: Kassir va Rahbar Telegram Mini App / web panelda ishlaydi.
+MOBILE_ROLES={'agent'}
+
+def handle_mobile_password(db,u,r,text):
+    """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
+    if r not in MOBILE_ROLES:raise ValueError('Mobil ilova faqat savdo agentlari uchun.')
+    if text=='/mobilyopish':
+        web_auth.revoke(db,u)
+        send(u,'🔒 Mobil ilova akkaunti o‘chirildi, barcha telefonlardan chiqildi.\nQayta ochish: /mobilparol');return
+    parts=text.split()
+    if len(parts)>2:raise ValueError('Format: /mobilparol yoki /mobilparol LOGIN')
+    current=web_auth.account(db,u)
+    login=parts[1] if len(parts)==2 else (current['login'] if current else f'{r}{u}')
+    login,password=web_auth.issue_password(db,u,login)
+    send(u,f'📱 ASMAN AGENT ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
+           'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
+           'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
+
 def _wh_int(value,label):
     if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
     return int(value)
@@ -1882,6 +1900,8 @@ def handle(db,update):
         return
     if text=='/webparol' or text.startswith('/webparol ') or text=='/webyopish':
         handle_web_password(db,u,r,text);return
+    if text=='/mobilparol' or text.startswith('/mobilparol ') or text=='/mobilyopish':
+        handle_mobile_password(db,u,r,text);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2929,7 +2949,8 @@ def serve_webhook(db,base_url):
                     if local is not None and postgres:local.close()
                 return
             if urlparse(self.path).path=='/api/agent':
-                headers=self._agent_headers()
+                native=self._native_app()
+                headers={} if native else self._agent_headers()
                 if headers is None or self.path!='/api/agent':
                     self._reply(403,b'Forbidden');return
                 def answer_agent(code,obj):
@@ -2945,17 +2966,25 @@ def serve_webhook(db,base_url):
                     action=str(payload.get('action') or 'dashboard')
                     if action not in ('photo_upload','profile_save') and length>100_000:
                         answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
-                    actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # Telegram Mini App sends initData; the mobile app sends its login session token.
+                    web_token=self._bearer_token()
+                    actor=None if web_token and not payload.get('initData') else agent_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
                     answer_agent(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,web_token)
+                        except ValueError as e:
+                            local.commit();answer_agent(401,{'error':str(e),'relogin':True});return
                     if payload.get('initData') and not perms.miniapp_allowed(local,actor):
                         answer_agent(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'agents'):
                         answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
+                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES:
+                        answer_agent(403,{'error':'Mobil ilova faqat savdo agentlari uchun.'});return
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
                     action=payload.get('action','dashboard')
@@ -2974,7 +3003,11 @@ def serve_webhook(db,base_url):
                                 answer_agent(200,{'adminMode':True,'readOnly':False,'agents':admin_agents,
                                     'selectedAgentId':None,'message':'Ishlash uchun agentni tanlang.'});return
                             answer_agent(400,{'error':'Ishlash uchun faol agentni tanlang.'});return
-                    if action=='photo_upload':
+                    if action=='location':
+                        if admin_mode:raise ValueError('GPS faqat agentning o‘z telefonidan yuboriladi.')
+                        data=agent_api.mobile_point(local,actor,payload)
+                        local.commit()
+                    elif action=='photo_upload':
                         image=decode_agent_camera_image(payload.get('imageData'))
                         data={'ok':True,'photoFileId':upload_agent_camera_photo(actor,image),
                               'message':'Foto tayyor.'}
@@ -3102,11 +3135,18 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     action=payload.get('action')
                     token=self._bearer_token()
-                    # panel='savdo' — savdo-web: savdo xodimi va rahbar; aks holda faqat rahbar.
+                    # panel='savdo' — savdo-web: savdo xodimi va rahbar; app='mobile' — AIBI Agent ilovasi;
+                    # aks holda faqat rahbar.
                     savdo_panel=payload.get('panel')=='savdo'
-                    web_roles=('sales','admin') if savdo_panel else ('admin',)
-                    web_denied='Bu panelga faqat savdo xodimi kira oladi.' if savdo_panel else 'Bu panelga faqat rahbar kira oladi.'
-                    if native and not savdo_panel:
+                    mobile=payload.get('app')=='mobile'
+                    if mobile:
+                        web_roles=tuple(MOBILE_ROLES);web_denied='Mobil ilova faqat savdo agentlari uchun.'
+                    elif savdo_panel:
+                        web_roles=('sales','admin');web_denied='Bu panelga faqat savdo xodimi kira oladi.'
+                    else:
+                        web_roles=('admin',);web_denied='Bu panelga faqat rahbar kira oladi.'
+                    # Chiqish faqat shu tokenni yopadi — ilova qaysi rejimda bo'lmasin ruxsat.
+                    if native and not (savdo_panel or mobile or action=='logout'):
                         answer_web(403,{'error':'Ruxsat yo‘q.'});return
                     if action=='login':
                         uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
@@ -3132,7 +3172,7 @@ def serve_webhook(db,base_url):
                         except Exception:
                             logging.warning('Own photo lookup failed')
                         data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS,
-                              'brand':branding.get(local)}
+                              'brand':branding.get(local),'role':role(local,uid)}
                     else:
                         answer_web(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
