@@ -26,6 +26,7 @@ MOVE_LABELS={
     'shop_sale':'🛒 Савдо бўлими сотуви',
     'correction_in':'↩️ Бекор қилинган сотув қайтди',
     'correction_out':'↪️ Бекор қилинган харид чиқди',
+    'cancelled_shop_sale':'🚫 Бекор қилинган сотув (ҳисобланмайди)',
 }
 REQUEST_LABELS={'need':'📥 Товар сўрови','return':'↩️ Омборга қайтариш'}
 STATUS_LABELS={'pending':'⏳ Кутилмоқда','accepted':'✅ Қабул қилинди','rejected':'❌ Рад этилди'}

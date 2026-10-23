@@ -4,8 +4,8 @@ Yozuvlar izsiz o'chirilmaydi (kassa bekor qilish bilan bir xil tamoyil):
 - asl xarid/sotuv saqlanadi, `voids` jadvaliga «bekor qilindi» belgisi, sabab, kim va qachon yoziladi;
 - uning ta'siri teskari yozuv bilan qaytariladi:
   xarid — ombordan 'correction_out' (yoki xom ashyo 'cancel'), ta'minotchi qarzi kamayadi (balance bekorni sanamaydi);
-  sotuv — omborga 'correction_in', mijozga 'return' hodisasi (qarz va sof savdo kamayadi), olingan pul teskari
-  to'lov bilan qaytadi (rahbar sotgan bo'lsa kassa kirimi cashbook.cancel orqali bekor qilinadi).
+  sotuv — uning yozuvlari (yetkazish, sotuv, to'lov, ombor chiqimi) 'cancelled_*' turiga o'tadi: savdo hisobotida
+  ham, qarzda ham, omborda ham sanalmaydi (rahbar sotgan bo'lsa kassa kirimi ham bekor qilinadi).
 - Tahrirlash = eski yozuvni bekor qilish + yangisini yozish, bitta tranzaksiyada; ikkalasi bir-biriga bog'lanadi.
 Faqat rahbar (role='admin') bajaradi.
 """
@@ -28,6 +28,7 @@ def init(db):
             if stmt.strip():db.execute(stmt)
     else:
         db.executescript(SCHEMA)
+    normalize_voided_sales(db)
 
 
 def require_admin(db,actor):
@@ -112,10 +113,28 @@ def edit_purchase(db,actor,pid,sid,lines,note,reason,source=None):
 
 # ---------- savdo sotuvi ----------
 
-def _sale_payment_event(db,sale):
-    tag=f"Savdo #{int(sale['id'])}"+(f" | {sale['note']}" if sale['note'] else '')
-    return db.execute("""SELECT * FROM events WHERE kind='payment' AND client=? AND note=? AND ts=? AND amount_usd>0
-        ORDER BY id LIMIT 1""",(sale['client'],tag,sale['ts'])).fetchone()
+def _sale_tag(sale):
+    return f"Savdo #{int(sale['id'])}"+(f" | {sale['note']}" if sale['note'] else '')
+
+
+def _hide_sale(db,sale):
+    """Bekor qilingan sotuvning yozuvlari 'cancelled_*' turiga o'tadi: hech bir hisobot (savdo, qarz, agent, ombor)
+    ularni sanamaydi, lekin bazada saqlanadi. Idempotent — qayta chaqirilsa hech narsa o'zgarmaydi.
+    Eski usulda (teskari 'return'/'payment' va 'correction_in') bekor qilinganlar ham shu yerda yashiriladi."""
+    sid=int(sale['id']);tag=_sale_tag(sale);label=f'Savdo #{sid} bekor qilindi%'
+    db.execute("""UPDATE events SET kind='cancelled_'||kind WHERE client=? AND note=? AND kind IN ('delivery','sold','payment')""",
+               (sale['client'],tag))
+    db.execute("""UPDATE events SET kind='cancelled_'||kind WHERE client=? AND kind IN ('return','payment')
+        AND (note LIKE ? OR note LIKE ?)""",(sale['client'],label,'Bekor qilindi: kassa kirimi #% · '+label))
+    db.execute("""UPDATE warehouse_moves SET kind='cancelled_'||kind WHERE (kind='shop_sale' AND note=?)
+        OR (kind='correction_in' AND note LIKE ?)""",(tag,label))
+
+
+def normalize_voided_sales(db):
+    """Ishga tushishda: oldin bekor qilingan sotuvlar ham hisobotlardan to'liq chiqariladi."""
+    for r in db.execute("SELECT ref FROM voids WHERE kind='sale'").fetchall():
+        s=db.execute('SELECT id,client,note FROM shop_sales WHERE id=?',(int(r[0]),)).fetchone()
+        if s:_hide_sale(db,s)
 
 
 def cancel_sale(db,actor,sale_id,reason,now=None):
@@ -127,27 +146,23 @@ def cancel_sale(db,actor,sale_id,reason,now=None):
     core.lock_agent(db,seller);wh._lock_warehouse(db)
     ts=int(time.time() if now is None else now)
     _mark(db,'sale',s['id'],actor,reason,ts)
-    label=f"Savdo #{int(s['id'])} bekor qilindi · {reason[:150]}"
-    # 1) Olingan pul qaytadi.
-    ev=_sale_payment_event(db,s) if int(s['paid'] or 0)>0 else None
+    # Olingan pul: sotuvchi qo'lida bo'lishi (yoki kassada qolgan bo'lishi) kerak — aks holda bekor qilinmaydi.
+    ev=db.execute("""SELECT * FROM events WHERE kind='payment' AND client=? AND note=? AND amount_usd>0 ORDER BY id LIMIT 1""",
+                  (s['client'],_sale_tag(s))).fetchone() if int(s['paid'] or 0)>0 else None
     if ev is not None:
-        move=db.execute("SELECT id FROM cash_moves WHERE event=?",(ev['id'],)).fetchone() if ev['agent'] is None else None
+        move=db.execute("SELECT * FROM cash_moves WHERE event=? AND status='active'",(ev['id'],)).fetchone() if ev['agent'] is None else None
         if move is not None:
             import cashbook
-            cashbook.cancel(db,actor,int(move[0]),label,now=ts)   # kassa qoldig'i tekshiriladi, qarz teskari yozuv bilan qaytadi
-        else:
-            agent=int(ev['agent'])
-            usd=int(ev['amount_usd']);uzs=int(ev['paid_uzs'] or 0);method=ev['pay_method'] or ''
-            if method!='card':
-                if uzs and core.cash(db,agent)<uzs*100:
-                    raise ValueError('Sotuvchi bu so‘mni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
-                if not uzs and core.cash_usd(db,agent)<usd:
-                    raise ValueError('Sotuvchi bu dollarni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
-            db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
-                VALUES(?,?,?,'payment',0,0,0,?,?,?,NULL,?,?,?)""",(actor,agent,s['client'],-usd,label,ts,method,-uzs,int(ev['fx_rate'] or 0)))
-    # 2) Tovar omborga qaytadi, mijoz qarzi/savdo 'return' bilan kamayadi.
-    for l in db.execute('SELECT * FROM shop_sale_lines WHERE sale=? ORDER BY id',(s['id'],)).fetchall():
-        wh._move(db,actor,'correction_in',int(l['pack']),int(l['qty']),agent=seller,note=label)
-        db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source)
-            VALUES(?,?,?,'return',?,?,0,?,?,?,NULL)""",(actor,seller,s['client'],int(l['pack']),int(l['qty']),int(l['total']),label,ts))
+            cashbook._lock(db)
+            if int(move['amount'])>cashbook._available(db,move['to_pocket'],move['currency']):
+                raise ValueError(f"Kassada ({cashbook.POCKETS[move['to_pocket']]}) yetarli {move['currency']} yo‘q — bu pul ishlatilgan.")
+            db.execute("UPDATE cash_moves SET status='cancelled',cancel_actor=?,cancel_ts=?,cancel_reason=? WHERE id=?",
+                       (actor,ts,f"Savdo #{int(s['id'])} bekor qilindi · {reason[:150]}",int(move['id'])))
+        elif ev['agent'] is not None and (ev['pay_method'] or '')!='card':
+            agent=int(ev['agent']);usd=int(ev['amount_usd']);uzs=int(ev['paid_uzs'] or 0)
+            if uzs and core.cash(db,agent)<uzs*100:
+                raise ValueError('Sotuvchi bu so‘mni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
+            if not uzs and core.cash_usd(db,agent)<usd:
+                raise ValueError('Sotuvchi bu dollarni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
+    _hide_sale(db,s)   # tovar omborga, qarz va pul o'z-o'zidan qaytadi (yozuvlar sanalmaydi)
     return int(s['id'])

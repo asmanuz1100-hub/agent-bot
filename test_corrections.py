@@ -113,6 +113,39 @@ class SaleCorrectionTests(unittest.TestCase):
         self.assertEqual(d['receipt']['cancelled']['reason'], 'Xato mijoz')
         self.assertEqual(d['today']['count'], 0)                                       # bugungi jamidan chiqdi
 
+    def sales_report(self):
+        import sales
+        return sales.sales(self.db, 'all')
+
+    def test_cancelled_sale_disappears_from_sales_report(self):
+        keep = self.sell(S1, self.client, [{'pack': self.p2, 'qty': 1}])
+        r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 3}], paid='10', method='cash_usd')
+        self.db.commit()
+        self.act(ADMIN, 'sale_cancel', saleId=r['id'], reason='Xato')
+        rep = self.sales_report()
+        self.assertEqual([j['kind'] for j in rep['journal']], ['sale'])              # «Qaytarish» ham, bekor sotuv ham yo'q
+        self.assertEqual(rep['journal'][0]['amountUsd'], keep['totalUsd'])
+        kinds = {r[0] for r in self.db.execute("SELECT DISTINCT kind FROM events WHERE note LIKE ?", (f"Savdo #{r['id']}%",))}
+        self.assertEqual(kinds, {'cancelled_delivery', 'cancelled_sold', 'cancelled_payment'})   # yozuvlar bazada saqlanadi
+        self.assertEqual(wh.stock(self.db, self.p1), 100)
+
+    def test_old_style_cancellations_are_cleaned_on_startup(self):
+        r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 2}], paid='5', method='cash_usd')
+        sale = self.db.execute('SELECT * FROM shop_sales WHERE id=?', (r['id'],)).fetchone()
+        label = f"Savdo #{r['id']} bekor qilindi · eski"
+        # avvalgi versiya: teskari return / manfiy to'lov / correction_in
+        self.db.execute("INSERT INTO voids(kind,ref,actor,reason,ts) VALUES('sale',?,?, 'eski',1)", (r['id'], ADMIN))
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts) VALUES(?,?,?,'return',?,2,0,2000,?,1)",
+                        (ADMIN, S1, self.client, self.p1, label))
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,pay_method) VALUES(?,?,?,'payment',0,0,0,-500,?,1,'cash')",
+                        (ADMIN, S1, self.client, label))
+        wh._move(self.db, ADMIN, 'correction_in', self.p1, 2, agent=S1, note=label)
+        self.assertIn('return', [j['kind'] for j in self.sales_report()['journal']])
+        corrections.normalize_voided_sales(self.db)
+        corrections.normalize_voided_sales(self.db)                                    # takror — o'zgarmaydi
+        self.assertEqual(self.sales_report()['journal'], [])
+        self.assertEqual((wh.stock(self.db, self.p1), core.client_debt_usd(self.db, self.client), core.cash_usd(self.db, S1)), (100, 0, 0))
+
     def test_cancel_blocked_when_cash_already_handed_over(self):
         r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 1}], paid='10', method='cash_usd')
         self.db.execute("INSERT INTO handovers(agent,amount,amount_usd,status,ts,cashier) VALUES(?,0,1000,'accepted',1,?)", (S1, ADMIN))
