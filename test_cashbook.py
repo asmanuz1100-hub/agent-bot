@@ -98,6 +98,49 @@ class CashbookTests(unittest.TestCase):
         self.assertEqual(j[0]['cancel']['who'], 'Admin')
         self.assertEqual(cashbook.balances(self.db)['bank_usd'], 0)
 
+    def _client_with_debt(self, usd_cents=50000):
+        self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(77,2,'Do‘kon A','+998900000077')")
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts,source) VALUES(2,2,77,'delivery',1,1,0,?,50,900001)", (usd_cents,))
+        self.db.commit()
+
+    def test_client_payment_reduces_debt_once_and_cancel_restores(self):
+        self._client_with_debt(50000)                                   # $500 qarz
+        agent_cash = (core.cash_usd(self.db, 2), core.cash(self.db, 2))
+        before = cashbook.balances(self.db)
+        src = self.src()
+        for _ in range(2):                                              # takroriy so'rov — bitta yozuv
+            mid = cashbook.add_income(self.db, 1, 'cash', 'USD', '100', cashbook.CLIENT_PAYMENT, '', '', src, client=77)
+        self.db.commit()
+        self.assertEqual(core.client_debt_usd(self.db, 77), 40000)
+        self.assertEqual(cashbook.balances(self.db)['cash_usd'], before['cash_usd'] + 10000)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0], 1)
+        self.assertEqual((core.cash_usd(self.db, 2), core.cash(self.db, 2)), agent_cash)   # agent hisobiga tegmaydi
+        # so'mda: 1 250 000 / 12 500 = $100
+        cashbook.add_income(self.db, 1, 'bank', 'UZS', '1250000', cashbook.CLIENT_PAYMENT, '', '', self.src(), client=77)
+        self.assertEqual(core.client_debt_usd(self.db, 77), 30000)
+        with self.assertRaises(ValueError):                             # qarzdan ko'p emas
+            cashbook.add_income(self.db, 1, 'cash', 'USD', '301', cashbook.CLIENT_PAYMENT, '', '', self.src(), client=77)
+        with self.assertRaises(ValueError):                             # mijoz tanlanmagan
+            cashbook.add_income(self.db, 1, 'cash', 'USD', '1', cashbook.CLIENT_PAYMENT, 'Kimdir', '', self.src())
+        cashbook.cancel(self.db, 1, mid, 'Noto‘g‘ri mijoz')
+        self.db.commit()
+        self.assertEqual(core.client_debt_usd(self.db, 77), 40000)    # qarz qaytdi
+        self.assertEqual(cashbook.balances(self.db)['cash_usd'], before['cash_usd'])
+        row = self.db.execute('SELECT status,reversal FROM cash_moves WHERE id=?', (mid,)).fetchone()
+        self.assertEqual(row['status'], 'cancelled')
+        self.assertIsNotNone(row['reversal'])                           # asl to'lov va teskari yozuv saqlanadi
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment' AND client=77").fetchone()[0], 3)
+        with self.assertRaises(ValueError):cashbook.cancel(self.db, 1, mid, 'yana')
+        self.assertEqual(core.client_debt_usd(self.db, 77), 40000)
+
+    def test_other_income_does_not_touch_client_debt(self):
+        self._client_with_debt(50000)
+        cashbook.add_income(self.db, 1, 'cash', 'USD', '100', 'Ta’sischi mablag‘i', 'Ta’sischi', '', self.src())
+        self.assertEqual(core.client_debt_usd(self.db, 77), 50000)
+        with self.assertRaises(ValueError):
+            cashbook.add_income(self.db, 1, 'cash', 'USD', '1', 'Qarz olindi', 'Bank', '', self.src(), client=77)
+        self.assertEqual([c['id'] for c in cashbook.debtors(self.db)], [77])
+
     def test_close_day_records_difference_without_fixing(self):
         before = cashbook.balances(self.db)
         c = cashbook.close_day(self.db, 1, {'cash_uzs': '1200000', 'cash_usd': str(before['cash_usd'] / 100)}, 'kechki sanoq')

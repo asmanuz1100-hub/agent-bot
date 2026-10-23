@@ -21,7 +21,11 @@ from core import PostgresDB
 TZ=ZoneInfo('Asia/Tashkent')
 POCKETS={'cash':'Naqd','card':'Karta','bank':'Bank'}
 CURRENCIES=('UZS','USD')
-INCOME_CATEGORIES=('Mijozdan to‘lov (kassaga to‘g‘ridan)','Ta’sischi mablag‘i','Qarz olindi','Qaytarilgan pul','Boshqa kirim')
+CLIENT_PAYMENT='Mijozdan to‘lov (kassaga to‘g‘ridan)'
+INCOME_CATEGORIES=(CLIENT_PAYMENT,'Ta’sischi mablag‘i','Qarz olindi','Qaytarilgan pul','Boshqa kirim')
+# Mijozdan to'lov qarzni mavjud mexanizm bilan kamaytiradi: events.kind='payment' (agent bo'sh — pul agent
+# qo'lida emas, to'g'ridan kassada). pay_method='cashbox' agent naqd/karta hisoblariga qo'shilmaydi.
+CASHBOX_METHOD='cashbox'
 MAX_AMOUNT=10**12
 
 SCHEMA='''
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS cash_moves(id INTEGER PRIMARY KEY, kind TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS cash_closings(id INTEGER PRIMARY KEY, day TEXT NOT NULL, pocket TEXT NOT NULL, currency TEXT NOT NULL, system INTEGER NOT NULL, counted INTEGER NOT NULL, diff INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', actor INTEGER NOT NULL, ts INTEGER NOT NULL, UNIQUE(day,pocket,currency));
 CREATE INDEX IF NOT EXISTS idx_cash_moves_ts ON cash_moves(ts);
 '''
+LINK_COLS=(('client','INTEGER'),('event','INTEGER'),('reversal','INTEGER'))
 PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGSERIAL PRIMARY KEY').replace(' INTEGER',' BIGINT')
 
 
@@ -38,6 +43,14 @@ def init(db):
             if stmt.strip():db.execute(stmt)
     else:
         db.executescript(SCHEMA)
+    if isinstance(db,PostgresDB):
+        have={r[0] for r in db.execute('''SELECT column_name FROM information_schema.columns
+            WHERE table_schema=current_schema() AND table_name='cash_moves' ''').fetchall()}
+    else:
+        have={r[1] for r in db.execute('PRAGMA table_info(cash_moves)').fetchall()}
+    for col,typ in LINK_COLS:
+        if col not in have:
+            db.execute(f"ALTER TABLE cash_moves ADD COLUMN {col} {'BIGINT' if isinstance(db,PostgresDB) else typ}")
 
 
 def _lock(db):
@@ -142,21 +155,42 @@ def _seen(db,source):
     return int(row[0]) if row else None
 
 
-def add_income(db,actor,pocket,currency,amount,category,counterparty,note,source,now=None):
+def add_income(db,actor,pocket,currency,amount,category,counterparty,note,source,now=None,client=None):
+    """Qo'lda kirim. «Mijozdan to'lov» — haqiqiy mijoz tanlanadi va qarzi shu operatsiyada kamayadi."""
+    import core
     pocket=_pocket(pocket);currency=_currency(currency);amount=parse_amount(amount,currency)
     if category not in INCOME_CATEGORIES:raise ValueError('Kirim turini ro‘yxatdan tanlang.')
-    counterparty=str(counterparty or '').strip()
-    if not counterparty or len(counterparty)>200:raise ValueError('Kimdan kelganini yozing (1–200 belgi).')
     note=str(note or '').strip()
     if len(note)>500:raise ValueError('Izoh 500 belgidan oshmasin.')
     if not isinstance(source,int) or source<=0:raise ValueError('Operatsiya ID noto‘g‘ri.')
+    crow=None
+    if category==CLIENT_PAYMENT:
+        try:client=int(client)
+        except (TypeError,ValueError):raise ValueError('Mijozni ro‘yxatdan tanlang.')
+        crow=db.execute('SELECT id,name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
+        if not crow:raise ValueError('Mijoz topilmadi.')
+        counterparty=crow['shop_name'] or crow['name'] or f'Mijoz #{client}'
+    elif client not in (None,''):
+        raise ValueError('Mijoz faqat «Mijozdan to‘lov» kirimida tanlanadi.')
+    counterparty=str(counterparty or '').strip()
+    if not counterparty or len(counterparty)>200:raise ValueError('Kimdan kelganini yozing (1–200 belgi).')
     _lock(db)
     old=_seen(db,source)
     if old:return old
     usd_eq,rate=_usd_eq(db,currency,amount)
-    return int(db.execute('''INSERT INTO cash_moves(kind,to_pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,ts,source)
-        VALUES('income',?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,
-        int(time.time() if now is None else now),source)).fetchone()[0])
+    ts=int(time.time() if now is None else now)
+    event=None
+    if crow:
+        debt=core.client_debt_usd(db,client)
+        if usd_eq>debt:
+            raise ValueError(f"Mijoz qarzi {debt/100:,.2f} USD — undan ko‘p to‘lov qabul qilinmaydi.".replace(',',' '))
+        if db.execute('SELECT 1 FROM events WHERE source=?',(source,)).fetchone():raise ValueError('Operatsiya ID band. Qayta yuboring.')
+        event=int(db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
+            VALUES(?,NULL,?,'payment',0,0,0,?,?,?,?,?,?,?) RETURNING id""",(actor,client,usd_eq,
+            ('Kassaga to‘g‘ridan'+(' · '+note if note else '')),ts,source,CASHBOX_METHOD,amount if currency=='UZS' else 0,rate)).fetchone()[0])
+    return int(db.execute('''INSERT INTO cash_moves(kind,to_pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,ts,source,client,event)
+        VALUES('income',?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,
+        ts,source,client if crow else None,event)).fetchone()[0])
 
 
 def add_transfer(db,actor,from_pocket,to_pocket,currency,amount,note,source,now=None):
@@ -188,8 +222,16 @@ def cancel(db,actor,move_id,reason,now=None):
     take=row['to_pocket']
     if int(row['amount'])>_available(db,take,row['currency']):
         raise ValueError(f"{POCKETS[take]} hisobida yetarli {row['currency']} yo‘q — avval pul qaytishini ta’minlang.")
-    db.execute("UPDATE cash_moves SET status='cancelled',cancel_actor=?,cancel_ts=?,cancel_reason=? WHERE id=?",
-               (actor,int(time.time() if now is None else now),reason,int(row['id'])))
+    ts=int(time.time() if now is None else now)
+    rev=None
+    if row['event']:
+        # Mijoz qarzi qaytadi: asl to'lov saqlanadi, teskari yozuv qo'shiladi (izsiz o'chirish yo'q).
+        ev=db.execute('SELECT * FROM events WHERE id=?',(int(row['event']),)).fetchone()
+        rev=int(db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
+            VALUES(?,NULL,?,'payment',0,0,0,?,?,?,NULL,?,?,?) RETURNING id""",(actor,ev['client'],-int(ev['amount_usd']),
+            f"Bekor qilindi: kassa kirimi #{int(row['id'])} · {reason}",ts,CASHBOX_METHOD,-int(ev['paid_uzs'] or 0),int(ev['fx_rate'] or 0))).fetchone()[0])
+    db.execute("UPDATE cash_moves SET status='cancelled',cancel_actor=?,cancel_ts=?,cancel_reason=?,reversal=? WHERE id=?",
+               (actor,ts,reason,rev,int(row['id'])))
 
 
 def today(now=None):
@@ -273,7 +315,7 @@ def journal(db,start=None,end=None,limit=200):
         items.append({'type':'income' if inc else 'transfer','group':'income' if inc else 'internal','label':'Kirim' if inc else 'O‘tkazma',
                       'id':int(r['id']),'move':int(r['id']),'from':r['counterparty'] if inc else POCKETS.get(r['from_pocket'],''),
                       'to':POCKETS.get(r['to_pocket'],''),'category':r['category'] or '','currency':r['currency'],'amount':int(r['amount']),
-                      'rate':int(r['rate'] or 0),'note':r['note'] or '','who':r['who'] or '','ts':int(r['ts']),'status':r['status'],
+                      'rate':int(r['rate'] or 0),'note':r['note'] or '','who':r['who'] or '','ts':int(r['ts']),'status':r['status'],'client':int(r['client']) if r['client'] else None,
                       'cancel':{'who':r['cancel_who'] or '','ts':int(r['cancel_ts'] or 0),'reason':r['cancel_reason'] or ''} if r['status']!='active' else None})
     items.sort(key=lambda x:-x['ts'])
     return items[:limit]
@@ -294,4 +336,15 @@ def view(db,start=None,end=None):
     import core
     return {'balances':balances(db),'pockets':[[k,v] for k,v in POCKETS.items()],'incomeCategories':list(INCOME_CATEGORIES),
             'journal':journal(db,start,end,limit=200),'summary':summary(db,start or 0,end or 2**62),
-            'closings':closings(db),'today':today(),'rate':core.cashier_rate(db)}
+            'closings':closings(db),'today':today(),'rate':core.cashier_rate(db),'clientPayment':CLIENT_PAYMENT,
+            'debtors':debtors(db)}
+
+
+def debtors(db,limit=500):
+    """«Mijozdan to'lov» uchun tanlov: qarzi bor mijozlar (USD sent)."""
+    rows=db.execute("""SELECT c.id,COALESCE(NULLIF(c.shop_name,''),c.name) AS name,c.phone,u.name AS agent_name,
+        COALESCE(SUM(CASE WHEN e.kind='delivery' THEN e.amount_usd WHEN e.kind IN ('payment','return') THEN -e.amount_usd ELSE 0 END),0) AS debt
+        FROM clients c JOIN events e ON e.client=c.id LEFT JOIN users u ON u.id=c.agent
+        GROUP BY c.id,c.shop_name,c.name,c.phone,u.name HAVING COALESCE(SUM(CASE WHEN e.kind='delivery' THEN e.amount_usd
+        WHEN e.kind IN ('payment','return') THEN -e.amount_usd ELSE 0 END),0)>0 ORDER BY debt DESC LIMIT ?""",(limit,)).fetchall()
+    return [{'id':int(r['id']),'name':r['name'] or f"Mijoz #{r['id']}",'phone':r['phone'] or '','agent':r['agent_name'] or '','debtUsd':int(r['debt'])} for r in rows]

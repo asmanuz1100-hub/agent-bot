@@ -1905,6 +1905,7 @@ def payment_label(row):
     if rate:parts.append(f"курс {rate:,}".replace(',',' '))
     if method=='card':parts.append('карта')
     elif method=='cash':parts.append('нақд')
+    elif method=='cashbox':parts.append('кассага тўғридан')
     return ' · '.join(parts)
 
 

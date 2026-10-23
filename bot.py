@@ -3251,7 +3251,8 @@ def serve_webhook(db,base_url):
                         src=warehouse_api._source(actor,payload)
                         if op=='income':
                             cashbook.add_income(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
-                                                payload.get('category'),payload.get('counterparty'),payload.get('note'),src)
+                                                payload.get('category'),payload.get('counterparty'),payload.get('note'),src,
+                                                client=payload.get('clientId'))
                         elif op=='transfer':
                             cashbook.add_transfer(local,actor,payload.get('fromPocket'),payload.get('toPocket'),payload.get('currency'),
                                                   payload.get('amount'),payload.get('note'),src)

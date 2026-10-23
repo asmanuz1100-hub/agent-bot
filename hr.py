@@ -325,6 +325,10 @@ def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='ca
     expense=None;rate=0;credited=paid
     if kind in CASH_KINDS:
         if not isinstance(source,int) or source<=0:raise ValueError('Operatsiya ID noto‘g‘ri.')
+        # Kassa qulfi qoldiqni tekshirishdan OLDIN: ikki kishi bir vaqtda to'lasa ham ortiqcha to'lanmaydi.
+        import cashbook;cashbook._lock(db)
+        old=db.execute('SELECT id FROM hr_w_pay WHERE source=?',(source,)).fetchone()
+        if old:return int(old[0])
         if paid_cur!=cur or paid_cur=='UZS':
             rate=core.cashier_rate(db)
             if rate is None:raise ValueError('Avval kassada 1 USD kursini belgilang.')
