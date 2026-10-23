@@ -405,7 +405,53 @@ function showReceipt(r){
     <div class="tl"><span class="tx">To‘langan${r.method?' · '+PM[r.method][0]:''}</span><b class="ok">${usd(r.paidUsd)}${r.paidUzs?' <small class="mu">'+som(r.paidUzs)+'</small>':''}</b></div>
     <div class="tl"><span class="tx"><b>Qoldiq (qarz)</b></span><b class="${r.debtUsd>0?'bad':'ok'}">${usd(r.debtUsd)}</b></div>
     ${r.note?`<div class="note">${esc(r.note)}</div>`:''}
-    <div class="acts"><button class="btn g" id="cl">Yopish</button></div>`,s=>s.querySelector('#cl').onclick=closeSheet);
+    <div class="acts"><button class="btn" id="rp">🖨 Chop etish</button><button class="btn" id="rs">📤 Mijozga yuborish</button></div>
+    <div class="acts"><button class="btn g" id="cl">Yopish</button></div>`,s=>{s.querySelector('#cl').onclick=closeSheet;
+      s.querySelector('#rp').onclick=()=>printReceipt(r);s.querySelector('#rs').onclick=()=>shareReceipt(r);});
+}
+function receiptDate(ts){const d=new Date(ts*1000);return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
+function receiptBrand(){const b=(S&&S.brand)||{},d=b.details||{};return {name:b.name||d.legalName||'',logo:b.logo||'',address:d.address||'',phone:d.phone||''};}
+function receiptText(r){
+  const B=receiptBrand();
+  const L=[...(B.name?[B.name]:[]),`🧾 CHEK № ${r.id}`,receiptDate(r.ts),`Mijoz: ${r.client}${r.phone?' ('+r.phone+')':''}`,`Sotuvchi: ${r.seller}`,'——————————'];
+  r.lines.forEach((l,i)=>L.push(`${i+1}. ${l.name}\n   ${num(l.qty)} × ${usd(l.priceUsd)}${l.discountUsd?' (chegirma '+usd(l.discountUsd)+')':''} = ${usd(l.totalUsd)}`));
+  L.push('——————————');
+  if(r.discountUsd)L.push(`Jami narx: ${usd(r.subtotalUsd)}`,`Chegirma: −${usd(r.discountUsd)}`);
+  L.push(`JAMI: ${usd(r.totalUsd)}`,`To‘langan${r.method?' ('+PM[r.method][0]+')':''}: ${usd(r.paidUsd)}${r.paidUzs?' / '+som(r.paidUzs):''}`);
+  if(r.debtUsd>0)L.push(`Qoldiq (qarz): ${usd(r.debtUsd)}`);
+  if(r.note)L.push('Izoh: '+r.note);
+  if(r.cancelled)L.push('⚠️ BEKOR QILINGAN');
+  L.push('','Xaridingiz uchun rahmat!');
+  if(B.address)L.push(B.address);if(B.phone)L.push('Tel: '+B.phone);
+  return L.join('\n');
+}
+function printReceipt(r){
+  const B=receiptBrand();
+  const row=(a,b,c='')=>`<tr class="${c}"><td>${a}</td><td class="r">${b}</td></tr>`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Chek ${r.id}</title><style>
+    @page{size:80mm auto;margin:3mm}body{font:12px/1.35 monospace;width:74mm;margin:0 auto;color:#000}
+    h1{font-size:15px;text-align:center;margin:0 0 2px}.c{text-align:center}hr{border:0;border-top:1px dashed #000;margin:5px 0}
+    table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:1px 0}.r{text-align:right;white-space:nowrap}
+    .b td{font-weight:bold;font-size:14px}.s{font-size:11px;color:#333}</style></head><body>
+    ${B.logo?`<div class="c"><img src="${esc(B.logo)}" style="max-width:40mm;max-height:22mm"></div>`:''}${B.name?`<div class="c"><b style="font-size:14px">${esc(B.name)}</b></div>`:''}
+    ${B.address||B.phone?`<div class="c s">${esc(B.address)}${B.address&&B.phone?'<br>':''}${B.phone?'Tel: '+esc(B.phone):''}</div>`:''}${B.logo||B.name?'<hr>':''}
+    <h1>CHEK № ${r.id}</h1><div class="c">${receiptDate(r.ts)}</div><hr>
+    <div>Mijoz: <b>${esc(r.client)}</b>${r.phone?'<br>Tel: '+esc(r.phone):''}</div><div>Sotuvchi: ${esc(r.seller)}</div><hr>
+    <table>${r.lines.map(l=>row(`${esc(l.name)}<div class="s">${num(l.qty)} × ${usd(l.priceUsd)}${l.discountUsd?' · −'+usd(l.discountUsd):''}</div>`,usd(l.totalUsd))).join('')}</table><hr>
+    <table>${r.discountUsd?row('Jami narx',usd(r.subtotalUsd))+row('Chegirma','−'+usd(r.discountUsd)):''}${row('JAMI',usd(r.totalUsd),'b')}
+    ${row('To‘langan'+(r.method?' ('+PM[r.method][0]+')':''),usd(r.paidUsd)+(r.paidUzs?'<br>'+som(r.paidUzs):''))}
+    ${r.debtUsd>0?row('Qoldiq (qarz)',usd(r.debtUsd),'b'):''}</table>
+    ${r.note?'<hr><div>Izoh: '+esc(r.note)+'</div>':''}${r.cancelled?'<hr><div class="c"><b>BEKOR QILINGAN</b></div>':''}
+    <hr><div class="c">Xaridingiz uchun rahmat!</div></body></html>`;
+  const fr=document.createElement('iframe');fr.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  document.body.appendChild(fr);const d=fr.contentWindow.document;d.open();d.write(html);d.close();
+  setTimeout(()=>{try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){shareReceipt(r);}setTimeout(()=>fr.remove(),60000);},B.logo?600:250);
+}
+async function shareReceipt(r){
+  const text=receiptText(r);
+  if(navigator.share){try{await navigator.share({title:'Chek № '+r.id,text});return;}catch(e){if(e.name==='AbortError')return;}}
+  if(tg&&tg.openTelegramLink){tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent('Chek № '+r.id)+'&text='+encodeURIComponent(text));return;}
+  try{await navigator.clipboard.writeText(text);toast('Chek nusxalandi — mijozga joylang');}catch(e){toast('Ulashib bo‘lmadi',false);}
 }
 
 /* ---------- mijozlar ---------- */
