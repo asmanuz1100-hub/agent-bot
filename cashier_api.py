@@ -14,6 +14,10 @@ import manager_api
 def require_cashier(db, actor):
     row = db.execute("SELECT name FROM users WHERE id=? AND role IN ('cashier','admin')", (actor,)).fetchone()
     if not row:
+        import perms
+        if perms.open_section(db, actor, 'cash'):  # masalan omborchiga «Kassani ko'rish» berilgan
+            row = db.execute('SELECT name FROM users WHERE id=?', (actor,)).fetchone()
+    if not row:
         raise ValueError('Бу бўлим фақат кассир ёки админ учун.')
     return row[0]
 

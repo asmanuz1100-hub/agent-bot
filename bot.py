@@ -786,12 +786,12 @@ def menu(db,u):
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
-    if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
+    if CASHIER_MINIAPP_URL and (r in ('admin','cashier') or perms.open_section(db,u,'cash',ADMINS)):
         rows.insert(0,['📱 Кассир Mini App'])
     if SHOP_MINIAPP_URL and r in ('admin','sales'):
         rows.insert(0,['🛒 Savdo Mini App'])
     if WAREHOUSE_MINIAPP_URL:
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             rows.insert(0,['📱 Омбор Mini App'])
         elif r=='agent':
             rows.append(['📦 Омбор сўрови'])
@@ -1777,7 +1777,7 @@ def handle(db,update):
         return
     if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
         if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             api('sendMessage',chat_id=u,text='🏬 Омбор панели · буюртмалар, кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
                 reply_markup={'inline_keyboard':[[{'text':'🏬 Омбор панелини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
         elif r=='agent':
@@ -2758,7 +2758,7 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     if not modules.enabled(local,'cash'):
                         answer_cashier(403,{'error':modules.closed_message('cash')});return
-                    if role(local,actor) not in ('cashier','admin'):
+                    if role(local,actor) not in ('cashier','admin') and not perms.open_section(local,actor,'cash',ADMINS):
                         answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
                     if action in ('profile','profile_save'):
@@ -2772,6 +2772,7 @@ def serve_webhook(db,base_url):
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
+                    if isinstance(data,dict):data['myPerms']=sorted(perms.effective(local,actor,ADMINS))
                     local.commit()
                     attach_card_photo_urls(data)
                     if notify:
@@ -2851,7 +2852,7 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     if not modules.enabled(local,'warehouse'):
                         answer_wh(403,{'error':modules.closed_message('warehouse')});return
-                    if role(local,actor) not in ('warehouse','admin','agent'):
+                    if role(local,actor) not in ('warehouse','admin','agent') and not perms.open_section(local,actor,'warehouse',ADMINS):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
                     if role(local,actor)!='agent':
                         need='warehouse.catalog' if payload.get('action')=='product_photo' else perms.WAREHOUSE_ACTION.get(str(payload.get('action') or 'dashboard'))

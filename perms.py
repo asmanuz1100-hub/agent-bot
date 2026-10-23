@@ -49,8 +49,16 @@ CATALOG={
 }
 SECTIONS={'cash':'Kassa','warehouse':'Ombor','hr':'Xodimlar va oylik','reports':'Hisobot va tahlil','staff':'Xodimlar'}
 EDITABLE_ROLES=('admin','cashier','warehouse')     # admin bu yerda = ikkinchi darajali rahbar
-# Rol qaysi bo'lim ruxsatlarini ishlata oladi: kassir faqat kassa ilovasida, omborchi faqat ombor ilovasida.
-ROLE_SECTIONS={'admin':tuple(SECTIONS),'cashier':('cash',),'warehouse':('warehouse',)}
+# Rol — boshlang'ich to'plam (DEFAULTS). Admin unga boshqa bo'limdan ham ruxsat qo'sha oladi, lekin faqat
+# oxirigacha ishlaydiganini: ilovaga kirish, API va ichki tekshiruv shu ruxsat bilan ochiladi (open_section).
+# Ro'yxatda yo'q ruxsat bu rolda hali ishlamaydi — ko'rsatilmaydi va saqlanmaydi (soxta tugma bo'lmasin).
+GRANTABLE={
+    'admin':frozenset(CATALOG),
+    'cashier':frozenset(k for k,v in CATALOG.items() if v[0]=='cash')|{'warehouse.view'},
+    'warehouse':frozenset(k for k,v in CATALOG.items() if v[0]=='warehouse')|{'cash.view','cash.report'},
+}
+# Boshqa bo'lim ilovasini qaysi ruxsat bilan ochadi: (rol, bo'lim) -> ruxsat
+CROSS_OPEN={('cashier','warehouse'):'warehouse.view',('warehouse','cash'):'cash.view'}
 ROLE_LABELS={'primary':'Admin','admin':'Rahbar','cashier':'Kassir','warehouse':'Omborchi','sales':'Sotuvchi','agent':'Agent'}
 
 # Standart huquqlar hozirgi xatti-harakatni saqlaydi: rahbar ombor/ta'minot/oylik pul amallarini
@@ -101,6 +109,12 @@ def effective(db,uid,primary=()):
     return out
 
 
+def open_section(db,uid,section,primary=()):
+    """Boshqa rol xodimi shu bo'lim ilovasiga kira oladimi (masalan, kassir omborni ko'rish uchun)."""
+    need=CROSS_OPEN.get((_role(db,uid),section))
+    return bool(need) and has(db,uid,need,primary)
+
+
 def has(db,uid,perm,primary=()):
     return perm in effective(db,uid,primary)
 
@@ -121,8 +135,10 @@ def set_perms(db,actor,target,changes,primary=(),now=None):
     if role not in EDITABLE_ROLES:
         raise ValueError('Bu xodimning ruxsatlari o‘z bo‘limida: sotuvchi — Xodimlar → Savdo jamoasi, agent — agent kartasi.')
     if not isinstance(changes,dict) or any(p not in CATALOG for p in changes):raise ValueError('Ruxsatlar noto‘g‘ri.')
-    if any(CATALOG[p][0] not in ROLE_SECTIONS[role] for p in changes):
-        raise ValueError('Bu ruxsat ushbu rol uchun emas: kassir — kassa, omborchi — ombor bo‘limi.')
+    bad=[p for p in changes if p not in GRANTABLE[role]]
+    if bad:
+        raise ValueError(f"«{CATALOG[bad[0]][1]}» ruxsati {ROLE_LABELS[role].lower()} rolida hozircha ishlamaydi. "
+                         'Bunday ish uchun xodimga mos rol bering.')
     ts=int(time.time() if now is None else now)
     before=effective(db,target,primary)
     for perm,val in changes.items():
@@ -151,7 +167,7 @@ def staff_view(db,uid,primary=()):
     return {'id':int(uid),'role':key,'roleLabel':ROLE_LABELS.get(key,role),'editable':key in EDITABLE_ROLES,
             'perms':[{'key':k,'section':v[0],'sectionLabel':SECTIONS[v[0]],'label':v[1],'on':k in eff,
                       'default':k in DEFAULTS.get(role,()) or key=='primary','override':overrides.get(k)} for k,v in CATALOG.items()
-                     if v[0] in ROLE_SECTIONS.get(role,tuple(SECTIONS))],
+                     if k in GRANTABLE.get(role,CATALOG)],
             'history':hist}
 
 

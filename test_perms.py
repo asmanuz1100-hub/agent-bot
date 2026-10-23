@@ -53,9 +53,15 @@ class PermUnitTests(unittest.TestCase):
             perms.set_perms(self.db, 1, 6, {'cash.view': True}, PRIMARY)
         with self.assertRaises(ValueError):
             perms.set_perms(self.db, 1, 3, {'nonsense': True}, PRIMARY)
-        with self.assertRaises(ValueError):        # kassirga ombor ruxsati — ma'nosiz
+        with self.assertRaises(ValueError):        # kassir tovar harakatini kirita olmaydi (omborchi ishi)
             perms.set_perms(self.db, 1, 3, {'warehouse.receive': True}, PRIMARY)
-        self.assertEqual({p['section'] for p in perms.staff_view(self.db, 3, PRIMARY)['perms']}, {'cash'})
+        # kassirga omborni ko'rish — boshqa bo'limdan ishlaydigan ruxsat
+        self.assertEqual({p['key'] for p in perms.staff_view(self.db, 3, PRIMARY)['perms'] if p['section'] != 'cash'}, {'warehouse.view'})
+        self.assertFalse(perms.open_section(self.db, 3, 'warehouse', PRIMARY))
+        perms.set_perms(self.db, 1, 3, {'warehouse.view': True}, PRIMARY)
+        self.assertTrue(perms.open_section(self.db, 3, 'warehouse', PRIMARY))
+        perms.set_perms(self.db, 1, 5, {'cash.view': True}, PRIMARY)
+        self.assertTrue(perms.open_section(self.db, 5, 'cash', PRIMARY))
 
     def test_manager_perm_mapping(self):
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'bonus'), 'hr.calculate')
@@ -137,6 +143,35 @@ class PermHttpTests(HttpBase):
         self.assertEqual(code, 403, d)
         code, d = self.post('/api/warehouse', initData=signed_init_data(5), action='dashboard')
         self.assertEqual(code, 200, d)
+
+    def test_cashier_gets_warehouse_view_but_not_issue_and_revoke_closes_open_session(self):
+        init = signed_init_data(3)
+        code, d = self.post('/api/warehouse', initData=init, action='dashboard')
+        self.assertEqual(code, 403, d)
+        code, d = self.post('/api/manager', self.admin, action='perms_set', id=3, changes={'warehouse.view': True})
+        self.assertEqual(code, 200, d)
+        code, d = self.post('/api/warehouse', initData=init, action='dashboard')
+        self.assertEqual(code, 200, d)
+        self.assertEqual(d['mode'], 'keeper')
+        code, d = self.post('/api/warehouse', initData=init, action='issue', pack=1, qty=1, agent=2, requestId='whperm0101')
+        self.assertEqual(code, 403, d)                           # chiqim taqiqlangan
+        code, d = self.post('/api/manager', self.admin, action='perms_set', id=3, changes={'warehouse.issue': True})
+        self.assertEqual(code, 400, d)                           # ishlamaydigan ruxsat saqlanmaydi
+        self.post('/api/manager', self.admin, action='perms_set', id=3, changes={'warehouse.view': False})
+        code, d = self.post('/api/warehouse', initData=init, action='dashboard')   # o'sha sessiya
+        self.assertEqual(code, 403, d)
+
+    def test_warehouse_keeper_gets_cash_view_read_only(self):
+        init = signed_init_data(5)
+        code, d = self.post('/api/cashier', initData=init, action='dashboard')
+        self.assertEqual(code, 403, d)
+        self.post('/api/manager', self.admin, action='perms_set', id=5, changes={'cash.view': True})
+        code, d = self.post('/api/cashier', initData=init, action='dashboard')
+        self.assertEqual(code, 200, d)
+        self.assertEqual(d['myPerms'], ['cash.view'] + sorted(perms.DEFAULTS['warehouse']))
+        code, d = self.post('/api/cashier', initData=init, action='expense', requestId='cashperm11',
+                            currency='USD', amount='1', category='📦 Бошқа харажат', recipient='x')
+        self.assertEqual(code, 403, d)
 
 
 if __name__ == '__main__':
