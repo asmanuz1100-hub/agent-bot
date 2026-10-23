@@ -102,6 +102,26 @@ class SaleOrderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.op(KEEPER, 'list')
 
+    def test_admin_sells_in_own_name_money_goes_to_cashbox(self):
+        import cashbook
+        self.db.execute("INSERT INTO meta(key,value) VALUES('cashier_uzs_per_usd','12500')")
+        before = cashbook.balances(self.db)
+        sellers = shop.dashboard(self.db, ADMIN)['sellers']
+        self.assertEqual(sellers[0]['id'], ADMIN)
+        r = shop.sell(self.db, ADMIN, {'requestId': self.req(), 'clientId': self.client, 'sellerId': ADMIN,
+                                       'items': [{'pack': self.p1, 'qty': 3}], 'paid': '20', 'method': 'cash_usd'})
+        self.db.commit()
+        self.assertEqual((r['totalUsd'], r['debtUsd']), (30, 10))
+        self.assertEqual(core.client_debt_usd(self.db, self.client), 1000)
+        self.assertEqual(cashbook.balances(self.db)['cash_usd'], before['cash_usd'] + 2000)   # kassada
+        self.assertEqual(core.cash_usd(self.db, ADMIN), 0)                                     # hech kim qo'lida emas
+        self.assertEqual(wh.stock(self.db, self.p1), 97)
+        # buyurtma to'lovi ham kassaga
+        o = self.op(ADMIN, 'create', clientId=self.client, sellerId=ADMIN, items=[{'pack': self.p1, 'qty': 1}])['order']
+        self.op(ADMIN, 'deliver', orderId=o['id'], items={str(self.p1): 1})
+        self.op(ADMIN, 'pay', orderId=o['id'], payments=[{'method': 'card', 'amount': '10'}])
+        self.assertEqual(cashbook.balances(self.db)['card_usd'], before['card_usd'] + 1000)
+
 
 if __name__ == '__main__':
     unittest.main()

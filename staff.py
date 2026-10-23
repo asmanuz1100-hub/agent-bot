@@ -41,6 +41,7 @@ def _role_of(row):
 
 def staff_list(db, primary_admins=()):
     accounts = {int(r['user_id']): r['login'] for r in db.execute('SELECT user_id,login FROM web_accounts').fetchall()}
+    app_off = {int(r[0]) for r in db.execute("SELECT user_id FROM user_perms WHERE perm='access.miniapp' AND allowed=0").fetchall()}
     roles = tuple(ROLES) + tuple(DISABLED.values())
     marks = ','.join('?' * len(roles))
     out = []
@@ -48,7 +49,8 @@ def staff_list(db, primary_admins=()):
         role, active = _role_of(r)
         uid = int(r['id'])
         out.append({'id': uid, 'name': r['name'] or str(uid), 'role': role, 'roleLabel': ROLES[role],
-                    'active': active, 'primary': uid in primary_admins, 'webLogin': accounts.get(uid) or ''})
+                    'active': active, 'primary': uid in primary_admins, 'webLogin': accounts.get(uid) or '',
+                    'webCapable': role in WEB_ROLES, 'miniapp': uid not in app_off})
     return {'staff': out, 'roles': [{'key': k, 'label': v} for k, v in ROLES.items()]}
 
 
@@ -161,13 +163,17 @@ def activate(db, actor, uid):
     _audit(db, actor, None, uid, role + '_activated')
 
 
+# Web panel bor rollar: rahbar — Rahbar Web, sotuvchi — Savdo Web. Kassir, omborchi, agent — faqat Telegram ilovasi.
+WEB_ROLES = ('admin', 'sales')
+
+
 def issue_login(db, actor, uid, login=None):
-    """Web panel login/parol: panel faqat rahbarlar uchun, shuning uchun faqat faol admin akkauntiga beriladi."""
+    """Web panel login/parol: faol rahbar yoki savdo xodimiga."""
     core._require_admin(db, actor)
     uid = core._telegram_id(uid)
     row = _user(db, uid)
-    if not row or row['role'] != 'admin':
-        raise ValueError('Web panelga faqat faol admin kira oladi. Boshqa xodimlar Telegram ilovasi orqali ishlaydi.')
+    if not row or row['role'] not in WEB_ROLES:
+        raise ValueError('Web panel faqat rahbar va savdo xodimi uchun. Kassir, omborchi va agent Telegram ilovasi orqali ishlaydi.')
     return web_auth.issue_password(db, uid, (login or '').strip() or None)
 
 

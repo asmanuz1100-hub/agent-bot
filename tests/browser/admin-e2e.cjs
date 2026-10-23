@@ -82,7 +82,25 @@ const step=(n)=>console.log('✓',n);
     await page.waitForTimeout(700);
     const wk=(await api('hr',{op:'worker',id:w.id})).worker;
     assert.equal(wk.payroll.remaining,0);assert.equal(wk.active,false);step('yakuniy oylik to‘landi, ishchi yopiq qoldi');
+    // 4) Xodimlar: ruxsatlar, web login, Mini App kirishi shu yerda; Ta'minot — Ombor ichida
+    await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.getElementById('drawer').classList.contains('on'));
+    await page.evaluate(()=>{location.hash='staff'});await page.click('#stView [data-v="list"]');
+    await page.waitForSelector('[data-act="perms"][data-id="4"]');
+    await page.click('[data-act="app"][data-id="4"]');await modalOk();
+    await page.waitForFunction(()=>document.querySelector('[data-act="app"][data-id="4"]').classList.contains('danger'));
+    assert.equal((await api('staff_list',{})).staff.find(x=>x.id===4).miniapp,false);
+    await page.click('[data-act="app"][data-id="4"]');await modalOk();
+    await page.click('[data-act="perms"][data-id="4"]');await page.waitForSelector('#modalBody .perm-form');await page.keyboard.press('Escape');
+    assert.ok(await page.locator('[data-act="login"][data-id="5"]').count(),'sotuvchiga web login tugmasi yo‘q');
+    step('xodimlar: ruxsat, Mini App, web login');
+    await page.evaluate(()=>{location.hash='warehouse'});await page.waitForSelector('#whView [data-v="supply"]');
+    await page.click('#whView [data-v="supply"]');await page.waitForSelector('#spView [data-v="wh"]');
+    assert.equal(await page.evaluate(()=>location.hash),'#supply');
+    assert.equal(await page.locator('#nav button.on, #nav [aria-current="page"]').first().textContent().then(t=>/Ombor/.test(t)),true);
+    step('ta’minot ombor ichida');
     assert.deepEqual(errors,[]);
     console.log('admin-e2e: OK');
-  }finally{await browser.close();srv.proc.kill()}
+  }catch(e){try{const pg=browser.contexts()[0].pages()[0];console.error('toast:',await pg.evaluate(()=>[...document.querySelectorAll('.toast,#toasts *')].map(t=>t.textContent).join(' | ')));
+    console.error('modal:',await pg.evaluate(()=>document.getElementById('modalOv').hidden?'':document.getElementById('modalBody').textContent.slice(0,300)))}catch(_){}throw e}
+  finally{await browser.close();srv.proc.kill()}
 })().catch(e=>{console.error(e);process.exit(1)});

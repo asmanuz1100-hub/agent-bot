@@ -356,6 +356,8 @@ def _seller(db, actor, payload):
     if raw in (None, '', 0, '0'):
         raise ValueError('Sotuv qaysi savdo xodimi nomidan ekanini tanlang.')
     sid = _int(raw, 'Savdo xodimi', 1)
+    if sid == actor:
+        return actor   # rahbar o'z nomidan sotadi: pul to'g'ridan kassaga (_insert_payment)
     r = db.execute('SELECT role FROM users WHERE id=?', (sid,)).fetchone()
     if not r or r[0] != 'sales':
         raise ValueError('Faol savdo xodimini tanlang.')
@@ -363,6 +365,14 @@ def _seller(db, actor, payload):
 
 
 def _insert_payment(db, actor, agent, client, cents, method, uzs, rate, note, source, ts):
+    row = db.execute('SELECT role FROM users WHERE id=?', (agent,)).fetchone()
+    if row and row[0] == 'admin':
+        # Rahbar o'zi sotgan: pul hech kimning qo'lida qolmaydi — kassa kirimi va mijoz to'lovi bitta yozuvda
+        # (cashbook «Mijozdan to'lov» bilan bir xil: events agent bo'sh, cash_moves bog'langan).
+        import cashbook
+        cashbook.record_client_payment(db, actor, client, 'card' if method == 'card' else 'cash',
+                                       'UZS' if uzs else 'USD', uzs or cents, cents, rate, note, source, ts)
+        return
     db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
         VALUES(?,?,?,'payment',0,0,0,?,?,?,?,?,?,?)""",
                (actor, agent, client, cents, note, ts, source, 'card' if method == 'card' else 'cash', uzs, rate))
@@ -578,6 +588,9 @@ def dashboard(db, actor, now=None):
         cash = {'usd': core.cash_usd(db, actor) / 100, 'uzs': int(core.cash(db, actor)) // 100,
                 'pendingUsd': int(pend_usd or 0) / 100, 'pendingUzs': int(pend_uzs or 0) // 100}
     team = None
+    sellers = None
+    if s['role'] == 'admin':
+        sellers = [{'id': actor, 'name': f"{s['name']} (o‘zim) — pul to‘g‘ridan kassaga", 'self': True}]
     if can(s, 'all_sales'):
         team = []
         for u in db.execute("SELECT id,name FROM users WHERE role='sales' ORDER BY name,id").fetchall():
@@ -591,7 +604,8 @@ def dashboard(db, actor, now=None):
     return {'me': {k: s[k] for k in ('id', 'name', 'role', 'level', 'perms', 'maxDiscountPct', 'allowCredit')},
             'permLabels': PERMS,
             'rate': core.cashier_rate(db), 'products': products, 'today': today, 'recent': recent,
-            'cash': cash, 'team': team, 'generatedTs': now}
+            'cash': cash, 'team': team, 'sellers': (sellers or []) + [{'id': u['id'], 'name': u['name']} for u in (team or [])],
+            'generatedTs': now}
 
 
 def client_card(db, actor, client):

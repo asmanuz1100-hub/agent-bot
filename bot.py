@@ -2756,6 +2756,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_cashier(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'cash'):
                         answer_cashier(403,{'error':modules.closed_message('cash')});return
                     if role(local,actor) not in ('cashier','admin') and not perms.open_section(local,actor,'cash',ADMINS):
@@ -2808,6 +2810,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if actor is not None and payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_shop(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'sales'):
                         answer_shop(403,{'error':modules.closed_message('sales')});return
                     if actor is None:
@@ -2850,6 +2854,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_wh(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'warehouse'):
                         answer_wh(403,{'error':modules.closed_message('warehouse')});return
                     if role(local,actor) not in ('warehouse','admin','agent') and not perms.open_section(local,actor,'warehouse',ADMINS):
@@ -2908,6 +2914,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_agent(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'agents'):
                         answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
@@ -3127,6 +3135,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if actor is not None and payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer(403,{'error':perms.MINIAPP_OFF});return
                     if actor is None:
                         try:actor=web_auth.session_user(local,web_token)
                         except ValueError as e:
@@ -3268,6 +3278,9 @@ def serve_webhook(db,base_url):
                         data=cashbook.view(local,start,end)
                         eff=perms.effective(local,actor,ADMINS)
                         data['can']={k:('cash.'+k) in eff for k in ('income','transfer','cancel','close')}
+                    elif action=='access_set':
+                        perms.set_miniapp(local,actor,payload.get('id'),payload.get('miniapp') is True,ADMINS)
+                        data=manager_api.staff_list(local);data.update(staff.staff_list(local,ADMINS))
                     elif action=='perms_staff':
                         data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
                     elif action=='perms_set':
@@ -3355,7 +3368,8 @@ def serve_webhook(db,base_url):
                         elif action=='staff_activate':staff.activate(local,actor,uid)
                         elif action=='staff_login_issue':
                             login,password=staff.issue_login(local,actor,uid,payload.get('login'))
-                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL})
+                            web_role=role(local,int(uid))
+                            data.update({'login':login,'password':password,'url':SAVDO_WEB_URL if web_role=='sales' else WEB_PANEL_URL})
                         else:staff.revoke_login(local,actor,uid)
                         data['staff']=manager_api.staff_list(local);data['staff'].update(staff.staff_list(local,ADMINS))
                     elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
