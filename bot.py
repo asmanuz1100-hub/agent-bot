@@ -32,6 +32,7 @@ import purchases
 import hr
 import modules
 import perms
+import cashbook
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -3243,6 +3244,28 @@ def serve_webhook(db,base_url):
                         data['canCalc']='hr.calculate' in eff
                         data['canEdit']='hr.edit' in eff
                         if 'hr.salary_view' not in eff:perms.strip_salary(data)
+                    elif action=='cashbook':
+                        # Kassa: qo'lda kirim, o'tkazma, bekor qilish, kun yopish va jurnal (ruxsat yuqorida tekshirildi).
+                        op=str(payload.get('op') or 'view')
+                        src=warehouse_api._source(actor,payload)
+                        if op=='income':
+                            cashbook.add_income(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
+                                                payload.get('category'),payload.get('counterparty'),payload.get('note'),src)
+                        elif op=='transfer':
+                            cashbook.add_transfer(local,actor,payload.get('fromPocket'),payload.get('toPocket'),payload.get('currency'),
+                                                  payload.get('amount'),payload.get('note'),src)
+                        elif op=='cancel':
+                            cashbook.cancel(local,actor,payload.get('id') or 0,payload.get('reason'))
+                        elif op=='close':
+                            cashbook.close_day(local,actor,payload.get('counted'),payload.get('note'))
+                        elif op!='view':
+                            raise ValueError('Kassa amali noto‘g‘ri.')
+                        start=end=None
+                        if payload.get('period'):
+                            start,end,_=resolve_period(payload.get('period'),payload.get('from'),payload.get('to'))
+                        data=cashbook.view(local,start,end)
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['can']={k:('cash.'+k) in eff for k in ('income','transfer','cancel','close')}
                     elif action=='perms_staff':
                         data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
                     elif action=='perms_set':

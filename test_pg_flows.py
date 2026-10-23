@@ -16,6 +16,7 @@ import test_warehouse_api
 import test_purchases
 import test_hr
 import test_perms
+import test_cashbook
 
 URL = os.getenv('TEST_DATABASE_URL')
 
@@ -80,6 +81,23 @@ class PgHrTests(_PgMixin, test_hr.HrTests):
 @unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
 class PgPermTests(_PgMixin, test_perms.PermUnitTests):
     """Ruxsatlar PostgreSQL'da: ON CONFLICT, audit, bir xil natija."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgCashbookTests(_PgMixin, test_cashbook.CashbookTests):
+    """Kassa kengaytmasi PostgreSQL'da: advisory lock, Decimal yig'indilar, sxema."""
     def setUp(self):
         orig = core.connect
         core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)

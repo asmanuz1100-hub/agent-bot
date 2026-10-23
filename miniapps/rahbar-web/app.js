@@ -1281,6 +1281,54 @@ async function pageCash(page){
        '<tr><td><b>Jami</b></td><td class="right num"><b>'+usd(ac.cashUsd)+'</b></td><td class="right num"><b>'+uzs(ac.cashUzs)+'</b></td><td class="right num"><b>'+usd(ac.pendingUsd)+(ac.pendingUzs?' + '+uzs(ac.pendingUzs):'')+'</b></td></tr></tbody></table>':emptyState('Agentlarda pul yo‘q','users'))+'</div></div>';
   bindAgentLinks($('finBody'));
   $('finConv').innerHTML=ex.conversions.length?'<div class="tbl-wrap"><table><thead><tr><th>Sana</th><th>Manba</th><th class="right">Berildi</th><th class="right">Olindi</th><th class="right">Kurs</th></tr></thead><tbody>'+ex.conversions.map(function(x){var f=function(cur,v){return cur==='USD'?usd(v):uzs(v)};return '<tr><td class="num">'+dt(x.ts)+'<br><small class="muted">'+esc(x.cashier)+'</small></td><td>'+(x.payFrom==='card'?'Karta':'Naqd')+'</td><td class="right num">'+f(x.from,x.amountFrom)+'</td><td class="right num">'+f(x.to,x.amountTo)+'</td><td class="right num">'+num(x.rate)+'</td></tr>'}).join('')+'</tbody></table></div>':emptyState('Bu davrda konvertatsiya yo‘q','swap');
+  if(!$('cbCard'))page.insertAdjacentHTML('beforeend','<div class="card" id="cbCard" style="margin-top:16px"><div class="loading">Kassa jurnali…</div></div>');
+  cashbookCard();
+}
+/* ----- Kassa: hisoblar (naqd/karta/bank), kirim, o'tkazma, bekor qilish, kun yopish, jurnal (server: cashbook.py) ----- */
+var CB={group:'',data:null};
+var CB_GROUP={'':'Hammasi',income:'Kirimlar',expense:'Chiqimlar',internal:'Ichki harakat'};
+function cbMoney(n,c){return c==='USD'?usd(n/100):uzs(n)}
+async function cashbookCard(){
+  var el=$('cbCard');if(!el)return;
+  var d;try{d=CB.data=await api('cashbook',{op:'view'})}catch(e){if($('cbCard'))el.innerHTML=errState(e.message);return}
+  if(!$('cbCard'))return;renderCashbook(el,d);
+}
+function renderCashbook(el,d){
+  var b=d.balances,can=d.can||{};
+  var rows=d.journal.filter(function(x){return !CB.group||x.group===CB.group||(CB.group==='expense'&&x.group==='expense')});
+  el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' Kassa hisoblari va jurnal</h3><div class="actions">'+
+      (can.income?'<button class="btn sm pri" data-cb="income">'+ic('in','sm')+' Kirim</button>':'')+
+      (can.transfer?'<button class="btn sm" data-cb="transfer">'+ic('swap','sm')+' O‘tkazma</button>':'')+
+      (can.close?'<button class="btn sm" data-cb="close">'+ic('checkc','sm')+' Kunni yopish</button>':'')+'</div></div>'+
+    '<div class="grid g3" style="margin-bottom:14px">'+d.pockets.map(function(p){return '<div class="card kpi">'+tone(p[0]==='cash'?'cash':p[0]==='card'?'card':'bank','blue')+'<div><small>'+esc(p[1])+'</small><b>'+uzs(b[p[0]+'_uzs'])+'</b><em>'+usd(b[p[0]+'_usd']/100)+'</em></div></div>'}).join('')+'</div>'+
+    '<p class="hint" style="margin:-4px 0 12px">O‘tkazma va konvertatsiya — ichki harakat: daromad yoki xarajat emas. Oylik, dividend va ta’minotchi to‘lovi jurnalda alohida turda.</p>'+
+    '<div class="seg" id="cbSeg" style="margin-bottom:10px">'+Object.keys(CB_GROUP).map(function(k){return '<button data-g="'+k+'" class="'+(CB.group===k?'on':'')+'">'+CB_GROUP[k]+'</button>'}).join('')+'</div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Sana</th><th>Tur</th><th>Kimdan → kimga</th><th class="right">Summa</th><th>Kim</th><th>Holat</th></tr></thead><tbody>'+
+    (rows.length?rows.slice(0,120).map(function(x,i){return '<tr class="click" data-cbi="'+d.journal.indexOf(x)+'"><td class="num">'+dt(x.ts)+'</td><td>'+esc(x.label)+'</td><td class="small">'+esc(x.from||'—')+' → '+esc(x.to||'—')+'</td><td class="right num'+(x.group==='expense'?' bad':x.group==='income'?' ok':'')+'">'+cbMoney(x.amount,x.currency)+'</td><td class="small muted">'+esc(x.who)+'</td><td>'+(x.status==='active'?'':pill('Bekor qilingan','p-bad'))+'</td></tr>'}).join(''):'<tr><td colspan="6">'+emptyState('Harakat yo‘q','list')+'</td></tr>')+
+    '</tbody></table></div>'+
+    (d.closings.length?'<details class="mod-hist" style="margin-top:12px"><summary class="small muted">Kun yopishlar tarixi</summary><div class="tbl-wrap"><table><thead><tr><th>Kun</th><th>Hisob</th><th class="right">Tizimda</th><th class="right">Sanaldi</th><th class="right">Farq</th><th>Kim</th></tr></thead><tbody>'+
+      d.closings.map(function(c){return '<tr><td class="num">'+esc(c.day)+'</td><td>'+esc(c.pocketLabel)+' '+c.currency+'</td><td class="right num">'+cbMoney(c.system,c.currency)+'</td><td class="right num">'+cbMoney(c.counted,c.currency)+'</td><td class="right num'+(c.diff?' bad':' ok')+'">'+(c.diff>0?'+':c.diff<0?'−':'')+cbMoney(Math.abs(c.diff),c.currency)+'</td><td class="small muted">'+esc(c.who)+'</td></tr>'}).join('')+'</tbody></table></div></details>':'');
+  $('cbSeg').onclick=function(e){var x=e.target.closest('button');if(!x)return;CB.group=x.dataset.g;renderCashbook(el,d)};
+  el.querySelectorAll('[data-cbi]').forEach(function(tr){tr.onclick=function(){cbDetail(d.journal[+tr.dataset.cbi],can)}});
+  var call=async function(args,msg){var r=await run(function(){return api('cashbook',Object.assign({requestId:rid()},args))},msg);if(r){CB.data=r;S.dash=null;renderCashbook(el,r)}return r};
+  var pockOpts=d.pockets;
+  el.querySelectorAll('[data-cb]').forEach(function(x){x.onclick=async function(){var k=x.dataset.cb,v;
+    if(k==='income'){v=await formBox('Kassaga kirim',[{name:'pocket',label:'Qaysi hisobga',options:pockOpts},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'category',label:'Kirim turi',options:d.incomeCategories.map(function(c){return [c,c]})},{name:'counterparty',label:'Kimdan',required:true},{name:'note',label:'Izoh'}],'Kirim qilish','Agentdan pul qabul qilish — kassir ilovasida (topshiriq). Bu yerda boshqa tushumlar.');
+      if(v&&await confirmBox('Kirimni tasdiqlang','<p><b>'+cbMoney(v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,v.currency)+'</b> → '+esc((pockOpts.find(function(p){return p[0]===v.pocket})||['',''])[1])+'<br>Kimdan: '+esc(v.counterparty)+'</p>','Tasdiqlash'))call(Object.assign({op:'income'},v),'Kirim saqlandi')}
+    else if(k==='transfer'){v=await formBox('Hisoblar orasida o‘tkazma',[{name:'fromPocket',label:'Qayerdan',options:pockOpts},{name:'toPocket',label:'Qayerga',options:pockOpts,value:'bank'},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'note',label:'Izoh'}],'O‘tkazish','Bir valyutada. Valyuta almashtirish — konvertatsiya (kassir ilovasida).');
+      if(v&&await confirmBox('O‘tkazmani tasdiqlang','<p><b>'+cbMoney(v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,v.currency)+'</b>: '+esc((pockOpts.find(function(p){return p[0]===v.fromPocket})||['',''])[1])+' → '+esc((pockOpts.find(function(p){return p[0]===v.toPocket})||['',''])[1])+'</p>','Tasdiqlash'))call(Object.assign({op:'transfer'},v),'O‘tkazma saqlandi')}
+    else{var f=[];pockOpts.forEach(function(p){['uzs','usd'].forEach(function(c){f.push({name:p[0]+'_'+c,label:p[1]+' '+(c==='uzs'?'so‘m':'dollar')+' — tizimda '+cbMoney(b[p[0]+'_'+c],c.toUpperCase()),type:'number',step:'any'})})});f.push({name:'note',label:'Izoh'});
+      v=await formBox('Kunni yopish — sanalgan pul',f,'Yopish','Faqat sanagan hisoblaringizni to‘ldiring. Farq yoziladi, qoldiq avtomatik tuzatilmaydi.');
+      if(v){var counted={};Object.keys(v).forEach(function(key){if(key!=='note'&&v[key]!=='')counted[key]=v[key]});call({op:'close',counted:counted,note:v.note},'Kun yopildi')}}}});
+}
+async function cbDetail(x,can){
+  var row=function(k,v){return v?'<dt>'+k+'</dt><dd>'+v+'</dd>':''};
+  var html='<h3>'+esc(x.label)+' #'+x.id+'</h3><dl class="kv" style="margin:12px 0">'+row('Sana',dt(x.ts))+row('Kimdan',esc(x.from))+row('Kimga',esc(x.to))+row('Summa','<b>'+cbMoney(x.amount,x.currency)+'</b>'+(x.toAmount?' → '+cbMoney(x.toAmount,x.toCurrency):''))+row('Kurs',x.rate?'1 USD = '+num(x.rate,0)+' so‘m':'')+row('Turi',esc(x.category))+row('Izoh',esc(x.note))+row('Kiritdi',esc(x.who))+
+    row('Holat',x.status==='active'?'Faol':'<span class="bad">Bekor qilingan</span> — '+esc(x.cancel.who)+', '+dt(x.cancel.ts)+'<br>Sabab: '+esc(x.cancel.reason))+'</dl>'+
+    (x.type==='handover'?'<p class="hint">Agent topshirig‘i tafsilotlari — agent kartasida va kassir ilovasida.</p>':'');
+  var cancellable=x.move&&x.status==='active'&&can.cancel;
+  var v=await modal('<form>'+html+(cancellable?'<label>Bekor qilish sababi<input name="reason" maxlength="300"></label>':'')+'<div class="foot"><button type="button" class="btn" data-m="cancel">Yopish</button>'+(cancellable?'<button class="btn danger">Bekor qilish</button>':'')+'</div></form>');
+  if(v&&cancellable){var r=await run(function(){return api('cashbook',{op:'cancel',id:x.move,reason:v.reason})},'Bekor qilindi');if(r){CB.data=r;S.dash=null;var el=$('cbCard');if(el)renderCashbook(el,r)}}
 }
 function debtRows(){
   var q=DEBT.q.trim().toLowerCase();

@@ -26,7 +26,7 @@ NEEDS={('hr','pay_add'):'cash',('supply','pay'):'cash'}   # (/api/manager action
 
 ACTION_MODULE={
     'sales':'sales','shop':'sales',
-    'cash_period':'cash','cashier_add':'cash','cashier_rename':'cash','cashier_transfer':'cash',
+    'cash_period':'cash','cashbook':'cash','cashier_add':'cash','cashier_rename':'cash','cashier_transfer':'cash',
     'cashier_deactivate':'cash','cashier_activate':'cash',
     'warehouse':'warehouse','stock':'warehouse','supply':'warehouse','order_status':'warehouse',
     'product_add':'warehouse','product_update':'warehouse','product_photo':'warehouse','custom_map':'warehouse',

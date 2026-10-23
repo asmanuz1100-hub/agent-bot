@@ -27,6 +27,10 @@ CATALOG={
     'cash.fund':('cash','Agent xarajat hisobini to‘ldirish'),
     'cash.debt_task':('cash','Qarz undirish topshirig‘i'),
     'cash.report':('cash','Kassa hisoboti va eksport'),
+    'cash.income':('cash','Qo‘lda kirim'),
+    'cash.transfer':('cash','Hisoblar orasida o‘tkazma (naqd, karta, bank)'),
+    'cash.cancel':('cash','Kirim/o‘tkazmani bekor qilish'),
+    'cash.close':('cash','Kunni yopish (pulni sanash)'),
     'warehouse.view':('warehouse','Omborni ko‘rish'),
     'warehouse.receive':('warehouse','Kirim'),
     'warehouse.issue':('warehouse','Chiqim: agentga berish, qaytarish, so‘rovlar, buyurtma holati'),
@@ -54,7 +58,8 @@ ROLE_LABELS={'primary':'Admin','admin':'Rahbar','cashier':'Kassir','warehouse':'
 DEFAULTS={
     'admin':{'cash.view','cash.handover','cash.expense','cash.convert','cash.rate','cash.fund','cash.debt_task','cash.report',
              'warehouse.view','warehouse.catalog','hr.view','hr.salary_view','hr.edit','reports.view','reports.export','staff.manage'},
-    'cashier':{'cash.view','cash.handover','cash.expense','cash.convert','cash.rate','cash.fund','cash.debt_task','cash.report'},
+    'cashier':{'cash.view','cash.handover','cash.expense','cash.convert','cash.rate','cash.fund','cash.debt_task','cash.report',
+               'cash.income','cash.transfer','cash.close'},
     # omborchi avvaldan Ombor ilovasida mahsulot rasmini yuklaydi (catalog) — saqlanadi
     'warehouse':{'warehouse.view','warehouse.receive','warehouse.issue','warehouse.writeoff','warehouse.catalog'},
 }
@@ -156,6 +161,8 @@ def manager_perm(action,op=None,kind=None):
     """/api/manager amali uchun kerakli ruxsat (None — rahbar paneliga kirgan har kim)."""
     action=str(action or '');op=str(op or '')
     if action=='cash_period':return 'cash.view'
+    if action=='cashbook':
+        return {'income':'cash.income','transfer':'cash.transfer','cancel':'cash.cancel','close':'cash.close'}.get(op,'cash.view')
     if action in ('cashier_add','cashier_rename','staff_add','staff_rename','agent_add_preview','agent_add_commit',
                   'agent_rename_preview','agent_rename_commit'):return 'staff.manage'
     if action=='stock':
