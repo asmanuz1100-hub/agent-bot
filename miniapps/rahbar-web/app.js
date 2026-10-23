@@ -1402,13 +1402,13 @@ function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
 async function shLoad(){SH.d=await shApi('dashboard');var sl=SH.d.sellers||[];if(!SH.seller||!sl.some(function(u){return String(u.id)===SH.seller})){SH.seller=sl[0]?String(sl[0].id):''}return SH.d}
 async function pageSales(page,force){
   if(!SH.cart)SH.cart=shNewCart();
-  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['orders','Buyurtmalar'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
+  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['checks','Cheklar'],['orders','Buyurtmalar'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
   $('shTabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;SH.tab=b.dataset.t;pageSales(page)};
   if(!SH.d||force){try{await shLoad()}catch(e){$('shBody').innerHTML=errState(e.message);$('shBody').querySelector('[data-retry]').onclick=function(){pageSales(page,true)};return}}
   if(S.page!=='sales')return;
   var body=$('shBody');
   if(SH.tab==='team')SH.tab='report';
-  ({report:salesReport,pos:shPos,orders:shOrders,prices:shPrices})[SH.tab](body,force);
+  ({report:salesReport,pos:shPos,checks:shChecks,orders:shOrders,prices:shPrices})[SH.tab](body,force);
 }
 function shProduct(p){return (SH.d.products||[]).find(function(x){return x.pack===p})}
 function shPayload(){var c=SH.cart,p={clientId:c.client?c.client.id:null,note:c.note,items:c.items.map(function(i){var o={pack:i.pack,qty:i.qty};if(i.price!=null&&i.price!=='')o.price=i.price;return o})};
@@ -1425,11 +1425,13 @@ function shPos(el){
     '<div style="min-width:0"><div class="card" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('users')+' Sotuvchi va mijoz</h3></div>'+
       '<label class="small muted">Sotuv kimning nomidan (o‘zingiz — pul to‘g‘ridan kassaga; savdo xodimi — pul uning hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select>'+
       '<div id="shClient" style="margin-top:12px"></div></div>'+
+    (c.replace?'<div class="card" style="margin-bottom:16px;border-color:var(--amber,#d97706)"><b>'+ic('edit','sm')+' Sotuv № '+c.replace+' tahrirlanmoqda</b><p class="small muted" style="margin:6px 0">Saqlaganda eski chek bekor qilinadi va o‘rniga shu yangi chek yoziladi.</p><button class="btn sm" id="shEditX">Tahrirni bekor qilish</button></div>':'')+
     '<div class="card flush" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('cart')+' Savatcha</h3>'+(c.items.length?'<button class="btn" id="shClr">Tozalash</button>':'')+'</div><div id="shCart" class="tbl-wrap" style="padding:0 20px 16px"></div></div>'+
     '<div class="card" id="shPay"></div></div></div>';
   $('shSeller').onchange=function(){SH.seller=this.value};
   $('shPq').oninput=function(){SH.pq=this.value;shProds()};
   if($('shClr'))$('shClr').onclick=function(){c.items=[];SH.q=null;shPos(el)};
+  if($('shEditX'))$('shEditX').onclick=function(){SH.cart=shNewCart();SH.q=null;shPos(el)};
   shProds();shClient();shCart();shTotals();
 }
 function shProds(){
@@ -1556,19 +1558,50 @@ async function shOrderOpen(id){
 }
 async function shSave(){
   var c=SH.cart,p=Object.assign(shPayload(),{requestId:c.rid,sellerId:SH.seller,method:c.method});
+  if(c.replace){var why=await formBox('Sotuv № '+c.replace+' ni tahrirlash',[{name:'reason',label:'Nima uchun o‘zgartirilmoqda',required:true}],'Saqlash',
+      'Eski chek bekor qilinadi (tovar, pul va qarz qaytadi) va o‘rniga yangisi yoziladi. Ikkalasi tarixda qoladi.');if(!why)return;p.replaceSaleId=c.replace;p.reason=why.reason}
   if(c.method==='cash_uzs'){if(c.paidUzs){p.paidUzs=c.paidUzs;p.rate=c.rate||SH.d.rate}}else if(c.paid)p.paid=String(c.paid).replace(',','.');
   if(!p.paid&&!p.paidUzs)delete p.method;
   var b=$('shSave');b.disabled=true;
-  var r=await run(function(){return shApi('sell',p)},'Sotuv saqlandi');
+  var r=await run(function(){return shApi('sell',p)},c.replace?'Sotuv tahrirlandi':'Sotuv saqlandi');
   if(!r){b.disabled=false;return}
   SH.d=r;SH.cart=shNewCart();SH.q=null;S.cache={};shReceipt(r.receipt);shPos($('shBody'));
 }
+function shCancelNote(x,what){return x?'<div class="bad small" style="margin:8px 0">'+ic('ban','sm')+' Bekor qilingan '+dt(x.ts)+' · '+esc(x.who)+' · «'+esc(x.reason)+'»'+(x.replacedBy?' — o‘rniga '+what+' № '+x.replacedBy:'')+'</div>':''}
 function shReceipt(r){
-  modal('<form><h3>Sotuv № '+r.id+'</h3><div class="muted small">'+dt(r.ts)+' · '+esc(r.seller)+' · '+esc(r.client)+(r.phone?' · '+esc(r.phone):'')+'</div>'+
+  var live=!r.cancelled;
+  var p=modal('<form><h3>Sotuv № '+r.id+(live?'':' '+pill('Bekor qilingan','p-bad'))+'</h3><div class="muted small">'+dt(r.ts)+' · '+esc(r.seller)+' · '+esc(r.client)+(r.phone?' · '+esc(r.phone):'')+'</div>'+shCancelNote(r.cancelled,'sotuv')+
     '<div class="tbl-wrap" style="margin:12px 0"><table><thead><tr><th>Mahsulot</th><th class="right">Miqdor</th><th class="right">Narx</th><th class="right">Chegirma</th><th class="right">Jami</th></tr></thead><tbody>'+
     r.lines.map(function(l){return '<tr><td>'+esc(l.name)+'</td><td class="right num">'+num(l.qty)+'</td><td class="right num">'+usd(l.priceUsd)+'</td><td class="right num">'+(l.discountUsd?usd(l.discountUsd):'—')+'</td><td class="right num">'+usd(l.totalUsd)+'</td></tr>'}).join('')+'</tbody></table></div>'+
     '<dl class="kv"><dt>Jami narx</dt><dd class="num">'+usd(r.subtotalUsd)+'</dd><dt>Jami chegirma</dt><dd class="num">−'+usd(r.discountUsd)+'</dd><dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+usd(r.totalUsd)+'</b></dd><dt>To‘langan</dt><dd class="num ok">'+usd(r.paidUsd)+(r.paidUzs?' · '+uzs(r.paidUzs):'')+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(r.debtUsd>0?'bad':'ok')+'"><b>'+usd(r.debtUsd)+'</b></dd></dl>'+
-    '<div class="foot"><button type="button" class="btn" onclick="window.print()">'+ic('download','sm')+' Chop etish</button><button type="button" class="btn pri" data-m="cancel">Yopish</button></div></form>');
+    '<div class="foot">'+(live?'<button type="button" class="btn danger" id="rcDel">'+ic('trash','sm')+' O‘chirish</button><button type="button" class="btn" id="rcEdit">'+ic('edit','sm')+' Tahrirlash</button>':'')+
+    '<button type="button" class="btn" onclick="window.print()">'+ic('download','sm')+' Chop etish</button><button type="button" class="btn pri" data-m="cancel">Yopish</button></div></form>');
+  if(!live)return p;
+  $('rcEdit').onclick=function(){closeModal(null);shEditSale(r)};
+  $('rcDel').onclick=async function(){closeModal(null);
+    var v=await formBox('Sotuv № '+r.id+' ni o‘chirish',[{name:'reason',label:'Sabab',required:true}],'O‘chirish',
+      'Tovar omborga qaytadi, mijoz qarzi va olingan pul ('+usd(r.paidUsd)+') teskari yozuv bilan qaytariladi. Chek tarixda «bekor qilingan» bo‘lib qoladi.');
+    if(!v)return;var x=await run(function(){return shApi('sale_cancel',{saleId:r.id,reason:v.reason,requestId:rid()})},'Sotuv o‘chirildi');
+    if(x){SH.d=x;S.cache={};pageSales($('page'))}};
+  return p;
+}
+function shEditSale(r){
+  // Chek savatchaga yuklanadi; saqlashda server eskisini bekor qilib, yangisini yozadi.
+  var c=shNewCart();c.replace=r.id;c.note=r.note||'';
+  c.items=r.lines.map(function(l){return {pack:l.pack,qty:l.qty,price:Math.abs(l.priceUsd-l.listPriceUsd)>0.001?String(l.priceUsd):null}});
+  if(r.discountUsd>0&&!r.lines.some(function(l){return l.discountUsd>0&&Math.abs(l.priceUsd-l.listPriceUsd)>0.001})){c.dmode='usd';c.discount=String(r.discountUsd)}
+  var walk=/chakana xaridor/i.test(r.client||'');
+  if(!walk)c.client={id:r.clientId,name:r.client,phone:r.phone,priceType:r.priceType,debtUsd:0};
+  if(r.method)c.method=r.method==='cash_uzs'?'cash_uzs':r.method==='card'?'card':'cash_usd';
+  if(r.paidUzs){c.paidUzs=String(r.paidUzs);c.rate=String(r.rate||'')}else if(r.paidUsd)c.paid=String(r.paidUsd);
+  SH.cart=c;SH.seller=String(r.sellerId);SH.q=null;SH.tab='pos';pageSales($('page')).then(function(){shRequote();toast('Sotuv № '+r.id+' tahrirlanmoqda — o‘zgartirib, «Saqlash»ni bosing')});
+}
+function shChecks(el){
+  var rows=SH.d.recent||[];
+  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('receipt')+' Oxirgi cheklar</h3><span class="muted small">Oxirgi 30 ta sotuv · chekni ochib tahrirlash yoki o‘chirish mumkin</span></div>'+
+    '<div class="tbl-wrap" style="margin-top:10px">'+(rows.length?'<table><thead><tr><th>№</th><th>Sana</th><th>Mijoz</th><th>Sotuvchi</th><th class="right">Summa</th><th class="right">To‘landi</th><th></th></tr></thead><tbody>'+
+    rows.map(function(r){return '<tr class="click" data-rc="'+r.id+'"'+(r.cancelled?' style="opacity:.55"':'')+'><td class="num">#'+r.id+'</td><td class="num">'+dt(r.ts)+'</td><td><b>'+esc(r.client)+'</b></td><td class="small">'+esc(r.seller)+'</td><td class="right num">'+(r.cancelled?'<s>'+usd(r.totalUsd)+'</s>':usd(r.totalUsd))+'</td><td class="right num">'+usd(r.paidUsd)+'</td><td>'+(r.cancelled?pill('Bekor qilingan','p-bad'):'')+'</td></tr>'}).join('')+'</tbody></table>':emptyState('Hali sotuv yo‘q','receipt'))+'</div></div>';
+  el.querySelectorAll('[data-rc]').forEach(function(tr){tr.onclick=function(){shReceipt(rows.find(function(x){return x.id===+tr.dataset.rc}))}});
 }
 function shPrices(el){
   var ps=SH.d.products||[];
@@ -1818,9 +1851,10 @@ function renderSupply(page,d){
       '<div class="card"><div class="card-h"><h3>'+ic('list')+' Xom ashyo harakati</h3></div><div class="list">'+(d.materialMoves.length?d.materialMoves.map(function(m){var t=m.kind==='in'?['in','t-green','+']:m.kind==='use'?['out','t-blue','−']:['trash','t-red','−'];
         return '<div class="li"><span class="tone '+t[1]+'" style="width:32px;height:32px;border-radius:9px">'+ic(t[0],'sm')+'</span><div class="t"><b>'+esc(m.label)+' · '+t[2]+esc(m.qty)+' '+esc(m.unit)+'</b><small>'+esc(m.name)+(m.note?' · '+esc(m.note):'')+(m.actorName?' · '+esc(m.actorName):'')+'</small></div><small class="muted num">'+ago(m.ts)+'</small></div>'}).join(''):emptyState('Harakat yo‘q','list'))+'</div></div></div>';
   }else if(v==='purchases'){
-    body='<div class="card flush"><div class="card-h"><h3>'+ic('receipt')+' Oxirgi xaridlar</h3><span class="muted small">Mahsulot omborga, xom ashyo xom ashyo omboriga avtomatik kirim bo‘ladi</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>№</th><th>Sana</th><th>Ta’minotchi</th><th>Tarkibi</th><th class="right">Summa</th></tr></thead><tbody>'+
-      (d.purchases.length?d.purchases.map(function(p){return '<tr><td class="num">#'+p.id+'</td><td class="num">'+dt(p.ts)+'</td><td><b>'+esc(p.supplierName)+'</b>'+(p.note?'<br><small class="muted">'+esc(p.note)+'</small>':'')+'</td><td class="small">'+spLines(p.lines)+'</td><td class="right num"><b>'+cents(p.total)+'</b></td></tr>'}).join('')
-      :'<tr><td colspan="5">'+emptyState('Hali xarid kiritilmagan.','receipt')+'</td></tr>')+'</tbody></table></div></div>';
+    body='<div class="card flush"><div class="card-h"><h3>'+ic('receipt')+' Oxirgi xaridlar</h3><span class="muted small">Mahsulot omborga, xom ashyo xom ashyo omboriga avtomatik kirim bo‘ladi</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>№</th><th>Sana</th><th>Ta’minotchi</th><th>Tarkibi</th><th class="right">Summa</th><th class="right"></th></tr></thead><tbody>'+
+      (d.purchases.length?d.purchases.map(function(p){var x=p.cancelled;return '<tr'+(x?' style="opacity:.6"':'')+'><td class="num">#'+p.id+'</td><td class="num">'+dt(p.ts)+'</td><td><b>'+esc(p.supplierName)+'</b>'+(p.note?'<br><small class="muted">'+esc(p.note)+'</small>':'')+(x?'<br>'+pill('Bekor qilingan','p-bad')+' <small class="muted">'+esc(x.who)+' · «'+esc(x.reason)+'»'+(x.replacedBy?' → #'+x.replacedBy:'')+'</small>':'')+'</td><td class="small">'+spLines(p.lines)+'</td><td class="right num"><b>'+(x?'<s>'+cents(p.total)+'</s>':cents(p.total))+'</b></td>'+
+        '<td class="right" style="white-space:nowrap">'+(x||!d.canOperate?'':'<button class="icon-btn ghost" data-pedit="'+p.id+'" title="Tahrirlash" aria-label="Xarid #'+p.id+' ni tahrirlash">'+ic('edit','sm')+'</button><button class="icon-btn ghost" data-pdel="'+p.id+'" title="O‘chirish" aria-label="Xarid #'+p.id+' ni o‘chirish" style="color:var(--bad)">'+ic('trash','sm')+'</button>')+'</td></tr>'}).join('')
+      :'<tr><td colspan="6">'+emptyState('Hali xarid kiritilmagan.','receipt')+'</td></tr>')+'</tbody></table></div></div>';
   }else{
     body='<div class="card flush"><div class="card-h"><h3>'+ic('sliders')+' Ishlab chiqarish</h3><span class="muted small">Xom ashyo sarflanadi, tayyor mahsulot omborga kirim bo‘ladi</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>№</th><th>Sana</th><th>Mahsulot</th><th class="right">Miqdor</th><th>Kim</th></tr></thead><tbody>'+
       (d.productions.length?d.productions.map(function(p){return '<tr><td class="num">#'+p.id+'</td><td class="num">'+dt(p.ts)+'</td><td><b>'+esc(p.name)+'</b>'+(p.note?'<br><small class="muted">'+esc(p.note)+'</small>':'')+'</td><td class="right num">'+num(p.qty)+' dona</td><td class="muted">'+esc(p.actorName)+'</td></tr>'}).join('')
@@ -1845,6 +1879,11 @@ function renderSupply(page,d){
     else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}
       if(!d.materials.length){toast('Avval xom ashyo qo‘shing («+ Xom ashyo»). Xarid ro‘yxatida faqat xom ashyo chiqadi.',true);return}purchaseForm(d,call)}
     else{if(!prodOpts.length){toast('Faol mahsulot yo‘q.',true);return}produceForm(d,prodOpts,call)}}});
+  page.querySelectorAll('[data-pdel]').forEach(function(b){b.onclick=async function(){var p=d.purchases.find(function(x){return x.id===+b.dataset.pdel});
+    var v=await formBox('Xarid #'+p.id+' ni o‘chirish',[{name:'reason',label:'Sabab',required:true}],'O‘chirish',
+      esc(p.supplierName)+' · '+cents(p.total)+'. Kirim qilingan tovar va xom ashyo ombordan chiqariladi, ta’minotchiga qarz shu summaga kamayadi. Xarid tarixda «bekor qilingan» bo‘lib qoladi.');
+    if(v)call('purchase_cancel',{purchaseId:p.id,reason:v.reason},'Xarid o‘chirildi')}});
+  page.querySelectorAll('[data-pedit]').forEach(function(b){b.onclick=function(){purchaseForm(d,call,d.purchases.find(function(x){return x.id===+b.dataset.pedit}))}});
   page.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=async function(){var s=d.suppliers.find(function(x){return x.id===+b.dataset.pay});
     var v=await formBox('To‘lov: '+s.name,[{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true,value:(s.debt/100).toFixed(2)},{name:'payFrom',label:'Qayerdan',options:[['cash','Kassa — naqd'],['card','Kassa — karta']]},{name:'note',label:'Izoh'}],'To‘lash','Joriy qarz: '+cents(s.debt)+'. Summa kassadan xarajat bo‘lib chiqadi.');
     if(v)call('pay',Object.assign(v,{supplierId:s.id}),'To‘lov saqlandi')}});
@@ -1870,19 +1909,24 @@ function bindLines(box,opts,first){var n=first;
 function sumLines(box){var t=0;box.querySelectorAll('.sp-line').forEach(function(r){var q=parseFloat(r.querySelector('[name^=qty_]').value)||0,p=r.querySelector('[name^=price_]');p=p?parseFloat(p.value)||0:0;t+=q*p});var el=box.querySelector('[data-total]');if(el)el.textContent=usd(Math.round(t*100)/100)}
 function collectLines(v,kind){var out=[];Object.keys(v).forEach(function(k){var m=/^item_(\d+)$/.exec(k);if(!m)return;var i=m[1],it=String(v[k]).split(':'),row={qty:v['qty_'+i]};
   if(kind==='purchase')row.price=v['price_'+i];if(it[0]==='m')row.material=+it[1];else row.pack=+it[1];out.push(row)});return out}
-async function purchaseForm(d,call){
-  // Xaridda faqat xom ashyo; tayyor mahsulot (qayta sotish uchun) — alohida belgi bilan
-  var opts=itemOpts(d,false),optsAll=itemOpts(d,true);
-  var p=modal('<form class="sp-form"><h3>Yangi xarid</h3><p class="muted">Har qatorda bir birlik narxi (USD): mahsulot uchun 1 dona, xom ashyo uchun 1 kg / litr / …</p><div class="form">'+
+async function purchaseForm(d,call,edit){
+  // Xaridda faqat xom ashyo; tayyor mahsulot (qayta sotish uchun) — alohida belgi bilan.
+  // edit — mavjud xarid: saqlashda server eskisini bekor qilib, yangisini yozadi (corrections.edit_purchase).
+  var opts=itemOpts(d,false),optsAll=itemOpts(d,true),hasProd=!!(edit&&edit.lines.some(function(l){return l.kind==='product'}));
+  var p=modal('<form class="sp-form"><h3>'+(edit?'Xarid #'+edit.id+' ni tahrirlash':'Yangi xarid')+'</h3>'+(edit?'<p class="small" style="color:var(--amber,#b45309)">Saqlaganda eski xarid bekor qilinadi (ombor va qarz qaytadi) va o‘rniga yangisi yoziladi.</p>':'')+'<p class="muted">Har qatorda bir birlik narxi (USD): mahsulot uchun 1 dona, xom ashyo uchun 1 kg / litr / …</p><div class="form">'+
     '<label>Ta’minotchi<select name="supplierId">'+d.suppliers.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join('')+'</select></label>'+
-    '<div class="sp-lines">'+lineRow(0,opts)+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Qator qo‘shish</button>'+
-    '<label class="chk"><input type="checkbox" id="spWithProd"> Tayyor mahsulot ham sotib olinadi (qayta sotish uchun)</label>'+
-    '<label>Izoh (hujjat raqami, partiya)<input name="note" maxlength="300"></label><div class="sp-total">Jami: <b data-total>$0</b></div></div>'+
-    '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">Xaridni saqlash</button></div></form>');
-  var box=$('modalBody');bindLines(box,function(){return $('spWithProd')&&$('spWithProd').checked?optsAll:opts},1);
+    '<div class="sp-lines">'+(edit?edit.lines.map(function(l,i){return lineRow(i,hasProd?optsAll:opts)}).join(''):lineRow(0,opts))+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Qator qo‘shish</button>'+
+    '<label class="chk"><input type="checkbox" id="spWithProd"'+(hasProd?' checked':'')+'> Tayyor mahsulot ham sotib olinadi (qayta sotish uchun)</label>'+
+    '<label>Izoh (hujjat raqami, partiya)<input name="note" maxlength="300" value="'+esc(edit?edit.note:'')+'"></label>'+
+    (edit?'<label>Nima uchun o‘zgartirilmoqda<input name="reason" maxlength="300" required></label>':'')+'<div class="sp-total">Jami: <b data-total>$0</b></div></div>'+
+    '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">'+(edit?'O‘zgarishni saqlash':'Xaridni saqlash')+'</button></div></form>');
+  var box=$('modalBody');bindLines(box,function(){return $('spWithProd')&&$('spWithProd').checked?optsAll:opts},edit?edit.lines.length:1);
+  if(edit){box.querySelector('[name=supplierId]').value=String(edit.supplier);
+    edit.lines.forEach(function(l,i){box.querySelector('[name=item_'+i+']').value=(l.kind==='product'?'p:':'m:')+l.id;box.querySelector('[name=qty_'+i+']').value=l.qty;box.querySelector('[name=price_'+i+']').value=(l.price/100).toFixed(2)});sumLines(box)}
   $('spWithProd').onchange=function(){var o=this.checked?optsAll:opts;box.querySelectorAll('.sp-line select').forEach(function(sel){var v0=sel.value;sel.innerHTML=o;if([].some.call(sel.options,function(x){return x.value===v0}))sel.value=v0})};
   var v=await p;if(!v)return;
-  call('purchase',{supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid saqlandi');
+  if(edit)call('purchase_edit',{purchaseId:edit.id,reason:v.reason,supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid tahrirlandi');
+  else call('purchase',{supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid saqlandi');
 }
 async function produceForm(d,prodOpts,call){
   var opts=itemOpts(d,false);
@@ -1907,7 +1951,7 @@ async function openLedger(id){
   openDrawer('<div class="dh"><span class="tone t-violet" style="width:60px;height:60px;border-radius:18px">'+ic('building','lg')+'</span><div><h2>'+esc(s.name)+'</h2><small class="muted">'+(s.phone?esc(s.phone)+' · ':'')+'Akt sverka</small></div></div>'+
     '<div class="grid g3" style="margin:14px 0">'+kpi('dollar','Bizning qarz',cents(r.debt),'',r.debt>0?'bad':'')+'</div>'+
     '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Sana</th><th>Hujjat</th><th class="right">Xarid</th><th class="right">To‘lov</th></tr></thead><tbody>'+
-    (r.items.length?r.items.map(function(i){var buy=i.type==='purchase';return '<tr><td class="num">'+dt(i.ts)+'</td><td>'+(buy?'<b>Xarid #'+i.id+'</b><br><small class="muted">'+spLines(i.lines)+'</small>':'<b>To‘lov #'+i.id+'</b><br><small class="muted">'+(i.payFrom==='card'?'Karta':'Naqd')+'</small>')+(i.note?'<br><small class="muted">'+esc(i.note)+'</small>':'')+'</td><td class="right num">'+(buy?cents(i.amount):'')+'</td><td class="right num ok">'+(buy?'':cents(i.amount))+'</td></tr>'}).join('')
+    (r.items.length?r.items.map(function(i){var buy=i.type==='purchase';return '<tr><td class="num">'+dt(i.ts)+'</td><td>'+(buy?'<b>Xarid #'+i.id+'</b>'+(i.cancelled?' '+pill('Bekor qilingan','p-bad'):'')+'<br><small class="muted">'+spLines(i.lines)+'</small>':'<b>To‘lov #'+i.id+'</b><br><small class="muted">'+(i.payFrom==='card'?'Karta':'Naqd')+'</small>')+(i.note?'<br><small class="muted">'+esc(i.note)+'</small>':'')+'</td><td class="right num">'+(buy?(i.cancelled?'<s>'+cents(i.amount)+'</s>':cents(i.amount)):'')+'</td><td class="right num ok">'+(buy?'':cents(i.amount))+'</td></tr>'}).join('')
       :'<tr><td colspan="4">'+emptyState('Harakat yo‘q','list')+'</td></tr>')+'</tbody></table></div></div>');
 }
 

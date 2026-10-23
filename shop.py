@@ -40,6 +40,7 @@ PERMS = {
 SELLER_PERMS = ('retail', 'discount', 'credit', 'collect', 'clients')
 PRICE_TYPES = ('retail', 'dealer')
 METHODS = ('cash_usd', 'cash_uzs', 'card')
+NOT_VOID = "NOT EXISTS(SELECT 1 FROM voids v WHERE v.kind='sale' AND v.ref=shop_sales.id)"
 DEFAULT_MAX_DISCOUNT_PCT = 5
 WALKIN_NAME = 'Chakana xaridor'
 
@@ -461,11 +462,20 @@ def quote(db, actor, payload):
 
 
 def sell(db, actor, payload):
-    """Sotuvni saqlash. Qaytaradi: sotuv kartasi (receipt)."""
+    """Sotuvni saqlash. Qaytaradi: sotuv kartasi (receipt).
+
+    replaceSaleId — rahbar tahriri: eski sotuv bekor qilinadi (tovar/pul/qarz qaytadi) va shu tranzaksiyada yangisi yoziladi."""
     src = _source(actor, payload.get('requestId'))
     old = db.execute('SELECT id FROM shop_sales WHERE source=?', (src,)).fetchone()
     if old:
         return receipt(db, int(old[0]))
+    replace = payload.get('replaceSaleId')
+    if replace not in (None, '', 0, '0'):
+        import corrections
+        replace = _int(replace, 'Sotuv', 1)
+        corrections.cancel_sale(db, actor, replace, payload.get('reason') or 'Tahrirlandi')
+    else:
+        replace = None
     who = _seller(db, actor, payload)
     core.lock_agent(db, who)
     wh._lock_warehouse(db)
@@ -501,6 +511,9 @@ def sell(db, actor, payload):
                                                      _source(actor, payload.get('requestId'), 300 + i)))
     if paid:
         _insert_payment(db, actor, who, cid, paid, method, uzs, rate, tag, _source(actor, payload.get('requestId'), 1), ts)
+    if replace:
+        import corrections
+        corrections.link_replacement(db, 'sale', replace, sale)
     return receipt(db, sale)
 
 
@@ -538,7 +551,17 @@ def receipt(db, sale):
             'clientId': int(h['client']), 'client': (h['shop_name'] or h['client_name'] or '').strip(), 'phone': h['phone'] or '',
             'priceType': h['price_type'], 'subtotalUsd': int(h['subtotal']) / 100, 'discountUsd': int(h['discount']) / 100,
             'totalUsd': total / 100, 'paidUsd': paid / 100, 'debtUsd': (total - paid) / 100, 'method': h['pay_method'],
-            'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines}
+            'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines,
+            'cancelled': _void_info(db, int(h['id']))}
+
+
+def _void_info(db, sale):
+    r = db.execute('''SELECT v.*,u.name AS who FROM voids v LEFT JOIN users u ON u.id=v.actor WHERE v.kind='sale' AND v.ref=?''',
+                   (sale,)).fetchone()
+    if not r:
+        return None
+    return {'reason': r['reason'], 'who': r['who'] or '', 'ts': int(r['ts']),
+            'replacedBy': int(r['replaced_by']) if r['replaced_by'] is not None else None}
 
 
 def handover(db, actor, payload):
@@ -578,6 +601,7 @@ def dashboard(db, actor, now=None):
     products.sort(key=lambda x: (x['stock'] <= 0, x['name']))
     mine = not can(s, 'all_sales')
     where, args = ('WHERE ts>=?', [day0]) if not mine else ('WHERE ts>=? AND seller=?', [day0, actor])
+    where += ' AND ' + NOT_VOID   # bekor qilingan sotuv bugungi jamiga kirmaydi
     rows = db.execute(f'SELECT id,total,paid FROM shop_sales {where} ORDER BY ts DESC,id DESC', args).fetchall()
     today = {'count': len(rows), 'totalUsd': sum(int(r['total']) for r in rows) / 100,
              'paidUsd': sum(int(r['paid']) for r in rows) / 100,
@@ -599,7 +623,7 @@ def dashboard(db, actor, now=None):
         team = []
         for u in db.execute("SELECT id,name FROM users WHERE role='sales' ORDER BY name,id").fetchall():
             st = staff(db, int(u['id']))
-            r = db.execute('SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(paid),0) FROM shop_sales WHERE seller=? AND ts>=?',
+            r = db.execute('SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(paid),0) FROM shop_sales WHERE seller=? AND ts>=? AND ' + NOT_VOID,
                            (int(u['id']), day0)).fetchone()
             team.append({'id': int(u['id']), 'name': u['name'] or str(u['id']), 'level': st['level'], 'perms': st['perms'],
                          'maxDiscountPct': st['maxDiscountPct'], 'allowCredit': st['allowCredit'],
@@ -626,7 +650,7 @@ def client_card(db, actor, client):
 # ---------- Mini App API ----------
 
 ACTIONS = ('dashboard', 'quote', 'sell', 'collect', 'clients', 'client', 'add_client', 'handover',
-           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt', 'orders')
+           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt', 'orders', 'sale_cancel')
 
 
 def handle(db, actor, action, payload):
@@ -642,6 +666,13 @@ def handle(db, actor, action, payload):
                           'totalUsd': q['total'] / 100, 'clientDebtUsd': q['clientDebt'] / 100,
                           'lines': [{**l, 'listPriceUsd': l['listPrice'] / 100, 'priceUsd': l['price'] / 100,
                                      'discountUsd': l['discount'] / 100, 'totalUsd': l['total'] / 100} for l in q['lines']]}}
+    if action == 'sale_cancel':
+        import corrections
+        sid = _int(payload.get('saleId'), 'Sotuv', 1)
+        corrections.cancel_sale(db, actor, sid, payload.get('reason'))
+        out['receipt'] = receipt(db, sid)
+        out.update(dashboard(db, actor))
+        return out
     if action == 'orders':
         # Ombordan buyurtma: band qilish, qisman yetkazish/to'lov, qaytarish (sale_orders.py)
         import sale_orders

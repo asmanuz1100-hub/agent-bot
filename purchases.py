@@ -10,7 +10,7 @@
 
 Пул суммалари бошқа модуллардаги каби USD центда. Хом ашё миқдори минг улушда
 (qty_milli: 1 кг = 1000), шунда 2.5 кг аниқ сақланади.
-Ёзувлар ўчирилмайди ва таҳрирланмайди; хато бўлса тескари амал киритилади.
+Ёзувлар изсиз ўчирилмайди: раҳбар харидни бекор қилса ёки таҳрирласа — corrections.py (белги + тескари амал).
 """
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -21,7 +21,9 @@ import warehouse as wh
 
 SUPPLIER_PAY_CATEGORY='🏭 Таъминотчига тўлов'
 MATERIAL_UNITS={'kg':'kg','l':'litr','dona':'dona','m':'metr','qop':'qop'}
-MATERIAL_MOVES={'in':'Kirim','use':'Ishlab chiqarishga','writeoff':'Brak / hisobdan chiqarish'}
+MATERIAL_MOVES={'in':'Kirim','use':'Ishlab chiqarishga','writeoff':'Brak / hisobdan chiqarish','cancel':'Bekor qilingan xarid'}
+# Bekor qilingan (corrections.voids) xarid qarzga va hisobotga kirmaydi.
+NOT_VOID="NOT EXISTS(SELECT 1 FROM voids v WHERE v.kind='purchase' AND v.ref=purchases.id)"
 MAX_LINES=30
 MAX_QTY_MILLI=10**10           # 10 mln kg
 MAX_TOTAL_USD=10**10           # 100 mln USD (centda): noto'g'ri kiritishdan himoya
@@ -167,7 +169,7 @@ def update_supplier(db,actor,sid,name,phone='',note=''):
 
 def balance(db,sid):
     """Ta'minotchiga qarzimiz (USD cent). Musbat = biz qarzdormiz."""
-    bought=db.execute('SELECT COALESCE(SUM(total_usd),0) FROM purchases WHERE supplier=?',(sid,)).fetchone()[0]
+    bought=db.execute('SELECT COALESCE(SUM(total_usd),0) FROM purchases WHERE supplier=? AND '+NOT_VOID,(sid,)).fetchone()[0]
     paid=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM supplier_payments WHERE supplier=?',(sid,)).fetchone()[0]
     return int(bought or 0)-int(paid or 0)
 
@@ -345,13 +347,15 @@ def dashboard(db,actor):
     sups=[{'id':int(r['id']),'name':r['name'],'phone':r['phone'] or '','note':r['note'] or '','debt':balance(db,int(r['id']))}
           for r in db.execute('SELECT * FROM suppliers WHERE active=1 ORDER BY name').fetchall()]
     mats=[_material_view(db,r) for r in db.execute('SELECT * FROM materials WHERE active=1 ORDER BY name').fetchall()]
+    import corrections
+    void=corrections.voided(db,'purchase')
     purchases=[]
     for p in db.execute('''SELECT p.*,s.name AS supplier_name,u.name AS actor_name FROM purchases p
         LEFT JOIN suppliers s ON s.id=p.supplier LEFT JOIN users u ON u.id=p.actor ORDER BY p.id DESC LIMIT 30''').fetchall():
         lines=[_line_view(db,l) for l in db.execute('SELECT * FROM purchase_lines WHERE purchase=? ORDER BY id',(p['id'],)).fetchall()]
         purchases.append({'id':int(p['id']),'supplier':int(p['supplier']),'supplierName':p['supplier_name'] or '',
                           'actorName':p['actor_name'] or '','total':int(p['total_usd']),'note':p['note'] or '',
-                          'ts':int(p['ts']),'lines':lines})
+                          'ts':int(p['ts']),'lines':lines,'cancelled':void.get(int(p['id']))})
     moves=[{'id':int(m['id']),'kind':m['kind'],'label':MATERIAL_MOVES.get(m['kind'],m['kind']),'material':int(m['material']),
             'name':m['name'] or '','unit':MATERIAL_UNITS.get(m['unit'] or '',''),'qty':milli_text(int(m['qty_milli'])),
             'note':m['note'] or '','actorName':m['actor_name'] or '','ts':int(m['ts'])}
@@ -362,7 +366,7 @@ def dashboard(db,actor):
            for r in db.execute('''SELECT p.*,u.name AS actor_name FROM productions p LEFT JOIN users u ON u.id=p.actor
                ORDER BY p.id DESC LIMIT 20''').fetchall()]
     month=wh.month_start()
-    month_bought=int(db.execute('SELECT COALESCE(SUM(total_usd),0) FROM purchases WHERE ts>=?',(month,)).fetchone()[0] or 0)
+    month_bought=int(db.execute('SELECT COALESCE(SUM(total_usd),0) FROM purchases WHERE ts>=? AND '+NOT_VOID,(month,)).fetchone()[0] or 0)
     month_paid=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM supplier_payments WHERE ts>=?',(month,)).fetchone()[0] or 0)
     core.refresh_catalog(db)
     active=set(core.active_product_ids())
@@ -377,10 +381,13 @@ def ledger(db,actor,sid,limit=200):
     """Ta'minotchi akt-sverkasi: xaridlar va to'lovlar, eng yangisi yuqorida."""
     _require_viewer(db,actor)
     supplier=_supplier(db,sid)
+    import corrections
+    void=corrections.voided(db,'purchase')
     items=[]
     for p in db.execute('SELECT * FROM purchases WHERE supplier=? ORDER BY id DESC LIMIT ?',(sid,limit)).fetchall():
         lines=[_line_view(db,l) for l in db.execute('SELECT * FROM purchase_lines WHERE purchase=? ORDER BY id',(p['id'],)).fetchall()]
-        items.append({'type':'purchase','id':int(p['id']),'amount':int(p['total_usd']),'note':p['note'] or '','ts':int(p['ts']),'lines':lines})
+        items.append({'type':'purchase','id':int(p['id']),'amount':int(p['total_usd']),'note':p['note'] or '','ts':int(p['ts']),'lines':lines,
+                      'cancelled':void.get(int(p['id']))})
     for r in db.execute('SELECT * FROM supplier_payments WHERE supplier=? ORDER BY id DESC LIMIT ?',(sid,limit)).fetchall():
         items.append({'type':'payment','id':int(r['id']),'amount':int(r['amount_usd']),'note':r['note'] or '',
                       'payFrom':r['pay_from'] or 'cash','ts':int(r['ts'])})
@@ -392,7 +399,7 @@ def ledger(db,actor,sid,limit=200):
 # ---------- web panel amallari ----------
 
 OPS=('dashboard','ledger','supplier_add','supplier_edit','material_add','material_edit','purchase','pay','produce',
-     'material_use','material_writeoff')
+     'material_use','material_writeoff','purchase_cancel','purchase_edit')
 WRITE_OPS=OPS[2:]
 
 
@@ -411,7 +418,10 @@ def handle(db,actor,op,payload,source=None):
         result['materialId']=add_material(db,actor,payload.get('name'),payload.get('unit'),payload.get('minQty'))
     elif op=='material_edit':
         update_material(db,actor,_int(payload.get('materialId'),'Xom ashyo'),payload.get('name'),payload.get('minQty'))
-    elif op=='purchase':
+    elif op=='purchase_cancel':
+        import corrections
+        corrections.cancel_purchase(db,actor,_int(payload.get('purchaseId'),'Xarid'),payload.get('reason'))
+    elif op in ('purchase','purchase_edit'):
         raw=payload.get('lines')
         if not isinstance(raw,list):raise ValueError('Qatorlar ro‘yxati noto‘g‘ri.')
         lines=[]
@@ -423,7 +433,12 @@ def handle(db,actor,op,payload,source=None):
             else:
                 pack=_int(item.get('pack'),'Mahsulot',0)
                 lines.append({'pack':pack,'qty':_int(item.get('qty'),'Miqdor',1,100000),'price':price})
-        result['purchaseId']=record_purchase(db,actor,_int(payload.get('supplierId'),'Ta’minotchi'),lines,payload.get('note'),source=source)
+        if op=='purchase_edit':
+            import corrections
+            result['purchaseId']=corrections.edit_purchase(db,actor,_int(payload.get('purchaseId'),'Xarid'),
+                _int(payload.get('supplierId'),'Ta’minotchi'),lines,payload.get('note'),payload.get('reason'),source=source)
+        else:
+            result['purchaseId']=record_purchase(db,actor,_int(payload.get('supplierId'),'Ta’minotchi'),lines,payload.get('note'),source=source)
     elif op=='pay':
         pay_from=str(payload.get('payFrom') or 'cash')
         result['paymentId']=pay_supplier(db,actor,_int(payload.get('supplierId'),'Ta’minotchi'),

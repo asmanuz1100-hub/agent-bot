@@ -132,6 +132,39 @@ const step=(n)=>console.log('✓',n);
     await page.waitForTimeout(800);cbx=await api('cashbook',{op:'view'});
     assert.equal(cash0-cbx.balances.cash_usd,500);
     step('web kassa: soliq xarajati va ta’minotchiga to‘lov');
+
+    // Rahbar tuzatishlari: xaridni tahrirlash va o'chirish (ombor va ta'minotchi qarzi qaytadi)
+    const sp0=await api('supply',{op:'dashboard'});const sup=sp0.suppliers[0],mat=sp0.materials[0];const debt0=sup.debt;
+    const pid=(await api('supply',{op:'purchase',supplierId:sup.id,lines:[{material:mat.id,qty:'4',price:'1'}],requestId:'e2ebuy0002'})).purchaseId;
+    await page.evaluate(()=>{location.hash='supply'});await page.waitForSelector('#spView [data-v="purchases"]',{timeout:20000});
+    await page.click('#spView [data-v="purchases"]');await page.click(`[data-pedit="${pid}"]`);
+    await page.waitForSelector('#modalBody [name="qty_0"]');assert.equal(await page.inputValue('#modalBody [name="qty_0"]'),'4');
+    await fill({qty_0:3,reason:'Miqdor xato'});await modalOk();await page.waitForTimeout(600);
+    let sp=await api('supply',{op:'dashboard'});
+    const oldP=sp.purchases.find(x=>x.id===pid),newP=sp.purchases.find(x=>x.id===oldP.cancelled.replacedBy);
+    assert.equal(newP.lines[0].qty,'3');assert.equal(sp.suppliers[0].debt,debt0+300);step('xarid tahrirlandi (#'+pid+' → #'+newP.id+')');
+    await page.click(`[data-pdel="${newP.id}"]`);await fill({reason:'Ikki marta kiritilgan'});await modalOk();await page.waitForTimeout(600);
+    sp=await api('supply',{op:'dashboard'});
+    assert.ok(sp.purchases.find(x=>x.id===newP.id).cancelled);assert.equal(sp.suppliers[0].debt,debt0);step('xarid o‘chirildi, qarz qaytdi');
+
+    // Sotuvni tahrirlash va o'chirish
+    await page.evaluate(()=>{location.hash='sales'});await page.waitForSelector('#shTabs');
+    await page.click('#shTabs [data-t="pos"]');await page.waitForSelector('#shCq');
+    await page.fill('#shCq','Mijoz 2');await page.waitForSelector('#shCres [data-c]');await page.click('#shCres [data-c]');
+    await page.click('#shProds [data-add]');await page.fill('#shCart [data-q="0"]','3');await page.dispatchEvent('#shCart [data-q="0"]','change');
+    await page.waitForSelector('#shSave:not([disabled])');await page.click('#shSave');
+    await page.waitForSelector('#modalBody #rcEdit');const sale1=+(await page.textContent('#modalBody h3')).replace(/\D/g,'');
+    await page.click('#rcEdit');await page.waitForSelector('#shEditX');
+    await page.fill('#shCart [data-q="0"]','2');await page.dispatchEvent('#shCart [data-q="0"]','change');
+    await page.waitForSelector('#shSave:not([disabled])');await page.click('#shSave');await fill({reason:'Mijoz 2 dona oldi'});await modalOk();
+    await page.waitForSelector('#modalBody #rcDel');const sale2=+(await page.textContent('#modalBody h3')).replace(/\D/g,'');
+    let rc=(await api('shop',{op:'receipt',saleId:sale1})).receipt;
+    assert.equal(rc.cancelled.replacedBy,sale2);assert.equal((await api('shop',{op:'receipt',saleId:sale2})).receipt.lines[0].qty,2);
+    step('sotuv tahrirlandi (#'+sale1+' → #'+sale2+')');
+    await page.click('#rcDel');await fill({reason:'Mijoz voz kechdi'});await modalOk();await page.waitForTimeout(600);
+    rc=(await api('shop',{op:'receipt',saleId:sale2})).receipt;assert.equal(rc.cancelled.reason,'Mijoz voz kechdi');
+    await page.click('#shTabs [data-t="checks"]');await page.waitForSelector(`[data-rc="${sale2}"]`);
+    assert.match(await page.textContent(`[data-rc="${sale2}"]`),/Bekor qilingan/);step('sotuv o‘chirildi, cheklar ro‘yxatida belgilandi');
     assert.deepEqual(errors,[]);
     console.log('admin-e2e: OK');
   }catch(e){try{const pg=browser.contexts()[0].pages()[0];console.error('toast:',await pg.evaluate(()=>[...document.querySelectorAll('.toast,#toasts *')].map(t=>t.textContent).join(' | ')));
