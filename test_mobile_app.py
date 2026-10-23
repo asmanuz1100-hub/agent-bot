@@ -116,6 +116,12 @@ class MobileHttpTests(unittest.TestCase):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0))
             cls.port = s.getsockname()[1]
+        db = core.connect(cls.path, initialize=False)
+        db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', [(5, 'agent', 'Gani')])
+        core.record(db, 1, 5, None, 'load', 1, 20, source=7201, currency='USD')
+        _, cls.gani_password = web_auth.issue_password(db, 5, 'gani')
+        db.commit()
+        db.close()
         cls.saved = (bot.TOKEN, bot.api, os.environ.get('PORT'), os.environ.get('WEBHOOK_SECRET'))
         bot.TOKEN = '123:TEST'
         bot.api = lambda *a, **k: {}
@@ -248,6 +254,63 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(code, 200, out)
         code, out = call(action='location', lat=40.54, lon=70.94, accuracy=9)
         self.assertEqual(code, 400)
+
+    def test_two_currency_payment_return_and_cashier_accept_stay_consistent(self):
+        """Agent, kassir va qarz raqamlari bitta hisob-kitob mantig'idan: sotuv qarzni oshiradi,
+        to'lov va qaytarish kamaytiradi, so'm va dollar alohida, topshirish ikki marta sanalmaydi."""
+        token = self.login('gani', self.gani_password)['token']
+        call = lambda **p: self.post('/api/agent', token, **p)
+        self.assertEqual(call(action='shift_start', requestId='g_shift_start_01')[0], 200)
+        self.assertEqual(call(action='location', lat=40.54, lon=70.94, accuracy=8)[0], 200)
+        db = self.db()
+        try:
+            cid = agent_api.mutate(db, 5, 'add_client', {'shopName': 'Gani do‘kon', 'name': 'Olim',
+                                   'phone': '+998901110033', 'lat': 40.54, 'lon': 70.94}, 'g_client_000001')['clientId']
+            db.commit()
+        finally:
+            db.close()
+        debt = lambda snap: next(c for c in snap['clients'] if c['id'] == cid)['debtUsd']
+        # 5 x $2.50 = $12.50 qarz.
+        code, out = call(action='delivery', clientId=cid, items=[{'pack': 1, 'qty': 5}], requestId='g_deliv_000001')
+        self.assertEqual(code, 200, out)
+        code, snap = call(action='snapshot')
+        self.assertEqual(debt(snap), 12.5)
+        # Bitta tashrifda: 25 000 so'm (kurs 12 500 = $2) va $3 naqd.
+        code, out = call(action='payment', clientId=cid, requestId='g_pay_00000001',
+                         parts=[{'currency': 'UZS', 'method': 'cash', 'amount': '25000', 'rate': '12500'},
+                                {'currency': 'USD', 'method': 'cash', 'amount': '3'}])
+        self.assertEqual(code, 200, out)
+        code, snap = call(action='snapshot')
+        self.assertEqual(debt(snap), 7.5)
+        self.assertEqual((snap['summary']['cashOnHandUzs'], snap['summary']['cashOnHandUsd']), (25000, 3))
+        # 1 dona qaytarildi: qarz $2.50 ga kamayadi, pul balansi o'zgarmaydi.
+        code, out = call(action='return', clientId=cid, items=[{'pack': 1, 'qty': 1}], requestId='g_ret_00000001')
+        self.assertEqual(code, 200, out)
+        code, snap = call(action='snapshot')
+        self.assertEqual(debt(snap), 5)
+        self.assertEqual((snap['summary']['cashOnHandUzs'], snap['summary']['cashOnHandUsd']), (25000, 3))
+        # So'mni kassirga topshirish: kassir qabul qilmaguncha mavjud qoldiqdan chegiriladi.
+        code, out = call(action='handover', currency='UZS', amount='25000', requestId='g_hand_0000001')
+        self.assertEqual(code, 200, out)
+        hid = out['handoverId']
+        code, snap = call(action='snapshot')
+        self.assertEqual((snap['summary']['cashAvailableUzs'], snap['summary']['cashAvailableUsd']), (0, 3))
+        code, out = call(action='handover', currency='UZS', amount='1000', requestId='g_hand_0000002')
+        self.assertEqual(code, 400, out)
+        db = self.db()
+        try:
+            before = core.cashier_balance_usd(db)
+            core.accept(db, 3, hid)
+            db.commit()
+            with self.assertRaises(ValueError):
+                core.accept(db, 3, hid)
+            self.assertEqual(core.cashier_balance_usd(db) - before, 200)
+        finally:
+            db.close()
+        code, snap = call(action='snapshot')
+        # Pul agentdan chiqdi, dollar qoldig'i aralashmadi, qarz o'zgarmadi.
+        self.assertEqual((snap['summary']['cashOnHandUzs'], snap['summary']['cashOnHandUsd']), (0, 3))
+        self.assertEqual(debt(snap), 5)
 
 
 if __name__ == '__main__':
