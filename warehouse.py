@@ -71,7 +71,8 @@ def _role(db,uid):
     return row[0] if row else None
 
 def _require_keeper(db,actor):
-    if _role(db,actor) not in KEEPER_ROLES:
+    import perms
+    if _role(db,actor) not in KEEPER_ROLES and not perms.open_section(db,actor,'warehouse'):
         raise ValueError('Bu bo‘lim faqat omborchi yoki rahbar uchun.')
 
 def _require_operator(db,actor):

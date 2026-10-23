@@ -30,6 +30,9 @@ import profiles
 import warehouse
 import purchases
 import hr
+import modules
+import perms
+import cashbook
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -783,12 +786,12 @@ def menu(db,u):
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
-    if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
+    if CASHIER_MINIAPP_URL and (r in ('admin','cashier') or perms.open_section(db,u,'cash',ADMINS)):
         rows.insert(0,['📱 Кассир Mini App'])
     if SHOP_MINIAPP_URL and r in ('admin','sales'):
         rows.insert(0,['🛒 Savdo Mini App'])
     if WAREHOUSE_MINIAPP_URL:
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             rows.insert(0,['📱 Омбор Mini App'])
         elif r=='agent':
             rows.append(['📦 Омбор сўрови'])
@@ -1746,6 +1749,11 @@ def handle(db,update):
     if not r:
         if 'edited_message' not in update:send(u,f'Сизнинг Telegram ID: {u}\nАдминга шу рақамни юборинг. Кириш ҳали очилмаган.')
         return
+    # Korxonada o'chirilgan bo'lim xodimi botdan ham foydalana olmaydi (rahbar — doim ochiq).
+    closed=modules.ROLE_MODULE.get(r)
+    if closed and not modules.enabled(db,closed):
+        if 'edited_message' not in update:send(u,modules.closed_message(closed))
+        return
     if 'edited_message' in update:
         if r=='agent' and 'location' in m:
             ok=point(db,u,m,True)
@@ -1769,7 +1777,7 @@ def handle(db,update):
         return
     if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
         if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             api('sendMessage',chat_id=u,text='🏬 Омбор панели · буюртмалар, кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
                 reply_markup={'inline_keyboard':[[{'text':'🏬 Омбор панелини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
         elif r=='agent':
@@ -2748,17 +2756,23 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor) not in ('cashier','admin'):
+                    if not modules.enabled(local,'cash'):
+                        answer_cashier(403,{'error':modules.closed_message('cash')});return
+                    if role(local,actor) not in ('cashier','admin') and not perms.open_section(local,actor,'cash',ADMINS):
                         answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
                     if action in ('profile','profile_save'):
                         answer_cashier(200,profile_action(local,actor,action,payload));return
+                    try:perms.require(local,actor,perms.CASHIER_ACTION.get(str(action)),ADMINS)
+                    except perms.Denied as e:
+                        answer_cashier(403,{'error':str(e)});return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
                     elif action=='handover_detail':data=cashier_api.handover_detail(local,actor,payload.get('handoverId'))
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
+                    if isinstance(data,dict):data['myPerms']=sorted(perms.effective(local,actor,ADMINS))
                     local.commit()
                     attach_card_photo_urls(data)
                     if notify:
@@ -2794,6 +2808,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'sales'):
+                        answer_shop(403,{'error':modules.closed_message('sales')});return
                     if actor is None:
                         # savdo-web (kompyuter): login/parol sessiyasi.
                         try:actor=web_auth.session_user(local,bearer)
@@ -2834,8 +2850,15 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor) not in ('warehouse','admin','agent'):
+                    if not modules.enabled(local,'warehouse'):
+                        answer_wh(403,{'error':modules.closed_message('warehouse')});return
+                    if role(local,actor) not in ('warehouse','admin','agent') and not perms.open_section(local,actor,'warehouse',ADMINS):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
+                    if role(local,actor)!='agent':
+                        need='warehouse.catalog' if payload.get('action')=='product_photo' else perms.WAREHOUSE_ACTION.get(str(payload.get('action') or 'dashboard'))
+                        try:perms.require(local,actor,need,ADMINS)
+                        except perms.Denied as e:
+                            answer_wh(403,{'error':str(e)});return
                     if payload.get('action')=='product_photo':
                         product_photo_action(local,actor,payload)
                         data=warehouse_api.handle(local,actor,'dashboard',payload)
@@ -2885,6 +2908,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'agents'):
+                        answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
@@ -3109,6 +3134,13 @@ def serve_webhook(db,base_url):
                     if role(local,actor)!='admin':
                         answer(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
                     action=payload.get('action','dashboard')
+                    try:modules.require_action(local,action,payload.get('op'))
+                    except modules.ModuleClosed as e:
+                        answer(403,{'error':str(e),'moduleClosed':True});return
+                    # Ruxsat har so'rovda bazadan: o'zgarish ochiq sessiyada ham darhol kuchga kiradi.
+                    try:perms.require(local,actor,perms.manager_perm(action,payload.get('op'),payload.get('kind')),ADMINS)
+                    except perms.Denied as e:
+                        answer(403,{'error':str(e),'denied':True});return
                     if action=='dashboard':
                         data=manager_api.dashboard(local)
                     elif action=='route':
@@ -3189,27 +3221,65 @@ def serve_webhook(db,base_url):
                         op=str(payload.get('op') or 'dashboard')
                         if op not in ('dashboard','receive','issue','writeoff','take_back','decide','moves'):
                             raise ValueError('Ombor amali noto‘g‘ri.')
-                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if actor in ADMINS else None)
+                        # Ruxsat yuqorida tekshirildi: web paneldan kirgan rahbar shu so'rov davomida ombor operatori.
+                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if op not in ('dashboard','moves') else None)
                         try:data=warehouse_api.handle(local,actor,op,payload)
                         finally:warehouse.WEB_PRIMARY_OPERATOR.reset(wh_tok)
-                        data['canOperate']=actor in ADMINS
+                        data['canOperate']=bool({'warehouse.receive','warehouse.issue','warehouse.writeoff'}&perms.effective(local,actor,ADMINS))
                         wh_notify=data.pop('_notify',None);data.pop('_orders',None)
                     elif action=='supply':
                         # Ta'minot (ta'minotchi, xarid, xom ashyo, ishlab chiqarish) faqat web paneldan.
                         # Ko'rish — barcha rahbarlar, yozish — faqat asosiy rahbar (ombor amallari kabi).
                         op=str(payload.get('op') or 'dashboard')
-                        if op in purchases.WRITE_OPS and actor not in ADMINS:
-                            raise ValueError('Ta’minot amallarini faqat asosiy rahbar kiritadi.')
                         data=purchases.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canOperate']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canOperate']='warehouse.supply' in eff
+                        data['canPaySupplier']='warehouse.supply_pay' in eff
                     elif action=='hr':
                         # Sex ishchilari (tizimdan foydalanmaydi): kartochka va davomat — har qanday rahbar;
                         # pul (avans, oylik, bonus, jarima) — faqat asosiy rahbar.
                         op=str(payload.get('op') or 'overview')
-                        if op in hr.PRIMARY_OPS and actor not in ADMINS:
-                            raise ValueError('Oylik va avans amallarini faqat asosiy rahbar kiritadi.')
                         data=hr.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canPay']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canPay']='hr.pay' in eff
+                        data['canCalc']='hr.calculate' in eff
+                        data['canEdit']='hr.edit' in eff
+                        if 'hr.salary_view' not in eff:perms.strip_salary(data)
+                    elif action=='cashbook':
+                        # Kassa: qo'lda kirim, o'tkazma, bekor qilish, kun yopish va jurnal (ruxsat yuqorida tekshirildi).
+                        op=str(payload.get('op') or 'view')
+                        src=warehouse_api._source(actor,payload)
+                        if op=='income':
+                            cashbook.add_income(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
+                                                payload.get('category'),payload.get('counterparty'),payload.get('note'),src,
+                                                client=payload.get('clientId'))
+                        elif op=='transfer':
+                            cashbook.add_transfer(local,actor,payload.get('fromPocket'),payload.get('toPocket'),payload.get('currency'),
+                                                  payload.get('amount'),payload.get('note'),src)
+                        elif op=='cancel':
+                            cashbook.cancel(local,actor,payload.get('id') or 0,payload.get('reason'))
+                        elif op=='close':
+                            cashbook.close_day(local,actor,payload.get('counted'),payload.get('note'))
+                        elif op!='view':
+                            raise ValueError('Kassa amali noto‘g‘ri.')
+                        start=end=None
+                        if payload.get('period'):
+                            start,end,_=resolve_period(payload.get('period'),payload.get('from'),payload.get('to'))
+                        data=cashbook.view(local,start,end)
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['can']={k:('cash.'+k) in eff for k in ('income','transfer','cancel','close')}
+                    elif action=='perms_staff':
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
+                    elif action=='perms_set':
+                        perms.set_perms(local,actor,payload.get('id'),payload.get('changes'),ADMINS)
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
+                    elif action=='modules':
+                        data=modules.view(local)
+                    elif action=='module_set':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Korxona bo‘limlarini faqat asosiy rahbar yoqadi yoki o‘chiradi.'});return
+                        modules.set_enabled(local,actor,str(payload.get('module') or ''),payload.get('enabled') is True)
+                        data=modules.view(local)
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
@@ -3330,6 +3400,8 @@ def serve_webhook(db,base_url):
                         except Exception:logging.exception('Web warehouse notification failed')
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
+                        data.setdefault('modules',modules.state(local))
+                        data.setdefault('myPerms',sorted(perms.effective(local,actor,ADMINS)))
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
                     attach_product_photo_urls(local,data)

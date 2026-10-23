@@ -15,6 +15,10 @@ import test_blacklist
 import test_warehouse_api
 import test_purchases
 import test_hr
+import hr
+import test_perms
+import test_cashbook
+import test_sale_orders
 
 URL = os.getenv('TEST_DATABASE_URL')
 
@@ -69,6 +73,94 @@ class PgHrTests(_PgMixin, test_hr.HrTests):
             self.schema = 't_' + uuid.uuid4().hex[:12]
             os.environ['DB_SCHEMA'] = self.schema
             super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+    def _parallel(self, fn, n=4):
+        import threading
+        pool = core.PgPool(URL, size=n, timeout=5)
+        out = []
+
+        def go(i):
+            d = pool.get()
+            try:
+                out.append(fn(d, i)); d.commit()
+            except Exception as e:
+                d.rollback(); out.append(e)
+            finally:
+                d.close()
+        th = [threading.Thread(target=go, args=(i,)) for i in range(n)]
+        [t.start() for t in th]; [t.join() for t in th]
+        pool.close()
+        return out
+
+    def test_parallel_salary_payments_never_overpay(self):
+        wid = self.worker('Parallel', salary='4000000')
+        self.cash(20000000)
+        out = self._parallel(lambda d, i: hr.add_pay(d, 1, wid, 'salary', '4000000', '2026-10', source=880000 + i, now=test_hr.NOW))
+        self.assertEqual(sum(1 for x in out if isinstance(x, int)), 1, out)
+        self.assertEqual(hr.payroll_row(self.db, wid, '2026-10')['remaining'], 0)
+        self.assertEqual(int(self.db.execute('SELECT COUNT(*) FROM cashier_expenses').fetchone()[0]), 1)
+
+    def test_parallel_duplicate_client_cash_payment_writes_once(self):
+        import cashbook
+        self.cash(1000000)
+        self.db.execute("INSERT INTO clients(id,agent,name,phone) VALUES(77,2,'D','+998900000077')")
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,ts,source) VALUES(2,2,77,'delivery',1,1,0,50000,50,900001)")
+        self.db.commit()
+        out = self._parallel(lambda d, i: cashbook.add_income(d, 1, 'cash', 'USD', '100', cashbook.CLIENT_PAYMENT, '', '', 990001, client=77))
+        self.assertEqual(int(self.db.execute("SELECT COUNT(*) FROM cash_moves").fetchone()[0]), 1, out)
+        self.assertEqual(core.client_debt_usd(self.db, 77), 40000)
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgPermTests(_PgMixin, test_perms.PermUnitTests):
+    """Ruxsatlar PostgreSQL'da: ON CONFLICT, audit, bir xil natija."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgCashbookTests(_PgMixin, test_cashbook.CashbookTests):
+    """Kassa kengaytmasi PostgreSQL'da: advisory lock, Decimal yig'indilar, sxema."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgSaleOrderTests(_PgMixin, test_sale_orders.SaleOrderTests):
+    """Savdo buyurtmasi PostgreSQL'da: qulflar, BIGSERIAL, Decimal yig'indilar."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            test_sale_orders.SaleOrderTests.setUp(self)
         finally:
             core.connect = orig
 

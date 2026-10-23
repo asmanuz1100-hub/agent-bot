@@ -96,5 +96,8 @@ async function save(reject=false){if(retry&&reject!==retry.reject){notice('Ав�
 function openTab(name){const target=document.querySelector('[data-tab="'+name+'"]');if(!target)return;if(name==='report')setTimeout(loadReport,0);document.querySelectorAll('[data-tab]').forEach(x=>{$(x.dataset.tab).classList.toggle('hidden',x!==target);x.classList.toggle('active',x===target);});}
 $('confirm').onclick=()=>save();$('reject').onclick=()=>save(true);$('cancel').onclick=()=>{if(!busy)$('review').close();};$('review').addEventListener('cancel',e=>{if(busy)e.preventDefault();});$('refresh').onclick=()=>task(load);document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));document.querySelectorAll('[data-open-tab]').forEach(b=>b.onclick=()=>openTab(b.dataset.openTab));
 if(!tg?.initData){$('welcome').textContent='Панелни Telegram ботдаги «📱 Кассир Mini App» тугмасидан очинг.';$('refresh').disabled=true;}else{task(load);}
-</script></body></html>
+</script><script>/* Ruxsat bo'yicha: berilmagan amal tugmasi ko'rsatilmaydi (server ham yopadi). */
+(function(){var base=render;render=function(){base.apply(this,arguments);var P=data&&data.myPerms;if(!P)return;var can=function(k){return P.indexOf(k)>=0};
+[['agentFund','cash.fund'],['expense','cash.expense'],['conversion','cash.convert'],['rate','cash.rate']].forEach(function(x){var e=document.getElementById(x[0]);if(e&&!can(x[1]))e.classList.add('hidden')});
+[['[data-review],[data-card-review]','cash.handover'],['[data-assign-debt]','cash.debt_task']].forEach(function(x){if(!can(x[1]))document.querySelectorAll(x[0]).forEach(function(b){b.disabled=true;b.title='Ruxsat yo‘q'})});};})();</script></body></html>
 

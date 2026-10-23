@@ -440,8 +440,10 @@ def quote(db, actor, payload):
         l['discount'] = d
         l['total'] = l['gross'] - d
         left -= d
-    stock = {p: wh.stock(db, p) for p in need}
-    short = [f'{core.product_name(p)}: omborda {stock[p]} dona' for p, q in need.items() if stock[p] < q]
+    # Mavjud = ombor qoldig'i − ochiq buyurtmalarda band (sale_orders). Buyurtma bo'lmasa — avvalgidek.
+    import sale_orders
+    stock = {p: sale_orders.available(db, p) for p in need}
+    short = [f'{core.product_name(p)}: mavjud {stock[p]} dona' for p, q in need.items() if stock[p] < q]
     debt = core.client_debt_usd(db, cid) if client else 0
     return {'client': client, 'walkin': walkin, 'priceType': ptype, 'lines': lines, 'subtotal': subtotal,
             'discount': discount, 'total': total, 'discountPct': round(eff_pct, 2), 'stockShort': short,
@@ -606,7 +608,7 @@ def client_card(db, actor, client):
 # ---------- Mini App API ----------
 
 ACTIONS = ('dashboard', 'quote', 'sell', 'collect', 'clients', 'client', 'add_client', 'handover',
-           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt')
+           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt', 'orders')
 
 
 def handle(db, actor, action, payload):
@@ -622,6 +624,10 @@ def handle(db, actor, action, payload):
                           'totalUsd': q['total'] / 100, 'clientDebtUsd': q['clientDebt'] / 100,
                           'lines': [{**l, 'listPriceUsd': l['listPrice'] / 100, 'priceUsd': l['price'] / 100,
                                      'discountUsd': l['discount'] / 100, 'totalUsd': l['total'] / 100} for l in q['lines']]}}
+    if action == 'orders':
+        # Ombordan buyurtma: band qilish, qisman yetkazish/to'lov, qaytarish (sale_orders.py)
+        import sale_orders
+        return sale_orders.handle(db, actor, payload.get('orderOp') or 'list', payload)
     if action == 'sell':
         out['receipt'] = sell(db, actor, payload)
     elif action == 'collect':

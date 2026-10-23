@@ -850,3 +850,12 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 .att-d.p-warn{background:color-mix(in srgb,var(--warn) 16%,transparent);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
 .att-d.p-bad{background:color-mix(in srgb,var(--bad) 14%,transparent);border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
 .att-d.p-pri{background:color-mix(in srgb,var(--pri) 12%,transparent);border-color:color-mix(in srgb,var(--pri) 35%,transparent)}
+
+/* Sozlamalar: korxona bo'limlari */
+.mod-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+@media (max-width:720px){.mod-grid{grid-template-columns:1fr}}
+.mod-hist{margin-top:10px}.mod-hist summary{cursor:pointer}
+.tog[disabled]{opacity:.5;cursor:not-allowed}
+.perm-form .perm-grp{margin:12px 0}.perm-form .perm-grp>b{display:block;margin-bottom:4px}
+.perm-form .switch input{width:20px;height:20px;flex:none}
+.perm-form .pill{font-size:10.5px;padding:1px 6px}

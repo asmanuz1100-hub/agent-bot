@@ -338,6 +338,7 @@ def _flows_json(f):
             "outCardUzs":f.get("out_card_uzs",0),"outCardUsd":_usd(f.get("out_card_usd",0)),
             # One general cashbox: an older pre-split balance is shown inside the dollar pocket.
             "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]+f.get("opening_usd",0)),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"]),
+            "bankUzs":f.get("bank_uzs",0),"bankUsd":_usd(f.get("bank_usd",0)),
             "openingUsd":0,"since":0}
 
 
@@ -564,7 +565,9 @@ def dashboard(db, now=None):
         WHERE status='pending'""").fetchone()[0]
     pending_count = db.execute("SELECT COUNT(*) FROM handovers WHERE status='pending'").fetchone()[0]
     # Same "umumiy kassa" as the Kassir app: cash (so'm + dollar) plus card/bank receipts, USD equivalent.
-    cash_balance=core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    import cashbook
+    cash_balance=(core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+                  +cashbook.legacy_usd(db,'card')+cashbook.legacy_usd(db,'bank'))
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)

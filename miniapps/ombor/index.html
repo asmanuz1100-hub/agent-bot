@@ -306,7 +306,7 @@ function render(){
     <div class="acts"><button class="btn g" id="cl">Yopish</button></div>`,s=>s.querySelector('#cl').onclick=closeSheet);
 }
 addEventListener('resize',moveNi);
-function roleName(){return keeper()?(S.me.role==='admin'?'Rahbar':'Omborchi'):'Agent';}
+function roleName(){return keeper()?(S.me.role==='admin'?'Rahbar':S.me.role==='cashier'?'Kassir · faqat ko‘rish':'Omborchi'):'Agent';}
 function greet(){const h=new Date().getHours();return h<5?'Xayrli tun':h<11?'Xayrli tong':h<18?'Xayrli kun':'Xayrli kech';}
 function header(){
   const titles={orders:'Mijoz buyurtmalari',requests:'Agent so‘rovlari',stock:'Ombor qoldig‘i',moves:'Harakatlar tarixi',mine:'Mening so‘rovlarim'};

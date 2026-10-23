@@ -159,7 +159,8 @@ def handle(db,actor,action,payload):
               +(f"\n📝 {_note(payload)}" if _note(payload) else '')+"\n\nОмбор Mini Appда қабул ёки рад қилинг.")
         data['_notify']=[(set(keeper_ids(db))|set(core_admins(db)),text)]
         return data
-    if role not in wh.KEEPER_ROLES:
+    import perms
+    if role not in wh.KEEPER_ROLES and not perms.open_section(db,actor,'warehouse'):
         raise ValueError('Bu bo‘lim faqat omborchi, rahbar yoki agent uchun.')
     order_filter=payload.get('orderFilter') or 'open'
     if action=='dashboard':return keeper_dashboard(db,actor,order_filter)
