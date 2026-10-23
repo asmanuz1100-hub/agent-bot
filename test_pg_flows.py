@@ -18,6 +18,7 @@ import test_hr
 import hr
 import test_perms
 import test_cashbook
+import test_sale_orders
 
 URL = os.getenv('TEST_DATABASE_URL')
 
@@ -143,6 +144,23 @@ class PgCashbookTests(_PgMixin, test_cashbook.CashbookTests):
             self.schema = 't_' + uuid.uuid4().hex[:12]
             os.environ['DB_SCHEMA'] = self.schema
             super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgSaleOrderTests(_PgMixin, test_sale_orders.SaleOrderTests):
+    """Savdo buyurtmasi PostgreSQL'da: qulflar, BIGSERIAL, Decimal yig'indilar."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            test_sale_orders.SaleOrderTests.setUp(self)
         finally:
             core.connect = orig
 

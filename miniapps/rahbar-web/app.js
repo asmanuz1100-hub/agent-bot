@@ -1316,7 +1316,7 @@ function renderCashbook(el,d){
     if(k==='income'){v=await formBox('Kassaga kirim',[{name:'pocket',label:'Qaysi hisobga',options:pockOpts},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'category',label:'Kirim turi',options:d.incomeCategories.filter(function(c){return c!==d.clientPayment}).map(function(c){return [c,c]})},{name:'counterparty',label:'Kimdan',required:true},{name:'note',label:'Izoh'}],'Kirim qilish','Agentdan pul qabul qilish — kassir ilovasida (topshiriq). Bu yerda boshqa tushumlar.');
       if(v&&await confirmBox('Kirimni tasdiqlang','<p><b>'+cbMoney(v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,v.currency)+'</b> → '+esc((pockOpts.find(function(p){return p[0]===v.pocket})||['',''])[1])+'<br>Kimdan: '+esc(v.counterparty)+'</p>','Tasdiqlash'))call(Object.assign({op:'income'},v),'Kirim saqlandi')}
     else if(k==='client'){
-      if(!d.debtors.length){toast('Qarzi bor mijoz yo‘q.',false);return}
+      if(!d.debtors.length){toast('Qarzi bor mijoz yo‘q.',true);return}
       v=await formBox('Mijozdan to‘lov — kassaga to‘g‘ridan',[{name:'clientId',label:'Mijoz (qarzi bilan)',options:d.debtors.map(function(c){return [String(c.id),c.name+(c.agent?' · '+c.agent:'')+' — qarz '+usd(c.debtUsd/100)]})},{name:'pocket',label:'Qaysi hisobga',options:pockOpts},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'note',label:'Izoh'}],'Davom etish','Mijoz qarzi shu to‘lov bilan kamayadi. So‘m kassa kursi bo‘yicha dollarga o‘giriladi'+(d.rate?' (1 USD = '+num(d.rate,0)+' so‘m)':' — avval kassa kursini belgilang')+'. Agent orqali olingan pul bu yerda emas — agent topshirig‘i.');
       if(!v)return;var c=d.debtors.find(function(x){return String(x.id)===v.clientId})||{},amt=v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,eq=v.currency==='USD'?amt:(d.rate?Math.round(amt*100/d.rate):0);
       if(await confirmBox('To‘lovni tasdiqlang','<p><b>'+cbMoney(amt,v.currency)+'</b> → '+esc((pockOpts.find(function(p){return p[0]===v.pocket})||['',''])[1])+'<br>Mijoz: <b>'+esc(c.name||'')+'</b><br>Qarz: '+usd((c.debtUsd||0)/100)+' → <b>'+usd(Math.max((c.debtUsd||0)-eq,0)/100)+'</b></p>','Tasdiqlash'))
@@ -1388,13 +1388,13 @@ function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
 async function shLoad(){SH.d=await shApi('dashboard');if(!SH.seller){var t=(SH.d.team||[]).find(function(u){return u.level==='head'})||(SH.d.team||[])[0];SH.seller=t?String(t.id):''}return SH.d}
 async function pageSales(page,force){
   if(!SH.cart)SH.cart=shNewCart();
-  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
+  page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['orders','Buyurtmalar'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
   $('shTabs').onclick=function(e){var b=e.target.closest('button');if(!b)return;SH.tab=b.dataset.t;pageSales(page)};
   if(!SH.d||force){try{await shLoad()}catch(e){$('shBody').innerHTML=errState(e.message);$('shBody').querySelector('[data-retry]').onclick=function(){pageSales(page,true)};return}}
   if(S.page!=='sales')return;
   var body=$('shBody');
   if(SH.tab==='team')SH.tab='report';
-  ({report:salesReport,pos:shPos,prices:shPrices})[SH.tab](body,force);
+  ({report:salesReport,pos:shPos,orders:shOrders,prices:shPrices})[SH.tab](body,force);
 }
 function shProduct(p){return (SH.d.products||[]).find(function(x){return x.pack===p})}
 function shPayload(){var c=SH.cart,p={clientId:c.client?c.client.id:null,note:c.note,items:c.items.map(function(i){var o={pack:i.pack,qty:i.qty};if(i.price!=null&&i.price!=='')o.price=i.price;return o})};
@@ -1448,7 +1448,8 @@ function shCart(){
   if(!c.items.length){el.innerHTML='<div class="muted small">Chapdagi ro‘yxatdan mahsulot qo‘shing</div>';return}
   el.innerHTML='<table><thead><tr><th>Mahsulot</th><th class="right">Miqdor</th><th class="right">Narx $</th><th class="right">Jami</th><th></th></tr></thead><tbody>'+c.items.map(function(i,k){var p=shProduct(i.pack)||{name:'#'+i.pack},l=SH.q&&SH.q.lines[k];
     return '<tr><td>'+esc(p.name)+(l&&l.priceSource==='special'?' <span class="pill p-ok">maxsus</span>':'')+'</td><td class="right"><input data-q="'+k+'" value="'+i.qty+'" inputmode="numeric" style="width:70px;text-align:right"></td><td class="right"><input data-pr="'+k+'" value="'+esc(i.price==null?'':i.price)+'" placeholder="'+(l?l.listPriceUsd:'')+'" inputmode="decimal" style="width:80px;text-align:right"></td><td class="right num">'+(l?usd(l.priceUsd*i.qty):'…')+'</td><td><button class="btn" data-del="'+k+'" aria-label="O‘chirish">'+ic('x','sm')+'</button></td></tr>'}).join('')+'</tbody></table>';
-  el.querySelectorAll('[data-q]').forEach(function(x){x.onchange=function(){var k=+x.dataset.q,p=shProduct(c.items[k].pack),n=Math.max(0,Math.min(parseInt(x.value,10)||0,p?p.stock:0));if(!n)c.items.splice(k,1);else c.items[k].qty=n;shProds();shCart();shRequote()}});
+  // qayta chizish keyingi tikda: blur paytida fokusdagi input olib tashlanmasin (DOM xatosi)
+  el.querySelectorAll('[data-q]').forEach(function(x){x.onchange=function(){var k=+x.dataset.q,p=shProduct(c.items[k].pack),n=Math.max(0,Math.min(parseInt(x.value,10)||0,p?p.stock:0));if(!n)c.items.splice(k,1);else c.items[k].qty=n;setTimeout(function(){shProds();shCart();shRequote()},0)}});
   el.querySelectorAll('[data-pr]').forEach(function(x){x.onchange=function(){c.items[+x.dataset.pr].price=x.value.trim().replace(',','.')||null;shRequote()}});
   el.querySelectorAll('[data-del]').forEach(function(x){x.onclick=function(){c.items.splice(+x.dataset.del,1);shProds();shCart();shRequote()}});
 }
@@ -1466,7 +1467,8 @@ function shTotals(){
     '<dl class="kv" style="margin-top:12px"><dt>To‘landi</dt><dd class="num ok">'+usd(paid)+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(debt>0?'bad':'ok')+'"><b>'+usd(debt)+'</b></dd></dl>'+
     (debt>0&&!c.client?'<div class="bad small">Chakana xaridorga qarzga berilmaydi — mijozni tanlang.</div>':'')+
     '<input id="shNt" placeholder="Izoh (ixtiyoriy)" maxlength="300" value="'+esc(c.note)+'" style="margin-top:10px">'+
-    '<button class="btn pri" id="shSave" style="width:100%;margin-top:12px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('check','sm')+' Sotuvni saqlash · '+(q?usd(tot):'')+'</button>';
+    '<button class="btn pri" id="shSave" style="width:100%;margin-top:12px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('check','sm')+' Sotuvni saqlash · '+(q?usd(tot):'')+'</button>'+
+    (c.client?'<button class="btn" id="shOrder" style="width:100%;margin-top:8px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('orders','sm')+' Buyurtma qilish — omborda band qilinadi, keyin yetkaziladi</button>':'');
   $('shDm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.dmode=b.dataset.d;c.discount='';shTotals();shRequote()};
   $('shDisc').onchange=function(){c.discount=this.value.trim().replace(',','.');shRequote()};
   $('shPm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.method=b.dataset.m;shTotals()};
@@ -1475,6 +1477,68 @@ function shTotals(){
   $('shFull').onclick=function(){if(!q)return;if(c.method==='cash_uzs'){var r=Number(c.rate||SH.d.rate);if(!r)return toast('Kursni kiriting',true);c.rate=String(r);c.paidUzs=String(Math.round(tot*r))}else c.paid=String(tot);shTotals()};
   $('shNone').onclick=function(){c.paid='';c.paidUzs='';shTotals()};
   $('shSave').onclick=shSave;
+  if($('shOrder'))$('shOrder').onclick=shOrderCreate;
+}
+async function shOrderCreate(){
+  var c=SH.cart,p=Object.assign(shPayload(),{requestId:c.rid,sellerId:SH.seller,orderOp:'create'});
+  if(!await confirmBox('Buyurtmani tasdiqlang','<p>Mijoz: <b>'+esc(c.client.name)+'</b><br>Jami: <b>'+usd(SH.q.totalUsd)+'</b></p><p class="hint">Tovar omborda band qilinadi. Ombordan chiqim va mijoz qarzi faqat yetkazilganda yoziladi, to‘lov alohida qabul qilinadi.</p>','Buyurtma qilish'))return;
+  var r=await run(function(){return api('shop',Object.assign({op:'orders'},p))},'Buyurtma yaratildi');
+  if(!r)return;SH.cart=shNewCart();SH.q=null;S.cache={};SH.tab='orders';await pageSales($('page'),true);shOrderOpen(r.order.id);
+}
+/* ----- Buyurtmalar: band qilish, qisman yetkazish, aralash to'lov, qaytarish ----- */
+var SO={status:'open',q:'',page:0};
+function soApi(op,args){return api('shop',Object.assign({op:'orders',orderOp:op},args||{}))}
+async function shOrders(el,force){
+  el.innerHTML='<div class="card"><div class="skel"></div></div>';
+  var r=await run(function(){return soApi('list',{status:SO.status})});if(!r){el.innerHTML=errState('Yuklab bo‘lmadi');return}
+  var L=r.labels,q=SO.q.trim().toLowerCase(),rows=r.orders.filter(function(o){return !q||(o.clientName+' '+o.phone+' '+o.seller+' #'+o.id).toLowerCase().indexOf(q)>=0}),per=25,pages=Math.max(1,Math.ceil(rows.length/per));
+  SO.page=Math.min(SO.page,pages-1);
+  var tone=function(k){return k==='full'||k==='paid'?'p-ok':k==='partial'?'p-warn':''};
+  el.innerHTML='<div class="card flush"><div class="card-h"><h3>'+ic('orders')+' Buyurtmalar</h3><div class="actions"><div class="seg" id="soSt">'+[['open','Ochiq'],['all','Hammasi'],['cancelled','Bekor qilingan']].map(function(x){return '<button data-s="'+x[0]+'" class="'+(SO.status===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div><input id="soQ" type="search" placeholder="Mijoz, telefon, sotuvchi, №" value="'+esc(SO.q)+'" style="width:240px;max-width:100%"></div></div>'+
+    '<p class="hint" style="margin:8px 20px 0">Yangi buyurtma — «Yangi sotuv» bo‘limida mijozni tanlab «Buyurtma qilish». Yetkazish va to‘lov holati alohida yuritiladi.</p>'+
+    '<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>№</th><th>Sana</th><th>Mijoz</th><th>Sotuvchi</th><th class="right">Jami</th><th class="right">Qoldiq</th><th>Yetkazish</th><th>To‘lov</th></tr></thead><tbody>'+
+    (rows.length?rows.slice(SO.page*per,SO.page*per+per).map(function(o){return '<tr class="click" data-o="'+o.id+'"><td class="num">#'+o.id+'</td><td class="num">'+dt(o.ts)+'</td><td><b>'+esc(o.clientName)+'</b><br><small class="muted">'+esc(o.phone)+'</small></td><td class="small">'+esc(o.seller)+'</td><td class="right num">'+usd(o.total/100)+'</td><td class="right num'+(o.due>0?' bad':'')+'">'+usd(o.due/100)+'</td><td>'+(o.status==='cancelled'?pill('Bekor qilingan','p-bad'):pill(esc(o.deliveryLabel),tone(o.delivery)))+'</td><td>'+pill(esc(o.paymentLabel),tone(o.payment))+'</td></tr>'}).join(''):'<tr><td colspan="8">'+emptyState('Buyurtma yo‘q','orders')+'</td></tr>')+'</tbody></table></div>'+
+    (pages>1?'<div class="actions" style="padding:12px 20px"><button class="btn sm" id="soPrev"'+(SO.page?'':' disabled')+'>‹</button><span class="small muted">'+(SO.page+1)+' / '+pages+'</span><button class="btn sm" id="soNext"'+(SO.page<pages-1?'':' disabled')+'>›</button></div>':'')+'</div>';
+  $('soSt').onclick=function(e){var b=e.target.closest('button');if(!b)return;SO.status=b.dataset.s;SO.page=0;shOrders(el)};
+  var t=0;$('soQ').oninput=function(){var v=this.value;clearTimeout(t);t=setTimeout(function(){SO.q=v;SO.page=0;shOrders(el).then(function(){var i=$('soQ');if(i){i.focus();i.setSelectionRange(v.length,v.length)}})},300)};
+  if($('soPrev'))$('soPrev').onclick=function(){SO.page--;shOrders(el)};
+  if($('soNext'))$('soNext').onclick=function(){SO.page++;shOrders(el)};
+  el.querySelectorAll('[data-o]').forEach(function(tr){tr.onclick=function(){shOrderOpen(+tr.dataset.o)}});
+}
+var SO_ACT={create:'Yaratildi',deliver:'Yetkazildi',pay:'To‘lov',return:'Qaytarildi',cancel:'Bekor qilindi'};
+async function shOrderOpen(id){
+  var r=await run(function(){return soApi('view',{orderId:id})});if(!r)return;var o=r.order,open=o.status==='open';
+  var left=o.lines.some(function(l){return l.qty>l.delivered}),canRet=o.lines.some(function(l){return l.delivered>l.returned});
+  var method={cash_usd:'Naqd $',cash_uzs:'Naqd so‘m',card:'Karta'};
+  openDrawer('<div class="dh"><span class="av lg">'+ic('orders')+'</span><div><h2>Buyurtma #'+o.id+'</h2><small class="muted">'+dt(o.ts)+' · '+esc(o.clientName)+(o.phone?' · '+esc(o.phone):'')+' · sotuvchi '+esc(o.seller)+(o.createdBy&&o.createdBy!==o.seller?' · <b>kiritdi: '+esc(o.createdBy)+'</b>':'')+'</small></div></div>'+
+    '<div class="actions" style="margin:10px 0">'+(o.status==='cancelled'?pill('Bekor qilingan','p-bad'):pill(esc(o.deliveryLabel))+pill(esc(o.paymentLabel)))+'</div>'+
+    '<dl class="kv"><dt>Jami</dt><dd class="num">'+usd(o.total/100)+(o.discount?' <small class="muted">(chegirma '+usd(o.discount/100)+')</small>':'')+'</dd><dt>Yetkazildi</dt><dd class="num">'+usd(o.delivered/100)+'</dd><dt>Qaytarildi</dt><dd class="num">'+usd(o.returned/100)+'</dd><dt>To‘landi</dt><dd class="num ok">'+usd(o.paid/100)+'</dd><dt><b>To‘lanishi qoldi</b></dt><dd class="num'+(o.due>0?' bad':'')+'"><b>'+usd(o.due/100)+'</b></dd>'+(o.deliveryDate?'<dt>Yetkazish sanasi</dt><dd>'+esc(o.deliveryDate)+'</dd>':'')+(o.address?'<dt>Manzil</dt><dd>'+esc(o.address)+'</dd>':'')+(o.note?'<dt>Izoh</dt><dd>'+esc(o.note)+'</dd>':'')+'</dl>'+
+    '<h3 style="margin-top:16px">Mahsulotlar</h3><div class="tbl-wrap"><table><thead><tr><th>Mahsulot</th><th class="right">Buyurtma</th><th class="right">Yetkazildi</th><th class="right">Qaytdi</th><th class="right">Narx</th><th class="right">Jami</th></tr></thead><tbody>'+
+    o.lines.map(function(l){return '<tr><td>'+esc(l.name)+'</td><td class="right num">'+num(l.qty)+'</td><td class="right num">'+num(l.delivered)+'</td><td class="right num">'+num(l.returned)+'</td><td class="right num">'+usd(l.price/100)+'</td><td class="right num">'+usd(l.total/100)+'</td></tr>'}).join('')+'</tbody></table></div>'+
+    (o.payments.length?'<h3 style="margin-top:16px">To‘lovlar</h3><div class="tbl-wrap"><table><thead><tr><th>Sana</th><th>Usul</th><th class="right">Summa</th><th class="right">USD</th></tr></thead><tbody>'+o.payments.map(function(p){return '<tr><td class="num">'+dt(p.ts)+'</td><td>'+(method[p.method]||esc(p.method))+'</td><td class="right num">'+(p.currency==='UZS'?uzs(p.amount)+(p.rate?' <small class="muted">· '+num(p.rate,0)+'</small>':''):usd(p.amount/100))+'</td><td class="right num">'+usd(p.usd/100)+'</td></tr>'}).join('')+'</tbody></table></div>':'')+
+    (open?'<div class="actions" style="margin-top:16px">'+(left?'<button class="btn pri" id="soDel">'+ic('box','sm')+' Yetkazish</button>':'')+(o.due>0?'<button class="btn" id="soPay">'+ic('coins','sm')+' To‘lov qabul qilish</button>':'')+(canRet?'<button class="btn" id="soRet">'+ic('in','sm')+' Qaytarish</button>':'')+
+      (!o.delivered&&!o.paid?'<details class="mod-hist"><summary class="small muted">Qo‘shimcha amallar</summary><button class="btn danger sm" id="soCan" style="margin-top:8px">'+ic('ban','sm')+' Buyurtmani bekor qilish</button></details>':'')+'</div>':'')+
+    '<h3 style="margin-top:16px">Tarix</h3><div class="list">'+o.log.map(function(g){return '<div class="li"><div class="t"><b>'+(SO_ACT[g.action]||esc(g.action))+'</b><small>'+esc(g.detail)+' · '+esc(g.who)+' · '+dt(g.ts)+'</small></div></div>'}).join('')+'</div>');
+  var done=function(x,msg){if(x){toast(msg);shOrderOpen(id);var b=document.querySelector('#shBody');if(b&&SH.tab==='orders')shOrders(b);S.cache={}}};
+  if($('soDel'))$('soDel').onclick=async function(){
+    var f=o.lines.filter(function(l){return l.qty>l.delivered}).map(function(l){return {name:'p'+l.pack,label:l.name+' — qolgan '+(l.qty-l.delivered)+' dona',type:'number',value:String(l.qty-l.delivered)}});
+    var v=await formBox('Yetkazish — omborda chiqim',f,'Davom etish','Faqat yetkazilgan miqdor ombordan chiqadi va mijoz qarziga yoziladi. Qolgani band bo‘lib turadi.');if(!v)return;
+    var items={},txt=[];Object.keys(v).forEach(function(k){var n=parseInt(v[k],10)||0;if(n>0){items[k.slice(1)]=n;txt.push(esc((o.lines.find(function(l){return 'p'+l.pack===k})||{}).name)+': '+n+' dona')}});
+    if(!txt.length)return toast('Miqdorni kiriting',true);
+    if(await confirmBox('Yetkazishni tasdiqlang','<p>'+txt.join('<br>')+'</p>','Tasdiqlash'))done(await run(function(){return soApi('deliver',{orderId:id,items:items,requestId:rid()})}),'Yetkazildi')};
+  if($('soPay'))$('soPay').onclick=async function(){
+    var v=await formBox('To‘lov — qolgan '+usd(o.due/100),[{name:'usd',label:'Naqd $',type:'number',step:'0.01'},{name:'uzs',label:'Naqd so‘m',type:'number'},{name:'rate',label:'So‘m kursi (1 USD)',type:'number',value:SH.d&&SH.d.rate?String(SH.d.rate):''},{name:'card',label:'Karta $',type:'number',step:'0.01'}],'Davom etish','Bir nechta usulni birga kiritish mumkin — bitta tasdiqda yoziladi. Naqd pul sotuvchi hisobiga tushadi.');if(!v)return;
+    var lines=[];if(+v.usd>0)lines.push({method:'cash_usd',amount:v.usd});if(+v.uzs>0)lines.push({method:'cash_uzs',amount:v.uzs,rate:v.rate});if(+v.card>0)lines.push({method:'card',amount:v.card});
+    if(!lines.length)return toast('Summani kiriting',true);
+    var eq=(+v.usd||0)+(+v.card||0)+(+v.uzs>0&&+v.rate>0?+v.uzs/+v.rate:0);
+    if(await confirmBox('To‘lovni tasdiqlang','<p>'+lines.map(function(l){return (method[l.method])+': '+(l.method==='cash_uzs'?uzs(+l.amount)+' (kurs '+num(+l.rate,0)+')':usd(+l.amount))}).join('<br>')+'</p><p>Qarz: '+usd(o.due/100)+' → <b>'+usd(Math.max(o.due/100-eq,0))+'</b></p>','Tasdiqlash'))done(await run(function(){return soApi('pay',{orderId:id,payments:lines,requestId:rid()})}),'To‘lov saqlandi')};
+  if($('soRet'))$('soRet').onclick=async function(){
+    var opts=o.lines.filter(function(l){return l.delivered>l.returned}).map(function(l){return [String(l.pack),l.name+' — qaytarish mumkin '+(l.delivered-l.returned)+' dona']});
+    var v=await formBox('Qaytarish — omborga kirim',[{name:'pack',label:'Mahsulot',options:opts},{name:'qty',label:'Miqdor',type:'number',required:true},{name:'reason',label:'Sabab',required:true}],'Davom etish','Tovar omborga qaytadi, mijoz qarzi qaytarilgan summaga kamayadi. Asl yetkazish tarixda qoladi.');if(!v)return;
+    if(await confirmBox('Qaytarishni tasdiqlang','<p>'+esc((opts.find(function(x){return x[0]===v.pack})||['',''])[1].split(' — ')[0])+': '+esc(v.qty)+' dona<br>Sabab: '+esc(v.reason)+'</p>','Tasdiqlash'))done(await run(function(){return soApi('return',{orderId:id,pack:+v.pack,qty:+v.qty,reason:v.reason,requestId:rid()})}),'Qaytarildi')};
+  if($('soCan'))$('soCan').onclick=async function(){
+    var v=await formBox('Buyurtmani bekor qilish',[{name:'reason',label:'Sabab',required:true}],'Bekor qilish','Band qilingan tovar bo‘shaydi. Yozuv tarixda qoladi.');if(!v)return;
+    done(await run(function(){return soApi('cancel',{orderId:id,reason:v.reason})}),'Bekor qilindi')};
 }
 async function shSave(){
   var c=SH.cart,p=Object.assign(shPayload(),{requestId:c.rid,sellerId:SH.seller,method:c.method});

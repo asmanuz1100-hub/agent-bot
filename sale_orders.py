@@ -125,12 +125,15 @@ def deliver(db,actor,oid,items,payload,now=None):
     wh._lock_warehouse(db)
     ts=int(time.time() if now is None else now)
     tag=f'Buyurtma #{oid}'
-    if db.execute('SELECT 1 FROM events WHERE source=?',(_src(actor,payload,1000),)).fetchone():
-        return oid   # takroriy so'rov: birinchi qator allaqachon yozilgan
+    try:items=sorted(((int(k),int(v)) for k,v in items.items()),key=lambda kv:kv[0])
+    except (TypeError,ValueError):raise ValueError('Miqdor butun son bo‘lsin.')
+    # takroriy so'rov: istalgan qatori yozilgan bo'lsa — qayta yozilmaydi (0 li qatorlar ham hisobga)
+    if any(db.execute('SELECT 1 FROM events WHERE source=?',(_src(actor,payload,1000+i*3)+1,)).fetchone() for i in range(len(items))):
+        return oid
     done=[]
-    for i,(pack,qty) in enumerate(sorted(items.items(),key=lambda kv:int(kv[0]))):
-        pack=int(pack);qty=int(qty)
-        if qty<=0:continue
+    for i,(pack,qty) in enumerate(items):
+        if qty<0:raise ValueError('Miqdor manfiy bo‘lmasin.')
+        if qty==0:continue
         line=db.execute('SELECT * FROM sale_order_lines WHERE order_id=? AND pack=?',(oid,pack)).fetchone()
         if not line:raise ValueError('Bu mahsulot buyurtmada yo‘q.')
         left=int(line['qty'])-int(line['delivered'])
@@ -232,9 +235,10 @@ def view(db,oid):
     d,p,s=states(db,o)
     c=db.execute('SELECT name,shop_name,phone FROM clients WHERE id=?',(o['client'],)).fetchone()
     seller=db.execute('SELECT name FROM users WHERE id=?',(o['seller'],)).fetchone()
+    by=db.execute('SELECT name FROM users WHERE id=?',(o['actor'],)).fetchone()
     return {'id':int(o['id']),'status':o['status'],'delivery':d,'deliveryLabel':DELIVERY[d],'payment':p,'paymentLabel':PAYMENT[p],
             'client':int(o['client']),'clientName':((c['shop_name'] or c['name']) if c else '') or '','phone':(c['phone'] if c else '') or '',
-            'seller':seller[0] if seller else '','priceType':o['price_type'],'subtotal':int(o['subtotal']),'discount':int(o['discount']),
+            'seller':seller[0] if seller else '','createdBy':by[0] if by else '','priceType':o['price_type'],'subtotal':int(o['subtotal']),'discount':int(o['discount']),
             'total':int(o['total']),'delivered':s['delivered'],'returned':s['returned'],'paid':s['paid'],
             'due':int(o['total'])-s['returned']-s['paid'],'deliveryDate':o['delivery_date'] or '','address':o['address'] or '',
             'note':o['note'] or '','ts':int(o['ts']),
@@ -271,12 +275,16 @@ def handle(db,actor,op,payload,now=None):
         o=_order(db,oid)
         if s['role']=='sales' and int(o['seller'])!=actor and not shop.can(s,'all_sales'):
             raise ValueError('Bu buyurtma sizniki emas.')
-    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open')}
+    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open'),'labels':{'delivery':DELIVERY,'payment':PAYMENT}}
     if op=='view':return {'order':view(db,oid)}
-    if op=='create':oid=create(db,actor,payload,now=now)
+    def need(perm):
+        if not shop.can(s,perm):raise ValueError(f'Sizda «{shop.PERMS[perm]}» ruxsati yo‘q. Rahbarga murojaat qiling.')
+    if op in ('deliver','return','cancel'):
+        need(_order(db,oid)['price_type'])          # chakana/diller sotuvi ruxsati
+    if op=='create':oid=create(db,actor,payload,now=now)   # narx turi, chegirma — shop.quote tekshiradi
     elif op=='deliver':deliver(db,actor,oid,payload.get('items'),payload,now=now)
     elif op=='pay':
-        if not shop.can(s,'collect') and not shop.can(s,'retail'):raise ValueError('To‘lov qabul qilish ruxsati yo‘q.')
+        need('collect')
         pay(db,actor,oid,payload.get('payments'),payload,now=now)
     elif op=='return':return_goods(db,actor,oid,payload.get('pack'),payload.get('qty'),payload.get('reason'),payload,now=now)
     elif op=='cancel':cancel(db,actor,oid,payload.get('reason'),now=now)

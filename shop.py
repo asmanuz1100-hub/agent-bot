@@ -608,7 +608,7 @@ def client_card(db, actor, client):
 # ---------- Mini App API ----------
 
 ACTIONS = ('dashboard', 'quote', 'sell', 'collect', 'clients', 'client', 'add_client', 'handover',
-           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt')
+           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt', 'orders')
 
 
 def handle(db, actor, action, payload):
@@ -624,6 +624,10 @@ def handle(db, actor, action, payload):
                           'totalUsd': q['total'] / 100, 'clientDebtUsd': q['clientDebt'] / 100,
                           'lines': [{**l, 'listPriceUsd': l['listPrice'] / 100, 'priceUsd': l['price'] / 100,
                                      'discountUsd': l['discount'] / 100, 'totalUsd': l['total'] / 100} for l in q['lines']]}}
+    if action == 'orders':
+        # Ombordan buyurtma: band qilish, qisman yetkazish/to'lov, qaytarish (sale_orders.py)
+        import sale_orders
+        return sale_orders.handle(db, actor, payload.get('orderOp') or 'list', payload)
     if action == 'sell':
         out['receipt'] = sell(db, actor, payload)
     elif action == 'collect':
