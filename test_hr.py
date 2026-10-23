@@ -113,7 +113,7 @@ class HrTests(unittest.TestCase):
             self.call('pay_add',id=wid,kind='advance',amount='3000000')
         with self.assertRaises(ValueError):   # kurs o'zgargan
             self.call('pay_add',id=wid,kind='advance',amount='10000',expectedRate='12000')
-        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM hr_pay').fetchone()[0],0)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM hr_w_pay').fetchone()[0],0)
 
     def test_pay_is_idempotent_by_source(self):
         wid=self.worker()
@@ -128,6 +128,22 @@ class HrTests(unittest.TestCase):
                         ('pay_add',{'id':wid,'kind':'bonus','amount':'1'})):
             with self.assertRaises(ValueError):self.call(op,actor=3,**args)
 
+
+    def test_init_survives_first_version_tables(self):
+        # Birinchi HR versiyasi (7fed78e) jonli bazada user_id ustunli hr_salary/hr_attendance/hr_pay yaratgan.
+        # Yangi kod ularga tegmasligi va ishga tushishi kerak.
+        self.db.executescript('''
+            CREATE TABLE IF NOT EXISTS hr_profiles(user_id INTEGER PRIMARY KEY, position TEXT);
+            CREATE TABLE IF NOT EXISTS hr_salary(user_id INTEGER NOT NULL, from_month TEXT NOT NULL, salary_uzs INTEGER NOT NULL, actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(user_id,from_month));
+            CREATE TABLE IF NOT EXISTS hr_attendance(user_id INTEGER NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT, actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(user_id,day));
+            CREATE TABLE IF NOT EXISTS hr_pay(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs INTEGER NOT NULL, note TEXT, expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
+            CREATE INDEX IF NOT EXISTS idx_hr_pay_month ON hr_pay(month,user_id);
+        ''')
+        hr.init(self.db)
+        wid=self.worker()
+        self.call('attendance_set',id=wid,day='2026-10-14',status='present')
+        self.call('pay_add',id=wid,kind='bonus',amount='1000')
+        self.assertEqual(hr.payroll_row(self.db,wid,'2026-10')['due'],3001000)
 
 if __name__=='__main__':
     unittest.main()

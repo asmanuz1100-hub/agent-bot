@@ -3,7 +3,7 @@
 Bu yerdagi ishchilar tizimdan foydalanmaydi (Telegram ID, Mini App yoki web login yo'q).
 Admin, kassir, savdo, ombor va agent kabi tizim foydalanuvchilari staff.py da boshqariladi.
 
-- Oylik tarix bilan saqlanadi (hr_salary: qaysi oydan boshlab qancha), shuning uchun oylik
+- Oylik tarix bilan saqlanadi (hr_w_salary: qaysi oydan boshlab qancha), shuning uchun oylik
   o'zgarsa o'tgan oylar hisobi o'zgarmaydi.
 - Oylik hisob (so'mda): hisoblandi = oylik + bonus − jarima; to'landi = avans + oylik to'lovi.
   Avans va oylik to'lovi kassadan «👷 Иш ҳақи» xarajati bo'lib chiqadi (core.add_cashier_expense_uzs).
@@ -28,11 +28,11 @@ _PHONE=re.compile(r'\+?[0-9][0-9 ()-]{6,22}')
 
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS hr_workers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, position TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', hire_date TEXT NOT NULL DEFAULT '', birth_date TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', passport TEXT NOT NULL DEFAULT '', emergency TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, actor INTEGER, ts INTEGER NOT NULL, updated_ts INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS hr_salary(worker_id INTEGER NOT NULL, from_month TEXT NOT NULL, salary_uzs INTEGER NOT NULL CHECK(salary_uzs>=0), actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,from_month));
-CREATE TABLE IF NOT EXISTS hr_attendance(worker_id INTEGER NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,day));
-CREATE TABLE IF NOT EXISTS hr_pay(id INTEGER PRIMARY KEY, worker_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs INTEGER NOT NULL CHECK(amount_uzs>0), note TEXT NOT NULL DEFAULT '', expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
-CREATE INDEX IF NOT EXISTS idx_hr_attendance_day ON hr_attendance(day);
-CREATE INDEX IF NOT EXISTS idx_hr_pay_month ON hr_pay(month,worker_id);
+CREATE TABLE IF NOT EXISTS hr_w_salary(worker_id INTEGER NOT NULL, from_month TEXT NOT NULL, salary_uzs INTEGER NOT NULL CHECK(salary_uzs>=0), actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,from_month));
+CREATE TABLE IF NOT EXISTS hr_w_attendance(worker_id INTEGER NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(worker_id,day));
+CREATE TABLE IF NOT EXISTS hr_w_pay(id INTEGER PRIMARY KEY, worker_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs INTEGER NOT NULL CHECK(amount_uzs>0), note TEXT NOT NULL DEFAULT '', expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
+CREATE INDEX IF NOT EXISTS idx_hr_w_attendance_day ON hr_w_attendance(day);
+CREATE INDEX IF NOT EXISTS idx_hr_w_pay_month ON hr_w_pay(month,worker_id);
 '''
 PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGSERIAL PRIMARY KEY').replace(' INTEGER',' BIGINT')
 
@@ -106,7 +106,7 @@ def _worker(db,wid):
 
 
 def salary_for(db,wid,month):
-    row=db.execute('''SELECT salary_uzs FROM hr_salary WHERE worker_id=? AND from_month<=?
+    row=db.execute('''SELECT salary_uzs FROM hr_w_salary WHERE worker_id=? AND from_month<=?
         ORDER BY from_month DESC LIMIT 1''',(wid,month)).fetchone()
     return int(row[0]) if row else 0
 
@@ -168,8 +168,8 @@ def set_active(db,actor,wid,active):
 def set_salary(db,actor,wid,amount,from_month=None,now=None):
     core._require_admin(db,actor)
     month=_month(from_month,now)
-    if db.execute('SELECT 1 FROM hr_salary WHERE worker_id=?',(wid,)).fetchone() and salary_for(db,wid,month)==amount:return
-    db.execute('''INSERT INTO hr_salary(worker_id,from_month,salary_uzs,actor,ts) VALUES(?,?,?,?,?)
+    if db.execute('SELECT 1 FROM hr_w_salary WHERE worker_id=?',(wid,)).fetchone() and salary_for(db,wid,month)==amount:return
+    db.execute('''INSERT INTO hr_w_salary(worker_id,from_month,salary_uzs,actor,ts) VALUES(?,?,?,?,?)
         ON CONFLICT(worker_id,from_month) DO UPDATE SET salary_uzs=excluded.salary_uzs,actor=excluded.actor,ts=excluded.ts''',
         (wid,month,amount,actor,_now(now)))
 
@@ -186,10 +186,10 @@ def set_attendance(db,actor,wid,day,status,note='',now=None):
     d=_day(day)
     if d>today(now):raise ValueError('Kelajak kun uchun davomat belgilab bo‘lmaydi.')
     if status in (None,'','clear'):
-        db.execute('DELETE FROM hr_attendance WHERE worker_id=? AND day=?',(int(w['id']),d.isoformat()))
+        db.execute('DELETE FROM hr_w_attendance WHERE worker_id=? AND day=?',(int(w['id']),d.isoformat()))
         return
     if status not in ATTENDANCE:raise ValueError('Davomat holati noto‘g‘ri.')
-    db.execute('''INSERT INTO hr_attendance(worker_id,day,status,note,actor,ts) VALUES(?,?,?,?,?,?)
+    db.execute('''INSERT INTO hr_w_attendance(worker_id,day,status,note,actor,ts) VALUES(?,?,?,?,?,?)
         ON CONFLICT(worker_id,day) DO UPDATE SET status=excluded.status,note=excluded.note,actor=excluded.actor,ts=excluded.ts''',
         (int(w['id']),d.isoformat(),status,_text(note,'Izoh',200),actor,_now(now)))
 
@@ -200,7 +200,7 @@ def attendance_month(db,wids,month):
     out={w:{} for w in wids}
     if wids:
         marks=','.join('?'*len(wids))
-        for r in db.execute(f'SELECT worker_id,day,status,note FROM hr_attendance WHERE worker_id IN ({marks}) AND day>=? AND day<?',
+        for r in db.execute(f'SELECT worker_id,day,status,note FROM hr_w_attendance WHERE worker_id IN ({marks}) AND day>=? AND day<?',
                             (*wids,first.isoformat(),nxt.isoformat())).fetchall():
             out[int(r['worker_id'])][r['day']]={'status':r['status'],'note':r['note'] or ''}
     return out
@@ -225,7 +225,7 @@ def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='ca
     note=_text(note,'Izoh',300)
     if kind=='penalty' and not note:raise ValueError('Jarima sababini yozing.')
     if source is not None:
-        old=db.execute('SELECT id FROM hr_pay WHERE source=?',(source,)).fetchone()
+        old=db.execute('SELECT id FROM hr_w_pay WHERE source=?',(source,)).fetchone()
         if old:return int(old[0])
     expense=None
     if kind in CASH_KINDS:
@@ -236,13 +236,13 @@ def add_pay(db,actor,wid,kind,amount,month=None,note='',source=None,pay_from='ca
         label=f"{w['name']} · {PAY_KINDS[kind]} {month}"
         expense,_,_=core.add_cashier_expense_uzs(db,actor,amount,SALARY_CATEGORY,label,note,source,
                                                  expected_rate=expected_rate,pay_from=pay_from)
-    return int(db.execute('''INSERT INTO hr_pay(worker_id,kind,month,amount_uzs,note,expense,actor,ts,source)
+    return int(db.execute('''INSERT INTO hr_w_pay(worker_id,kind,month,amount_uzs,note,expense,actor,ts,source)
         VALUES(?,?,?,?,?,?,?,?,?) RETURNING id''',(wid,kind,month,amount,note,expense,actor,_now(now),source)).fetchone()[0])
 
 
 def payroll_row(db,wid,month):
     sums={k:0 for k in PAY_KINDS}
-    for r in db.execute('SELECT kind,COALESCE(SUM(amount_uzs),0) FROM hr_pay WHERE worker_id=? AND month=? GROUP BY kind',(wid,month)).fetchall():
+    for r in db.execute('SELECT kind,COALESCE(SUM(amount_uzs),0) FROM hr_w_pay WHERE worker_id=? AND month=? GROUP BY kind',(wid,month)).fetchall():
         sums[r[0]]=int(r[1] or 0)
     base=salary_for(db,wid,month)
     due=base+sums['bonus']-sums['penalty']
@@ -254,7 +254,7 @@ def payroll_row(db,wid,month):
 def pay_list(db,wid,month):
     return [{'id':int(r['id']),'kind':r['kind'],'label':PAY_KINDS.get(r['kind'],r['kind']),'amount':int(r['amount_uzs']),
              'note':r['note'] or '','cash':r['expense'] is not None,'actorName':r['actor_name'] or '','ts':int(r['ts'])}
-            for r in db.execute('''SELECT p.*,u.name AS actor_name FROM hr_pay p LEFT JOIN users u ON u.id=p.actor
+            for r in db.execute('''SELECT p.*,u.name AS actor_name FROM hr_w_pay p LEFT JOIN users u ON u.id=p.actor
                 WHERE p.worker_id=? AND p.month=? ORDER BY p.id DESC''',(wid,month)).fetchall()]
 
 
@@ -300,7 +300,7 @@ def worker(db,wid,month=None,now=None):
             'month':month,'calendar':cal,'attendance':_att_summary(days),'payroll':payroll_row(db,wid,month),
             'payments':pay_list(db,wid,month),
             'salaryHistory':[{'from':r['from_month'],'amount':int(r['salary_uzs'])} for r in
-                             db.execute('SELECT from_month,salary_uzs FROM hr_salary WHERE worker_id=? ORDER BY from_month DESC',(wid,)).fetchall()],
+                             db.execute('SELECT from_month,salary_uzs FROM hr_w_salary WHERE worker_id=? ORDER BY from_month DESC',(wid,)).fetchall()],
             'statuses':[[k,v] for k,v in ATTENDANCE.items()],'payKinds':[[k,v] for k,v in PAY_KINDS.items()],
             'cashRate':core.cashier_rate(db)}
 
