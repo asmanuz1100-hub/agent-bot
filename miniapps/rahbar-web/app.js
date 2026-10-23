@@ -2349,6 +2349,29 @@ async function modulesCard(can){
     b.disabled=true;var x=await run(function(){return api('module_set',{module:m.key,enabled:on})},on?'Bo‘lim yoqildi':'Bo‘lim o‘chirildi');b.disabled=false;
     if(x){S.dash=null;S.cache={};modulesCard(can)}}});
 }
+function bkSize(n){return n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+function bkInit(){
+  var run_=$('bkRun'),get=$('bkGet'),st=$('bkState'),timer=null;
+  function show(s){if(!$('bkRun')){clearTimeout(timer);return}
+    run_.disabled=s.status==='running';get.hidden=s.status!=='ready';
+    st.className='small '+(s.status==='error'?'bad':'muted');
+    st.textContent=s.status==='running'?'Tayyorlanmoqda… mijoz rasmlari ko‘p bo‘lsa bir necha daqiqa oladi. Sahifani yopmasangiz bo‘ldi.':
+      s.status==='ready'?'Tayyor: '+s.name+' · '+bkSize(s.size)+' · mijozlar '+s.clients+', rasmlar '+s.photosOk+(s.photosFailed?' (yuklanmagan: '+s.photosFailed+')':'')+'. 1 soat saqlanadi.':
+      s.status==='error'?'Backup tayyorlashda xato bo‘ldi. Qayta urinib ko‘ring.':'';
+    clearTimeout(timer);if(s.status==='running')timer=setTimeout(poll,3000)}
+  function poll(){api('full_backup',{op:'status'}).then(show).catch(function(e){st.textContent=e.message})}
+  run_.onclick=async function(){if(!await confirmBox('To‘liq backup','<p>Server butun bazani va mijoz rasmlarini bitta ZIP arxivga yig‘adi, so‘ng uni yuklab olasiz. Panel va bot ishlashda davom etadi.</p>','Boshlash'))return;
+    var r=await run(function(){return api('full_backup',{op:'start'})});if(r)show(r)};
+  get.onclick=async function(){get.disabled=true;var old=st.textContent;st.textContent='Yuklanmoqda…';
+    try{var r=await fetch(API,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},body:JSON.stringify({action:'full_backup',op:'download'})});
+      if(!r.ok){var d={};try{d=await r.json()}catch(e){}throw new Error(d.error||('Xato '+r.status))}
+      var name=(r.headers.get('Content-Disposition')||'').match(/filename="([^"]+)"/),blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download=name?name[1]:'full-backup-'+today()+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},10000);
+      st.textContent=old;toast('Backup yuklab olindi')}
+    catch(e){st.textContent=old;toast(e.message,true);poll()}
+    get.disabled=false};
+  poll();
+}
 function pageSettings(page){
   var me=S.me||{};
   var canBrand=S.primary;
@@ -2369,8 +2392,8 @@ function pageSettings(page){
    '<div class="card" id="modCard" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div><div class="loading">Yuklanmoqda…</div></div>'+
    '<div class="card" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('shield')+' Xodimlar va ruxsatlar</h3></div><p class="hint">Ruxsatlar, web login/parol va Telegram Mini App kirishi — <b>Xodimlar</b> bo‘limida.</p><div class="actions"><a class="btn sm" href="#staff">Xodimlarga o‘tish</a></div></div>'+
    (canBrand?'<div class="card" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('box')+' To‘liq backup</h3></div>'+
-    '<p class="hint" style="margin:-4px 0 12px">Butun baza (mijozlar, savdo, kassa, ombor, xodimlar, oylik, ruxsatlar va boshqalar) hamda mijoz rasmlari ZIP arxivga yig‘iladi va Telegram botdagi chatingizga yuboriladi. Parol, BOT_TOKEN va API kalitlar qo‘shilmaydi. Arxivda shaxsiy ma’lumot bor — uni maxfiy saqlang.</p>'+
-    '<div class="actions"><button class="btn pri" id="bkRun">'+ic('box','sm')+' Backup olish</button></div></div>':'')+
+    '<p class="hint" style="margin:-4px 0 12px">Butun baza (mijozlar, savdo, kassa, ombor, xodimlar, oylik, ruxsatlar va boshqalar) hamda mijoz rasmlari bitta ZIP arxivga yig‘iladi va shu kompyuterga yuklab olinadi. Parol, BOT_TOKEN va API kalitlar qo‘shilmaydi. Arxivda shaxsiy ma’lumot bor — uni maxfiy saqlang.</p>'+
+    '<div class="actions"><button class="btn pri" id="bkRun">'+ic('box','sm')+' Backup tayyorlash</button><button class="btn" id="bkGet" hidden>'+ic('upload','sm')+' Yuklab olish</button></div><p class="small muted" id="bkState" style="margin-top:8px"></p></div>':'')+
    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Bildirishnomalar</h3></div>'+
     '<div class="switch"><span>Brauzer bildirishnomasi<br><small class="muted">Panel boshqa oynada bo‘lsa ham xabar chiqadi</small></span><button class="tog'+(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'?' on':'')+'" id="tgNotify" aria-label="Brauzer bildirishnomasi"></button></div>'+
     '<div class="switch"><span>Ovozli signal</span><button class="tog'+(store('rw-sound')!=='0'?' on':'')+'" id="tgSound" aria-label="Ovozli signal"></button></div>'+
@@ -2393,10 +2416,7 @@ function pageSettings(page){
     $('brForm').onsubmit=async function(e){e.preventDefault();var b=$('brSave');b.disabled=true;
       var r=await run(function(){return api('branding_save',{name:$('brForm').elements.name.value,logo:logo,details:BR_FIELDS.reduce(function(o,f){o[f[0]]=$('brForm').elements['d_'+f[0]].value;return o},{})})},'Kompaniya ma’lumotlari saqlandi');
       b.disabled=false;if(r&&r.brand){applyBrand(r.brand);document.title=$('pageTitle').textContent+' · '+brandName()}}}
-  if($('bkRun'))$('bkRun').onclick=async function(){var b=this;
-    if(!await confirmBox('To‘liq backup','<p>Arxiv tayyorlanib, bir necha daqiqada Telegram botdagi chatingizga keladi. Panel va bot ishlashda davom etadi.</p>','Boshlash'))return;
-    b.disabled=true;var r=await run(function(){return api('full_backup')});b.disabled=false;
-    if(r)toast(r.started?'Backup tayyorlanmoqda — arxiv Telegramga keladi':'Backup allaqachon tayyorlanmoqda')};
+  if($('bkRun'))bkInit();
   $('stLogout').onclick=async function(){await auth('logout').catch(function(){});TOKEN='';store('rw-token',null);S.dash=null;S.cache={};showLogin()};
   $('tgNotify').onclick=async function(){var b=this;
     if(b.classList.contains('on')){store('rw-notify','0');b.classList.remove('on');return}

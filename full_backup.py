@@ -84,8 +84,10 @@ def build_archives(db, photo_fetcher, photo_chunk_bytes=38_000_000):
     for table in TABLES:
         try:
             rows = _safe_select_all(db, table)
-        except Exception:
-            # Table not created yet on this install (module never used).
+        except Exception as exc:
+            # Table not created yet on this install (module never used); anything else is a real failure.
+            if "no such table" not in str(exc) and "does not exist" not in str(exc):
+                raise
             try:
                 db.rollback()
             except Exception:
@@ -188,6 +190,22 @@ def build_archives(db, photo_fetcher, photo_chunk_bytes=38_000_000):
         "temp_dir": str(temp_dir),
     }
     return paths, summary
+
+
+def build_single_archive(db, photo_fetcher):
+    """Return (path, summary): one ZIP holding the data ZIP and the photo ZIP for web download."""
+    paths, summary = build_archives(db, photo_fetcher, photo_chunk_bytes=10**12)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    out = Path(tempfile.mkdtemp(prefix="asman-web-backup-")) / f"ASMAN-full-backup-{stamp}.zip"
+    try:
+        with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED) as zf:
+            for raw in paths:
+                zf.write(raw, os.path.basename(raw))
+    finally:
+        cleanup(paths)
+    summary["archives"] = [out.name]
+    summary["bytes"] = out.stat().st_size
+    return str(out), summary
 
 
 def cleanup(paths):

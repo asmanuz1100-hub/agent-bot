@@ -1,6 +1,6 @@
 """Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
-import threading
+import threading, shutil
 import gzip
 from collections import OrderedDict
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -334,6 +334,39 @@ _PHOTO_CACHE_MAX_BYTES=24_000_000
 _PHOTO_CACHE_TTL=1800
 _PHOTO_CACHE_SIZE=0
 _FULL_BACKUP_LOCK=threading.Lock()
+# Web panel backup: oxirgi tayyorlangan arxiv (bitta, 1 soat saqlanadi) va holati.
+_WEB_BACKUP={'status':'idle'}
+_WEB_BACKUP_TTL=3600
+
+def _web_backup_drop():
+    path=_WEB_BACKUP.get('path')
+    if path:
+        try:full_backup.cleanup([path])
+        except Exception:logging.exception('Web backup cleanup failed')
+    _WEB_BACKUP.clear();_WEB_BACKUP['status']='idle'
+
+def _web_backup_worker(uid,open_db):
+    # open_db: Postgres pool connection, or a fresh SQLite connection (SQLite objects are per-thread).
+    local=None
+    try:
+        local=open_db()
+        path,summary=full_backup.build_single_archive(local,customer_photo_bytes)  # read-only; close() rolls back
+        _WEB_BACKUP.update(status='ready',path=path,name=Path(path).name,size=summary['bytes'],
+                           clients=summary['clients'],photosOk=summary['photos_ok'],
+                           photosFailed=summary['photos_failed'],ts=int(time.time()))
+    except Exception:
+        logging.exception('Web full backup failed user=%s',uid)
+        _WEB_BACKUP.clear();_WEB_BACKUP.update(status='error',ts=int(time.time()))
+    finally:
+        if local is not None:
+            try:local.close()
+            except Exception:pass
+        _FULL_BACKUP_LOCK.release()
+
+def web_backup_state():
+    if _WEB_BACKUP.get('status')=='ready' and time.time()-_WEB_BACKUP.get('ts',0)>_WEB_BACKUP_TTL:
+        _web_backup_drop()
+    return {k:v for k,v in _WEB_BACKUP.items() if k!='path'}
 
 def photo_content_type(content):
     """Return the actual safe image MIME type, not one inferred from a filename."""
@@ -2443,6 +2476,10 @@ def serve_webhook(db,base_url):
         # Connections come from a bounded pool; close() rolls back and returns them.
         return pool.get() if postgres else db
 
+    sqlite_path=None if postgres else (db.execute('PRAGMA database_list').fetchone()[2] or DB_PATH)
+    def backup_db():
+        return pool.get() if postgres else connect(sqlite_path,initialize=False)
+
     class Handler(BaseHTTPRequestHandler):
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
             try:
@@ -3300,14 +3337,36 @@ def serve_webhook(db,base_url):
                         modules.set_enabled(local,actor,str(payload.get('module') or ''),payload.get('enabled') is True)
                         data=modules.view(local)
                     elif action=='full_backup':
-                        # Sozlamalar → To'liq backup: arxivlar asosiy rahbarning Telegramiga yuboriladi.
+                        # Sozlamalar → To'liq backup: server arxivni tayyorlaydi, panel uni to'g'ridan-to'g'ri yuklab oladi.
                         if actor not in ADMINS:
                             answer(403,{'error':'To‘liq backup faqat asosiy rahbar uchun.'});return
-                        if _FULL_BACKUP_LOCK.locked():
-                            data={'ok':True,'started':False}
-                        else:
-                            threading.Thread(target=_full_backup_worker,args=(actor,),daemon=True,name='full-backup-export').start()
-                            data={'ok':True,'started':True}
+                        op=str(payload.get('op') or 'status')
+                        if op=='start':
+                            if _FULL_BACKUP_LOCK.acquire(blocking=False):
+                                _web_backup_drop();_WEB_BACKUP['status']='running';_WEB_BACKUP['ts']=int(time.time())
+                                threading.Thread(target=_web_backup_worker,args=(actor,backup_db),daemon=True,name='web-full-backup').start()
+                        elif op=='download':
+                            state=web_backup_state()
+                            if state.get('status')!='ready':
+                                answer(404,{'error':'Backup tayyor emas yoki muddati tugadi. Qaytadan tayyorlang.'});return
+                            path=_WEB_BACKUP['path']
+                            try:
+                                self.send_response(200)
+                                self.send_header('Content-Type','application/zip')
+                                self.send_header('Content-Length',str(os.path.getsize(path)))
+                                self.send_header('Content-Disposition',f'attachment; filename="{state["name"]}"')
+                                self.send_header('Cache-Control','no-store')
+                                self.send_header('X-Content-Type-Options','nosniff')
+                                for k,v in headers.items():self.send_header(k,v)
+                                self.end_headers()
+                                with open(path,'rb') as fh:shutil.copyfileobj(fh,self.wfile,1024*1024)
+                            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
+                                self.close_connection=True
+                            logging.info('Web full backup downloaded user=%s',actor)
+                            return
+                        elif op!='status':
+                            raise ValueError('Backup amali noto‘g‘ri.')
+                        data=web_backup_state()
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return

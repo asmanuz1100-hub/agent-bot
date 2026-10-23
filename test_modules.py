@@ -207,3 +207,35 @@ class ModuleHttpTests(HttpBase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WebBackupHttpTests(HttpBase):
+    def test_primary_admin_prepares_and_downloads_backup(self):
+        import io, zipfile
+        t2 = self.token('second', self.password2)
+        code, d = self.post('/api/manager', t2, action='full_backup', op='start')
+        self.assertEqual(code, 403, d)                       # faqat asosiy rahbar
+        t = self.token()
+        with patch.object(bot, 'customer_photo_bytes', return_value=b'\xff\xd8\xff photo'):
+            code, d = self.post('/api/manager', t, action='full_backup', op='start')
+            self.assertEqual(code, 200, d)
+            for _ in range(100):
+                code, d = self.post('/api/manager', t, action='full_backup', op='status')
+                if d.get('status') != 'running':
+                    break
+                time.sleep(.1)
+        self.assertEqual(d['status'], 'ready', d)
+        self.assertNotIn('path', d)                          # server yo'li panelga chiqmaydi
+        headers = {'Content-Type': 'application/json', 'Origin': sorted(bot.SELF_MINIAPP_ORIGINS)[0], 'Authorization': 'Bearer ' + t}
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/api/manager',
+                                     json.dumps({'action': 'full_backup', 'op': 'download'}).encode(), headers)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.headers['Content-Type'], 'application/zip')
+            body = r.read()
+        with zipfile.ZipFile(io.BytesIO(body)) as outer:
+            names = outer.namelist()
+            data = next(n for n in names if n.startswith('ASMAN-full-data-'))
+            with zipfile.ZipFile(io.BytesIO(outer.read(data))) as inner:
+                self.assertIn('database/clients.json', inner.namelist())
+                self.assertNotIn('database/web_accounts.json', inner.namelist())
+        bot._web_backup_drop()
