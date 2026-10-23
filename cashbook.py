@@ -179,18 +179,33 @@ def add_income(db,actor,pocket,currency,amount,category,counterparty,note,source
     if old:return old
     usd_eq,rate=_usd_eq(db,currency,amount)
     ts=int(time.time() if now is None else now)
-    event=None
     if crow:
         debt=core.client_debt_usd(db,client)
         if usd_eq>debt:
             raise ValueError(f"Mijoz qarzi {debt/100:,.2f} USD — undan ko‘p to‘lov qabul qilinmaydi.".replace(',',' '))
-        if db.execute('SELECT 1 FROM events WHERE source=?',(source,)).fetchone():raise ValueError('Operatsiya ID band. Qayta yuboring.')
-        event=int(db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
-            VALUES(?,NULL,?,'payment',0,0,0,?,?,?,?,?,?,?) RETURNING id""",(actor,client,usd_eq,
-            ('Kassaga to‘g‘ridan'+(' · '+note if note else '')),ts,source,CASHBOX_METHOD,amount if currency=='UZS' else 0,rate)).fetchone()[0])
+        return record_client_payment(db,actor,client,pocket,currency,amount,usd_eq,rate,
+                                     'Kassaga to‘g‘ridan'+(' · '+note if note else ''),source,ts,note=note,counterparty=counterparty)
+    return int(db.execute('''INSERT INTO cash_moves(kind,to_pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,ts,source)
+        VALUES('income',?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,
+        ts,source)).fetchone()[0])
+
+
+def record_client_payment(db,actor,client,pocket,currency,amount,usd_cents,rate,event_note,source,ts,note='',counterparty=None):
+    """Mijoz puli to'g'ridan kassaga: events 'payment' (qarz kamayadi, agent bo'sh) + bog'langan kassa kirimi.
+    Kassadagi «Mijozdan to'lov» va rahbarning o'z nomidan sotuvi shu yerdan yoziladi."""
+    _lock(db)
+    old=_seen(db,source)
+    if old:return old
+    if counterparty is None:
+        c=db.execute('SELECT name,shop_name FROM clients WHERE id=?',(client,)).fetchone()
+        counterparty=((c['shop_name'] or c['name']) if c else '') or f'Mijoz #{client}'
+    if db.execute('SELECT 1 FROM events WHERE source=?',(source,)).fetchone():raise ValueError('Operatsiya ID band. Qayta yuboring.')
+    event=int(db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
+        VALUES(?,NULL,?,'payment',0,0,0,?,?,?,?,?,?,?) RETURNING id""",(actor,client,usd_cents,event_note,ts,source,CASHBOX_METHOD,
+        amount if currency=='UZS' else 0,rate)).fetchone()[0])
     return int(db.execute('''INSERT INTO cash_moves(kind,to_pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,ts,source,client,event)
-        VALUES('income',?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(pocket,currency,amount,usd_eq,rate,category,counterparty,note,actor,
-        ts,source,client if crow else None,event)).fetchone()[0])
+        VALUES('income',?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',(pocket,currency,amount,usd_cents,rate,CLIENT_PAYMENT,
+        counterparty[:200],note,actor,ts,source,client,event)).fetchone()[0])
 
 
 def add_transfer(db,actor,from_pocket,to_pocket,currency,amount,note,source,now=None):

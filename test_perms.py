@@ -63,6 +63,15 @@ class PermUnitTests(unittest.TestCase):
         perms.set_perms(self.db, 1, 5, {'cash.view': True}, PRIMARY)
         self.assertTrue(perms.open_section(self.db, 5, 'cash', PRIMARY))
 
+    def test_web_login_for_rahbar_and_sales_only(self):
+        import staff
+        login, pw = staff.issue_login(self.db, 1, 6)                 # sotuvchi — Savdo Web
+        self.assertTrue(login and pw)
+        with self.assertRaisesRegex(ValueError, 'Telegram ilovasi'):
+            staff.issue_login(self.db, 1, 3)                         # kassirda web panel yo'q
+        rows = {x['id']: x for x in staff.staff_list(self.db, PRIMARY)['staff']}
+        self.assertEqual((rows[6]['webCapable'], rows[3]['webCapable'], rows[6]['webLogin']), (True, False, login))
+
     def test_manager_perm_mapping(self):
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'bonus'), 'hr.calculate')
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'advance'), 'hr.pay')
@@ -172,6 +181,21 @@ class PermHttpTests(HttpBase):
         code, d = self.post('/api/cashier', initData=init, action='expense', requestId='cashperm11',
                             currency='USD', amount='1', category='📦 Бошқа харажат', recipient='x')
         self.assertEqual(code, 403, d)
+
+    def test_miniapp_access_toggle_blocks_initdata_but_not_web(self):
+        init = signed_init_data(3)
+        code, d = self.post('/api/manager', self.rahbar, action='access_set', id=3, miniapp=False)
+        self.assertNotEqual(code, 200, d)                        # faqat asosiy Admin
+        code, d = self.post('/api/manager', self.admin, action='access_set', id=3, miniapp=False)
+        self.assertEqual(code, 200, d)
+        self.assertFalse(next(x for x in d['staff'] if x['id'] == 3)['miniapp'])
+        code, d = self.post('/api/cashier', initData=init, action='dashboard')
+        self.assertEqual(code, 403, d)
+        self.post('/api/manager', self.admin, action='access_set', id=3, miniapp=True)
+        code, d = self.post('/api/cashier', initData=init, action='dashboard')
+        self.assertEqual(code, 200, d)
+        code, d = self.post('/api/manager', self.admin, action='access_set', id=1, miniapp=False)
+        self.assertNotEqual(code, 200, d)                        # Admin o'zini yopa olmaydi
 
 
 if __name__ == '__main__':

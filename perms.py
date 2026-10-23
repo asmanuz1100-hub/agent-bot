@@ -121,7 +121,7 @@ def has(db,uid,perm,primary=()):
 
 def require(db,uid,perm,primary=()):
     if perm and not has(db,uid,perm,primary):
-        raise Denied(f"Sizda «{CATALOG[perm][1]}» ruxsati yo‘q. Admin Sozlamalar → Xodimlar va ruxsatlar bo‘limida beradi.")
+        raise Denied(f"Sizda «{CATALOG[perm][1]}» ruxsati yo‘q. Admin Xodimlar bo‘limida beradi.")
 
 
 def set_perms(db,actor,target,changes,primary=(),now=None):
@@ -155,20 +155,48 @@ def set_perms(db,actor,target,changes,primary=(),now=None):
     return after
 
 
+# ---------- kirish yo'llari ----------
+# Web — login/parol (web_auth) bor-yo'qligi. Telegram Mini App — alohida yoqiladi/o'chiriladi (standart: yoqiq).
+# Bu ruxsat katalogda emas (bo'lim huquqi emas): faqat qaysi yo'l bilan kirishni belgilaydi.
+MINIAPP='access.miniapp'
+MINIAPP_OFF='Telegram ilovasi orqali kirish o‘chirilgan. Admin Xodimlar bo‘limida yoqadi.'
+
+
+def miniapp_allowed(db,uid):
+    row=db.execute('SELECT allowed FROM user_perms WHERE user_id=? AND perm=?',(uid,MINIAPP)).fetchone()
+    return row is None or bool(int(row[0]))
+
+
+def set_miniapp(db,actor,target,on,primary=(),now=None):
+    if actor not in primary:raise Denied('Kirish yo‘llarini faqat Admin (asosiy rahbar) o‘zgartiradi.')
+    try:target=int(target)
+    except (TypeError,ValueError):raise ValueError('Xodim noto‘g‘ri.')
+    if target==actor or target in primary:raise Denied('Admin (asosiy rahbar) kirishi o‘chirilmaydi.')
+    if _role(db,target) is None:raise ValueError('Xodim topilmadi.')
+    on=bool(on)
+    if miniapp_allowed(db,target)==on:return on
+    ts=int(time.time() if now is None else now)
+    if on:db.execute('DELETE FROM user_perms WHERE user_id=? AND perm=?',(target,MINIAPP))
+    else:db.execute('INSERT INTO user_perms(user_id,perm,allowed,actor,ts) VALUES(?,?,0,?,?)',(target,MINIAPP,actor,ts))
+    db.execute('INSERT INTO perm_audit(actor,target,perm,before,after,ts) VALUES(?,?,?,?,?,?)',
+               (actor,target,MINIAPP,'0' if on else '1','1' if on else '0',ts))
+    return on
+
+
 def staff_view(db,uid,primary=()):
     role=_role(db,uid)
     if role is None:raise ValueError('Xodim topilmadi.')
     eff=effective(db,uid,primary)
     overrides={r['perm']:bool(int(r['allowed'])) for r in db.execute('SELECT perm,allowed FROM user_perms WHERE user_id=?',(uid,)).fetchall()}
     key='primary' if uid in primary else role
-    hist=[{'perm':r['perm'],'label':CATALOG.get(r['perm'],('',r['perm']))[1],'on':r['after']=='1','who':r['who'],'ts':int(r['ts'])}
+    hist=[{'perm':r['perm'],'label':'Telegram Mini App orqali kirish' if r['perm']==MINIAPP else CATALOG.get(r['perm'],('',r['perm']))[1],'on':r['after']=='1','who':r['who'],'ts':int(r['ts'])}
           for r in db.execute('''SELECT a.*,COALESCE(u.name,CAST(a.actor AS TEXT)) AS who FROM perm_audit a
               LEFT JOIN users u ON u.id=a.actor WHERE a.target=? ORDER BY a.ts DESC,a.id DESC LIMIT 40''',(uid,)).fetchall()]
     return {'id':int(uid),'role':key,'roleLabel':ROLE_LABELS.get(key,role),'editable':key in EDITABLE_ROLES,
             'perms':[{'key':k,'section':v[0],'sectionLabel':SECTIONS[v[0]],'label':v[1],'on':k in eff,
                       'default':k in DEFAULTS.get(role,()) or key=='primary','override':overrides.get(k)} for k,v in CATALOG.items()
                      if k in GRANTABLE.get(role,CATALOG)],
-            'history':hist}
+            'history':hist,'miniapp':miniapp_allowed(db,uid)}
 
 
 # ---------- amal -> ruxsat ----------

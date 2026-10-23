@@ -213,8 +213,8 @@ var PAGES=[
   ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
   ['team','users','Agentlar','KPI, pul, topshirish, GPS va marshrutlar'],
   ['agents','compass','Agentlar','Jonli GPS xarita, marshrut va mijozlar',9],
-  ['warehouse','orders','Ombor','Buyurtmalar, katalog, kirim/chiqim va qoldiq',0,'Ombor'],
-  ['supply','warehouse','Ta’minot','Ta’minotchilar, xarid, xom ashyo va ishlab chiqarish',0,'Ta’minot'],
+  ['warehouse','orders','Ombor','Buyurtmalar, qoldiq, katalog va ta’minot',0,'Ombor'],
+  ['supply','warehouse','Ombor · Ta’minot','Ta’minotchilar, xarid, xom ashyo va ishlab chiqarish',9],
   ['cash','wallet','Kassa','Kassa va hisoblar, kirim, o‘tkazma, agentlardagi pul, qarzdorlar',1,'Kassa'],
   ['staff','staff','Xodimlar','Tizim foydalanuvchilari, sex ishchilari, davomat va oylik',1],
   ['reports','report','Hisobot','Davr bo‘yicha natijalar',1],
@@ -230,7 +230,7 @@ function renderNav(){
     return '<button data-p="'+p[0]+'" class="'+(cur?'on':'')+'"'+(cur?' aria-current="page"':'')+' data-tip="'+esc(lb)+'">'+ic(p[1])+'<span class="lbl">'+lb+'</span>'+(badge[p[0]]?'<span class="badge" aria-label="'+badge[p[0]]+' ta yangi">'+badge[p[0]]+'</span>':'')+'</button>'}).join('')+'</div>'}).join('')+'<i class="nav-ind" aria-hidden="true"></i>';
   moveInd();
 }
-function navKey(){return S.page==='agents'?'team':S.page}
+function navKey(){return S.page==='agents'?'team':S.page==='supply'?'warehouse':S.page}
 /* Agentlar bo'limi ichidagi tablar: ro'yxat/KPI va jonli GPS xarita (avval alohida bo'limlar edi). */
 function agTabs(cur){return '<div class="seg ag-tabs" role="tablist" aria-label="Agentlar ko‘rinishi"><button role="tab" data-h="team" class="'+(cur==='team'?'on':'')+'" aria-selected="'+(cur==='team')+'">'+ic('users','sm')+' Ro‘yxat va KPI</button><button role="tab" data-h="agents" class="'+(cur==='agents'?'on':'')+'" aria-selected="'+(cur==='agents')+'">'+ic('map','sm')+' GPS xarita</button></div>'}
 function bindAgTabs(page){var t=page.querySelector('.ag-tabs');if(t)t.onclick=function(e){var b=e.target.closest('button');if(b&&b.dataset.h!==S.page)location.hash=b.dataset.h}}
@@ -1385,7 +1385,7 @@ function cashList(){
 var SH={tab:'report',d:null,cart:null,q:null,qErr:'',pq:'',seller:''};
 function shNewCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',rid:'web'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}}
 function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
-async function shLoad(){SH.d=await shApi('dashboard');if(!SH.seller){var t=(SH.d.team||[]).find(function(u){return u.level==='head'})||(SH.d.team||[])[0];SH.seller=t?String(t.id):''}return SH.d}
+async function shLoad(){SH.d=await shApi('dashboard');var sl=SH.d.sellers||[];if(!SH.seller||!sl.some(function(u){return String(u.id)===SH.seller})){SH.seller=sl[0]?String(sl[0].id):''}return SH.d}
 async function pageSales(page,force){
   if(!SH.cart)SH.cart=shNewCart();
   page.innerHTML='<div class="toolbar"><div class="seg" id="shTabs" style="max-width:100%;overflow-x:auto">'+[['report','Hisobot'],['pos','Yangi sotuv'],['orders','Buyurtmalar'],['prices','Narxlar']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(SH.tab===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div></div><div id="shBody"><div class="grid g3">'+'<div class="skel"></div>'.repeat(3)+'</div></div>';
@@ -1403,13 +1403,13 @@ var shQT=0;
 function shRequote(){clearTimeout(shQT);if(!SH.cart.items.length){SH.q=null;SH.qErr='';shTotals();return}
   shQT=setTimeout(async function(){try{SH.q=(await shApi('quote',shPayload())).quote;SH.qErr=''}catch(e){SH.qErr=e.message}shCart();shTotals()},250)}
 function shPos(el){
-  var team=SH.d.team||[],c=SH.cart;
-  if(!team.length){el.innerHTML='<div class="card">'+emptyState('Savdo xodimlari yo‘q. «Xodimlar» bo‘limidan «Savdo» rolida qo‘shing — sotuv ularning nomidan yoziladi.','users')+'</div>';return}
+  var team=SH.d.sellers||[],c=SH.cart;
+  if(!team.length){el.innerHTML='<div class="card">'+emptyState('Sotuvchi yo‘q.','users')+'</div>';return}
   if(!c.rate&&SH.d.rate)c.rate=String(SH.d.rate);
   el.innerHTML='<div class="grid g2" style="align-items:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))">'+
     '<div class="card flush" style="min-width:0"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3><input id="shPq" type="search" placeholder="Qidirish…" value="'+esc(SH.pq)+'" style="width:220px;max-width:100%"></div><div class="tbl-wrap" style="margin-top:12px;max-height:620px" id="shProds"></div></div>'+
     '<div style="min-width:0"><div class="card" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('users')+' Sotuvchi va mijoz</h3></div>'+
-      '<label class="small muted">Sotuv kimning nomidan (naqd pul shu xodim hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select>'+
+      '<label class="small muted">Sotuv kimning nomidan (o‘zingiz — pul to‘g‘ridan kassaga; savdo xodimi — pul uning hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select>'+
       '<div id="shClient" style="margin-top:12px"></div></div>'+
     '<div class="card flush" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('cart')+' Savatcha</h3>'+(c.items.length?'<button class="btn" id="shClr">Tozalash</button>':'')+'</div><div id="shCart" class="tbl-wrap" style="padding:0 20px 16px"></div></div>'+
     '<div class="card" id="shPay"></div></div></div>';
@@ -1780,13 +1780,13 @@ function exportRows(name,head,rows){
 /* ----- Ta'minot: ta'minotchilar, xarid, xom ashyo, ishlab chiqarish (server: purchases.py) ----- */
 var SP={view:store('rw-spview')||'suppliers',q:''};
 function cents(n){return usd((n||0)/100)}
-function spViewSeg(){return '<div class="seg" id="spView" aria-label="Ko‘rinish">'+[['suppliers','building','Ta’minotchilar'],['materials','box','Xom ashyo'],['purchases','receipt','Xaridlar'],['production','sliders','Ishlab chiqarish']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(SP.view===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
+function spViewSeg(){return '<div class="seg" id="spView" aria-label="Ko‘rinish"><button data-v="wh">'+ic('orders','sm')+' Ombor</button>'+[['suppliers','building','Ta’minotchilar'],['materials','box','Xom ashyo'],['purchases','receipt','Xaridlar'],['production','sliders','Ishlab chiqarish']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(SP.view===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
 async function pageSupply(page,force){
   if(!S.cache.supply||force){if(!S.cache.supply)page.innerHTML='<div class="toolbar">'+spViewSeg()+'</div><div class="grid g4">'+'<div class="skel"></div>'.repeat(4)+'</div>';
     try{S.cache.supply=await api('supply',{op:'dashboard'})}catch(e){if(S.page==='supply'){page.innerHTML='<div class="toolbar">'+spViewSeg()+'</div>'+errState(e.message);bindSpView(page);page.querySelector('[data-retry]').onclick=function(){pageSupply(page,true)}}return}}
   if(S.page!=='supply')return;renderSupply(page,S.cache.supply);
 }
-function bindSpView(page){var el=$('spView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;SP.view=b.dataset.v;store('rw-spview',SP.view);renderSupply(page,S.cache.supply)}}
+function bindSpView(page){var el=$('spView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;if(b.dataset.v==='wh'){location.hash='warehouse';return}SP.view=b.dataset.v;store('rw-spview',SP.view);renderSupply(page,S.cache.supply)}}
 function spLines(lines){return lines.map(function(l){return esc(l.name)+' — '+esc(l.qty)+' '+esc(l.unit)+' × '+cents(l.price)}).join('<br>')}
 function renderSupply(page,d){
   if(!d)return pageSupply(page,true);
@@ -1897,8 +1897,8 @@ async function openLedger(id){
 var WH={status:'open',view:store('rw-whview')||'board',q:'',agent:'',open:{}};
 /* Kanban ustunlari = backenddagi buyurtma statuslari (core.ORDER_STATUSES). Rang semantik. */
 var KB=[['new','Yangi','c-yellow',C.yellow],['preparing','Tayyorlanmoqda','',C.pri],['loaded','Agentga berildi','c-forest',C.forest],['delivered','Yetkazildi','',C.gray],['rejected','Rad etildi','c-orange',C.orange]];
-function whViewSeg(){return '<div class="seg" id="whView" aria-label="Ko‘rinish">'+[['board','orders','Buyurtmalar'],['stock','warehouse','Ombor'],['list','list','Ro‘yxat va katalog']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(WH.view===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
-function bindWhView(page){var el=$('whView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;WH.view=b.dataset.v;store('rw-whview',WH.view);pageWarehouse(page,true)}}
+function whViewSeg(){return '<div class="seg" id="whView" aria-label="Ko‘rinish">'+[['board','orders','Buyurtmalar'],['stock','warehouse','Ombor'],['list','list','Ro‘yxat va katalog']].map(function(v){return '<button data-v="'+v[0]+'" class="'+(WH.view===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'<button data-v="supply">'+ic('building','sm')+' Ta’minot</button></div>'}
+function bindWhView(page){var el=$('whView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;if(b.dataset.v==='supply'){location.hash='supply';return}WH.view=b.dataset.v;store('rw-whview',WH.view);pageWarehouse(page,true)}}
 var NEXT={new:[['preparing','Tayyorlashga olish'],['rejected','Rad etish']],preparing:[['new','Yangiga qaytarish'],['rejected','Rad etish']],loaded:[['delivered','Yetkazildi']],rejected:[['new','Qayta ochish']],delivered:[]};
 async function pageWarehouse(page,force){
   if(WH.view==='board')return pageBoard(page,force);
@@ -2115,7 +2115,7 @@ function renderAtt(page,d){
   page.querySelectorAll('[data-emp]').forEach(function(b){b.onclick=function(){openWorker(+b.dataset.emp,'att',d.day.slice(0,7))}});
 }
 function renderPay(page,d){
-  if(d.salaryHidden){page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Sozlamalar → Xodimlar va ruxsatlar bo‘limida beradi.','shield')+'</div>';bindStView(page);return}
+  if(d.salaryHidden){page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Xodimlar bo‘limida beradi.','shield')+'</div>';bindStView(page);return}
   var T=d.totals,list=d.workers.filter(function(w){return w.active});
   page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="toolbar">'+monthNav('payMonth',d.month)+'<span class="grow"></span><span class="muted small">Qatorni bosing — avans, oylik to‘lovi, bonus yoki jarima</span></div>'+
     (list.length?['UZS','USD'].filter(function(c){return list.some(function(w){return w.currency===c})}).map(function(c){var Q=d.money[c],n=list.filter(function(w){return w.currency===c}).length,f=function(v){return c==='USD'?usd(v/100):num(v,0)},u=c==='USD'?'$':'so‘m';
@@ -2149,7 +2149,7 @@ function renderWorker(e,fl){
       e.calendar.map(function(x){return '<button class="att-d '+(x.status?ATT_TONE[x.status]||'':'')+'" data-day="'+x.day+'"'+(x.future||!e.active||!canEdit?' disabled':'')+' title="'+esc(x.day+(x.status?' · '+(e.statuses.find(function(s){return s[0]===x.status})||['',''])[1]:'')+(x.note?' · '+x.note:''))+'"><span>'+(+x.day.slice(8))+'</span><small>'+(x.status?ATT_SHORT[x.status]:'')+'</small></button>'}).join('')+'</div>'+
       '<p class="small muted" style="margin-top:8px">K — keldi, Kc — kechikdi, Y — kelmadi, D — dam olish, B — kasal, T — ta’til. Kunni bosib o‘zgartiring.</p>';
   }else if(hid){
-    body='<div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Sozlamalar → Xodimlar va ruxsatlar bo‘limida beradi.','shield')+'</div>';
+    body='<div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Xodimlar bo‘limida beradi.','shield')+'</div>';
   }else{
     body=monthNav('empMonth',e.month)+'<div class="card" style="margin:12px 0"><dl class="kv">'+(P.carry?'<dt>Oldingi oylardan</dt><dd class="num'+(P.carry<0?' bad">−'+M(-P.carry)+' <small>(ortiqcha berilgan)</small>':'">'+M(P.carry))+'</dd>':'')+'<dt>Oylik</dt><dd class="num">'+M(P.salary)+'</dd><dt>Bonus</dt><dd class="num'+(P.bonus?' ok">+'+M(P.bonus):'">—')+'</dd><dt>Jarima</dt><dd class="num'+(P.penalty?' bad">−'+M(P.penalty):'">—')+'</dd><dt><b>Hisoblandi</b></dt><dd class="num"><b>'+M(P.due)+'</b></dd><dt>Avans</dt><dd class="num">'+M(P.advance)+'</dd><dt>Oylik to‘landi</dt><dd class="num">'+M(P.paidSalary)+'</dd>'+(P.overpaid?'<dt><b>Ortiqcha berilgan</b></dt><dd class="num bad"><b>'+M(P.overpaid)+'</b> <small>keyingi oydan ushlanadi</small></dd>':'<dt><b>To‘lanishi qolgan</b></dt><dd class="num'+(P.remaining>0?' bad':'')+'"><b>'+M(P.remaining)+'</b></dd>')+'</dl>'+
       ((canPay||canCalc)&&e.active?'<div class="actions" style="margin-top:14px">'+(canPay?'<button class="btn pri" data-pk="salary"'+(P.remaining>0?'':' disabled')+'>'+ic('coins','sm')+' Oylik to‘lash</button><button class="btn" data-pk="advance">'+ic('cash','sm')+' Avans</button>':'')+(canCalc?'<button class="btn" data-pk="bonus">'+ic('plus','sm')+' Bonus</button><button class="btn danger" data-pk="penalty">'+ic('ban','sm')+' Jarima</button>':'')+'</div>':'')+(canPay&&!e.active&&P.remaining>0?'<div class="actions" style="margin-top:14px"><button class="btn pri" data-pk="salary">'+ic('coins','sm')+' Yakuniy hisob: qolgan oylikni to‘lash</button></div><p class="small muted" style="margin-top:8px">Ishdan ketgan: yangi oylik hisoblanmaydi, avans berilmaydi. Qayta ishga olish shart emas.</p>':'')+(!canPay&&e.active?'<p class="small muted" style="margin-top:10px">Avans va oylik to‘lash uchun «Avans va oylik to‘lash» ruxsati kerak.</p>':'')+'</div>'+
@@ -2200,22 +2200,25 @@ function renderStaff(page,s){
     '<input type="search" id="stQ" placeholder="Ism, Telegram ID, login…" value="'+esc(ST.q)+'"><span class="grow"></span>'+
     '<label class="chk"><input type="checkbox" id="stOff"'+(ST.showOff?' checked':'')+'> Yopilganlar ('+off+')</label>'+
     '<button class="btn pri" id="stAdd">'+ic('userplus','sm')+' Xodim qo‘shish</button></div>'+
-   '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Xodim</th><th>Rol</th><th>Telegram ID</th><th>Web login</th><th>Holat</th><th class="right">Amallar</th></tr></thead><tbody>'+
+   '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Xodim</th><th>Rol</th><th>Telegram ID</th><th>Web login</th><th>Mini App</th><th>Holat</th><th class="right">Amallar</th></tr></thead><tbody>'+
    (rows.length?rows.map(function(x){var t=ROLE_ICON[x.role]||['users','blue'],ag=x.role==='agent';
      var acts=x.active?
        act('rename',x.id,'edit','Nomini o‘zgartirish')+
-       (P&&x.role==='admin'&&!x.primary?act('login',x.id,'shield',x.webLogin?'Yangi parol berish':'Login va parol berish'):'')+
+       (!x.primary?act('perms',x.id,'sliders',x.role==='sales'?'Savdo ruxsatlari':x.role==='agent'?'Agent huquqlari':'Ruxsatlar'):'')+
+       (P&&x.webCapable&&!x.primary?act('login',x.id,'shield',x.webLogin?'Web: yangi parol berish':'Web: login va parol berish'):'')+
+       (P&&!x.primary?act('app',x.id,x.miniapp?'phone':'ban',x.miniapp?'Telegram Mini App: yoqiq — o‘chirish':'Telegram Mini App: o‘chiq — yoqish',x.miniapp?'':'danger'):'')+
        (P&&x.webLogin&&!x.primary?act('logout',x.id,'logout','Web kirishni o‘chirish'):'')+
        (P&&x.role!=='admin'?act('transfer',x.id,'swap','Akkauntni almashtirish'):'')+
        (P&&!x.primary?act('off',x.id,'ban','Akkauntni yopish','danger'):'')
       :(P?act('on',x.id,'checkc','Qayta ochish'):'');
      return '<tr'+(ag?' class="click" data-agent="'+x.id+'"':'')+'><td><div class="cell"><div class="tone t-'+t[1]+'" style="width:34px;height:34px">'+ic(t[0])+'</div><div class="t"><b>'+esc(x.name)+'</b><small>'+esc(ROLE_NOTE[x.role]||'')+'</small></div></div></td>'+
       '<td>'+pill(esc(x.roleLabel)+(x.primary?' · asosiy':''),x.role==='admin'?'p-pri':'')+'</td><td class="num">'+x.id+'</td>'+
-      '<td>'+(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">—</span>')+'</td>'+
+      '<td>'+(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">'+(x.webCapable||x.primary?'—':'web yo‘q')+'</span>')+'</td>'+
+      '<td>'+(x.miniapp===false?pill('O‘chiq','p-bad'):pill('Yoqiq','p-ok'))+'</td>'+
       '<td>'+(x.active?pill('<span class="dot"></span>Faol','p-ok'):pill('<span class="dot"></span>Yopilgan','p-bad'))+'</td>'+
       '<td class="right"><div class="actions" style="justify-content:flex-end;flex-wrap:nowrap">'+acts+'</div></td></tr>'}).join('')
-    :'<tr><td colspan="6">'+emptyState('Xodim topilmadi','users')+'</td></tr>')+
-   '</tbody></table></div><div class="pager"><span>Agent qatorini bossangiz — to‘liq karta (KPI, huquqlar, qoldiq). '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>'+
+    :'<tr><td colspan="7">'+emptyState('Xodim topilmadi','users')+'</td></tr>')+
+   '</tbody></table></div><div class="pager"><span>Sozlash belgisi — ruxsatlar; telefon — Telegram Mini App kirishi; qalqon — web login va parol. Agent qatorini bossangiz — to‘liq karta. '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>'+
    (!ST.role||ST.role==='sales'?'<div id="stSales" style="margin-top:16px"></div>':'');
   if($('stSales'))(SH.d?Promise.resolve(SH.d):shLoad()).then(function(){if($('stSales'))shTeam($('stSales'))}).catch(function(e){if($('stSales'))$('stSales').innerHTML=errState(e.message)});
   var re=function(){renderStaff(page,S.cache.staff)};
@@ -2226,13 +2229,15 @@ function renderStaff(page,s){
   bindStView(page);
   bindAgentLinks(page);
   var call=async function(action,args,ok){var r=await run(function(){return api(action,Object.assign({confirm:true},args))},ok);
-    if(r&&r.staff){S.cache.staff=r.staff;S.dash=null;SH.d=null;re()}return r};
+    if(r&&r.staff){S.cache.staff=Array.isArray(r.staff)?r:r.staff;S.dash=null;SH.d=null;re()}return r};
   var find=function(id){return all.find(function(x){return String(x.id)===String(id)})};
   $('stAdd').onclick=async function(){
     var opts=roles.filter(function(r){return r.key!=='admin'||P}).map(function(r){return [r.key,r.label]});
     var v=await formBox('Yangi xodim',[{name:'role',label:'Bo‘lim / rol',options:opts,value:ST.role&&opts.some(function(o){return o[0]===ST.role})?ST.role:'agent'},{name:'name',label:'Ismi',required:true},{name:'id',label:'Telegram ID',required:true,placeholder:'123456789'}],'Qo‘shish','Xodim botga /start yozib Telegram ID sini bilib oladi va sizga yuboradi.');
     if(!v)return;await call('staff_add',{role:v.role,id:v.id,name:v.name},'Xodim qo‘shildi')};
   page.querySelectorAll('[data-act]').forEach(function(b){b.onclick=async function(e){e.stopPropagation();var x=find(b.dataset.id);if(!x)return;var k=b.dataset.act;
+    if(k==='perms'){if(x.role==='sales'){ST.role='sales';re();setTimeout(function(){var e2=$('stSales');if(e2)e2.scrollIntoView({behavior:'smooth'})},300)}else if(x.role==='agent')openAgent(x.id);else permModal(x.id,P);return}
+    if(k==='app'){var on=!x.miniapp;if(await confirmBox(on?'Mini App kirishini yoqish':'Mini App kirishini o‘chirish','<p><b>'+esc(x.name)+'</b> Telegram ilovasi (Mini App) orqali '+(on?'yana kira oladi.':'kira olmaydi. Web login (bo‘lsa) ishlayveradi. Ochiq oynalarda ham keyingi so‘rovdan yopiladi.')+'</p>',on?'Yoqish':'O‘chirish',!on))await call('access_set',{id:x.id,miniapp:on},on?'Mini App yoqildi':'Mini App o‘chirildi');return}
     if(k==='rename'){var v=await formBox('Nomini o‘zgartirish',[{name:'name',label:'Yangi ism',value:x.name,required:true}]);if(v)await call('staff_rename',{id:x.id,name:v.name},'Saqlandi')}
     else if(k==='transfer'){var v2=await formBox('Akkauntni almashtirish',[{name:'newId',label:'Yangi Telegram ID',required:true}],'Almashtirish',esc(x.name)+' ('+esc(x.roleLabel)+') yangi Telegram akkauntga o‘tadi. Eski akkaunt yopiladi; mijozlar, qoldiq va tarix saqlanadi.');if(v2)await call('staff_transfer',{id:x.id,newId:v2.newId},'Akkaunt almashtirildi')}
     else if(k==='off'){if(await confirmBox('Akkauntni yopish','<p><b>'+esc(x.name)+'</b> ('+esc(x.roleLabel)+') tizimga kira olmaydi. Tarix va hisoblar o‘chirilmaydi, keyin qayta ochish mumkin.</p>','Yopish',true))await call('staff_deactivate',{id:x.id},'Akkaunt yopildi')}
@@ -2308,7 +2313,7 @@ function pageSettings(page){
     '<p class="hint" style="margin-top:14px">Loginni o‘zgartirish yoki parolni unutgan bo‘lsangiz: botda <code>/webparol</code> yoki <code>/webparol yangi_login</code>. Web kirishni butunlay o‘chirish: <code>/webyopish</code>.</p>'+
     '<div class="actions" style="margin-top:16px"><button class="btn danger" id="stLogout">Chiqish</button></div></div>'+
    '<div class="card" id="modCard" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div><div class="loading">Yuklanmoqda…</div></div>'+
-   '<div class="card" id="permCard" style="grid-column:1/-1"><div class="loading">Yuklanmoqda…</div></div>'+
+   '<div class="card" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('shield')+' Xodimlar va ruxsatlar</h3></div><p class="hint">Ruxsatlar, web login/parol va Telegram Mini App kirishi — <b>Xodimlar</b> bo‘limida.</p><div class="actions"><a class="btn sm" href="#staff">Xodimlarga o‘tish</a></div></div>'+
    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Bildirishnomalar</h3></div>'+
     '<div class="switch"><span>Brauzer bildirishnomasi<br><small class="muted">Panel boshqa oynada bo‘lsa ham xabar chiqadi</small></span><button class="tog'+(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'?' on':'')+'" id="tgNotify" aria-label="Brauzer bildirishnomasi"></button></div>'+
     '<div class="switch"><span>Ovozli signal</span><button class="tog'+(store('rw-sound')!=='0'?' on':'')+'" id="tgSound" aria-label="Ovozli signal"></button></div>'+
@@ -2322,7 +2327,6 @@ function pageSettings(page){
     '<p class="hint">Kamida 8 belgi. Parol almashganda boshqa kompyuterlardagi kirishlar yopiladi.</p></div></form>'+
    '</div>';
   modulesCard(canBrand);
-  permCard(canBrand);
   if(canBrand){var logo=BRAND.logo;
     $('brFile').onchange=function(){var f=this.files[0];this.value='';if(!f)return;
       if(!/^image\/(png|jpeg|webp)$/.test(f.type)){toast('Faqat PNG, JPEG yoki WebP rasm',true);return}
