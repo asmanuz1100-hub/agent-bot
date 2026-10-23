@@ -29,6 +29,7 @@ import full_backup
 import profiles
 import warehouse
 import purchases
+import hr
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -3201,6 +3202,16 @@ def serve_webhook(db,base_url):
                             raise ValueError('Ta’minot amallarini faqat asosiy rahbar kiritadi.')
                         data=purchases.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
                         data['canOperate']=actor in ADMINS
+                    elif action=='hr':
+                        # Xodimlar: kartochka va davomat — har qanday rahbar; pul (avans, oylik, bonus, jarima) — asosiy rahbar.
+                        op=str(payload.get('op') or 'overview')
+                        if op in hr.PRIMARY_OPS and actor not in ADMINS:
+                            raise ValueError('Oylik va avans amallarini faqat asosiy rahbar kiritadi.')
+                        data=hr.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
+                        emp=data.get('employee')
+                        if isinstance(emp,dict) and emp.get('id') in profiles.photo_ids(local,[emp['id']]):
+                            emp['photoUrl']=user_photo_link(emp['id'],version=profiles.photo_versions(local).get(emp['id'],0))
+                        data['canPay']=actor in ADMINS
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return

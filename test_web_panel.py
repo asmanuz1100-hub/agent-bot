@@ -359,6 +359,32 @@ class WebPanelHttpTests(unittest.TestCase):
             bot.ADMINS.clear()
             bot.ADMINS.update(saved)
 
+    def test_hr_section_cards_for_all_admins_money_primary_only(self):
+        _, data = self.login()
+        token = data['token']
+        saved = set(bot.ADMINS)
+        try:
+            bot.ADMINS.discard(1)
+            code, d = self.post('/api/manager', token, action='hr', op='overview')
+            self.assertEqual(code, 200, d)
+            self.assertFalse(d['canPay'])
+            self.assertIn(2, [e['id'] for e in d['employees']])
+            code, d = self.post('/api/manager', token, action='hr', op='profile_save', id=2, position='Agent', salary='2500000', requestId='hrweb0001')
+            self.assertEqual(code, 200, d)
+            self.assertEqual(d['employee']['profile']['salary'], 2500000)
+            code, d = self.post('/api/manager', token, action='hr', op='pay_add', id=2, kind='bonus', amount='1000', requestId='hrweb0002')
+            self.assertEqual(code, 400, d)
+            bot.ADMINS.add(1)
+            code, d = self.post('/api/manager', token, action='hr', op='pay_add', id=2, kind='bonus', amount='1000', requestId='hrweb0003')
+            self.assertEqual(code, 200, d)
+            self.assertTrue(d['canPay'])
+            self.assertEqual(d['employee']['payroll']['due'], 2501000)
+            code, d = self.post('/api/manager', token, action='hr', op='hack')
+            self.assertEqual(code, 400, d)
+        finally:
+            bot.ADMINS.clear()
+            bot.ADMINS.update(saved)
+
     def test_supply_section_primary_admin_writes_others_read(self):
         _, data = self.login()
         token = data['token']

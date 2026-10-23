@@ -14,6 +14,7 @@ import manager_api
 import test_blacklist
 import test_warehouse_api
 import test_purchases
+import test_hr
 
 URL = os.getenv('TEST_DATABASE_URL')
 
@@ -56,6 +57,23 @@ class PgPurchasesTests(_PgMixin, test_purchases.PurchasesTests):
         mid = self.material()
         self.call(5, 'purchase', supplierId=sid, lines=[{'material': mid, 'qty': '3.5', 'price': '1.1'}])
         json.dumps(purchases_dashboard(self.db))
+
+
+@unittest.skipUnless(URL, 'TEST_DATABASE_URL berilmagan')
+class PgHrTests(_PgMixin, test_hr.HrTests):
+    """Xodimlar moduli PostgreSQL'da: sxema, ON CONFLICT, Decimal yig'indilar JSON'ga."""
+    def setUp(self):
+        orig = core.connect
+        core.connect = lambda path, *a, **k: orig(URL, *a, **k) if path == ':memory:' else orig(path, *a, **k)
+        try:
+            self.schema = 't_' + uuid.uuid4().hex[:12]
+            os.environ['DB_SCHEMA'] = self.schema
+            super().setUp()
+        finally:
+            core.connect = orig
+
+    def tearDown(self):
+        self._drop()
 
 
 def purchases_dashboard(db):

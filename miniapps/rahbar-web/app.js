@@ -1933,10 +1933,109 @@ function renderWarehouse(page,w){
 /* ----- Xodimlar ----- */
 /* Xodimlar: barcha rollar bitta joyda. Amallar mavjud huquqlarga mos: qo'shish/nom — har bir rahbar;
    admin qo'shish, akkaunt almashtirish, yopish/ochish, web login — faqat asosiy rahbar (server ham tekshiradi). */
-var ST={role:'',q:'',showOff:false};
+var ST={role:'',q:'',showOff:false,view:store('rw-stview')||'list'};
+/* ----- Xodimlar: davomat, oylik va xodim kartochkasi (server: hr.py) ----- */
+var HR={month:'',day:'',tab:'card',data:null};
+var ATT_TONE={present:'p-ok',late:'p-warn',absent:'p-bad',off:'',sick:'p-warn',vacation:'p-pri'};
+var ATT_SHORT={present:'K',late:'Kc',absent:'Y',off:'D',sick:'B',vacation:'T'};
+function stViewSeg(){return '<div class="seg" id="stView" aria-label="Ko‘rinish">'+[['list','users','Ro‘yxat'],['att','calendar','Davomat'],['pay','wallet','Oylik']].map(function(v){return '<button data-v="'+v[0]+'" class="'+((ST.view||'list')===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
+function bindStView(page){var el=$('stView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;ST.view=b.dataset.v;store('rw-stview',ST.view);pageStaff(page,true)}}
+function som(n){return num(n||0,0)+' so‘m'}
+function monthLabel(m){var p=String(m||'').split('-');var names=['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];return p.length===2?names[+p[1]-1]+' '+p[0]:m}
+function shiftMonth(m,d){var p=m.split('-').map(Number),y=p[0],mo=p[1]+d;while(mo<1){mo+=12;y--}while(mo>12){mo-=12;y++}return y+'-'+String(mo).padStart(2,'0')}
+function monthNav(id,m){return '<div class="seg month-nav" id="'+id+'"><button data-d="-1" aria-label="Oldingi oy">‹</button><button class="on" disabled>'+esc(monthLabel(m))+'</button><button data-d="1" aria-label="Keyingi oy">›</button></div>'}
+async function hrLoad(args){return api('hr',Object.assign({op:'overview',month:HR.month||undefined,day:HR.day||undefined},args||{}))}
+async function pageHr(page,force){
+  if(!HR.data||force){page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="grid g4">'+'<div class="skel"></div>'.repeat(4)+'</div>';
+    try{HR.data=await hrLoad()}catch(e){if(S.page!=='staff')return;page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div>'+errState(e.message);bindStView(page);page.querySelector('[data-retry]').onclick=function(){pageHr(page,true)};return}}
+  if(S.page!=='staff')return;HR.month=HR.data.month;HR.day=HR.data.day;
+  (ST.view==='att'?renderAtt:renderPay)(page,HR.data);
+}
+function renderAtt(page,d){
+  var T=d.totals,opts=d.statuses;
+  page.innerHTML='<div class="toolbar">'+stViewSeg()+'<input type="date" id="attDay" value="'+esc(d.day)+'" max="'+today()+'" aria-label="Kun"><span class="grow"></span><button class="btn" id="attAll">'+ic('checkc','sm')+' Belgilanmaganlarni «Keldi»</button><button class="btn pri" id="attSave" disabled>'+ic('check','sm')+' Saqlash</button></div>'+
+    '<div class="grid g4 kpis" style="margin-bottom:16px">'+kpi('users','Faol xodimlar',num(T.count),'')+kpi('checkc','Keldi',num(T.present),'kechikkanlar bilan')+kpi('xcircle','Kelmadi',num(T.absent),'',T.absent?'bad':'')+kpi('clock','Belgilanmagan',num(T.unmarked),'',T.unmarked?'bad':'')+'</div>'+
+    '<div class="card flush"><div class="card-h"><h3>'+ic('calendar')+' Davomat · '+esc(d.day)+'</h3><span class="muted small">Agent shu kuni smena ochgan bo‘lsa avtomatik «Keldi». Qo‘lda belgi avtomatikdan ustun.</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Xodim</th><th>Rol</th><th>Holat</th><th>Izoh</th><th class="right">Oy bo‘yicha</th></tr></thead><tbody>'+
+    d.employees.map(function(e){var m=e.day||{};return '<tr data-id="'+e.id+'"><td><b class="click-name" data-emp="'+e.id+'">'+esc(e.name)+'</b>'+(e.position?'<br><small class="muted">'+esc(e.position)+'</small>':'')+'</td><td>'+pill(esc(e.roleLabel))+'</td>'+
+      '<td><select data-st aria-label="Holat"><option value="">'+(m.auto?'Avto: '+esc((opts.find(function(o){return o[0]===m.status})||['',''])[1]):'— belgilanmagan —')+'</option>'+opts.map(function(o){return '<option value="'+o[0]+'"'+(!m.auto&&m.status===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select></td>'+
+      '<td><input data-note maxlength="200" value="'+esc(m.auto?'':m.note||'')+'" placeholder="Izoh" aria-label="Izoh"></td>'+
+      '<td class="right small muted num">'+e.attendance.worked+' kun ishladi'+(e.attendance.absent?' · <span class="bad">'+e.attendance.absent+' kelmadi</span>':'')+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  bindStView(page);
+  var dirty=function(){$('attSave').disabled=false};
+  page.querySelectorAll('[data-st],[data-note]').forEach(function(el){el.onchange=dirty;el.oninput=dirty});
+  $('attDay').onchange=async function(){HR.day=this.value;HR.data=null;pageHr(page,true)};
+  $('attAll').onclick=function(){page.querySelectorAll('tbody tr').forEach(function(tr){var s=tr.querySelector('[data-st]');if(!s.value&&!/^Avto/.test(s.options[0].text))s.value='present'});dirty()};
+  $('attSave').onclick=async function(){var items=[];page.querySelectorAll('tbody tr').forEach(function(tr){var s=tr.querySelector('[data-st]').value,n=tr.querySelector('[data-note]').value;var e=d.employees.find(function(x){return String(x.id)===tr.dataset.id}),m=e.day||{};
+      var was=m.auto?'':(m.status||'');if(s!==was||(s&&n!==(m.note||'')))items.push({id:+tr.dataset.id,status:s||'auto',note:n})});
+    if(!items.length){toast('O‘zgarish yo‘q');return}
+    var r=await run(function(){return api('hr',{op:'attendance_bulk',day:d.day,month:d.day.slice(0,7),items:items})},'Davomat saqlandi');if(r){HR.data=r;renderAtt(page,r)}};
+  page.querySelectorAll('[data-emp]').forEach(function(b){b.onclick=function(){openEmployee(+b.dataset.emp,'att')}});
+}
+function renderPay(page,d){
+  var T=d.totals;
+  page.innerHTML='<div class="toolbar">'+stViewSeg()+monthNav('payMonth',d.month)+'<span class="grow"></span><span class="muted small">Qatorni bosing — avans, oylik to‘lovi, bonus yoki jarima</span></div>'+
+    '<div class="grid g4 kpis" style="margin-bottom:16px">'+kpi('wallet','Oylik fondi, so‘m',num(T.salary,0),d.employees.length+' xodim')+kpi('cash','Hisoblandi, so‘m',num(T.due,0),'oylik + bonus − jarima')+kpi('coins','To‘landi, so‘m',num(T.paid,0),'avans + oylik')+kpi('hourglass','Qoldi, so‘m',num(T.remaining,0),'',T.remaining>0?'bad':'')+'</div>'+
+    '<div class="card flush"><div class="card-h"><h3>'+ic('wallet')+' Oylik hisobi · '+esc(monthLabel(d.month))+'</h3><span class="muted small">Oylikni xodim kartochkasida belgilang</span></div><div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Xodim</th><th class="right">Oylik</th><th class="right">Bonus</th><th class="right">Jarima</th><th class="right">Avans</th><th class="right">Oylik to‘landi</th><th class="right">Qoldi</th><th class="right">Ish kuni</th></tr></thead><tbody>'+
+    d.employees.map(function(e){var p=e.payroll;return '<tr class="click" data-emp="'+e.id+'"><td><b>'+esc(e.name)+'</b><br><small class="muted">'+esc(e.position||e.roleLabel)+'</small></td><td class="right num">'+(p.salary?som(p.salary):'<span class="muted">belgilanmagan</span>')+'</td><td class="right num ok">'+(p.bonus?'+'+num(p.bonus,0):'—')+'</td><td class="right num bad">'+(p.penalty?'−'+num(p.penalty,0):'—')+'</td><td class="right num">'+(p.advance?num(p.advance,0):'—')+'</td><td class="right num">'+(p.paidSalary?num(p.paidSalary,0):'—')+'</td><td class="right num'+(p.remaining>0?' bad':'')+'"><b>'+num(p.remaining,0)+'</b></td><td class="right num muted">'+e.attendance.worked+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  bindStView(page);
+  $('payMonth').onclick=function(e){var b=e.target.closest('[data-d]');if(!b)return;HR.month=shiftMonth(d.month,+b.dataset.d);HR.data=null;pageHr(page,true)};
+  page.querySelectorAll('[data-emp]').forEach(function(tr){tr.onclick=function(){openEmployee(+tr.dataset.emp,'pay',d.month)}});
+}
+async function openEmployee(id,tab,month){
+  HR.tab=tab||HR.tab||'card';openDrawer(drawerSkel());
+  var r=await run(function(){return api('hr',{op:'employee',id:id,month:month||HR.month||undefined})});if(!r){closeDrawer();return}
+  renderEmployee(r.employee,r.canPay);
+}
+function renderEmployee(e,canPay){
+  var p=e.profile,P=e.payroll,tab=HR.tab,K=e.kpi;
+  var tabs='<div class="seg" id="empTabs" style="margin:4px 0 14px">'+[['card','user','Kartochka'],['att','calendar','Davomat'],['pay','wallet','Oylik'],['log','list','Faoliyat']].map(function(t){return '<button data-t="'+t[0]+'" class="'+(tab===t[0]?'on':'')+'">'+ic(t[1],'sm')+' '+t[2]+'</button>'}).join('')+'</div>';
+  var body='';
+  if(tab==='card'){
+    var row=function(k,v){return '<dt>'+k+'</dt><dd>'+(v?esc(v):'<span class="muted">—</span>')+'</dd>'};
+    body='<div class="card"><dl class="kv">'+row('Lavozim',p.position)+row('Telefon',p.phone)+row('Ishga kirgan',p.hire_date)+row('Tug‘ilgan sana',p.birth_date)+row('Manzil',p.address)+row('Hujjat (pasport)',p.passport)+row('Favqulodda aloqa',p.emergency)+'<dt>Oylik</dt><dd>'+(p.salary?som(p.salary):'<span class="muted">belgilanmagan</span>')+'</dd>'+row('Izoh',p.note)+'<dt>Telegram ID</dt><dd class="num">'+e.id+'</dd></dl>'+
+      (e.salaryHistory.length>1?'<p class="small muted" style="margin-top:10px">Oylik tarixi: '+e.salaryHistory.map(function(h){return esc(monthLabel(h.from))+' dan '+som(h.amount)}).join(' · ')+'</p>':'')+
+      (e.active?'<div class="actions" style="margin-top:14px"><button class="btn pri" id="empEdit">'+ic('edit','sm')+' Tahrirlash</button>'+(e.role==='agent'?'<button class="btn" id="empAgent">'+ic('compass','sm')+' Agent kartasi (KPI, GPS)</button>':'')+'</div>':'')+'</div>';
+  }else if(tab==='att'){
+    var A=e.attendance,pad=(e.calendar[0].dow);
+    body=monthNav('empMonth',e.month)+'<div class="grid g4 kpis" style="margin:12px 0">'+kpi('checkc','Ishladi',A.worked+' kun',A.late?A.late+' kechikdi':'')+kpi('xcircle','Kelmadi',A.absent+' kun','',A.absent?'bad':'')+kpi('calendar','Dam / ta’til',(A.off+A.vacation)+' kun','')+kpi('alert','Kasal',A.sick+' kun','')+'</div>'+
+      '<div class="att-cal">'+['Du','Se','Ch','Pa','Ju','Sh','Ya'].map(function(x){return '<b>'+x+'</b>'}).join('')+'<i></i>'.repeat(pad)+
+      e.calendar.map(function(c){return '<button class="att-d '+(c.status?ATT_TONE[c.status]||'':'')+(c.auto?' auto':'')+'" data-day="'+c.day+'"'+(c.future||!e.active?' disabled':'')+' title="'+esc(c.day+(c.status?' · '+(e.statuses.find(function(s){return s[0]===c.status})||['',''])[1]:'')+(c.note?' · '+c.note:''))+'"><span>'+(+c.day.slice(8))+'</span><small>'+(c.status?ATT_SHORT[c.status]:'')+'</small></button>'}).join('')+'</div>'+
+      '<p class="small muted" style="margin-top:8px">K — keldi, Kc — kechikdi, Y — kelmadi, D — dam olish, B — kasal, T — ta’til. Chiziqli — smenadan avtomatik. Kunni bosib o‘zgartiring.</p>';
+  }else if(tab==='pay'){
+    body=monthNav('empMonth',e.month)+'<div class="card" style="margin:12px 0"><dl class="kv"><dt>Oylik</dt><dd class="num">'+som(P.salary)+'</dd><dt>Bonus</dt><dd class="num'+(P.bonus?' ok">+'+som(P.bonus):'">—')+'</dd><dt>Jarima</dt><dd class="num'+(P.penalty?' bad">−'+som(P.penalty):'">—')+'</dd><dt><b>Hisoblandi</b></dt><dd class="num"><b>'+som(P.due)+'</b></dd><dt>Avans</dt><dd class="num">'+som(P.advance)+'</dd><dt>Oylik to‘landi</dt><dd class="num">'+som(P.paidSalary)+'</dd><dt><b>Qoldi</b></dt><dd class="num'+(P.remaining>0?' bad':'')+'"><b>'+som(P.remaining)+'</b></dd></dl>'+
+      (canPay&&e.active?'<div class="actions" style="margin-top:14px"><button class="btn pri" data-pk="salary"'+(P.remaining>0?'':' disabled')+'>'+ic('coins','sm')+' Oylik to‘lash</button><button class="btn" data-pk="advance">'+ic('cash','sm')+' Avans</button><button class="btn" data-pk="bonus">'+ic('plus','sm')+' Bonus</button><button class="btn danger" data-pk="penalty">'+ic('ban','sm')+' Jarima</button></div>':(!canPay?'<p class="small muted" style="margin-top:10px">To‘lov amallari — asosiy rahbar huquqi.</p>':''))+'</div>'+
+      '<div class="card flush"><div class="card-h"><h3>'+ic('list')+' Yozuvlar</h3></div><div class="list" style="padding:0 20px 10px">'+(e.payments.length?e.payments.map(function(x){var neg=x.kind==='penalty';return '<div class="li"><div class="t"><b>'+esc(x.label)+' · <span class="num '+(neg?'bad':x.kind==='bonus'?'ok':'')+'">'+(neg?'−':'')+som(x.amount)+'</span></b><small>'+(x.cash?'Kassadan · ':'')+esc(x.note)+(x.actorName?' · '+esc(x.actorName):'')+'</small></div><small class="muted num">'+dt(x.ts)+'</small></div>'}).join(''):emptyState('Bu oy yozuv yo‘q','list'))+'</div></div>';
+  }else{
+    var k=[];if(K.shifts)k.push(kpi('timer','Smenalar',num(K.shifts),''));if(K.deliveriesUsd)k.push(kpi('box','Tovar berdi',usd(K.deliveriesUsd/100),''));if(K.paymentsUsd)k.push(kpi('coins','To‘lov oldi',usd(K.paymentsUsd/100),''));if(K.visits)k.push(kpi('walk','Tashriflar',num(K.visits),K.newClients?K.newClients+' yangi mijoz':''));
+    if(K.acceptedUsd)k.push(kpi('cash','Qabul qilgan pul',usd(K.acceptedUsd/100),''));if(K.warehouseMoves)k.push(kpi('warehouse','Ombor amallari',num(K.warehouseMoves),''));if(K.shopSalesUsd)k.push(kpi('cart','Savdo',usd(K.shopSalesUsd/100),''));
+    body=monthNav('empMonth',e.month)+(k.length?'<div class="grid g2 kpis sm" style="margin:12px 0">'+k.join('')+'</div>':'')+
+      '<div class="card flush" style="margin-top:12px"><div class="list" style="padding:4px 20px 10px">'+(e.activity.length?e.activity.map(function(a){return '<div class="li"><div class="t"><b>'+esc(a.label)+'</b><small>'+esc(a.detail)+'</small></div><small class="muted num">'+dt(a.ts)+'</small></div>'}).join(''):emptyState('Bu oy faoliyat yo‘q','list'))+'</div></div>';
+  }
+  openDrawer('<div class="dh">'+avatar(e.name,e.photoUrl,'lg')+'<div><h2>'+esc(e.name)+'</h2><small class="muted">'+esc(e.roleLabel)+(p.position?' · '+esc(p.position):'')+(p.phone?' · <a href="tel:'+esc(p.phone)+'">'+esc(p.phone)+'</a>':'')+(e.active?'':' · <span class="bad">yopilgan</span>')+'</small></div></div>'+tabs+body);
+  var reload=async function(m){var r=await run(function(){return api('hr',{op:'employee',id:e.id,month:m||e.month})});if(r)renderEmployee(r.employee,r.canPay)};
+  var after=function(r){if(r){HR.data=null;S.cache.staff=null;renderEmployee(r.employee,r.canPay);if(S.page==='staff'&&ST.view!=='list')pageHr($('page'),true)}};
+  $('empTabs').onclick=function(ev){var b=ev.target.closest('button');if(!b)return;HR.tab=b.dataset.t;renderEmployee(e,canPay)};
+  if($('empMonth'))$('empMonth').onclick=function(ev){var b=ev.target.closest('[data-d]');if(b)reload(shiftMonth(e.month,+b.dataset.d))};
+  if($('empAgent'))$('empAgent').onclick=function(){openAgent(e.id)};
+  if($('empEdit'))$('empEdit').onclick=async function(){
+    var v=await formBox('Kartochka: '+e.name,[{name:'position',label:'Lavozim',value:p.position},{name:'phone',label:'Telefon',value:p.phone,placeholder:'+998 90 123 45 67'},{name:'hire_date',label:'Ishga kirgan sana',type:'date',value:p.hire_date},{name:'birth_date',label:'Tug‘ilgan sana',type:'date',value:p.birth_date},{name:'address',label:'Manzil',value:p.address},{name:'passport',label:'Hujjat (pasport seriya va raqami)',value:p.passport},{name:'emergency',label:'Favqulodda aloqa (ism, telefon)',value:p.emergency},{name:'salary',label:'Oylik (so‘m)',type:'number',step:'1',value:p.salary||''},{name:'salaryFrom',label:'Oylik qaysi oydan',type:'month',value:e.month},{name:'note',label:'Izoh',area:true,value:p.note}],'Saqlash','Oylik o‘zgarsa, tanlangan oydan boshlab amal qiladi — o‘tgan oylar hisobi o‘zgarmaydi.');
+    if(!v)return;if(!v.salary)delete v.salary;after(await run(function(){return api('hr',Object.assign({op:'profile_save',id:e.id,month:e.month,requestId:rid()},v))},'Saqlandi'))};
+  document.querySelectorAll('#drawerBody .att-d').forEach(function(b){b.onclick=async function(){var c=e.calendar.find(function(x){return x.day===b.dataset.day});
+    var v=await formBox('Davomat · '+c.day,[{name:'status',label:'Holat',options:[['auto','Avto (smena bo‘yicha) / belgisiz']].concat(e.statuses),value:c.auto||!c.status?'auto':c.status},{name:'note',label:'Izoh',value:c.auto?'':c.note}],'Saqlash');
+    if(v)after(await run(function(){return api('hr',{op:'attendance_set',id:e.id,day:c.day,status:v.status,note:v.note,month:e.month})},'Saqlandi'))}});
+  document.querySelectorAll('#drawerBody [data-pk]').forEach(function(b){b.onclick=async function(){var k=b.dataset.pk,cash=k==='advance'||k==='salary',label=(e.payKinds.find(function(x){return x[0]===k})||['',''])[1];
+    if(cash&&!e.cashRate){toast('Avval kassada 1 USD kursini belgilang.',true);return}
+    var f=[{name:'amount',label:'Summa (so‘m)',type:'number',step:'1',required:true,value:k==='salary'?P.remaining:''}];
+    if(cash)f.push({name:'payFrom',label:'Qayerdan',options:[['cash','Kassa — naqd'],['card','Kassa — karta']]});
+    f.push({name:'note',label:k==='penalty'?'Sabab':'Izoh',required:k==='penalty'});
+    var v=await formBox(label+' · '+e.name+' · '+monthLabel(e.month),f,label,cash?'Kassadan «Иш ҳақи» xarajati bo‘lib chiqadi (kurs: 1 USD = '+num(e.cashRate,0)+' so‘m).':'Kassaga ta’sir qilmaydi — faqat hisoblangan oylikni o‘zgartiradi.');
+    if(!v)return;after(await run(function(){return api('hr',Object.assign({op:'pay_add',id:e.id,kind:k,month:e.month,expectedRate:e.cashRate,requestId:rid()},v))},'Saqlandi'))}});
+}
+
 var ROLE_ICON={admin:['shield','blue'],sales:['trend','cyan'],cashier:['coins','green'],agent:['compass','violet'],warehouse:['warehouse','amber'],production:['box','cyan']};
 var ROLE_NOTE={admin:'Web panel (login/parol) va Telegram bot',sales:'Savdo Mini App (Telegram): sotuv, chegirma, qarz, kassa',cashier:'Kassir Mini App (Telegram)',agent:'Agent Mini App (Telegram, GPS)',warehouse:'Ombor Mini App (Telegram)',production:'Hisob uchun rol — alohida ilova hali yo‘q'};
 async function pageStaff(page,force){
+  if(ST.view==='att'||ST.view==='pay')return pageHr(page,force);
   if(!S.cache.staff||force){if(!S.cache.staff)page.innerHTML='<div class="grid g3">'+'<div class="skel"></div>'.repeat(6)+'</div>';
     try{S.cache.staff=await api('staff_list')}catch(e){if(S.page!=='staff'||!TOKEN)return;page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){pageStaff(page,true)};return}}
   if(S.page!=='staff')return;renderStaff(page,S.cache.staff);
@@ -1950,19 +2049,20 @@ function renderStaff(page,s){
   var act=function(k,id,icon,label,cls){return '<button class="icon-btn'+(cls?' '+cls:'')+'" data-act="'+k+'" data-id="'+id+'" aria-label="'+esc(label)+'" data-tip="'+esc(label)+'">'+ic(icon)+'</button>'};
   page.innerHTML=
    '<div class="grid g6 kpis-roles" style="margin-bottom:16px">'+roles.map(function(r){var t=ROLE_ICON[r.key]||['users','blue'];return '<button class="card kpi click st-role'+(ST.role===r.key?' on':'')+'" data-role="'+r.key+'">'+tone(t[0],t[1])+'<div><small>'+esc(r.label)+'</small><b>'+(cnt[r.key]||0)+'</b></div></button>'}).join('')+'</div>'+
-   '<div class="toolbar"><div class="seg" id="stRole">'+[['','Hammasi']].concat(roles.map(function(r){return [r.key,r.label]})).map(function(x){return '<button data-r="'+x[0]+'" class="'+(ST.role===x[0]?'on':'')+'">'+esc(x[1])+'<b>'+(cnt[x[0]]||0)+'</b></button>'}).join('')+'</div>'+
+   '<div class="toolbar">'+stViewSeg()+'</div><div class="toolbar"><div class="seg" id="stRole">'+[['','Hammasi']].concat(roles.map(function(r){return [r.key,r.label]})).map(function(x){return '<button data-r="'+x[0]+'" class="'+(ST.role===x[0]?'on':'')+'">'+esc(x[1])+'<b>'+(cnt[x[0]]||0)+'</b></button>'}).join('')+'</div>'+
     '<input type="search" id="stQ" placeholder="Ism, Telegram ID, login…" value="'+esc(ST.q)+'"><span class="grow"></span>'+
     '<label class="chk"><input type="checkbox" id="stOff"'+(ST.showOff?' checked':'')+'> Yopilganlar ('+off+')</label>'+
     '<button class="btn pri" id="stAdd">'+ic('userplus','sm')+' Xodim qo‘shish</button></div>'+
    '<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Xodim</th><th>Rol</th><th>Telegram ID</th><th>Web login</th><th>Holat</th><th class="right">Amallar</th></tr></thead><tbody>'+
    (rows.length?rows.map(function(x){var t=ROLE_ICON[x.role]||['users','blue'],ag=x.role==='agent';
      var acts=x.active?
+       act('card',x.id,'user','Kartochka, davomat, oylik')+
        act('rename',x.id,'edit','Nomini o‘zgartirish')+
        (P&&x.role==='admin'&&!x.primary?act('login',x.id,'shield',x.webLogin?'Yangi parol berish':'Login va parol berish'):'')+
        (P&&x.webLogin&&!x.primary?act('logout',x.id,'logout','Web kirishni o‘chirish'):'')+
        (P&&x.role!=='admin'?act('transfer',x.id,'swap','Akkauntni almashtirish'):'')+
        (P&&!x.primary?act('off',x.id,'ban','Akkauntni yopish','danger'):'')
-      :(P?act('on',x.id,'checkc','Qayta ochish'):'');
+      :act('card',x.id,'user','Kartochka va tarix')+(P?act('on',x.id,'checkc','Qayta ochish'):'');
      return '<tr'+(ag?' class="click" data-agent="'+x.id+'"':'')+'><td><div class="cell"><div class="tone t-'+t[1]+'" style="width:34px;height:34px">'+ic(t[0])+'</div><div class="t"><b>'+esc(x.name)+'</b><small>'+esc(ROLE_NOTE[x.role]||'')+'</small></div></div></td>'+
       '<td>'+pill(esc(x.roleLabel)+(x.primary?' · asosiy':''),x.role==='admin'?'p-pri':'')+'</td><td class="num">'+x.id+'</td>'+
       '<td>'+(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">—</span>')+'</td>'+
@@ -1977,6 +2077,7 @@ function renderStaff(page,s){
   $('stRole').onclick=function(e){var b=e.target.closest('button');if(!b)return;ST.role=b.dataset.r;re()};
   $('stQ').oninput=debounce(function(){ST.q=this.value;re();var i=$('stQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},200);
   $('stOff').onchange=function(){ST.showOff=this.checked;re()};
+  bindStView(page);
   bindAgentLinks(page);
   var call=async function(action,args,ok){var r=await run(function(){return api(action,Object.assign({confirm:true},args))},ok);
     if(r&&r.staff){S.cache.staff=r.staff;S.dash=null;SH.d=null;re()}return r};
@@ -1986,6 +2087,7 @@ function renderStaff(page,s){
     var v=await formBox('Yangi xodim',[{name:'role',label:'Bo‘lim / rol',options:opts,value:ST.role&&opts.some(function(o){return o[0]===ST.role})?ST.role:'agent'},{name:'name',label:'Ismi',required:true},{name:'id',label:'Telegram ID',required:true,placeholder:'123456789'}],'Qo‘shish','Xodim botga /start yozib Telegram ID sini bilib oladi va sizga yuboradi.');
     if(!v)return;await call('staff_add',{role:v.role,id:v.id,name:v.name},'Xodim qo‘shildi')};
   page.querySelectorAll('[data-act]').forEach(function(b){b.onclick=async function(e){e.stopPropagation();var x=find(b.dataset.id);if(!x)return;var k=b.dataset.act;
+    if(k==='card'){openEmployee(x.id,'card');return}
     if(k==='rename'){var v=await formBox('Nomini o‘zgartirish',[{name:'name',label:'Yangi ism',value:x.name,required:true}]);if(v)await call('staff_rename',{id:x.id,name:v.name},'Saqlandi')}
     else if(k==='transfer'){var v2=await formBox('Akkauntni almashtirish',[{name:'newId',label:'Yangi Telegram ID',required:true}],'Almashtirish',esc(x.name)+' ('+esc(x.roleLabel)+') yangi Telegram akkauntga o‘tadi. Eski akkaunt yopiladi; mijozlar, qoldiq va tarix saqlanadi.');if(v2)await call('staff_transfer',{id:x.id,newId:v2.newId},'Akkaunt almashtirildi')}
     else if(k==='off'){if(await confirmBox('Akkauntni yopish','<p><b>'+esc(x.name)+'</b> ('+esc(x.roleLabel)+') tizimga kira olmaydi. Tarix va hisoblar o‘chirilmaydi, keyin qayta ochish mumkin.</p>','Yopish',true))await call('staff_deactivate',{id:x.id},'Akkaunt yopildi')}
