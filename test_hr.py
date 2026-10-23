@@ -132,13 +132,17 @@ class HrTests(unittest.TestCase):
     def test_init_survives_first_version_tables(self):
         # Birinchi HR versiyasi (7fed78e) jonli bazada user_id ustunli hr_salary/hr_attendance/hr_pay yaratgan.
         # Yangi kod ularga tegmasligi va ishga tushishi kerak.
-        self.db.executescript('''
+        old_schema=('''
             CREATE TABLE IF NOT EXISTS hr_profiles(user_id INTEGER PRIMARY KEY, position TEXT);
             CREATE TABLE IF NOT EXISTS hr_salary(user_id INTEGER NOT NULL, from_month TEXT NOT NULL, salary_uzs INTEGER NOT NULL, actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(user_id,from_month));
             CREATE TABLE IF NOT EXISTS hr_attendance(user_id INTEGER NOT NULL, day TEXT NOT NULL, status TEXT NOT NULL, note TEXT, actor INTEGER, ts INTEGER NOT NULL, PRIMARY KEY(user_id,day));
             CREATE TABLE IF NOT EXISTS hr_pay(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL, month TEXT NOT NULL, amount_uzs INTEGER NOT NULL, note TEXT, expense INTEGER, actor INTEGER, ts INTEGER NOT NULL, source INTEGER UNIQUE);
             CREATE INDEX IF NOT EXISTS idx_hr_pay_month ON hr_pay(month,user_id);
         ''')
+        if isinstance(self.db,core.PostgresDB):
+            old_schema=old_schema.replace('INTEGER PRIMARY KEY','BIGSERIAL PRIMARY KEY').replace(' INTEGER',' BIGINT')
+        for stmt in old_schema.split(';'):
+            if stmt.strip():self.db.execute(stmt)
         hr.init(self.db)
         wid=self.worker()
         self.call('attendance_set',id=wid,day='2026-10-14',status='present')
