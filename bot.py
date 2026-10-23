@@ -3349,17 +3349,17 @@ def serve_webhook(db,base_url):
                             state=web_backup_state()
                             if state.get('status')!='ready':
                                 answer(404,{'error':'Backup tayyor emas yoki muddati tugadi. Qaytadan tayyorlang.'});return
-                            path=_WEB_BACKUP['path']
+                            bk_path=_WEB_BACKUP['path']   # 'path' nomi do_POST ichida webhook uchun band — boshqa nom
                             try:
                                 self.send_response(200)
                                 self.send_header('Content-Type','application/zip')
-                                self.send_header('Content-Length',str(os.path.getsize(path)))
+                                self.send_header('Content-Length',str(os.path.getsize(bk_path)))
                                 self.send_header('Content-Disposition',f'attachment; filename="{state["name"]}"')
                                 self.send_header('Cache-Control','no-store')
                                 self.send_header('X-Content-Type-Options','nosniff')
                                 for k,v in headers.items():self.send_header(k,v)
                                 self.end_headers()
-                                with open(path,'rb') as fh:shutil.copyfileobj(fh,self.wfile,1024*1024)
+                                with open(bk_path,'rb') as fh:shutil.copyfileobj(fh,self.wfile,1024*1024)
                             except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
                                 self.close_connection=True
                             logging.info('Web full backup downloaded user=%s',actor)
