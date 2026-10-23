@@ -31,6 +31,7 @@ import warehouse
 import purchases
 import hr
 import modules
+import perms
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -2761,6 +2762,9 @@ def serve_webhook(db,base_url):
                     action=payload.get('action','dashboard')
                     if action in ('profile','profile_save'):
                         answer_cashier(200,profile_action(local,actor,action,payload));return
+                    try:perms.require(local,actor,perms.CASHIER_ACTION.get(str(action)),ADMINS)
+                    except perms.Denied as e:
+                        answer_cashier(403,{'error':str(e)});return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
                     elif action=='handover_detail':data=cashier_api.handover_detail(local,actor,payload.get('handoverId'))
@@ -2848,6 +2852,11 @@ def serve_webhook(db,base_url):
                         answer_wh(403,{'error':modules.closed_message('warehouse')});return
                     if role(local,actor) not in ('warehouse','admin','agent'):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
+                    if role(local,actor)!='agent':
+                        need='warehouse.catalog' if payload.get('action')=='product_photo' else perms.WAREHOUSE_ACTION.get(str(payload.get('action') or 'dashboard'))
+                        try:perms.require(local,actor,need,ADMINS)
+                        except perms.Denied as e:
+                            answer_wh(403,{'error':str(e)});return
                     if payload.get('action')=='product_photo':
                         product_photo_action(local,actor,payload)
                         data=warehouse_api.handle(local,actor,'dashboard',payload)
@@ -3126,6 +3135,10 @@ def serve_webhook(db,base_url):
                     try:modules.require_action(local,action,payload.get('op'))
                     except modules.ModuleClosed as e:
                         answer(403,{'error':str(e),'moduleClosed':True});return
+                    # Ruxsat har so'rovda bazadan: o'zgarish ochiq sessiyada ham darhol kuchga kiradi.
+                    try:perms.require(local,actor,perms.manager_perm(action,payload.get('op'),payload.get('kind')),ADMINS)
+                    except perms.Denied as e:
+                        answer(403,{'error':str(e),'denied':True});return
                     if action=='dashboard':
                         data=manager_api.dashboard(local)
                     elif action=='route':
@@ -3206,27 +3219,35 @@ def serve_webhook(db,base_url):
                         op=str(payload.get('op') or 'dashboard')
                         if op not in ('dashboard','receive','issue','writeoff','take_back','decide','moves'):
                             raise ValueError('Ombor amali noto‘g‘ri.')
-                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if actor in ADMINS else None)
+                        # Ruxsat yuqorida tekshirildi: web paneldan kirgan rahbar shu so'rov davomida ombor operatori.
+                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if op not in ('dashboard','moves') else None)
                         try:data=warehouse_api.handle(local,actor,op,payload)
                         finally:warehouse.WEB_PRIMARY_OPERATOR.reset(wh_tok)
-                        data['canOperate']=actor in ADMINS
+                        data['canOperate']=bool({'warehouse.receive','warehouse.issue','warehouse.writeoff'}&perms.effective(local,actor,ADMINS))
                         wh_notify=data.pop('_notify',None);data.pop('_orders',None)
                     elif action=='supply':
                         # Ta'minot (ta'minotchi, xarid, xom ashyo, ishlab chiqarish) faqat web paneldan.
                         # Ko'rish — barcha rahbarlar, yozish — faqat asosiy rahbar (ombor amallari kabi).
                         op=str(payload.get('op') or 'dashboard')
-                        if op in purchases.WRITE_OPS and actor not in ADMINS:
-                            raise ValueError('Ta’minot amallarini faqat asosiy rahbar kiritadi.')
                         data=purchases.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canOperate']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canOperate']='warehouse.supply' in eff
+                        data['canPaySupplier']='warehouse.supply_pay' in eff
                     elif action=='hr':
                         # Sex ishchilari (tizimdan foydalanmaydi): kartochka va davomat — har qanday rahbar;
                         # pul (avans, oylik, bonus, jarima) — faqat asosiy rahbar.
                         op=str(payload.get('op') or 'overview')
-                        if op in hr.PRIMARY_OPS and actor not in ADMINS:
-                            raise ValueError('Oylik va avans amallarini faqat asosiy rahbar kiritadi.')
                         data=hr.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canPay']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canPay']='hr.pay' in eff
+                        data['canCalc']='hr.calculate' in eff
+                        data['canEdit']='hr.edit' in eff
+                        if 'hr.salary_view' not in eff:perms.strip_salary(data)
+                    elif action=='perms_staff':
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
+                    elif action=='perms_set':
+                        perms.set_perms(local,actor,payload.get('id'),payload.get('changes'),ADMINS)
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
                     elif action=='modules':
                         data=modules.view(local)
                     elif action=='module_set':
@@ -3355,6 +3376,7 @@ def serve_webhook(db,base_url):
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
                         data.setdefault('modules',modules.state(local))
+                        data.setdefault('myPerms',sorted(perms.effective(local,actor,ADMINS)))
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
                     attach_product_photo_urls(local,data)

@@ -87,14 +87,16 @@ class ModuleUnitTests(unittest.TestCase):
         self.assertEqual(hr.salary_for(self.db, wid, hr.this_month()), 1000)
 
 
-class ModuleHttpTests(unittest.TestCase):
+class HttpBase(unittest.TestCase):
+    """Haqiqiy HTTP server (vaqtinchalik SQLite). Testlarsiz — boshqa fayllar meros oladi."""
+    USERS = [(1, 'admin', 'Rahbar'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (4, 'admin', 'Ikkinchi')]
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        path = os.path.join(cls.tmp.name, 'm.sqlite3')
+        path = cls.db_path = os.path.join(cls.tmp.name, 'm.sqlite3')
         db = core.connect(path)
-        db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
-                       [(1, 'admin', 'Rahbar'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (4, 'admin', 'Ikkinchi')])
+        db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', cls.USERS)
         _, cls.password = web_auth.issue_password(db, 1, 'boss')
         _, cls.password2 = web_auth.issue_password(db, 4, 'second')
         db.commit()
@@ -145,6 +147,9 @@ class ModuleHttpTests(unittest.TestCase):
         self.assertEqual(code, 200, d)
         return d['token']
 
+
+
+class ModuleHttpTests(HttpBase):
     def test_toggle_closes_menu_api_miniapp_and_reopens(self):
         t = self.token()
         code, d = self.post('/api/manager', t, action='dashboard')
