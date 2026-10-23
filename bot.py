@@ -30,6 +30,7 @@ import profiles
 import warehouse
 import purchases
 import hr
+import modules
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -1746,6 +1747,11 @@ def handle(db,update):
     if not r:
         if 'edited_message' not in update:send(u,f'Сизнинг Telegram ID: {u}\nАдминга шу рақамни юборинг. Кириш ҳали очилмаган.')
         return
+    # Korxonada o'chirilgan bo'lim xodimi botdan ham foydalana olmaydi (rahbar — doim ochiq).
+    closed=modules.ROLE_MODULE.get(r)
+    if closed and not modules.enabled(db,closed):
+        if 'edited_message' not in update:send(u,modules.closed_message(closed))
+        return
     if 'edited_message' in update:
         if r=='agent' and 'location' in m:
             ok=point(db,u,m,True)
@@ -2748,6 +2754,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'cash'):
+                        answer_cashier(403,{'error':modules.closed_message('cash')});return
                     if role(local,actor) not in ('cashier','admin'):
                         answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
@@ -2794,6 +2802,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'sales'):
+                        answer_shop(403,{'error':modules.closed_message('sales')});return
                     if actor is None:
                         # savdo-web (kompyuter): login/parol sessiyasi.
                         try:actor=web_auth.session_user(local,bearer)
@@ -2834,6 +2844,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'warehouse'):
+                        answer_wh(403,{'error':modules.closed_message('warehouse')});return
                     if role(local,actor) not in ('warehouse','admin','agent'):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
                     if payload.get('action')=='product_photo':
@@ -2885,6 +2897,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if not modules.enabled(local,'agents'):
+                        answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
@@ -3109,6 +3123,9 @@ def serve_webhook(db,base_url):
                     if role(local,actor)!='admin':
                         answer(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
                     action=payload.get('action','dashboard')
+                    try:modules.require_action(local,action,payload.get('op'))
+                    except modules.ModuleClosed as e:
+                        answer(403,{'error':str(e),'moduleClosed':True});return
                     if action=='dashboard':
                         data=manager_api.dashboard(local)
                     elif action=='route':
@@ -3210,6 +3227,13 @@ def serve_webhook(db,base_url):
                             raise ValueError('Oylik va avans amallarini faqat asosiy rahbar kiritadi.')
                         data=hr.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
                         data['canPay']=actor in ADMINS
+                    elif action=='modules':
+                        data=modules.view(local)
+                    elif action=='module_set':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Korxona bo‘limlarini faqat asosiy rahbar yoqadi yoki o‘chiradi.'});return
+                        modules.set_enabled(local,actor,str(payload.get('module') or ''),payload.get('enabled') is True)
+                        data=modules.view(local)
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
@@ -3330,6 +3354,7 @@ def serve_webhook(db,base_url):
                         except Exception:logging.exception('Web warehouse notification failed')
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
+                        data.setdefault('modules',modules.state(local))
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
                     attach_product_photo_urls(local,data)

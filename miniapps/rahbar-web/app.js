@@ -2,7 +2,11 @@
 (function(){'use strict';
 var API='/api/manager',AUTH='/api/web';
 var TOKEN=store('rw-token')||'';
-var S={dash:null,me:null,primary:false,page:'',loadedTs:0,maps:{},timer:0,cache:{}};
+var S={dash:null,me:null,primary:false,page:'',loadedTs:0,maps:{},timer:0,cache:{},modules:null};
+/* Sahifa -> korxona bo'limi (server modules.py). Ro'yxatda yo'q sahifa doim ochiq. */
+var PAGE_MODULE={sales:'sales',cash:'cash',warehouse:'warehouse',supply:'warehouse',team:'agents',agents:'agents',reports:'reports',insights:'reports'};
+function modOn(k){return !k||!S.modules||S.modules[k]!==false}
+function pageOn(p){return modOn(PAGE_MODULE[p])}
 var $=function(id){return document.getElementById(id)};
 
 /* ---------- helpers ---------- */
@@ -145,7 +149,7 @@ async function post(url,body){
     throw e;
   }finally{clearTimeout(timer)}
 }
-function api(action,args){return post(API,Object.assign({action:action},args||{}))}
+function api(action,args){return post(API,Object.assign({action:action},args||{})).then(function(d){if(d&&d.modules){var ch=JSON.stringify(d.modules)!==JSON.stringify(S.modules);S.modules=d.modules;if(ch&&!$('shell').hidden){renderNav();if(!pageOn(S.page))location.hash='home'}}return d})}
 function auth(action,args){return post(AUTH,Object.assign({action:action},args||{}))}
 
 /* ---------- login ---------- */
@@ -222,7 +226,7 @@ var NAV_GROUPS=['Ish jarayoni','Moliya va tahlil','Boshqaruv'];
 function renderNav(){
   var d=S.dash,badge={};
   if(d){badge.warehouse=d.warehouse&&d.warehouse.newOrders;badge.cash=d.summary&&d.summary.pendingCount}
-  $('nav').innerHTML=NAV_GROUPS.map(function(g,gi){return '<div class="nav-grp"><span class="lbl nav-h">'+g+'</span>'+PAGES.filter(function(p){return (p[4]||0)===gi}).map(function(p){var lb=p[5]||p[2],cur=navKey()===p[0];
+  $('nav').innerHTML=NAV_GROUPS.map(function(g,gi){return '<div class="nav-grp"><span class="lbl nav-h">'+g+'</span>'+PAGES.filter(function(p){return (p[4]||0)===gi&&pageOn(p[0])}).map(function(p){var lb=p[5]||p[2],cur=navKey()===p[0];
     return '<button data-p="'+p[0]+'" class="'+(cur?'on':'')+'"'+(cur?' aria-current="page"':'')+' data-tip="'+esc(lb)+'">'+ic(p[1])+'<span class="lbl">'+lb+'</span>'+(badge[p[0]]?'<span class="badge" aria-label="'+badge[p[0]]+' ta yangi">'+badge[p[0]]+'</span>':'')+'</button>'}).join('')+'</div>'}).join('')+'<i class="nav-ind" aria-hidden="true"></i>';
   moveInd();
 }
@@ -257,7 +261,7 @@ function openFeedDrawer(){
 window.addEventListener('hashchange',route);
 function route(){
   if($('shell').hidden)return;
-  var p=(location.hash||'').slice(1)||'home';if(!PAGES.some(function(x){return x[0]===p}))p='home';
+  var p=(location.hash||'').slice(1)||'home';if(!PAGES.some(function(x){return x[0]===p})||!pageOn(p))p='home';
   S.page=p;var meta=PAGES.find(function(x){return x[0]===p});
   $('pageTitle').textContent=meta[2];$('pageSub').textContent=meta[3];document.title=meta[2]+' · '+brandName();
   closeDrawer();renderNav();destroyMaps();S.routeTs=Date.now();
@@ -428,7 +432,7 @@ function gsearch(q){
   var ag=S.dash.agents.filter(function(a){return norm(a.name).indexOf(q)>=0||String(a.id)===q}).slice(0,5).map(function(a){return {k:'agent',id:a.id,t:a.name,s:(AG_ST[a.status]||AG_ST.offline)[0]+' · '+a.clients+' mijoz',ph:a.photoUrl}});
   var cl=S.dash.clients.filter(function(c){var hay=norm(c.name+' '+c.person+' '+c.address+' '+c.region+' '+c.agent);return hay.indexOf(q)>=0||(digits.length>=4&&String(c.phone||'').replace(/\D/g,'').indexOf(digits)>=0)}).slice(0,8)
     .map(function(c){return {k:'client',id:c.id,t:c.name,s:[c.region,c.agent,c.debtUsd>0?'qarz '+usd(c.debtUsd):''].filter(Boolean).join(' · '),ph:c.thumbUrl}});
-  var pg=PAGES.filter(function(p){return p[4]!==9&&norm(p[2]).indexOf(q)>=0}).map(function(p){return {k:'page',id:p[0],t:p[2],s:p[3],icon:p[1]}});
+  var pg=PAGES.filter(function(p){return p[4]!==9&&pageOn(p[0])&&norm(p[2]).indexOf(q)>=0}).map(function(p){return {k:'page',id:p[0],t:p[2],s:p[3],icon:p[1]}});
   GS.items=pg.concat(ag,cl);GS.sel=0;
   var row=function(it,i){return '<div class="it'+(i===GS.sel?' on':'')+'" data-i="'+i+'" role="option">'+(it.k==='page'?'<div class="tone t-blue" style="width:32px;height:32px">'+ic(it.icon)+'</div>':avatar(it.t,it.ph,it.k==='client'?'sq':''))+'<div class="t"><b>'+esc(it.t)+'</b><small>'+esc(it.s||'')+'</small></div></div>'};
   var html='',i=0,grp=function(name,arr){if(!arr.length)return;html+='<div class="grp">'+name+'</div>';arr.forEach(function(it){html+=row(it,i++)})};
@@ -1938,7 +1942,7 @@ var ST={role:'',q:'',showOff:false,view:store('rw-stview')||'list'};
 var HR={month:'',day:'',tab:'card',data:null,closed:false,q:''};
 var ATT_TONE={present:'p-ok',late:'p-warn',absent:'p-bad',off:'',sick:'p-warn',vacation:'p-pri'};
 var ATT_SHORT={present:'K',late:'Kc',absent:'Y',off:'D',sick:'B',vacation:'T'};
-function stViewSeg(){return '<div class="seg" id="stView" aria-label="Ko‘rinish">'+[['list','shield','Tizim foydalanuvchilari'],['workers','users','Sex ishchilari'],['att','calendar','Davomat'],['pay','wallet','Oylik']].map(function(v){return '<button data-v="'+v[0]+'" class="'+((ST.view||'list')===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
+function stViewSeg(){return '<div class="seg" id="stView" aria-label="Ko‘rinish">'+[['list','shield','Tizim foydalanuvchilari'],['workers','users','Sex ishchilari'],['att','calendar','Davomat'],['pay','wallet','Oylik']].filter(function(v){return v[0]==='list'||modOn('hr')}).map(function(v){return '<button data-v="'+v[0]+'" class="'+((ST.view||'list')===v[0]?'on':'')+'">'+ic(v[1],'sm')+' '+v[2]+'</button>'}).join('')+'</div>'}
 function bindStView(page){var el=$('stView');if(el)el.onclick=function(e){var b=e.target.closest('button');if(!b)return;ST.view=b.dataset.v;store('rw-stview',ST.view);pageStaff(page,true)}}
 function som(n){return num(n||0,0)+' so‘m'}
 /* Ishchi valyutasida: so'm butun, dollar sentda saqlanadi */
@@ -2054,6 +2058,7 @@ function renderWorker(e,canPay){
 var ROLE_ICON={admin:['shield','blue'],sales:['trend','cyan'],cashier:['coins','green'],agent:['compass','violet'],warehouse:['warehouse','amber']};
 var ROLE_NOTE={admin:'Web panel (login/parol) va Telegram bot',sales:'Savdo Mini App (Telegram): sotuv, chegirma, qarz, kassa',cashier:'Kassir Mini App (Telegram)',agent:'Agent Mini App (Telegram, GPS)',warehouse:'Ombor Mini App (Telegram)'};
 async function pageStaff(page,force){
+  if((ST.view==='workers'||ST.view==='att'||ST.view==='pay')&&!modOn('hr'))ST.view='list';
   if(ST.view==='workers'||ST.view==='att'||ST.view==='pay')return pageHr(page,force);
   if(!S.cache.staff||force){if(!S.cache.staff)page.innerHTML='<div class="grid g3">'+'<div class="skel"></div>'.repeat(6)+'</div>';
     try{S.cache.staff=await api('staff_list')}catch(e){if(S.page!=='staff'||!TOKEN)return;page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){pageStaff(page,true)};return}}
@@ -2119,6 +2124,19 @@ function renderStaff(page,s){
 
 /* ----- Sozlamalar ----- */
 var BR_FIELDS=[['legalName','Yuridik nomi',160,1],['inn','STIR (INN)',20],['phone','Telefon',80],['address','Manzil',240,1],['bank','Bank rekvizitlari (h/r, bank, MFO)',240,1],['director','Rahbar F.I.Sh.',120]];
+async function modulesCard(can){
+  var el=$('modCard');if(!el)return;
+  var r;try{r=await api('modules')}catch(e){el.querySelector('.loading').outerHTML='<p class="bad">'+esc(e.message)+'</p>';return}
+  if(!$('modCard'))return;
+  el.innerHTML='<div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(can?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish — asosiy rahbar o‘zgartiradi</span>')+'</div>'+
+    '<p class="hint" style="margin:-4px 0 10px">O‘chirilgan bo‘lim menyuda chiqmaydi, uning ilovasi va server amallari yopiladi. Ma’lumot va tarix o‘chmaydi — qayta yoqsangiz hammasi joyida. Sozlamalar, Asosiy sahifa, Mijozlar va Xodimlar doim ochiq.</p>'+
+    '<div class="mod-grid">'+r.items.map(function(m){return '<div class="switch"><span><b>'+esc(m.label)+'</b><br><small class="muted">'+esc(m.description)+'</small></span><button class="tog'+(m.enabled?' on':'')+'" data-mod="'+m.key+'" aria-pressed="'+m.enabled+'" aria-label="'+esc(m.label)+'"'+(can?'':' disabled')+'></button></div>'}).join('')+'</div>'+
+    (r.history.length?'<details class="mod-hist"><summary class="small muted">O‘zgarishlar tarixi</summary><div class="list">'+r.history.map(function(h){return '<div class="li"><div class="t"><b>'+esc(h.label)+' — '+(h.on?'yoqildi':'o‘chirildi')+'</b><small>'+esc(h.who)+'</small></div><small class="muted num">'+dt(h.ts)+'</small></div>'}).join('')+'</div></details>':'');
+  el.querySelectorAll('[data-mod]').forEach(function(b){b.onclick=async function(){var on=!b.classList.contains('on'),m=r.items.find(function(x){return x.key===b.dataset.mod});
+    if(!on&&!await confirmBox('«'+m.label+'» bo‘limini o‘chirish','<p>Menyu, ilova va server amallari yopiladi. Ma’lumotlar o‘chirilmaydi, qayta yoqsangiz hammasi joyida bo‘ladi.</p>'+(m.key==='cash'?'<p class="bad">Kassa o‘chsa, oylik/avans va ta’minotchiga to‘lov ham yopiladi.</p>':'')+(m.key==='agents'?'<p class="bad">Agentlar Telegram bot va ilovadan foydalana olmay qoladi.</p>':''),'O‘chirish',true))return;
+    b.disabled=true;var x=await run(function(){return api('module_set',{module:m.key,enabled:on})},on?'Bo‘lim yoqildi':'Bo‘lim o‘chirildi');b.disabled=false;
+    if(x){S.dash=null;S.cache={};modulesCard(can)}}});
+}
 function pageSettings(page){
   var me=S.me||{};
   var canBrand=S.primary;
@@ -2136,6 +2154,7 @@ function pageSettings(page){
     '<dl class="kv"><dt>Web login</dt><dd><b>'+esc(S.login)+'</b></dd><dt>Telefon</dt><dd>'+esc(me.phone||'—')+'</dd></dl>'+
     '<p class="hint" style="margin-top:14px">Loginni o‘zgartirish yoki parolni unutgan bo‘lsangiz: botda <code>/webparol</code> yoki <code>/webparol yangi_login</code>. Web kirishni butunlay o‘chirish: <code>/webyopish</code>.</p>'+
     '<div class="actions" style="margin-top:16px"><button class="btn danger" id="stLogout">Chiqish</button></div></div>'+
+   '<div class="card" id="modCard" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div><div class="loading">Yuklanmoqda…</div></div>'+
    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Bildirishnomalar</h3></div>'+
     '<div class="switch"><span>Brauzer bildirishnomasi<br><small class="muted">Panel boshqa oynada bo‘lsa ham xabar chiqadi</small></span><button class="tog'+(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'?' on':'')+'" id="tgNotify" aria-label="Brauzer bildirishnomasi"></button></div>'+
     '<div class="switch"><span>Ovozli signal</span><button class="tog'+(store('rw-sound')!=='0'?' on':'')+'" id="tgSound" aria-label="Ovozli signal"></button></div>'+
@@ -2148,6 +2167,7 @@ function pageSettings(page){
     '<div class="form-err" id="pwErr"></div><button class="btn pri">Saqlash</button>'+
     '<p class="hint">Kamida 8 belgi. Parol almashganda boshqa kompyuterlardagi kirishlar yopiladi.</p></div></form>'+
    '</div>';
+  modulesCard(canBrand);
   if(canBrand){var logo=BRAND.logo;
     $('brFile').onchange=function(){var f=this.files[0];this.value='';if(!f)return;
       if(!/^image\/(png|jpeg|webp)$/.test(f.type)){toast('Faqat PNG, JPEG yoki WebP rasm',true);return}
