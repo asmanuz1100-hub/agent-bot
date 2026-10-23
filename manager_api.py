@@ -221,7 +221,7 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     delivered_qty=sold_qty=returned_qty=0
     per_agent={}
     for row in event_rows:
-        aid=int(row["agent"]);kind=row["kind"]
+        aid=int(row["agent"] or 0);kind=row["kind"]   # 0 — kassaga to'g'ridan (agentsiz) to'lov
         cents=int(row["amount_usd"] or 0);qty=int(row["qty"] or 0)
         acc=per_agent.setdefault(aid,{"delivery":[0,0],"return":[0,0],"payment":[0,0],"sold":[0,0]})
         acc[kind][0]+=cents;acc[kind][1]+=qty

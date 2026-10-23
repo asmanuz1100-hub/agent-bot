@@ -347,12 +347,37 @@ def summary(db,start,end):
     return out
 
 
+def add_expense(db,actor,pocket,currency,amount,category,recipient,note,source,expected_rate=None):
+    """Web kassadan xarajat: mavjud kassa xarajati (core) — kassir ilovasi va hisobotlar bilan bitta jurnal."""
+    import core
+    if pocket not in ('cash','card'):raise ValueError('Qayerdan: naqd yoki karta.')
+    currency=_currency(currency);amount=parse_amount(amount,currency)
+    if category not in core.cashier_expense_categories():raise ValueError('Xarajat turini ro‘yxatdan tanlang.')
+    recipient=str(recipient or '').strip()
+    if not recipient or len(recipient)>200:raise ValueError('Kimga / nima uchun — yozing (1–200 belgi).')
+    note=str(note or '').strip()[:500]
+    if not isinstance(source,int) or source<=0:raise ValueError('Operatsiya ID noto‘g‘ri.')
+    if db.execute('SELECT 1 FROM cashier_expenses WHERE source=?',(source,)).fetchone():return None   # takroriy so'rov
+    if currency=='UZS':
+        return core.add_cashier_expense_uzs(db,actor,amount,category,recipient,note,source,expected_rate=expected_rate,pay_from=pocket)[0]
+    return core.add_cashier_expense(db,actor,amount,category,recipient,note,source,pay_from=pocket)
+
+
 def view(db,start=None,end=None):
     import core
     return {'balances':balances(db),'pockets':[[k,v] for k,v in POCKETS.items()],'incomeCategories':list(INCOME_CATEGORIES),
             'journal':journal(db,start,end,limit=200),'summary':summary(db,start or 0,end or 2**62),
             'closings':closings(db),'today':today(),'rate':core.cashier_rate(db),'clientPayment':CLIENT_PAYMENT,
+            'expenseCategories':list(core.WEB_EXPENSE_CATEGORIES)+list(core.CASHIER_EXPENSE_CATEGORIES),
+            'suppliers':_suppliers(db),
             'debtors':debtors(db)}
+
+
+def _suppliers(db):
+    """Kassadan ta'minotchiga to'lov uchun tanlov (qarz USD sentda, purchases.balance)."""
+    import purchases
+    return [{'id':int(r['id']),'name':r['name'],'debt':purchases.balance(db,int(r['id']))}
+            for r in db.execute('SELECT id,name FROM suppliers WHERE active=1 ORDER BY name').fetchall()]
 
 
 def debtors(db,limit=500):

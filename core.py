@@ -1542,9 +1542,13 @@ CASHIER_EXPENSE_CATEGORIES=(
 )
 
 
+# Korxona xarajatlari (Bito kabi): web kassada ham, kassir Mini App'ida ham.
+WEB_EXPENSE_CATEGORIES=('🧾 Солиқ ва мажбурий тўловлар','💡 Коммунал хизматлар','🏭 Корхона харажати','💰 Дивиденд')
+
+
 def cashier_expense_categories():
-    # Dividend is a cashier category, not an agent expense category.
-    return CASHIER_EXPENSE_CATEGORIES + ('💰 Дивиденд',)
+    # Dividend and company expenses are cashier categories, not agent expense categories.
+    return CASHIER_EXPENSE_CATEGORIES + WEB_EXPENSE_CATEGORIES
 
 
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):

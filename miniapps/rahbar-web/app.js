@@ -1298,6 +1298,8 @@ function renderCashbook(el,d){
   var rows=d.journal.filter(function(x){return !CB.group||x.group===CB.group||(CB.group==='expense'&&x.group==='expense')});
   el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' Kassa hisoblari va jurnal</h3><div class="actions">'+
       (can.income?'<button class="btn sm pri" data-cb="client">'+ic('in','sm')+' Mijozdan to‘lov</button><button class="btn sm" data-cb="income">'+ic('in','sm')+' Boshqa kirim</button>':'')+
+      (can.expense?'<button class="btn sm danger" data-cb="expense">'+ic('out','sm')+' Xarajat</button>':'')+
+      (can.supplier?'<button class="btn sm" data-cb="supplier">'+ic('building','sm')+' Ta’minotchiga to‘lov</button>':'')+
       (can.transfer?'<button class="btn sm" data-cb="transfer">'+ic('swap','sm')+' O‘tkazma</button>':'')+
       (can.close?'<button class="btn sm" data-cb="close">'+ic('checkc','sm')+' Kunni yopish</button>':'')+'</div></div>'+
     '<div class="grid g3" style="margin-bottom:14px">'+d.pockets.map(function(p){return '<div class="card kpi">'+tone(p[0]==='cash'?'cash':p[0]==='card'?'card':'bank','blue')+'<div><small>'+esc(p[1])+'</small><b>'+uzs(b[p[0]+'_uzs'])+'</b><em>'+usd(b[p[0]+'_usd']/100)+'</em></div></div>'}).join('')+'</div>'+
@@ -1321,6 +1323,18 @@ function renderCashbook(el,d){
       if(!v)return;var c=d.debtors.find(function(x){return String(x.id)===v.clientId})||{},amt=v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,eq=v.currency==='USD'?amt:(d.rate?Math.round(amt*100/d.rate):0);
       if(await confirmBox('To‘lovni tasdiqlang','<p><b>'+cbMoney(amt,v.currency)+'</b> → '+esc((pockOpts.find(function(p){return p[0]===v.pocket})||['',''])[1])+'<br>Mijoz: <b>'+esc(c.name||'')+'</b><br>Qarz: '+usd((c.debtUsd||0)/100)+' → <b>'+usd(Math.max((c.debtUsd||0)-eq,0)/100)+'</b></p>','Tasdiqlash'))
         call(Object.assign({op:'income',category:d.clientPayment},v),'To‘lov saqlandi, mijoz qarzi kamaydi')}
+    else if(k==='expense'){
+      v=await formBox('Kassadan xarajat',[{name:'category',label:'Xarajat turi',options:d.expenseCategories.map(function(c){return [c,c]})},{name:'pocket',label:'Qayerdan',options:[['cash','Naqd'],['card','Karta']]},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'recipient',label:'Kimga / nima uchun',required:true},{name:'note',label:'Izoh (hujjat raqami)'}],'Davom etish','Soliq, kommunal, korxona xarajati, dividend — shu yerdan. Oylik/avans — Xodimlar bo‘limida, ta’minotchiga — «Ta’minotchiga to‘lov».'+(d.rate?' Kurs: 1 USD = '+num(d.rate,0)+' so‘m.':''));
+      if(!v)return;var amt=v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,have=b[v.pocket+'_'+v.currency.toLowerCase()];
+      if(await confirmBox('Xarajatni tasdiqlang','<p><b>'+cbMoney(amt,v.currency)+'</b> · '+esc(v.category)+'<br>'+(v.pocket==='card'?'Kartadan':'Naqddan')+' — qoldiq '+cbMoney(have,v.currency)+(amt>have?' <span class="bad">· yetarli emas</span>':'')+'<br>'+esc(v.recipient)+'</p>','Tasdiqlash',true))
+        call(Object.assign({op:'expense',expectedRate:d.rate},v),'Xarajat saqlandi')}
+    else if(k==='supplier'){
+      if(!d.suppliers.length){toast('Ta’minotchi yo‘q — Ombor → Ta’minot bo‘limida qo‘shing.',true);return}
+      v=await formBox('Ta’minotchiga to‘lov',[{name:'supplierId',label:'Ta’minotchi',options:d.suppliers.map(function(x){return [String(x.id),x.name+(x.debt>0?' — qarz '+usd(x.debt/100):'')]})},{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true},{name:'payFrom',label:'Qayerdan',options:[['cash','Naqd'],['card','Karta']]},{name:'note',label:'Izoh'}],'Davom etish','Ta’minotchi qarzi kamayadi, kassadan xarajat yoziladi.');
+      if(!v)return;var sp=d.suppliers.find(function(x){return String(x.id)===v.supplierId})||{};
+      if(await confirmBox('To‘lovni tasdiqlang','<p><b>'+usd(+v.amount)+'</b> → '+esc(sp.name||'')+'<br>Qarz: '+usd((sp.debt||0)/100)+' → <b>'+usd(Math.max((sp.debt||0)/100-v.amount,0))+'</b></p>','Tasdiqlash')){
+        var r=await run(function(){return api('supply',{op:'pay',supplierId:+v.supplierId,amount:v.amount,payFrom:v.payFrom,note:v.note,requestId:rid()})},'To‘lov saqlandi');
+        if(r){S.cache.supply=null;var r2=await run(function(){return api('cashbook',{op:'view'})});if(r2){CB.data=r2;S.dash=null;renderCashbook(el,r2)}}}}
     else if(k==='transfer'){v=await formBox('Hisoblar orasida o‘tkazma',[{name:'fromPocket',label:'Qayerdan',options:pockOpts},{name:'toPocket',label:'Qayerga',options:pockOpts,value:'bank'},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'note',label:'Izoh'}],'O‘tkazish','Bir valyutada. Valyuta almashtirish — konvertatsiya (kassir ilovasida).');
       if(v&&await confirmBox('O‘tkazmani tasdiqlang','<p><b>'+cbMoney(v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,v.currency)+'</b>: '+esc((pockOpts.find(function(p){return p[0]===v.fromPocket})||['',''])[1])+' → '+esc((pockOpts.find(function(p){return p[0]===v.toPocket})||['',''])[1])+'</p>','Tasdiqlash'))call(Object.assign({op:'transfer'},v),'O‘tkazma saqlandi')}
     else{var f=[];pockOpts.forEach(function(p){['uzs','usd'].forEach(function(c){f.push({name:p[0]+'_'+c,label:p[1]+' '+(c==='uzs'?'so‘m':'dollar')+' — tizimda '+cbMoney(b[p[0]+'_'+c],c.toUpperCase()),type:'number',step:'any'})})});f.push({name:'note',label:'Izoh'});
@@ -1828,7 +1842,8 @@ function renderSupply(page,d){
   page.querySelectorAll('[data-sop]').forEach(function(b){b.onclick=async function(){var op=b.dataset.sop,v;
     if(op==='supplier_add'){v=await formBox('Yangi ta’minotchi',[{name:'name',label:'Nomi',required:true},{name:'phone',label:'Telefon',placeholder:'+998…'},{name:'note',label:'Izoh (nima yetkazadi, shartlar)'}],'Qo‘shish');if(v)call(op,v,'Ta’minotchi qo‘shildi')}
     else if(op==='material_add'){v=await formBox('Yangi xom ashyo',[{name:'name',label:'Nomi',required:true},{name:'unit',label:'O‘lchov birligi',options:d.units},{name:'minQty',label:'Minimal qoldiq (ixtiyoriy)',type:'number',step:'any'}],'Qo‘shish','Qoldiq shu miqdordan kamaysa, panelda ogohlantirish chiqadi.');if(v){v.minQty=v.minQty||'';call(op,v,'Xom ashyo qo‘shildi')}}
-    else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}purchaseForm(d,call)}
+    else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}
+      if(!d.materials.length){toast('Avval xom ashyo qo‘shing («+ Xom ashyo»). Xarid ro‘yxatida faqat xom ashyo chiqadi.',true);return}purchaseForm(d,call)}
     else{if(!prodOpts.length){toast('Faol mahsulot yo‘q.',true);return}produceForm(d,prodOpts,call)}}});
   page.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=async function(){var s=d.suppliers.find(function(x){return x.id===+b.dataset.pay});
     var v=await formBox('To‘lov: '+s.name,[{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true,value:(s.debt/100).toFixed(2)},{name:'payFrom',label:'Qayerdan',options:[['cash','Kassa — naqd'],['card','Kassa — karta']]},{name:'note',label:'Izoh'}],'To‘lash','Joriy qarz: '+cents(s.debt)+'. Summa kassadan xarajat bo‘lib chiqadi.');
@@ -1848,7 +1863,7 @@ function itemOpts(d,withProducts){
   return (m?'<optgroup label="Xom ashyo">'+m+'</optgroup>':'')+(p?'<optgroup label="Tayyor mahsulot">'+p+'</optgroup>':'');
 }
 function bindLines(box,opts,first){var n=first;
-  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',lineRow(n++,opts));sumLines(box)};
+  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',lineRow(n++,typeof opts==='function'?opts():opts));sumLines(box)};
   box.addEventListener('click',function(e){var b=e.target.closest('[data-rm]');if(!b)return;var rows=box.querySelectorAll('.sp-line');if(rows.length>1){b.closest('.sp-line').remove();sumLines(box)}});
   box.addEventListener('input',function(){sumLines(box)});
 }
@@ -1856,13 +1871,16 @@ function sumLines(box){var t=0;box.querySelectorAll('.sp-line').forEach(function
 function collectLines(v,kind){var out=[];Object.keys(v).forEach(function(k){var m=/^item_(\d+)$/.exec(k);if(!m)return;var i=m[1],it=String(v[k]).split(':'),row={qty:v['qty_'+i]};
   if(kind==='purchase')row.price=v['price_'+i];if(it[0]==='m')row.material=+it[1];else row.pack=+it[1];out.push(row)});return out}
 async function purchaseForm(d,call){
-  var opts=itemOpts(d,true);
+  // Xaridda faqat xom ashyo; tayyor mahsulot (qayta sotish uchun) — alohida belgi bilan
+  var opts=itemOpts(d,false),optsAll=itemOpts(d,true);
   var p=modal('<form class="sp-form"><h3>Yangi xarid</h3><p class="muted">Har qatorda bir birlik narxi (USD): mahsulot uchun 1 dona, xom ashyo uchun 1 kg / litr / …</p><div class="form">'+
     '<label>Ta’minotchi<select name="supplierId">'+d.suppliers.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join('')+'</select></label>'+
     '<div class="sp-lines">'+lineRow(0,opts)+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Qator qo‘shish</button>'+
+    '<label class="chk"><input type="checkbox" id="spWithProd"> Tayyor mahsulot ham sotib olinadi (qayta sotish uchun)</label>'+
     '<label>Izoh (hujjat raqami, partiya)<input name="note" maxlength="300"></label><div class="sp-total">Jami: <b data-total>$0</b></div></div>'+
     '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">Xaridni saqlash</button></div></form>');
-  bindLines($('modalBody'),opts,1);
+  var box=$('modalBody');bindLines(box,function(){return $('spWithProd')&&$('spWithProd').checked?optsAll:opts},1);
+  $('spWithProd').onchange=function(){var o=this.checked?optsAll:opts;box.querySelectorAll('.sp-line select').forEach(function(sel){var v0=sel.value;sel.innerHTML=o;if([].some.call(sel.options,function(x){return x.value===v0}))sel.value=v0})};
   var v=await p;if(!v)return;
   call('purchase',{supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid saqlandi');
 }
