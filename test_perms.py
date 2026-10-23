@@ -53,6 +53,9 @@ class PermUnitTests(unittest.TestCase):
             perms.set_perms(self.db, 1, 6, {'cash.view': True}, PRIMARY)
         with self.assertRaises(ValueError):
             perms.set_perms(self.db, 1, 3, {'nonsense': True}, PRIMARY)
+        with self.assertRaises(ValueError):        # kassirga ombor ruxsati — ma'nosiz
+            perms.set_perms(self.db, 1, 3, {'warehouse.receive': True}, PRIMARY)
+        self.assertEqual({p['section'] for p in perms.staff_view(self.db, 3, PRIMARY)['perms']}, {'cash'})
 
     def test_manager_perm_mapping(self):
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'bonus'), 'hr.calculate')

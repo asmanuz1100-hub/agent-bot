@@ -45,6 +45,8 @@ CATALOG={
 }
 SECTIONS={'cash':'Kassa','warehouse':'Ombor','hr':'Xodimlar va oylik','reports':'Hisobot va tahlil','staff':'Xodimlar'}
 EDITABLE_ROLES=('admin','cashier','warehouse')     # admin bu yerda = ikkinchi darajali rahbar
+# Rol qaysi bo'lim ruxsatlarini ishlata oladi: kassir faqat kassa ilovasida, omborchi faqat ombor ilovasida.
+ROLE_SECTIONS={'admin':tuple(SECTIONS),'cashier':('cash',),'warehouse':('warehouse',)}
 ROLE_LABELS={'primary':'Admin','admin':'Rahbar','cashier':'Kassir','warehouse':'Omborchi','sales':'Sotuvchi','agent':'Agent'}
 
 # Standart huquqlar hozirgi xatti-harakatni saqlaydi: rahbar ombor/ta'minot/oylik pul amallarini
@@ -53,7 +55,8 @@ DEFAULTS={
     'admin':{'cash.view','cash.handover','cash.expense','cash.convert','cash.rate','cash.fund','cash.debt_task','cash.report',
              'warehouse.view','warehouse.catalog','hr.view','hr.salary_view','hr.edit','reports.view','reports.export','staff.manage'},
     'cashier':{'cash.view','cash.handover','cash.expense','cash.convert','cash.rate','cash.fund','cash.debt_task','cash.report'},
-    'warehouse':{'warehouse.view','warehouse.receive','warehouse.issue','warehouse.writeoff'},
+    # omborchi avvaldan Ombor ilovasida mahsulot rasmini yuklaydi (catalog) — saqlanadi
+    'warehouse':{'warehouse.view','warehouse.receive','warehouse.issue','warehouse.writeoff','warehouse.catalog'},
 }
 
 SCHEMA='''
@@ -113,6 +116,8 @@ def set_perms(db,actor,target,changes,primary=(),now=None):
     if role not in EDITABLE_ROLES:
         raise ValueError('Bu xodimning ruxsatlari o‘z bo‘limida: sotuvchi — Xodimlar → Savdo jamoasi, agent — agent kartasi.')
     if not isinstance(changes,dict) or any(p not in CATALOG for p in changes):raise ValueError('Ruxsatlar noto‘g‘ri.')
+    if any(CATALOG[p][0] not in ROLE_SECTIONS[role] for p in changes):
+        raise ValueError('Bu ruxsat ushbu rol uchun emas: kassir — kassa, omborchi — ombor bo‘limi.')
     ts=int(time.time() if now is None else now)
     before=effective(db,target,primary)
     for perm,val in changes.items():
@@ -140,7 +145,8 @@ def staff_view(db,uid,primary=()):
               LEFT JOIN users u ON u.id=a.actor WHERE a.target=? ORDER BY a.ts DESC,a.id DESC LIMIT 40''',(uid,)).fetchall()]
     return {'id':int(uid),'role':key,'roleLabel':ROLE_LABELS.get(key,role),'editable':key in EDITABLE_ROLES,
             'perms':[{'key':k,'section':v[0],'sectionLabel':SECTIONS[v[0]],'label':v[1],'on':k in eff,
-                      'default':k in DEFAULTS.get(role,()) or key=='primary','override':overrides.get(k)} for k,v in CATALOG.items()],
+                      'default':k in DEFAULTS.get(role,()) or key=='primary','override':overrides.get(k)} for k,v in CATALOG.items()
+                     if v[0] in ROLE_SECTIONS.get(role,tuple(SECTIONS))],
             'history':hist}
 
 

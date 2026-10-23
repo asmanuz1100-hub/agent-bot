@@ -1965,14 +1965,14 @@ async function pageHr(page,force){
 function noWorkers(){return '<div class="card">'+emptyState('Hali sex ishchisi qo‘shilmagan. «Ishchi qo‘shish» tugmasini bosing.','users')+'</div>'}
 function renderWorkers(page,d){
   var q=HR.q.trim().toLowerCase(),rows=d.workers.filter(function(w){return !q||(w.name+' '+w.position+' '+w.phone).toLowerCase().indexOf(q)>=0});
-  page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="toolbar"><input type="search" id="wkQ" placeholder="Ism, lavozim, telefon…" value="'+esc(HR.q)+'"><span class="grow"></span><label class="chk"><input type="checkbox" id="wkOff"'+(HR.closed?' checked':'')+'> Ishdan ketganlar ('+d.totals.closed+')</label><button class="btn pri" id="wkAdd">'+ic('userplus','sm')+' Ishchi qo‘shish</button></div>'+
+  page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="toolbar"><input type="search" id="wkQ" placeholder="Ism, lavozim, telefon…" value="'+esc(HR.q)+'"><span class="grow"></span><label class="chk"><input type="checkbox" id="wkOff"'+(HR.closed?' checked':'')+'> Ishdan ketganlar ('+d.totals.closed+')</label>'+(d.canEdit===false?'':'<button class="btn pri" id="wkAdd">'+ic('userplus','sm')+' Ishchi qo‘shish</button>')+'</div>'+
     (d.workers.length?'<div class="card flush"><div class="tbl-wrap"><table><thead><tr><th>Ishchi</th><th>Telefon</th><th>Ishga kirgan</th><th class="right">Oylik</th><th class="right">Bu oy ishladi</th><th class="right">Qolgan oylik</th><th>Holat</th></tr></thead><tbody>'+
-    (rows.length?rows.map(function(w){return '<tr class="click" data-w="'+w.id+'"><td><div class="cell"><span class="av">'+initial(w.name)+'</span><div class="t"><b>'+esc(w.name)+'</b><small>'+esc([w.department,w.position].filter(Boolean).join(' · ')||'—')+'</small></div></div></td><td class="num">'+(w.phone?esc(w.phone):'<span class="muted">—</span>')+'</td><td class="num">'+(w.hireDate?esc(w.hireDate):'<span class="muted">—</span>')+'</td><td class="right num">'+(w.payroll.salary?wm(w.payroll.salary,w.currency):'<span class="muted">belgilanmagan</span>')+'</td><td class="right num">'+w.attendance.worked+' kun</td><td class="right num'+(w.payroll.remaining>0?' bad':'')+'">'+wm(w.payroll.remaining,w.currency)+'</td><td>'+(w.active?pill('<span class="dot"></span>Ishlayapti','p-ok'):pill('<span class="dot"></span>Ketgan','p-bad'))+'</td></tr>'}).join('')
+    (rows.length?rows.map(function(w){return '<tr class="click" data-w="'+w.id+'"><td><div class="cell"><span class="av">'+initial(w.name)+'</span><div class="t"><b>'+esc(w.name)+'</b><small>'+esc([w.department,w.position].filter(Boolean).join(' · ')||'—')+'</small></div></div></td><td class="num">'+(w.phone?esc(w.phone):'<span class="muted">—</span>')+'</td><td class="num">'+(w.hireDate?esc(w.hireDate):'<span class="muted">—</span>')+'</td><td class="right num">'+(!w.payroll?'<span class="muted">—</span>':w.payroll.salary?wm(w.payroll.salary,w.currency):'<span class="muted">belgilanmagan</span>')+'</td><td class="right num">'+w.attendance.worked+' kun</td><td class="right num'+(w.payroll&&w.payroll.remaining>0?' bad':'')+'">'+(w.payroll?wm(w.payroll.remaining,w.currency):'—')+'</td><td>'+(w.active?pill('<span class="dot"></span>Ishlayapti','p-ok'):pill('<span class="dot"></span>Ketgan','p-bad'))+'</td></tr>'}).join('')
       :'<tr><td colspan="7">'+emptyState('Topilmadi','users')+'</td></tr>')+'</tbody></table></div></div>':noWorkers());
   bindStView(page);
   $('wkQ').oninput=debounce(function(){HR.q=this.value;renderWorkers(page,d);var i=$('wkQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},200);
   $('wkOff').onchange=function(){HR.closed=this.checked;pageHr(page,true)};
-  $('wkAdd').onclick=function(){addWorker(function(r){pageHr(page,true);renderWorker(r.worker,r.canPay)})};
+  if($('wkAdd'))$('wkAdd').onclick=function(){addWorker(function(r){pageHr(page,true);renderWorker(r.worker,r)})};
   page.querySelectorAll('[data-w]').forEach(function(tr){tr.onclick=function(){openWorker(+tr.dataset.w,'card')}});
 }
 function renderAtt(page,d){
@@ -1997,6 +1997,7 @@ function renderAtt(page,d){
   page.querySelectorAll('[data-emp]').forEach(function(b){b.onclick=function(){openWorker(+b.dataset.emp,'att',d.day.slice(0,7))}});
 }
 function renderPay(page,d){
+  if(d.salaryHidden){page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Sozlamalar → Xodimlar va ruxsatlar bo‘limida beradi.','shield')+'</div>';bindStView(page);return}
   var T=d.totals,list=d.workers.filter(function(w){return w.active});
   page.innerHTML='<div class="toolbar">'+stViewSeg()+'</div><div class="toolbar">'+monthNav('payMonth',d.month)+'<span class="grow"></span><span class="muted small">Qatorni bosing — avans, oylik to‘lovi, bonus yoki jarima</span></div>'+
     (list.length?['UZS','USD'].filter(function(c){return list.some(function(w){return w.currency===c})}).map(function(c){var Q=d.money[c],n=list.filter(function(w){return w.currency===c}).length,f=function(v){return c==='USD'?usd(v/100):num(v,0)},u=c==='USD'?'$':'so‘m';
@@ -2010,32 +2011,36 @@ function renderPay(page,d){
 async function openWorker(id,tab,month){
   HR.tab=tab||HR.tab||'card';openDrawer(drawerSkel());
   var r=await run(function(){return api('hr',{op:'worker',id:id,month:month||HR.month||undefined})});if(!r){closeDrawer();return}
-  renderWorker(r.worker,r.canPay);
+  renderWorker(r.worker,r);
 }
-function renderWorker(e,canPay){
-  var c=e.card,P=e.payroll,tab=HR.tab,cu=e.currency,M=function(v){return wm(v,cu)};
+function renderWorker(e,fl){
+  /* Ruxsatlar serverdan: canPay (avans/oylik), canCalc (bonus/jarima), canEdit, salaryHidden */
+  fl=fl||{};var canPay=!!fl.canPay,canCalc=!!fl.canCalc,canEdit=fl.canEdit!==false,hid=!!fl.salaryHidden;
+  var c=e.card,P=e.payroll||{},tab=HR.tab,cu=e.currency,M=function(v){return wm(v,cu)};
   var tabs='<div class="seg" id="empTabs" style="margin:4px 0 14px">'+[['card','user','Kartochka'],['att','calendar','Davomat'],['pay','wallet','Oylik']].map(function(t){return '<button data-t="'+t[0]+'" class="'+(tab===t[0]?'on':'')+'">'+ic(t[1],'sm')+' '+t[2]+'</button>'}).join('')+'</div>';
   var body='';
   if(tab==='card'){
     var row=function(k,v){return '<dt>'+k+'</dt><dd>'+(v?esc(v):'<span class="muted">—</span>')+'</dd>'};
-    body='<div class="card"><dl class="kv">'+row('Bo‘lim',c.department)+row('Lavozim',c.position)+row('Telefon',c.phone)+row('Ishga kirgan',c.hire_date)+'<dt>Oylik</dt><dd>'+(e.salary?M(e.salary):'<span class="muted">belgilanmagan</span>')+'</dd>'+row('Tug‘ilgan sana',c.birth_date)+row('Manzil',c.address)+row('Hujjat (pasport)',c.passport)+row('Favqulodda aloqa',c.emergency)+row('Izoh',c.note)+'</dl>'+
-      (e.salaryHistory.length>1?'<p class="small muted" style="margin-top:10px">Oylik tarixi: '+e.salaryHistory.map(function(h){return esc(monthLabel(h.from))+' dan '+M(h.amount)}).join(' · ')+'</p>':'')+
-      '<div class="actions" style="margin-top:14px">'+(e.active?'<button class="btn pri" id="empEdit">'+ic('edit','sm')+' Tahrirlash</button><button class="btn danger" id="empClose">'+ic('ban','sm')+' Ishdan ketdi</button>':'<button class="btn pri" id="empOpen">'+ic('checkc','sm')+' Qayta ishga olish</button>')+'</div></div>';
+    body='<div class="card"><dl class="kv">'+row('Bo‘lim',c.department)+row('Lavozim',c.position)+row('Telefon',c.phone)+row('Ishga kirgan',c.hire_date)+'<dt>Oylik</dt><dd>'+(hid?'<span class="muted">ruxsat yo‘q</span>':e.salary?M(e.salary):'<span class="muted">belgilanmagan</span>')+'</dd>'+row('Tug‘ilgan sana',c.birth_date)+row('Manzil',c.address)+row('Hujjat (pasport)',c.passport)+row('Favqulodda aloqa',c.emergency)+row('Izoh',c.note)+'</dl>'+
+      ((e.salaryHistory||[]).length>1?'<p class="small muted" style="margin-top:10px">Oylik tarixi: '+e.salaryHistory.map(function(h){return esc(monthLabel(h.from))+' dan '+M(h.amount)}).join(' · ')+'</p>':'')+
+      (canEdit?'<div class="actions" style="margin-top:14px">'+(e.active?'<button class="btn pri" id="empEdit">'+ic('edit','sm')+' Tahrirlash</button><button class="btn danger" id="empClose">'+ic('ban','sm')+' Ishdan ketdi</button>':'<button class="btn pri" id="empOpen">'+ic('checkc','sm')+' Qayta ishga olish</button>')+'</div>':'')+'</div>';
   }else if(tab==='att'){
     var A=e.attendance,pad=e.calendar[0].dow;
     body=monthNav('empMonth',e.month)+'<div class="grid g4 kpis" style="margin:12px 0">'+kpi('checkc','Ishladi',A.worked+' kun',A.late?A.late+' kechikdi':'')+kpi('xcircle','Kelmadi',A.absent+' kun','',A.absent?'bad':'')+kpi('calendar','Dam / ta’til',(A.off+A.vacation)+' kun','')+kpi('alert','Kasal',A.sick+' kun','')+'</div>'+
       '<div class="att-cal">'+['Du','Se','Ch','Pa','Ju','Sh','Ya'].map(function(x){return '<b>'+x+'</b>'}).join('')+'<i></i>'.repeat(pad)+
-      e.calendar.map(function(x){return '<button class="att-d '+(x.status?ATT_TONE[x.status]||'':'')+'" data-day="'+x.day+'"'+(x.future||!e.active?' disabled':'')+' title="'+esc(x.day+(x.status?' · '+(e.statuses.find(function(s){return s[0]===x.status})||['',''])[1]:'')+(x.note?' · '+x.note:''))+'"><span>'+(+x.day.slice(8))+'</span><small>'+(x.status?ATT_SHORT[x.status]:'')+'</small></button>'}).join('')+'</div>'+
+      e.calendar.map(function(x){return '<button class="att-d '+(x.status?ATT_TONE[x.status]||'':'')+'" data-day="'+x.day+'"'+(x.future||!e.active||!canEdit?' disabled':'')+' title="'+esc(x.day+(x.status?' · '+(e.statuses.find(function(s){return s[0]===x.status})||['',''])[1]:'')+(x.note?' · '+x.note:''))+'"><span>'+(+x.day.slice(8))+'</span><small>'+(x.status?ATT_SHORT[x.status]:'')+'</small></button>'}).join('')+'</div>'+
       '<p class="small muted" style="margin-top:8px">K — keldi, Kc — kechikdi, Y — kelmadi, D — dam olish, B — kasal, T — ta’til. Kunni bosib o‘zgartiring.</p>';
+  }else if(hid){
+    body='<div class="card">'+emptyState('Oylik summalarini ko‘rish uchun ruxsat kerak. Admin Sozlamalar → Xodimlar va ruxsatlar bo‘limida beradi.','shield')+'</div>';
   }else{
     body=monthNav('empMonth',e.month)+'<div class="card" style="margin:12px 0"><dl class="kv">'+(P.carry?'<dt>Oldingi oylardan</dt><dd class="num'+(P.carry<0?' bad">−'+M(-P.carry)+' <small>(ortiqcha berilgan)</small>':'">'+M(P.carry))+'</dd>':'')+'<dt>Oylik</dt><dd class="num">'+M(P.salary)+'</dd><dt>Bonus</dt><dd class="num'+(P.bonus?' ok">+'+M(P.bonus):'">—')+'</dd><dt>Jarima</dt><dd class="num'+(P.penalty?' bad">−'+M(P.penalty):'">—')+'</dd><dt><b>Hisoblandi</b></dt><dd class="num"><b>'+M(P.due)+'</b></dd><dt>Avans</dt><dd class="num">'+M(P.advance)+'</dd><dt>Oylik to‘landi</dt><dd class="num">'+M(P.paidSalary)+'</dd>'+(P.overpaid?'<dt><b>Ortiqcha berilgan</b></dt><dd class="num bad"><b>'+M(P.overpaid)+'</b> <small>keyingi oydan ushlanadi</small></dd>':'<dt><b>To‘lanishi qolgan</b></dt><dd class="num'+(P.remaining>0?' bad':'')+'"><b>'+M(P.remaining)+'</b></dd>')+'</dl>'+
-      (canPay&&e.active?'<div class="actions" style="margin-top:14px"><button class="btn pri" data-pk="salary"'+(P.remaining>0?'':' disabled')+'>'+ic('coins','sm')+' Oylik to‘lash</button><button class="btn" data-pk="advance">'+ic('cash','sm')+' Avans</button><button class="btn" data-pk="bonus">'+ic('plus','sm')+' Bonus</button><button class="btn danger" data-pk="penalty">'+ic('ban','sm')+' Jarima</button></div>':(!canPay?'<p class="small muted" style="margin-top:10px">To‘lov amallari — asosiy rahbar huquqi.</p>':''))+'</div>'+
+      ((canPay||canCalc)&&e.active?'<div class="actions" style="margin-top:14px">'+(canPay?'<button class="btn pri" data-pk="salary"'+(P.remaining>0?'':' disabled')+'>'+ic('coins','sm')+' Oylik to‘lash</button><button class="btn" data-pk="advance">'+ic('cash','sm')+' Avans</button>':'')+(canCalc?'<button class="btn" data-pk="bonus">'+ic('plus','sm')+' Bonus</button><button class="btn danger" data-pk="penalty">'+ic('ban','sm')+' Jarima</button>':'')+'</div>':'')+(!canPay&&e.active?'<p class="small muted" style="margin-top:10px">Avans va oylik to‘lash uchun «Avans va oylik to‘lash» ruxsati kerak.</p>':'')+'</div>'+
       '<div class="card flush"><div class="card-h"><h3>'+ic('list')+' Yozuvlar</h3></div><div class="list" style="padding:0 20px 10px">'+(e.payments.length?e.payments.map(function(x){var neg=x.kind==='penalty';return '<div class="li"><div class="t"><b>'+esc(x.label)+' · <span class="num '+(neg?'bad':x.kind==='bonus'?'ok':'')+'">'+(neg?'−':'')+M(x.amount)+'</span></b><small>'+[x.cash?'Kassadan'+(x.paidCurrency&&x.paidCurrency!==cu?' '+wm(x.paidAmount,x.paidCurrency)+(x.rate?' (kurs '+num(x.rate,0)+')':''):''):'',esc(x.note),esc(x.actorName)].filter(Boolean).join(' · ')+'</small></div><small class="muted num">'+dt(x.ts)+'</small></div>'}).join(''):emptyState('Bu oy yozuv yo‘q','list'))+'</div></div>';
   }
   openDrawer('<div class="dh"><span class="av lg">'+initial(e.name)+'</span><div><h2>'+esc(e.name)+'</h2><small class="muted">Sex ishchisi'+(c.position?' · '+esc(c.position):'')+(c.phone?' · <a href="tel:'+esc(c.phone)+'">'+esc(c.phone)+'</a>':'')+(e.active?'':' · <span class="bad">ishdan ketgan</span>')+'</small></div></div>'+tabs+body);
-  var reload=async function(m){var r=await run(function(){return api('hr',{op:'worker',id:e.id,month:m||e.month})});if(r)renderWorker(r.worker,r.canPay)};
-  var after=function(r){if(r){HR.data=null;renderWorker(r.worker,r.canPay);if(S.page==='staff'&&ST.view!=='list')pageHr($('page'),true)}};
-  $('empTabs').onclick=function(ev){var b=ev.target.closest('button');if(!b)return;HR.tab=b.dataset.t;renderWorker(e,canPay)};
+  var reload=async function(m){var r=await run(function(){return api('hr',{op:'worker',id:e.id,month:m||e.month})});if(r)renderWorker(r.worker,r)};
+  var after=function(r){if(r){HR.data=null;renderWorker(r.worker,r);if(S.page==='staff'&&ST.view!=='list')pageHr($('page'),true)}};
+  $('empTabs').onclick=function(ev){var b=ev.target.closest('button');if(!b)return;HR.tab=b.dataset.t;renderWorker(e,fl)};
   if($('empMonth'))$('empMonth').onclick=function(ev){var b=ev.target.closest('[data-d]');if(b)reload(shiftMonth(e.month,+b.dataset.d))};
   if($('empEdit'))$('empEdit').onclick=async function(){
     var v=await formBox('Kartochka: '+e.name,workerFields(Object.assign({name:e.name,salary:e.salary,currency:cu},c),e.month).filter(function(f){return f.name!=='currency'||e.canChangeCurrency}),'Saqlash','Oylik o‘zgarsa, tanlangan oydan boshlab amal qiladi — o‘tgan oylar hisobi o‘zgarmaydi.'+(e.canChangeCurrency?'':' Valyutani o‘zgartirib bo‘lmaydi — to‘lovlar yozilgan.'));
@@ -2124,6 +2129,36 @@ function renderStaff(page,s){
 
 /* ----- Sozlamalar ----- */
 var BR_FIELDS=[['legalName','Yuridik nomi',160,1],['inn','STIR (INN)',20],['phone','Telefon',80],['address','Manzil',240,1],['bank','Bank rekvizitlari (h/r, bank, MFO)',240,1],['director','Rahbar F.I.Sh.',120]];
+var PERM_ROLES=['admin','cashier','warehouse','sales','agent'];
+async function permCard(can){
+  var el=$('permCard');if(!el)return;
+  var st;try{st=(await api('staff_list')).staff}catch(e){el.innerHTML='<p class="bad">'+esc(e.message)+'</p>';return}
+  if(!$('permCard'))return;
+  var list=(Array.isArray(st)?st:st.staff||[]).filter(function(x){return x.active&&PERM_ROLES.indexOf(x.role)>=0});
+  var label=function(x){return x.primary?'Admin':x.role==='admin'?'Rahbar':x.role==='sales'?'Sotuvchi':x.role==='warehouse'?'Omborchi':x.roleLabel};
+  el.innerHTML='<div class="card-h"><h3>'+ic('shield')+' Xodimlar va ruxsatlar</h3>'+(can?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div>'+
+    '<p class="hint" style="margin:-4px 0 10px">Har bir rolning standart huquqlari bor; Admin ularni xodim bo‘yicha alohida yoqadi yoki o‘chiradi. O‘zgarish darhol, ochiq sessiyalarda ham kuchga kiradi. Amal uchun bo‘lim yoqilgan va ruxsat bo‘lishi kerak. Filial modeli yo‘q — kassa va ombor butun korxona doirasida.</p>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Xodim</th><th>Rol</th><th class="right"></th></tr></thead><tbody>'+
+    list.map(function(x){return '<tr class="click" data-pid="'+x.id+'"><td><b>'+esc(x.name)+'</b><br><small class="muted num">'+x.id+'</small></td><td>'+pill(esc(label(x)),x.primary?'p-pri':'')+'</td><td class="right"><span class="muted small">'+(x.primary?'barcha huquq':x.role==='sales'?'Savdo jamoasida':x.role==='agent'?'agent kartasida':'Ruxsatlar')+'</span> '+ic('chevron','sm')+'</td></tr>'}).join('')+'</tbody></table></div>';
+  el.querySelectorAll('[data-pid]').forEach(function(tr){tr.onclick=function(){var x=list.find(function(y){return String(y.id)===tr.dataset.pid});
+    if(x.role==='sales'){location.hash='staff';ST.view='list';ST.role='sales';return}
+    if(x.role==='agent'){openAgent(x.id);return}
+    permModal(x.id,can)}});
+}
+async function permModal(id,can){
+  var r=await run(function(){return api('perms_staff',{id:id})});if(!r)return;var s=r.staff,ch={};
+  var groups={};s.perms.forEach(function(p){(groups[p.sectionLabel]=groups[p.sectionLabel]||[]).push(p)});
+  var edit=can&&s.editable;
+  var p=modal('<form class="perm-form"><h3>'+esc(s.roleLabel)+' · ruxsatlar</h3><p class="muted">'+(s.role==='primary'?'Admin (asosiy rahbar) barcha huquqqa ega — o‘zgartirib bo‘lmaydi.':edit?'Belgi — rol standarti. O‘zgartirilganlari «individual» deb ko‘rsatiladi.':'Faqat ko‘rish.')+'</p>'+
+    Object.keys(groups).map(function(g){return '<div class="perm-grp"><b>'+esc(g)+'</b>'+groups[g].map(function(x){return '<label class="switch"><span>'+esc(x.label)+(x.override!=null?' <small class="pill p-warn">individual</small>':'')+(x['default']?' <small class="muted">· standart</small>':'')+'</span><input type="checkbox" data-perm="'+x.key+'"'+(x.on?' checked':'')+(edit?'':' disabled')+'></label>'}).join('')+'</div>'}).join('')+
+    (s.history.length?'<details class="mod-hist"><summary class="small muted">O‘zgarishlar tarixi</summary><div class="list">'+s.history.map(function(h){return '<div class="li"><div class="t"><b>'+esc(h.label)+' — '+(h.on?'berildi':'olindi')+'</b><small>'+esc(h.who)+'</small></div><small class="muted num">'+dt(h.ts)+'</small></div>'}).join('')+'</div></details>':'')+
+    '<div class="foot"><button type="button" class="btn" data-m="cancel">Yopish</button>'+(edit?'<button type="button" class="btn" id="permReset">Standartga qaytarish</button><button class="btn pri">Saqlash</button>':'')+'</div></form>');
+  var box=$('modalBody');
+  box.querySelectorAll('[data-perm]').forEach(function(c){c.onchange=function(){ch[c.dataset.perm]=c.checked}});
+  if($('permReset'))$('permReset').onclick=function(){s.perms.forEach(function(x){if(x.override!=null)ch[x.key]=null});closeModal({})};
+  var v=await p;if(!v||!Object.keys(ch).length)return;
+  var x=await run(function(){return api('perms_set',{id:id,changes:ch})},'Ruxsatlar saqlandi');if(x)permModal(id,can);
+}
 async function modulesCard(can){
   var el=$('modCard');if(!el)return;
   var r;try{r=await api('modules')}catch(e){el.querySelector('.loading').outerHTML='<p class="bad">'+esc(e.message)+'</p>';return}
@@ -2155,6 +2190,7 @@ function pageSettings(page){
     '<p class="hint" style="margin-top:14px">Loginni o‘zgartirish yoki parolni unutgan bo‘lsangiz: botda <code>/webparol</code> yoki <code>/webparol yangi_login</code>. Web kirishni butunlay o‘chirish: <code>/webyopish</code>.</p>'+
     '<div class="actions" style="margin-top:16px"><button class="btn danger" id="stLogout">Chiqish</button></div></div>'+
    '<div class="card" id="modCard" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div><div class="loading">Yuklanmoqda…</div></div>'+
+   '<div class="card" id="permCard" style="grid-column:1/-1"><div class="loading">Yuklanmoqda…</div></div>'+
    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Bildirishnomalar</h3></div>'+
     '<div class="switch"><span>Brauzer bildirishnomasi<br><small class="muted">Panel boshqa oynada bo‘lsa ham xabar chiqadi</small></span><button class="tog'+(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'?' on':'')+'" id="tgNotify" aria-label="Brauzer bildirishnomasi"></button></div>'+
     '<div class="switch"><span>Ovozli signal</span><button class="tog'+(store('rw-sound')!=='0'?' on':'')+'" id="tgSound" aria-label="Ovozli signal"></button></div>'+
@@ -2168,6 +2204,7 @@ function pageSettings(page){
     '<p class="hint">Kamida 8 belgi. Parol almashganda boshqa kompyuterlardagi kirishlar yopiladi.</p></div></form>'+
    '</div>';
   modulesCard(canBrand);
+  permCard(canBrand);
   if(canBrand){var logo=BRAND.logo;
     $('brFile').onchange=function(){var f=this.files[0];this.value='';if(!f)return;
       if(!/^image\/(png|jpeg|webp)$/.test(f.type)){toast('Faqat PNG, JPEG yoki WebP rasm',true);return}

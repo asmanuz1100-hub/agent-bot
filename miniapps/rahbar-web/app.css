@@ -856,3 +856,6 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 @media (max-width:720px){.mod-grid{grid-template-columns:1fr}}
 .mod-hist{margin-top:10px}.mod-hist summary{cursor:pointer}
 .tog[disabled]{opacity:.5;cursor:not-allowed}
+.perm-form .perm-grp{margin:12px 0}.perm-form .perm-grp>b{display:block;margin-bottom:4px}
+.perm-form .switch input{width:20px;height:20px;flex:none}
+.perm-form .pill{font-size:10.5px;padding:1px 6px}
