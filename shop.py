@@ -440,8 +440,10 @@ def quote(db, actor, payload):
         l['discount'] = d
         l['total'] = l['gross'] - d
         left -= d
-    stock = {p: wh.stock(db, p) for p in need}
-    short = [f'{core.product_name(p)}: omborda {stock[p]} dona' for p, q in need.items() if stock[p] < q]
+    # Mavjud = ombor qoldig'i − ochiq buyurtmalarda band (sale_orders). Buyurtma bo'lmasa — avvalgidek.
+    import sale_orders
+    stock = {p: sale_orders.available(db, p) for p in need}
+    short = [f'{core.product_name(p)}: mavjud {stock[p]} dona' for p, q in need.items() if stock[p] < q]
     debt = core.client_debt_usd(db, cid) if client else 0
     return {'client': client, 'walkin': walkin, 'priceType': ptype, 'lines': lines, 'subtotal': subtotal,
             'discount': discount, 'total': total, 'discountPct': round(eff_pct, 2), 'stockShort': short,
