@@ -472,10 +472,11 @@ function printReceipt(r){
     ${row('To‘langan'+(r.method?' ('+PM[r.method][0]+')':''),usd(r.paidUsd)+(r.paidUzs?'<br>'+som(r.paidUzs):''))}
     ${r.debtUsd>0?row('Qoldiq (qarz)',usd(r.debtUsd),'b'):''}</table>
     ${r.note?'<hr><div>Izoh: '+esc(r.note)+'</div>':''}${r.cancelled?'<hr><div class="c"><b>BEKOR QILINGAN</b></div>':''}
+    ${r.publicUrl?`<hr><div class="c"><img src="${esc(r.publicUrl)}.svg" style="width:30mm;height:30mm" alt=""><div class="s">Chekni telefonda ochish uchun skanerlang</div></div>`:''}
     <hr><div class="c">Xaridingiz uchun rahmat!</div></body></html>`;
   const fr=document.createElement('iframe');fr.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(fr);const d=fr.contentWindow.document;d.open();d.write(html);d.close();
-  setTimeout(()=>{try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){shareReceipt(r);}setTimeout(()=>fr.remove(),60000);},B.logo?600:250);
+  setTimeout(()=>{try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){shareReceipt(r);}setTimeout(()=>fr.remove(),60000);},B.logo||r.publicUrl?700:250);
 }
 async function shareReceipt(r){
   const text=receiptText(r);

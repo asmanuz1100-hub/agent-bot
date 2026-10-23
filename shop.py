@@ -23,6 +23,7 @@ import time
 import branding
 import core
 import warehouse as wh
+import receipt_public
 
 LEVELS = ('seller', 'head')
 # Rahbar har bir savdo xodimi uchun alohida yoqadigan funksiyalar.
@@ -553,7 +554,7 @@ def receipt(db, sale):
             'priceType': h['price_type'], 'subtotalUsd': int(h['subtotal']) / 100, 'discountUsd': int(h['discount']) / 100,
             'totalUsd': total / 100, 'paidUsd': paid / 100, 'debtUsd': (total - paid) / 100, 'method': h['pay_method'],
             'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines,
-            'cancelled': _void_info(db, int(h['id']))}
+            'cancelled': _void_info(db, int(h['id'])), 'publicUrl': receipt_public.url(int(h['id']))}
 
 
 def _void_info(db, sale):
