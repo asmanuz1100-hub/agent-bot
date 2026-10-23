@@ -850,4 +850,3 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 .att-d.p-warn{background:color-mix(in srgb,var(--warn) 16%,transparent);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
 .att-d.p-bad{background:color-mix(in srgb,var(--bad) 14%,transparent);border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
 .att-d.p-pri{background:color-mix(in srgb,var(--pri) 12%,transparent);border-color:color-mix(in srgb,var(--pri) 35%,transparent)}
-.att-d.auto{border-style:dashed}
