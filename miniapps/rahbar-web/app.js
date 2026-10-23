@@ -209,20 +209,20 @@ applyBrand();
 /* ---------- navigation ---------- */
 var PAGES=[
   ['home','home','Asosiy','Bugungi jonli holat',0,'Dashboard'],
+  ['sales','cart','Savdo','Sotuv, buyurtmalar, narxlar va hisobot',0],
+  ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
   ['team','users','Agentlar','KPI, pul, topshirish, GPS va marshrutlar'],
   ['agents','compass','Agentlar','Jonli GPS xarita, marshrut va mijozlar',9],
-  ['clients','store','Mijozlar','Barcha mijozlar va qarzdorlik'],
-  ['warehouse','orders','Buyurtmalar','Kanban, ro‘yxat, katalog va ombor qoldig‘i',0,'Buyurtmalar'],
+  ['warehouse','orders','Ombor','Buyurtmalar, katalog, kirim/chiqim va qoldiq',0,'Ombor'],
   ['supply','warehouse','Ta’minot','Ta’minotchilar, xarid, xom ashyo va ishlab chiqarish',0,'Ta’minot'],
-  ['sales','cart','Savdo','Sotuvlar, cheklar, top mahsulot va mijozlar',0],
-  ['cash','wallet','Moliya va qarzdorlik','Kassa, agentlardagi pul, qarzdorlar, konvertatsiya',1,'Moliya'],
+  ['cash','wallet','Kassa','Kassa va hisoblar, kirim, o‘tkazma, agentlardagi pul, qarzdorlar',1,'Kassa'],
+  ['staff','staff','Xodimlar','Tizim foydalanuvchilari, sex ishchilari, davomat va oylik',1],
   ['reports','report','Hisobot','Davr bo‘yicha natijalar',1],
   ['insights','analytics','Tahlil','Bugungi reja, mijozlar reytingi va hududlar',1],
-  ['staff','staff','Xodimlar','Tizim foydalanuvchilari, sex ishchilari, davomat va oylik',2],
-  ['settings','settings','Sozlamalar','Kompaniya, akkaunt va xavfsizlik',2]
+  ['settings','settings','Sozlamalar','Korxona bo‘limlari, xodimlar va ruxsatlar, akkaunt',2]
 ];
 /* Guruhlar: barcha bo'limlar mavjud rahbar huquqlari doirasida (server /api/manager rolni tekshiradi). */
-var NAV_GROUPS=['Ish jarayoni','Moliya va tahlil','Boshqaruv'];
+var NAV_GROUPS=['Ish jarayoni','Moliya, xodimlar va hisobot','Boshqaruv'];
 function renderNav(){
   var d=S.dash,badge={};
   if(d){badge.warehouse=d.warehouse&&d.warehouse.newOrders;badge.cash=d.summary&&d.summary.pendingCount}
