@@ -60,8 +60,43 @@ class SaleOrderTests(unittest.TestCase):
         with self.assertRaises(ValueError):                                   # ortiqcha to'lov yo'q
             self.op(S1, 'pay', orderId=o['id'], payments=[{'method': 'cash_usd', 'amount': '75.01'}])
         o = self.op(S1, 'pay', orderId=o['id'], payments=[{'method': 'cash_usd', 'amount': '75'}])['order']
-        self.assertEqual((o['payment'], o['due']), ('paid', 0))
-        self.assertEqual([x['action'] for x in o['log']][::-1], ['create', 'deliver', 'pay', 'deliver', 'return', 'pay'])
+        self.assertEqual((o['payment'], o['due'], o['status']), ('paid', 0, 'closed'))   # to'liq yetkazildi + to'landi → yopildi
+        self.assertEqual([x['action'] for x in o['log']][::-1], ['create', 'deliver', 'pay', 'deliver', 'return', 'pay', 'close'])
+
+    def test_closed_orders_leave_open_list_and_can_still_be_returned(self):
+        o = self.order(qty1=2, qty2=1)
+        self.op(S1, 'pay', orderId=o['id'], payments=[{'method': 'cash_usd', 'amount': '25'}])
+        o = self.op(S1, 'deliver', orderId=o['id'], items={str(self.p1): 2, str(self.p2): 1})['order']
+        self.assertEqual(o['status'], 'closed')
+        self.assertEqual(self.op(S1, 'list')['orders'], [])                   # «Ochiq» ro'yxat tozalanadi
+        self.assertEqual([x['id'] for x in self.op(S1, 'list', status='closed')['orders']], [o['id']])
+        o = self.op(S1, 'return', orderId=o['id'], pack=self.p2, qty=1, reason='Yaroqsiz')['order']
+        self.assertEqual((o['status'], o['due']), ('closed', -500))           # ortiqcha to'lov ko'rinadi, buyurtma yopiq qoladi
+        with self.assertRaisesRegex(ValueError, 'ochiq emas'):
+            self.op(S1, 'cancel', orderId=o['id'], reason='x')
+
+    def test_delivery_on_credit_needs_credit_permission(self):
+        shop.set_staff(self.db, ADMIN, S2, ['retail', 'collect'], 0)          # qarzga berish ruxsati yo'q
+        o = self.order(actor=S2, qty1=2, qty2=1)
+        with self.assertRaisesRegex(ValueError, 'Qarzga berish'):
+            self.op(S2, 'deliver', orderId=o['id'], items={str(self.p1): 1})
+        self.assertEqual(wh.stock(self.db, self.p1), 100)                     # hech narsa yozilmadi
+        self.op(S2, 'pay', orderId=o['id'], payments=[{'method': 'cash_usd', 'amount': '10'}])
+        o = self.op(S2, 'deliver', orderId=o['id'], items={str(self.p1): 1})['order']   # to'langan qismigacha — mumkin
+        self.assertEqual(o['delivered'], 1000)
+        with self.assertRaisesRegex(ValueError, 'Qarzga berish'):
+            self.op(S2, 'deliver', orderId=o['id'], items={str(self.p1): 1})
+        self.assertEqual(core.client_debt_usd(self.db, self.client), 0)
+
+    def test_dashboard_stock_excludes_reserved(self):
+        self.op(S1, 'create', clientId=self.client, items=[{'pack': self.p1, 'qty': 30}])
+        p = next(x for x in shop.dashboard(self.db, S1)['products'] if x['pack'] == self.p1)
+        self.assertEqual((p['stock'], p['onHand'], p['reserved']), (70, 100, 30))
+
+    def test_bad_return_input_has_clear_message(self):
+        o = self.order()
+        with self.assertRaisesRegex(ValueError, 'to‘g‘ri tanlang'):
+            self.op(S1, 'return', orderId=o['id'], pack='abc', qty='', reason='x')
 
     def test_repeated_requests_do_not_duplicate(self):
         o = self.order()

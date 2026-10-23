@@ -568,8 +568,12 @@ def dashboard(db, actor, now=None):
     day0 = wh.day_start(now)
     table = prices(db)
     stock = wh.stock_all(db)
+    import sale_orders
+    held = sale_orders.reserved_all(db)
+    # stock — sotish mumkin (ochiq buyurtmalarda band qilingani ayirilgan); onHand — ombordagi jismoniy qoldiq.
     products = [{'pack': p, 'name': core.product_name(p), 'retailUsd': table[p]['retail'] / 100,
-                 'dealerUsd': table[p]['dealer'] / 100, 'stock': stock.get(p, 0)}
+                 'dealerUsd': table[p]['dealer'] / 100, 'stock': stock.get(p, 0) - held.get(p, 0),
+                 'onHand': stock.get(p, 0), 'reserved': held.get(p, 0)}
                 for p in core.PRODUCTS if p not in core.INACTIVE_PRODUCTS]
     products.sort(key=lambda x: (x['stock'] <= 0, x['name']))
     mine = not can(s, 'all_sales')

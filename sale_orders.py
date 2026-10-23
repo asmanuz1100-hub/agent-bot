@@ -19,6 +19,7 @@ import warehouse as wh
 
 DELIVERY={'none':'Yetkazilmadi','partial':'Qisman yetkazildi','full':'Yetkazildi'}
 PAYMENT={'unpaid':'To‘lanmagan','partial':'Qisman to‘langan','paid':'To‘langan'}
+STATUS={'open':'Ochiq','closed':'Yakunlangan','cancelled':'Bekor qilingan'}
 
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS sale_orders(id INTEGER PRIMARY KEY, seller INTEGER NOT NULL, client INTEGER NOT NULL, price_type TEXT NOT NULL, subtotal INTEGER NOT NULL, discount INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', delivery_date TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', actor INTEGER NOT NULL, ts INTEGER NOT NULL, source INTEGER UNIQUE);
@@ -48,6 +49,12 @@ def reserved(db,pack,exclude=None):
     if exclude is not None:
         sql+=' AND o.id<>?';args.append(exclude)
     return int(db.execute(sql,args).fetchone()[0] or 0)
+
+
+def reserved_all(db):
+    rows=db.execute('''SELECT l.pack,COALESCE(SUM(l.qty-l.delivered),0) FROM sale_order_lines l JOIN sale_orders o ON o.id=l.order_id
+        WHERE o.status='open' GROUP BY l.pack''').fetchall()
+    return {int(r[0]):int(r[1] or 0) for r in rows if int(r[1] or 0)>0}
 
 
 def available(db,pack,exclude=None):
@@ -86,6 +93,27 @@ def states(db,row):
     due=int(row['total'])-s['returned']
     p='unpaid' if s['paid']==0 else 'paid' if s['paid']>=due else 'partial'
     return d,p,s
+
+
+def _settle(db,oid,actor,ts):
+    """To'liq yetkazilgan va to'liq to'langan buyurtma yopiladi; qaytarishdan keyin qarz qolsa — qayta ochiladi."""
+    o=_order(db,oid)
+    if o['status']=='cancelled':return
+    d,p,_=states(db,o)
+    want='closed' if d=='full' and p=='paid' else 'open'
+    if want!=o['status']:
+        db.execute('UPDATE sale_orders SET status=? WHERE id=?',(want,oid))
+        _log(db,oid,'close' if want=='closed' else 'reopen','',actor,ts)
+
+
+def _credit_check(db,actor,o,extra):
+    """Yetkazilgan (qaytgani ayirilgan) summa to'langandan oshsa — bu qarz: savdo xodimiga 'credit' ruxsati kerak."""
+    import shop
+    s=shop._require(db,actor)
+    if s['role']!='sales' or shop.can(s,'credit'):return
+    _,_,sm=states(db,o)
+    if sm['delivered']+extra-sm['returned']>sm['paid']:
+        raise ValueError('Sizda «Qarzga berish» ruxsati yo‘q — avval to‘lovni qabul qiling, keyin yetkazing.')
 
 
 # ---------- amallar ----------
@@ -130,6 +158,14 @@ def deliver(db,actor,oid,items,payload,now=None):
     # takroriy so'rov: istalgan qatori yozilgan bo'lsa — qayta yozilmaydi (0 li qatorlar ham hisobga)
     if any(db.execute('SELECT 1 FROM events WHERE source=?',(_src(actor,payload,1000+i*3)+1,)).fetchone() for i in range(len(items))):
         return oid
+    extra=0
+    for pack,qty in items:
+        if qty<0:raise ValueError('Miqdor manfiy bo‘lmasin.')
+        line=db.execute('SELECT * FROM sale_order_lines WHERE order_id=? AND pack=?',(oid,pack)).fetchone() if qty else None
+        if line and 0<qty<=int(line['qty'])-int(line['delivered']):
+            left=int(line['qty'])-int(line['delivered'])
+            extra+=int(line['total'])-int(line['delivered_amount']) if qty==left else int(line['total'])*qty//int(line['qty'])
+    _credit_check(db,actor,o,extra)
     done=[]
     for i,(pack,qty) in enumerate(items):
         if qty<0:raise ValueError('Miqdor manfiy bo‘lmasin.')
@@ -150,6 +186,7 @@ def deliver(db,actor,oid,items,payload,now=None):
         done.append(f'{core.product_name(pack)} {qty} dona')
     if not done:raise ValueError('Yetkaziladigan miqdorni kiriting.')
     _log(db,oid,'deliver',', '.join(done),actor,ts)
+    _settle(db,oid,actor,ts)
     return oid
 
 
@@ -185,6 +222,7 @@ def pay(db,actor,oid,lines,payload,now=None):
             VALUES(?,?,?,?,?,?,?,?,?)''',(oid,m,cur,amount,cents,rate,actor,ts,src))
         shop._insert_payment(db,actor,int(o['seller']),int(o['client']),cents,m,amount if cur=='UZS' else 0,rate,tag,src+1,ts)
     _log(db,oid,'pay',' + '.join((f'{a:,} so‘m'.replace(',',' ') if c=='UZS' else f'${a/100:.2f}')+(' karta' if m=='card' else '') for m,c,a,_,_ in parsed),actor,ts)
+    _settle(db,oid,actor,ts)
     return oid
 
 
@@ -193,7 +231,8 @@ def return_goods(db,actor,oid,pack,qty,reason,payload,now=None):
     o=_order(db,oid);oid=int(o['id'])
     reason=str(reason or '').strip()
     if not reason:raise ValueError('Qaytarish sababini yozing.')
-    pack=int(pack);qty=int(qty)
+    try:pack=int(pack);qty=int(qty)
+    except (TypeError,ValueError):raise ValueError('Mahsulot va miqdorni to‘g‘ri tanlang.')
     line=db.execute('SELECT * FROM sale_order_lines WHERE order_id=? AND pack=?',(oid,pack)).fetchone()
     if not line:raise ValueError('Bu mahsulot buyurtmada yo‘q.')
     can=int(line['delivered'])-int(line['returned'])
@@ -211,6 +250,7 @@ def return_goods(db,actor,oid,pack,qty,reason,payload,now=None):
     try:wh._move(db,actor,'in',pack,qty,note=f'Buyurtma #{oid} qaytarildi',source=source+1)
     finally:wh.WEB_PRIMARY_OPERATOR.reset(tok)
     _log(db,oid,'return',f'{core.product_name(pack)} {qty} dona · {reason[:200]}',actor,ts)
+    _settle(db,oid,actor,ts)
     return oid
 
 
@@ -236,7 +276,7 @@ def view(db,oid):
     c=db.execute('SELECT name,shop_name,phone FROM clients WHERE id=?',(o['client'],)).fetchone()
     seller=db.execute('SELECT name FROM users WHERE id=?',(o['seller'],)).fetchone()
     by=db.execute('SELECT name FROM users WHERE id=?',(o['actor'],)).fetchone()
-    return {'id':int(o['id']),'status':o['status'],'delivery':d,'deliveryLabel':DELIVERY[d],'payment':p,'paymentLabel':PAYMENT[p],
+    return {'id':int(o['id']),'status':o['status'],'statusLabel':STATUS.get(o['status'],o['status']),'delivery':d,'deliveryLabel':DELIVERY[d],'payment':p,'paymentLabel':PAYMENT[p],
             'client':int(o['client']),'clientName':((c['shop_name'] or c['name']) if c else '') or '','phone':(c['phone'] if c else '') or '',
             'seller':seller[0] if seller else '','createdBy':by[0] if by else '','priceType':o['price_type'],'subtotal':int(o['subtotal']),'discount':int(o['discount']),
             'total':int(o['total']),'delivered':s['delivered'],'returned':s['returned'],'paid':s['paid'],
@@ -257,7 +297,7 @@ def view(db,oid):
 def listing(db,actor,status='open',limit=100):
     import shop
     s=shop._require(db,actor)
-    where=["o.status=?"] if status in ('open','cancelled') else []
+    where=["o.status=?"] if status in STATUS else []
     args=[status] if where else []
     if s['role']=='sales' and not shop.can(s,'all_sales'):
         where.append('o.seller=?');args.append(actor)   # doira: o'z buyurtmalari
@@ -275,7 +315,7 @@ def handle(db,actor,op,payload,now=None):
         o=_order(db,oid)
         if s['role']=='sales' and int(o['seller'])!=actor and not shop.can(s,'all_sales'):
             raise ValueError('Bu buyurtma sizniki emas.')
-    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open'),'labels':{'delivery':DELIVERY,'payment':PAYMENT}}
+    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open'),'labels':{'delivery':DELIVERY,'payment':PAYMENT,'status':STATUS}}
     if op=='view':return {'order':view(db,oid)}
     def need(perm):
         if not shop.can(s,perm):raise ValueError(f'Sizda «{shop.PERMS[perm]}» ruxsati yo‘q. Rahbarga murojaat qiling.')
