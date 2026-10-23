@@ -206,5 +206,76 @@ class HrTests(unittest.TestCase):
         self.assertEqual((p['currency'],p['salary'],p['bonus']),('UZS',2000000,5000))
         self.worker('Yangi',salary='100',currency='USD')
 
+    def at(self,month):
+        y,m=map(int,month.split('-'))
+        return int(datetime(y,m,15,12,0,tzinfo=hr.TZ).timestamp())
+
+    def pay(self,wid,kind,amount,month,**kw):
+        self.n+=1
+        hr.handle(self.db,1,'pay_add',dict(id=wid,kind=kind,amount=amount,month=month,**kw),source=9000+self.n,now=self.at(month))
+        self.db.commit()
+        return hr.payroll_row(self.db,wid,month)
+
+    def test_spec_example_4m_salary_1m_advance_3m_final(self):
+        wid=self.worker('Misol',salary='4000000')
+        self.cash(10000000)
+        p=self.pay(wid,'advance','1000000','2026-10')
+        self.assertEqual((p['due'],p['paid'],p['remaining']),(4000000,1000000,3000000))
+        with self.assertRaises(ValueError):self.pay(wid,'salary','3000001','2026-10')   # ortiqcha to'lov yo'q
+        p=self.pay(wid,'salary','3000000','2026-10')
+        self.assertEqual(p['remaining'],0)
+        # kassadan avans bir marta, oylik bir marta chiqdi — jami 4 mln
+        self.assertEqual(tuple(int(x) for x in self.db.execute('SELECT SUM(amount_uzs),COUNT(*) FROM cashier_expenses').fetchone()),(4000000,2))
+        with self.assertRaises(ValueError):self.pay(wid,'salary','1','2026-10')         # ikkinchi marta to'lab bo'lmaydi
+
+    def test_previous_month_balance_carries_over(self):
+        wid=self.worker('Qoldiq',salary='4000000',salaryFrom='2026-09')
+        self.cash(20000000)
+        self.pay(wid,'advance','1000000','2026-09')           # sentabrdan 3 mln qoldi
+        p=hr.payroll_row(self.db,wid,'2026-10')
+        self.assertEqual((p['carry'],p['due'],p['remaining']),(3000000,4000000,7000000))
+        p=self.pay(wid,'salary','7000000','2026-10')          # qarz + shu oy birga
+        self.assertEqual(p['remaining'],0)
+        self.assertEqual(hr.payroll_row(self.db,wid,'2026-11')['carry'],0)
+
+    def test_overpaid_advance_is_visible_and_deducted_next_month(self):
+        wid=self.worker('Ortiqcha',salary='2000000',salaryFrom='2026-09')
+        self.cash(20000000)
+        p=self.pay(wid,'advance','2500000','2026-09')          # avans oylikdan ko'p
+        self.assertEqual((p['remaining'],p['overpaid']),(-500000,500000))
+        p=hr.payroll_row(self.db,wid,'2026-10')
+        self.assertEqual((p['carry'],p['remaining'],p['overpaid']),(-500000,1500000,0))
+        o=hr.overview(self.db,'2026-09',now=self.at('2026-09'))
+        self.assertEqual((o['money']['UZS']['remaining'],o['money']['UZS']['overpaid']),(0,500000))
+
+    def test_closed_worker_does_not_accrue_until_reopened(self):
+        wid=self.worker('Ketgan',salary='1000000',salaryFrom='2026-08')
+        hr.set_active(self.db,1,wid,False,now=self.at('2026-08'));self.db.commit()
+        self.assertEqual((hr.salary_for(self.db,wid,'2026-08'),hr.salary_for(self.db,wid,'2026-09')),(1000000,0))
+        hr.set_active(self.db,1,wid,True,now=self.at('2026-10'));self.db.commit()
+        p=hr.payroll_row(self.db,wid,'2026-10')
+        self.assertEqual((p['carry'],p['salary'],p['remaining']),(1000000,1000000,2000000))   # avgust to'lanmagan + oktabr
+
+    def test_mixed_currency_rounding_uses_stored_rate(self):
+        wid=self.worker('Dollarchi',salary='100',currency='USD')
+        self.cash(5000000)
+        p=self.pay(wid,'advance','1000001','2026-10',payCurrency='UZS',expectedRate='12500')
+        self.assertEqual(p['advance'],8000)                     # 80.00008 $ -> 80.00 $ (yarim yuqoriga)
+        row=self.db.execute('SELECT paid_amount,rate FROM hr_w_pay').fetchone()
+        self.assertEqual(tuple(row),(1000001,12500))
+
+    def test_agent_cash_does_not_touch_worker_payroll(self):
+        wid=self.worker('Alohida',salary='1000000')
+        before=hr.payroll_row(self.db,wid,'2026-10')
+        self.db.execute("INSERT INTO handovers(agent,amount,amount_usd,status,ts,cashier) VALUES(2,0,50000,'accepted',?,3)",(NOW,))
+        self.db.execute("INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source) VALUES(2,2,NULL,'payment',0,0,0,50000,'',?,77)",(NOW,))
+        self.db.commit()
+        self.assertEqual(hr.payroll_row(self.db,wid,'2026-10'),before)
+
+    def test_department_saved(self):
+        wid=self.worker('Bolimli',department='Quyish sexi',position='Usta')
+        c=self.call('worker',id=wid)['worker']['card']
+        self.assertEqual((c['department'],c['position']),('Quyish sexi','Usta'))
+
 if __name__=='__main__':
     unittest.main()
