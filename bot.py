@@ -3299,6 +3299,15 @@ def serve_webhook(db,base_url):
                             answer(403,{'error':'Korxona bo‘limlarini faqat asosiy rahbar yoqadi yoki o‘chiradi.'});return
                         modules.set_enabled(local,actor,str(payload.get('module') or ''),payload.get('enabled') is True)
                         data=modules.view(local)
+                    elif action=='full_backup':
+                        # Sozlamalar → To'liq backup: arxivlar asosiy rahbarning Telegramiga yuboriladi.
+                        if actor not in ADMINS:
+                            answer(403,{'error':'To‘liq backup faqat asosiy rahbar uchun.'});return
+                        if _FULL_BACKUP_LOCK.locked():
+                            data={'ok':True,'started':False}
+                        else:
+                            threading.Thread(target=_full_backup_worker,args=(actor,),daemon=True,name='full-backup-export').start()
+                            data={'ok':True,'started':True}
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return

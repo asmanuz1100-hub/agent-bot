@@ -2368,6 +2368,9 @@ function pageSettings(page){
     '<div class="actions" style="margin-top:16px"><button class="btn danger" id="stLogout">Chiqish</button></div></div>'+
    '<div class="card" id="modCard" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('grid')+' Korxona bo‘limlari</h3>'+(canBrand?'':'<span class="pill">'+ic('shield','sm')+' Faqat ko‘rish</span>')+'</div><div class="loading">Yuklanmoqda…</div></div>'+
    '<div class="card" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('shield')+' Xodimlar va ruxsatlar</h3></div><p class="hint">Ruxsatlar, web login/parol va Telegram Mini App kirishi — <b>Xodimlar</b> bo‘limida.</p><div class="actions"><a class="btn sm" href="#staff">Xodimlarga o‘tish</a></div></div>'+
+   (canBrand?'<div class="card" style="grid-column:1/-1"><div class="card-h"><h3>'+ic('box')+' To‘liq backup</h3></div>'+
+    '<p class="hint" style="margin:-4px 0 12px">Butun baza (mijozlar, savdo, kassa, ombor, xodimlar, oylik, ruxsatlar va boshqalar) hamda mijoz rasmlari ZIP arxivga yig‘iladi va Telegram botdagi chatingizga yuboriladi. Parol, BOT_TOKEN va API kalitlar qo‘shilmaydi. Arxivda shaxsiy ma’lumot bor — uni maxfiy saqlang.</p>'+
+    '<div class="actions"><button class="btn pri" id="bkRun">'+ic('box','sm')+' Backup olish</button></div></div>':'')+
    '<div class="card"><div class="card-h"><h3>'+ic('bell')+' Bildirishnomalar</h3></div>'+
     '<div class="switch"><span>Brauzer bildirishnomasi<br><small class="muted">Panel boshqa oynada bo‘lsa ham xabar chiqadi</small></span><button class="tog'+(store('rw-notify')==='1'&&window.Notification&&Notification.permission==='granted'?' on':'')+'" id="tgNotify" aria-label="Brauzer bildirishnomasi"></button></div>'+
     '<div class="switch"><span>Ovozli signal</span><button class="tog'+(store('rw-sound')!=='0'?' on':'')+'" id="tgSound" aria-label="Ovozli signal"></button></div>'+
@@ -2390,6 +2393,10 @@ function pageSettings(page){
     $('brForm').onsubmit=async function(e){e.preventDefault();var b=$('brSave');b.disabled=true;
       var r=await run(function(){return api('branding_save',{name:$('brForm').elements.name.value,logo:logo,details:BR_FIELDS.reduce(function(o,f){o[f[0]]=$('brForm').elements['d_'+f[0]].value;return o},{})})},'Kompaniya ma’lumotlari saqlandi');
       b.disabled=false;if(r&&r.brand){applyBrand(r.brand);document.title=$('pageTitle').textContent+' · '+brandName()}}}
+  if($('bkRun'))$('bkRun').onclick=async function(){var b=this;
+    if(!await confirmBox('To‘liq backup','<p>Arxiv tayyorlanib, bir necha daqiqada Telegram botdagi chatingizga keladi. Panel va bot ishlashda davom etadi.</p>','Boshlash'))return;
+    b.disabled=true;var r=await run(function(){return api('full_backup')});b.disabled=false;
+    if(r)toast(r.started?'Backup tayyorlanmoqda — arxiv Telegramga keladi':'Backup allaqachon tayyorlanmoqda')};
   $('stLogout').onclick=async function(){await auth('logout').catch(function(){});TOKEN='';store('rw-token',null);S.dash=null;S.cache={};showLogin()};
   $('tgNotify').onclick=async function(){var b=this;
     if(b.classList.contains('on')){store('rw-notify','0');b.classList.remove('on');return}
