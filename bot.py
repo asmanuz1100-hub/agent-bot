@@ -1730,10 +1730,12 @@ def handle_web_password(db,u,r,text):
 
 # Mobil ilova faqat savdo uchun: Kassir va Rahbar Telegram Mini App / web panelda ishlaydi.
 MOBILE_ROLES={'agent'}
+# AIBI ilovasi (APK) — Telegram Mini App'larning o'zi, login/parol bilan.
+AIBI_APP_ROLES=('agent','cashier','warehouse','sales','admin')
 
 def handle_mobile_password(db,u,r,text):
     """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
-    if r not in MOBILE_ROLES:raise ValueError('Mobil ilova faqat savdo agentlari uchun.')
+    if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
     if text=='/mobilyopish':
         web_auth.revoke(db,u)
         send(u,'🔒 Mobil ilova akkaunti o‘chirildi, barcha telefonlardan chiqildi.\nQayta ochish: /mobilparol');return
@@ -1742,7 +1744,7 @@ def handle_mobile_password(db,u,r,text):
     current=web_auth.account(db,u)
     login=parts[1] if len(parts)==2 else (current['login'] if current else f'{r}{u}')
     login,password=web_auth.issue_password(db,u,login)
-    send(u,f'📱 ASMAN AGENT ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
+    send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
            'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
            'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
 
@@ -2807,12 +2809,18 @@ def serve_webhook(db,base_url):
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
                     if length>20000 and payload.get('action')!='profile_save':raise ValueError('Invalid length')
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # AIBI ilovasi (APK) Telegram imzosi o'rniga login sessiyasi tokenini yuboradi.
+                    bearer=self._bearer_token()
+                    actor=None if bearer and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_cashier(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,bearer)
+                        except ValueError as e:
+                            local.commit();answer_cashier(401,{'error':str(e),'relogin':True});return
                     if payload.get('initData') and not perms.miniapp_allowed(local,actor):
                         answer_cashier(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'cash'):
@@ -2905,12 +2913,18 @@ def serve_webhook(db,base_url):
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
                     if length>20000 and payload.get('action')!='product_photo':raise ValueError('Invalid length')
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # AIBI ilovasi (APK) Telegram imzosi o'rniga login sessiyasi tokenini yuboradi.
+                    bearer=self._bearer_token()
+                    actor=None if bearer and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_wh(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,bearer)
+                        except ValueError as e:
+                            local.commit();answer_wh(401,{'error':str(e),'relogin':True});return
                     if payload.get('initData') and not perms.miniapp_allowed(local,actor):
                         answer_wh(403,{'error':perms.MINIAPP_OFF});return
                     if not modules.enabled(local,'warehouse'):
@@ -3139,14 +3153,18 @@ def serve_webhook(db,base_url):
                     # aks holda faqat rahbar.
                     savdo_panel=payload.get('panel')=='savdo'
                     mobile=payload.get('app')=='mobile'
-                    if mobile:
+                    aibi=payload.get('app')=='aibi'
+                    if aibi:
+                        # AIBI ilovasi (APK): har bir xodim o'z rolidagi Mini App'ni ochadi.
+                        web_roles=AIBI_APP_ROLES;web_denied='Bu ilovaga sizning rolingiz uchun kirish yo‘q.'
+                    elif mobile:
                         web_roles=tuple(MOBILE_ROLES);web_denied='Mobil ilova faqat savdo agentlari uchun.'
                     elif savdo_panel:
                         web_roles=('sales','admin');web_denied='Bu panelga faqat savdo xodimi kira oladi.'
                     else:
                         web_roles=('admin',);web_denied='Bu panelga faqat rahbar kira oladi.'
                     # Chiqish faqat shu tokenni yopadi — ilova qaysi rejimda bo'lmasin ruxsat.
-                    if native and not (savdo_panel or mobile or action=='logout'):
+                    if native and not (savdo_panel or mobile or aibi or action=='logout'):
                         answer_web(403,{'error':'Ruxsat yo‘q.'});return
                     if action=='login':
                         uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))

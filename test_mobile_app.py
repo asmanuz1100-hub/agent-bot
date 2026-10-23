@@ -74,13 +74,14 @@ class MobilePasswordCommandTests(unittest.TestCase):
     def password(self):
         return self.sent[-1][1].split('Parol: ')[1].split()[0]
 
-    def test_agent_gets_own_login_but_other_roles_do_not(self):
+    def test_staff_get_own_login_but_disabled_users_do_not(self):
         bot.handle_mobile_password(self.db, 2, 'agent', '/mobilparol')
         self.assertIn('Login: agent2', self.sent[-1][1])
         self.assertEqual(web_auth.login(self.db, 'agent2', self.password())[0], 2)
-        for uid, r in ((3, 'cashier'), (1, 'admin')):
-            with self.assertRaisesRegex(ValueError, 'savdo agentlari'):
-                bot.handle_mobile_password(self.db, uid, r, '/mobilparol')
+        bot.handle_mobile_password(self.db, 3, 'cashier', '/mobilparol')
+        self.assertEqual(web_auth.login(self.db, 'cashier3', self.password())[0], 3)
+        with self.assertRaisesRegex(ValueError, 'rolingiz'):
+            bot.handle_mobile_password(self.db, 5, 'disabled', '/mobilparol')
 
     def test_reissue_keeps_login_and_revoke_signs_out(self):
         bot.handle_mobile_password(self.db, 2, 'agent', '/mobilparol ali')
@@ -311,6 +312,41 @@ class MobileHttpTests(unittest.TestCase):
         # Pul agentdan chiqdi, dollar qoldig'i aralashmadi, qarz o'zgarmadi.
         self.assertEqual((snap['summary']['cashOnHandUzs'], snap['summary']['cashOnHandUsd']), (0, 3))
         self.assertEqual(debt(snap), 5)
+
+    def test_aibi_app_login_opens_each_role_its_own_api(self):
+        """AIBI APK: har bir rol o'z Mini App API'siga login tokeni bilan kiradi, boshqasiga emas."""
+        site = sorted(bot.SELF_MINIAPP_ORIGINS)[0]
+        def aibi_login(name, password):
+            code, data = self.post('/api/web', action='login', app='aibi', login=name, password=password)
+            self.assertEqual(code, 200, data)
+            return data
+        cashier = aibi_login('kassa', self.cashier_password)
+        self.assertEqual(cashier['role'], 'cashier')
+        # Mini App sahifasi ichidan (WebView, o'z Origin'i bilan) Bearer token bilan.
+        code, data = self.post('/api/cashier', cashier['token'], native=False, origin=site, action='dashboard')
+        self.assertEqual(code, 200, data)
+        code, _ = self.post('/api/cashier', 'y' * 43, native=False, origin=site, action='dashboard')
+        self.assertEqual(code, 401)
+        code, _ = self.post('/api/manager', cashier['token'], native=False, origin=site, action='dashboard')
+        self.assertEqual(code, 403)
+        agent = aibi_login('ali', self.agent_password)
+        code, _ = self.post('/api/cashier', agent['token'], native=False, origin=site, action='dashboard')
+        self.assertEqual(code, 403)
+        code, data = self.post('/api/agent', agent['token'], native=False, origin=site, action='snapshot')
+        self.assertEqual(code, 200, data)
+        boss = aibi_login('boss', self.admin_password)
+        self.assertEqual(boss['role'], 'admin')
+        code, data = self.post('/api/manager', boss['token'], native=False, origin=site, action='dashboard')
+        self.assertEqual(code, 200, data)
+        db = self.db()
+        try:
+            db.execute("INSERT INTO users(id,role,name) VALUES(6,'disabled','Eski')")
+            _, old = web_auth.issue_password(db, 6, 'eski')
+            db.commit()
+        finally:
+            db.close()
+        code, _ = self.post('/api/web', action='login', app='aibi', login='eski', password=old)
+        self.assertEqual(code, 403)
 
 
 if __name__ == '__main__':
