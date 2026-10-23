@@ -105,6 +105,18 @@ const step=(n)=>console.log('✓',n);
     assert.equal(await page.evaluate(()=>location.hash),'#supply');
     assert.equal(await page.locator('#nav button.on, #nav [aria-current="page"]').first().textContent().then(t=>/Ombor/.test(t)),true);
     step('ta’minot ombor ichida');
+    // Xarid formasida faqat xom ashyo (tayyor mahsulot — alohida belgi bilan)
+    await api('supply',{op:'supplier_add',name:'E2E ta’minotchi',requestId:'e2esup0001'});
+    await api('supply',{op:'material_add',name:'Bitum',unit:'kg',requestId:'e2emat0001'});
+    await page.evaluate(()=>{location.hash='warehouse'});await page.waitForSelector('#whView');await page.evaluate(()=>{location.hash='supply'});
+    await page.click('#spView [data-v="wh"]');await page.waitForSelector('#whView [data-v="supply"]');await page.click('#whView [data-v="supply"]');
+    await page.reload();await page.waitForSelector('[data-sop="purchase"]',{timeout:20000});await page.click('[data-sop="purchase"]');
+    await page.waitForSelector('#modalBody .sp-line select');
+    let op=await page.$$eval('#modalBody .sp-line select option',xs=>xs.map(x=>x.value));
+    assert.ok(op.length&&op.every(v=>v.startsWith('m:')),'xaridda tayyor mahsulot chiqdi: '+op);
+    await page.check('#spWithProd');op=await page.$$eval('#modalBody .sp-line select option',xs=>xs.map(x=>x.value));
+    assert.ok(op.some(v=>v.startsWith('p:')));await page.keyboard.press('Escape');
+    step('xarid: faqat xom ashyo');
     assert.deepEqual(errors,[]);
     console.log('admin-e2e: OK');
   }catch(e){try{const pg=browser.contexts()[0].pages()[0];console.error('toast:',await pg.evaluate(()=>[...document.querySelectorAll('.toast,#toasts *')].map(t=>t.textContent).join(' | ')));

@@ -1828,7 +1828,8 @@ function renderSupply(page,d){
   page.querySelectorAll('[data-sop]').forEach(function(b){b.onclick=async function(){var op=b.dataset.sop,v;
     if(op==='supplier_add'){v=await formBox('Yangi ta’minotchi',[{name:'name',label:'Nomi',required:true},{name:'phone',label:'Telefon',placeholder:'+998…'},{name:'note',label:'Izoh (nima yetkazadi, shartlar)'}],'Qo‘shish');if(v)call(op,v,'Ta’minotchi qo‘shildi')}
     else if(op==='material_add'){v=await formBox('Yangi xom ashyo',[{name:'name',label:'Nomi',required:true},{name:'unit',label:'O‘lchov birligi',options:d.units},{name:'minQty',label:'Minimal qoldiq (ixtiyoriy)',type:'number',step:'any'}],'Qo‘shish','Qoldiq shu miqdordan kamaysa, panelda ogohlantirish chiqadi.');if(v){v.minQty=v.minQty||'';call(op,v,'Xom ashyo qo‘shildi')}}
-    else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}purchaseForm(d,call)}
+    else if(op==='purchase'){if(!d.suppliers.length){toast('Avval ta’minotchi qo‘shing.',true);return}
+      if(!d.materials.length){toast('Avval xom ashyo qo‘shing («+ Xom ashyo»). Xarid ro‘yxatida faqat xom ashyo chiqadi.',true);return}purchaseForm(d,call)}
     else{if(!prodOpts.length){toast('Faol mahsulot yo‘q.',true);return}produceForm(d,prodOpts,call)}}});
   page.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=async function(){var s=d.suppliers.find(function(x){return x.id===+b.dataset.pay});
     var v=await formBox('To‘lov: '+s.name,[{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true,value:(s.debt/100).toFixed(2)},{name:'payFrom',label:'Qayerdan',options:[['cash','Kassa — naqd'],['card','Kassa — karta']]},{name:'note',label:'Izoh'}],'To‘lash','Joriy qarz: '+cents(s.debt)+'. Summa kassadan xarajat bo‘lib chiqadi.');
@@ -1848,7 +1849,7 @@ function itemOpts(d,withProducts){
   return (m?'<optgroup label="Xom ashyo">'+m+'</optgroup>':'')+(p?'<optgroup label="Tayyor mahsulot">'+p+'</optgroup>':'');
 }
 function bindLines(box,opts,first){var n=first;
-  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',lineRow(n++,opts));sumLines(box)};
+  box.querySelector('[data-add]').onclick=function(){box.querySelector('.sp-lines').insertAdjacentHTML('beforeend',lineRow(n++,typeof opts==='function'?opts():opts));sumLines(box)};
   box.addEventListener('click',function(e){var b=e.target.closest('[data-rm]');if(!b)return;var rows=box.querySelectorAll('.sp-line');if(rows.length>1){b.closest('.sp-line').remove();sumLines(box)}});
   box.addEventListener('input',function(){sumLines(box)});
 }
@@ -1856,13 +1857,16 @@ function sumLines(box){var t=0;box.querySelectorAll('.sp-line').forEach(function
 function collectLines(v,kind){var out=[];Object.keys(v).forEach(function(k){var m=/^item_(\d+)$/.exec(k);if(!m)return;var i=m[1],it=String(v[k]).split(':'),row={qty:v['qty_'+i]};
   if(kind==='purchase')row.price=v['price_'+i];if(it[0]==='m')row.material=+it[1];else row.pack=+it[1];out.push(row)});return out}
 async function purchaseForm(d,call){
-  var opts=itemOpts(d,true);
+  // Xaridda faqat xom ashyo; tayyor mahsulot (qayta sotish uchun) — alohida belgi bilan
+  var opts=itemOpts(d,false),optsAll=itemOpts(d,true);
   var p=modal('<form class="sp-form"><h3>Yangi xarid</h3><p class="muted">Har qatorda bir birlik narxi (USD): mahsulot uchun 1 dona, xom ashyo uchun 1 kg / litr / …</p><div class="form">'+
     '<label>Ta’minotchi<select name="supplierId">'+d.suppliers.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join('')+'</select></label>'+
     '<div class="sp-lines">'+lineRow(0,opts)+'</div><button type="button" class="btn sm" data-add>'+ic('plus','sm')+' Qator qo‘shish</button>'+
+    '<label class="chk"><input type="checkbox" id="spWithProd"> Tayyor mahsulot ham sotib olinadi (qayta sotish uchun)</label>'+
     '<label>Izoh (hujjat raqami, partiya)<input name="note" maxlength="300"></label><div class="sp-total">Jami: <b data-total>$0</b></div></div>'+
     '<div class="foot"><button type="button" class="btn" data-m="cancel">Bekor qilish</button><button class="btn pri">Xaridni saqlash</button></div></form>');
-  bindLines($('modalBody'),opts,1);
+  var box=$('modalBody');bindLines(box,function(){return $('spWithProd')&&$('spWithProd').checked?optsAll:opts},1);
+  $('spWithProd').onchange=function(){var o=this.checked?optsAll:opts;box.querySelectorAll('.sp-line select').forEach(function(sel){var v0=sel.value;sel.innerHTML=o;if([].some.call(sel.options,function(x){return x.value===v0}))sel.value=v0})};
   var v=await p;if(!v)return;
   call('purchase',{supplierId:+v.supplierId,note:v.note,lines:collectLines(v,'purchase')},'Xarid saqlandi');
 }
