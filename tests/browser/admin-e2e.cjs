@@ -85,13 +85,20 @@ const step=(n)=>console.log('✓',n);
     // 4) Xodimlar: ruxsatlar, web login, Mini App kirishi shu yerda; Ta'minot — Ombor ichida
     await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.getElementById('drawer').classList.contains('on'));
     await page.evaluate(()=>{location.hash='staff'});await page.click('#stView [data-v="list"]');
-    await page.waitForSelector('[data-act="perms"][data-id="4"]');
-    await page.click('[data-act="app"][data-id="4"]');await modalOk();
-    await page.waitForFunction(()=>document.querySelector('[data-act="app"][data-id="4"]').classList.contains('danger'));
+    // qatorni bosish — bitta kartochka: kirish, ruxsatlar, akkaunt
+    await page.click('tr[data-sid="4"] td:first-child');await page.waitForSelector('#drawerBody [data-scard="4"] [data-ca="app"]');
+    await page.click('#drawerBody [data-ca="app"]');await modalOk();
+    await page.waitForFunction(()=>/O‘chiq/.test(document.querySelector('#drawerBody [data-scard="4"]')?.textContent||''));
     assert.equal((await api('staff_list',{})).staff.find(x=>x.id===4).miniapp,false);
-    await page.click('[data-act="app"][data-id="4"]');await modalOk();
-    await page.click('[data-act="perms"][data-id="4"]');await page.waitForSelector('#modalBody .perm-form');await page.keyboard.press('Escape');
-    assert.ok(await page.locator('[data-act="login"][data-id="5"]').count(),'sotuvchiga web login tugmasi yo‘q');
+    await page.click('#drawerBody [data-ca="app"]');await modalOk();
+    await page.waitForFunction(()=>/Yoqiq/.test(document.querySelector('#drawerBody [data-scard="4"]')?.textContent||''));
+    await page.click('#drawerBody [data-perm="warehouse.view"]');await page.click('#drawerBody [data-ca="psave"]');
+    await page.waitForFunction(()=>document.querySelector('#drawerBody [data-perm="warehouse.view"]')?.checked===true&&/individual/.test(document.getElementById('drawerBody').textContent));
+    assert.ok((await api('perms_staff',{id:4})).staff.perms.find(q=>q.key==='warehouse.view').on);
+    assert.ok(await page.locator('#drawerBody [data-ca="transfer"]').count());
+    await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.getElementById('drawer').classList.contains('on'));
+    await page.click('tr[data-sid="5"] td:first-child');await page.waitForSelector('#drawerBody [data-scard="5"] [data-ca="login"]');
+    await page.keyboard.press('Escape');
     step('xodimlar: ruxsat, Mini App, web login');
     await page.evaluate(()=>{location.hash='warehouse'});await page.waitForSelector('#whView [data-v="supply"]');
     await page.click('#whView [data-v="supply"]');await page.waitForSelector('#spView [data-v="wh"]');

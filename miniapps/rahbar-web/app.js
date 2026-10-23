@@ -2211,14 +2211,14 @@ function renderStaff(page,s){
        (P&&x.role!=='admin'?act('transfer',x.id,'swap','Akkauntni almashtirish'):'')+
        (P&&!x.primary?act('off',x.id,'ban','Akkauntni yopish','danger'):'')
       :(P?act('on',x.id,'checkc','Qayta ochish'):'');
-     return '<tr'+(ag?' class="click" data-agent="'+x.id+'"':'')+'><td><div class="cell"><div class="tone t-'+t[1]+'" style="width:34px;height:34px">'+ic(t[0])+'</div><div class="t"><b>'+esc(x.name)+'</b><small>'+esc(ROLE_NOTE[x.role]||'')+'</small></div></div></td>'+
+     return '<tr class="click" data-sid="'+x.id+'"><td><div class="cell"><div class="tone t-'+t[1]+'" style="width:34px;height:34px">'+ic(t[0])+'</div><div class="t"><b>'+esc(x.name)+'</b><small>'+esc(ROLE_NOTE[x.role]||'')+'</small></div></div></td>'+
       '<td>'+pill(esc(x.roleLabel)+(x.primary?' · asosiy':''),x.role==='admin'?'p-pri':'')+'</td><td class="num">'+x.id+'</td>'+
       '<td>'+(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">'+(x.webCapable||x.primary?'—':'web yo‘q')+'</span>')+'</td>'+
       '<td>'+(x.miniapp===false?pill('O‘chiq','p-bad'):pill('Yoqiq','p-ok'))+'</td>'+
       '<td>'+(x.active?pill('<span class="dot"></span>Faol','p-ok'):pill('<span class="dot"></span>Yopilgan','p-bad'))+'</td>'+
       '<td class="right"><div class="actions" style="justify-content:flex-end;flex-wrap:nowrap">'+acts+'</div></td></tr>'}).join('')
     :'<tr><td colspan="7">'+emptyState('Xodim topilmadi','users')+'</td></tr>')+
-   '</tbody></table></div><div class="pager"><span>Sozlash belgisi — ruxsatlar; telefon — Telegram Mini App kirishi; qalqon — web login va parol. Agent qatorini bossangiz — to‘liq karta. '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>'+
+   '</tbody></table></div><div class="pager"><span>Xodim qatorini bosing — kartochkada ruxsatlar, web login/parol, Mini App kirishi va akkaunt amallari. '+(P?'':'Akkaunt almashtirish, yopish va login/parol — asosiy rahbar huquqi.')+'</span></div></div>'+
    (!ST.role||ST.role==='sales'?'<div id="stSales" style="margin-top:16px"></div>':'');
   if($('stSales'))(SH.d?Promise.resolve(SH.d):shLoad()).then(function(){if($('stSales'))shTeam($('stSales'))}).catch(function(e){if($('stSales'))$('stSales').innerHTML=errState(e.message)});
   var re=function(){renderStaff(page,S.cache.staff)};
@@ -2235,8 +2235,43 @@ function renderStaff(page,s){
     var opts=roles.filter(function(r){return r.key!=='admin'||P}).map(function(r){return [r.key,r.label]});
     var v=await formBox('Yangi xodim',[{name:'role',label:'Bo‘lim / rol',options:opts,value:ST.role&&opts.some(function(o){return o[0]===ST.role})?ST.role:'agent'},{name:'name',label:'Ismi',required:true},{name:'id',label:'Telegram ID',required:true,placeholder:'123456789'}],'Qo‘shish','Xodim botga /start yozib Telegram ID sini bilib oladi va sizga yuboradi.');
     if(!v)return;await call('staff_add',{role:v.role,id:v.id,name:v.name},'Xodim qo‘shildi')};
-  page.querySelectorAll('[data-act]').forEach(function(b){b.onclick=async function(e){e.stopPropagation();var x=find(b.dataset.id);if(!x)return;var k=b.dataset.act;
-    if(k==='perms'){if(x.role==='sales'){ST.role='sales';re();setTimeout(function(){var e2=$('stSales');if(e2)e2.scrollIntoView({behavior:'smooth'})},300)}else if(x.role==='agent')openAgent(x.id);else permModal(x.id,P);return}
+  page.querySelectorAll('[data-sid]').forEach(function(tr){tr.onclick=function(e){if(e.target.closest('[data-act]'))return;var x=find(tr.dataset.sid);if(x)staffCard(x)}});
+  // amaldan keyin kartochka yangi ma'lumot bilan qayta ochiladi (ro'yxat S.cache.staff da yangilangan)
+  var doAct=async function(k,x){await stAct(k,x);if($('drawer').classList.contains('on')&&$('drawerBody').querySelector('[data-scard]')){var y=((S.cache.staff||{}).staff||[]).find(function(z){return String(z.id)===String(x.id)});staffCard(y||x)}};
+  page.querySelectorAll('[data-act]').forEach(function(b){b.onclick=function(e){e.stopPropagation();var x=find(b.dataset.id);if(x)doAct(b.dataset.act,x)}});
+  /* ----- Xodim kartochkasi: ruxsatlar, kirish (web va Mini App), akkaunt — hammasi bir joyda ----- */
+  var staffCard=async function(x){
+    var t=ROLE_ICON[x.role]||['users','blue'],editable=['admin','cashier','warehouse'].indexOf(x.role)>=0&&!x.primary,pr=null;
+    openDrawer(drawerSkel());
+    if(editable){var rr=await run(function(){return api('perms_staff',{id:x.id})});pr=rr&&rr.staff}
+    var btn=function(k,icon,label,cls){return '<button class="btn'+(cls?' '+cls:'')+'" data-ca="'+k+'">'+ic(icon,'sm')+' '+label+'</button>'};
+    var groups={};if(pr)pr.perms.forEach(function(q){(groups[q.sectionLabel]=groups[q.sectionLabel]||[]).push(q)});
+    var canEdit=P&&editable&&x.active;
+    openDrawer('<div data-scard="'+x.id+'"><div class="dh"><div class="tone t-'+t[1]+'" style="width:56px;height:56px">'+ic(t[0])+'</div><div><h2>'+esc(x.name)+'</h2><small class="muted">'+esc(x.roleLabel)+(x.primary?' · asosiy Admin':'')+' · Telegram ID <span class="num">'+x.id+'</span> · '+(x.active?'<span class="ok">faol</span>':'<span class="bad">yopilgan</span>')+'</small></div></div>'+
+      '<div class="card" style="margin-top:14px"><div class="card-h"><h3>'+ic('shield')+' Kirish</h3></div><dl class="kv">'+
+        '<dt>Web panel</dt><dd>'+(x.webCapable||x.primary?(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">login berilmagan</span>'):'<span class="muted">bu rolda web panel yo‘q — Telegram ilovasi orqali ishlaydi</span>')+'</dd>'+
+        '<dt>Telegram Mini App</dt><dd>'+(x.miniapp===false?pill('O‘chiq','p-bad'):pill('Yoqiq','p-ok'))+'</dd></dl>'+
+        (P&&!x.primary&&x.active?'<div class="actions" style="margin-top:12px">'+(x.webCapable?btn('login','shield',x.webLogin?'Yangi parol berish':'Login va parol berish','pri')+(x.webLogin?btn('logout','logout','Web kirishni o‘chirish','danger'):''):'')+btn('app',x.miniapp===false?'checkc':'ban',x.miniapp===false?'Mini App kirishini yoqish':'Mini App kirishini o‘chirish',x.miniapp===false?'':'danger')+'</div>':'')+'</div>'+
+      '<div class="card" style="margin-top:14px"><div class="card-h"><h3>'+ic('sliders')+' Ruxsatlar</h3>'+(pr&&!canEdit?'<span class="pill">Faqat ko‘rish</span>':'')+'</div>'+
+        (x.primary?'<p class="muted">Asosiy Admin barcha huquqqa ega — o‘zgartirib bo‘lmaydi.</p>':
+         x.role==='sales'?'<p class="muted">Sotuvchi funksiyalari (chakana, diller, chegirma, qarzga, qarz undirish…) Savdo jamoasi jadvalida.</p><div class="actions">'+btn('sales','cart','Savdo ruxsatlarini ochish')+'</div>':
+         x.role==='agent'?'<p class="muted">Agent huquqlari (mijoz qo‘shish, to‘lov, qaytarish…) agent kartasida.</p><div class="actions">'+btn('agent','compass','Agent kartasini ochish')+'</div>':
+         pr?Object.keys(groups).map(function(g){return '<div class="perm-grp"><b>'+esc(g)+'</b>'+groups[g].map(function(q){return '<label class="switch"><span>'+esc(q.label)+(q.override!=null?' <small class="pill p-warn">individual</small>':'')+(q['default']?' <small class="muted">· standart</small>':'')+'</span><input type="checkbox" data-perm="'+q.key+'"'+(q.on?' checked':'')+(canEdit?'':' disabled')+'></label>'}).join('')+'</div>'}).join('')+
+           (canEdit?'<div class="actions" style="margin-top:12px"><button class="btn pri" data-ca="psave">Ruxsatlarni saqlash</button><button class="btn" data-ca="preset">Rol standartiga qaytarish</button></div>':''):'<p class="muted">—</p>')+'</div>'+
+      (P&&!x.primary?'<div class="card" style="margin-top:14px"><div class="card-h"><h3>'+ic('user')+' Akkaunt</h3></div><div class="actions">'+(x.active?btn('rename','edit','Nomini o‘zgartirish')+(x.role!=='admin'?btn('transfer','swap','Akkauntni almashtirish'):'')+btn('off','ban','Akkauntni yopish','danger'):btn('on','checkc','Qayta ochish','pri'))+'</div><p class="hint" style="margin-top:8px">Almashtirish — xodim yangi Telegram akkauntga o‘tadi, tarix va hisoblar saqlanadi. Yopish — tizimga kira olmaydi, ma’lumot o‘chmaydi.</p></div>':
+        (x.active&&!x.primary?'<div class="actions" style="margin-top:14px">'+btn('rename','edit','Nomini o‘zgartirish')+'</div>':''))+
+      (pr&&pr.history.length?'<details class="mod-hist" style="margin-top:14px"><summary class="small muted">O‘zgarishlar tarixi</summary><div class="list">'+pr.history.map(function(h){return '<div class="li"><div class="t"><b>'+esc(h.label)+' — '+(h.on?'berildi':'olindi')+'</b><small>'+esc(h.who)+'</small></div><small class="muted num">'+dt(h.ts)+'</small></div>'}).join('')+'</div></details>':'')+'</div>');
+    var box=$('drawerBody'),ch={};
+    box.querySelectorAll('[data-perm]').forEach(function(c){c.onchange=function(){ch[c.dataset.perm]=c.checked}});
+    box.querySelectorAll('[data-ca]').forEach(function(b){b.onclick=async function(){var k=b.dataset.ca;
+      if(k==='sales'){closeDrawer();ST.role='sales';re();setTimeout(function(){var e2=$('stSales');if(e2)e2.scrollIntoView({behavior:'smooth'})},300);return}
+      if(k==='agent'){openAgent(x.id);return}
+      if(k==='psave'||k==='preset'){if(k==='preset')pr.perms.forEach(function(q){if(q.override!=null)ch[q.key]=null});if(!Object.keys(ch).length)return toast('O‘zgarish yo‘q',true);
+        if(await run(function(){return api('perms_set',{id:x.id,changes:ch})},'Ruxsatlar saqlandi'))staffCard(x);return}
+      doAct(k,x)}});
+  };
+  var stAct=async function(k,x){
+    if(k==='perms'){staffCard(x);return}
     if(k==='app'){var on=!x.miniapp;if(await confirmBox(on?'Mini App kirishini yoqish':'Mini App kirishini o‘chirish','<p><b>'+esc(x.name)+'</b> Telegram ilovasi (Mini App) orqali '+(on?'yana kira oladi.':'kira olmaydi. Web login (bo‘lsa) ishlayveradi. Ochiq oynalarda ham keyingi so‘rovdan yopiladi.')+'</p>',on?'Yoqish':'O‘chirish',!on))await call('access_set',{id:x.id,miniapp:on},on?'Mini App yoqildi':'Mini App o‘chirildi');return}
     if(k==='rename'){var v=await formBox('Nomini o‘zgartirish',[{name:'name',label:'Yangi ism',value:x.name,required:true}]);if(v)await call('staff_rename',{id:x.id,name:v.name},'Saqlandi')}
     else if(k==='transfer'){var v2=await formBox('Akkauntni almashtirish',[{name:'newId',label:'Yangi Telegram ID',required:true}],'Almashtirish',esc(x.name)+' ('+esc(x.roleLabel)+') yangi Telegram akkauntga o‘tadi. Eski akkaunt yopiladi; mijozlar, qoldiq va tarix saqlanadi.');if(v2)await call('staff_transfer',{id:x.id,newId:v2.newId},'Akkaunt almashtirildi')}
@@ -2247,7 +2282,8 @@ function renderStaff(page,s){
       if(!v3)return;var r=await call('staff_login_issue',{id:x.id,login:v3.login},'Parol yaratildi');
       if(r&&r.password)modal('<h3>Kirish ma’lumotlari</h3><p class="muted">'+esc(x.name)+' uchun. Faqat hozir ko‘rinadi — xavfsiz yo‘l bilan yuboring.</p><dl class="kv" style="margin:14px 0"><dt>Sayt</dt><dd><code>'+esc(r.url)+'</code></dd><dt>Login</dt><dd><code>'+esc(r.login)+'</code></dd><dt>Parol</dt><dd><code id="pwShow">'+esc(r.password)+'</code></dd></dl><div class="foot"><button class="btn" id="pwCopy">'+ic('file','sm')+' Nusxalash</button><button class="btn pri" data-m="cancel">Tayyor</button></div>').then(function(){});
       if($('pwCopy'))$('pwCopy').onclick=function(){try{navigator.clipboard.writeText('Sayt: '+r.url+'\nLogin: '+r.login+'\nParol: '+r.password);toast('Nusxalandi')}catch(err){toast('Nusxalab bo‘lmadi',true)}}}
-  }});
+    return true;
+  };
 }
 
 /* ----- Sozlamalar ----- */
