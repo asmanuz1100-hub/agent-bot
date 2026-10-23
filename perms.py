@@ -206,7 +206,7 @@ def manager_perm(action,op=None,kind=None):
     action=str(action or '');op=str(op or '')
     if action=='cash_period':return 'cash.view'
     if action=='cashbook':
-        return {'income':'cash.income','transfer':'cash.transfer','cancel':'cash.cancel','close':'cash.close'}.get(op,'cash.view')
+        return {'income':'cash.income','expense':'cash.expense','transfer':'cash.transfer','cancel':'cash.cancel','close':'cash.close'}.get(op,'cash.view')
     if action in ('cashier_add','cashier_rename','staff_add','staff_rename','agent_add_preview','agent_add_commit',
                   'agent_rename_preview','agent_rename_commit'):return 'staff.manage'
     if action=='stock':

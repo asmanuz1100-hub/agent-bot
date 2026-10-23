@@ -3263,6 +3263,11 @@ def serve_webhook(db,base_url):
                             cashbook.add_income(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
                                                 payload.get('category'),payload.get('counterparty'),payload.get('note'),src,
                                                 client=payload.get('clientId'))
+                        elif op=='expense':
+                            rate=payload.get('expectedRate')
+                            cashbook.add_expense(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
+                                                 payload.get('category'),payload.get('recipient'),payload.get('note'),src,
+                                                 expected_rate=int(rate) if str(rate or '').isdecimal() else None)
                         elif op=='transfer':
                             cashbook.add_transfer(local,actor,payload.get('fromPocket'),payload.get('toPocket'),payload.get('currency'),
                                                   payload.get('amount'),payload.get('note'),src)
@@ -3277,7 +3282,8 @@ def serve_webhook(db,base_url):
                             start,end,_=resolve_period(payload.get('period'),payload.get('from'),payload.get('to'))
                         data=cashbook.view(local,start,end)
                         eff=perms.effective(local,actor,ADMINS)
-                        data['can']={k:('cash.'+k) in eff for k in ('income','transfer','cancel','close')}
+                        data['can']={k:('cash.'+k) in eff for k in ('income','expense','transfer','cancel','close')}
+                        data['can']['supplier']='warehouse.supply_pay' in eff and modules.enabled(local,'warehouse')
                     elif action=='access_set':
                         perms.set_miniapp(local,actor,payload.get('id'),payload.get('miniapp') is True,ADMINS)
                         data=manager_api.staff_list(local);data.update(staff.staff_list(local,ADMINS))

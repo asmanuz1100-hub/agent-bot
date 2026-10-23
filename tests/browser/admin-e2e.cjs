@@ -117,6 +117,21 @@ const step=(n)=>console.log('✓',n);
     await page.check('#spWithProd');op=await page.$$eval('#modalBody .sp-line select option',xs=>xs.map(x=>x.value));
     assert.ok(op.some(v=>v.startsWith('p:')));await page.keyboard.press('Escape');
     step('xarid: faqat xom ashyo');
+    // Kassa (web): soliq xarajati va ta'minotchiga to'lov
+    await page.evaluate(()=>{location.hash='cash'});await page.waitForSelector('#cbCard [data-cb="expense"]',{timeout:20000});
+    let cbx=await api('cashbook',{op:'view'});const cash0=cbx.balances.cash_usd;
+    await page.click('#cbCard [data-cb="expense"]');
+    await fill({category:'🧾 Солиқ ва мажбурий тўловлар',pocket:'cash',currency:'USD',amount:3,recipient:'Soliq inspeksiyasi'});await modalOk();await modalOk();
+    await page.waitForTimeout(600);cbx=await api('cashbook',{op:'view'});
+    assert.equal(cash0-cbx.balances.cash_usd,300);assert.ok(cbx.journal.some(x=>x.category==='🧾 Солиқ ва мажбурий тўловлар'));
+    const spd=await api('supply',{op:'dashboard'});   // ta'minotchi qarzi bo'lsin: 5 kg × $1
+    await api('supply',{op:'purchase',supplierId:spd.suppliers[0].id,lines:[{material:spd.materials[0].id,qty:'5',price:'1'}],requestId:'e2ebuy0001'});
+    await page.evaluate(()=>{location.hash='home'});await page.waitForTimeout(500);
+    await page.evaluate(()=>{location.hash='cash'});await page.waitForSelector('#cbCard [data-cb="supplier"]',{timeout:20000});
+    await page.click('#cbCard [data-cb="supplier"]');await fill({amount:2,payFrom:'cash'});await modalOk();await modalOk();
+    await page.waitForTimeout(800);cbx=await api('cashbook',{op:'view'});
+    assert.equal(cash0-cbx.balances.cash_usd,500);
+    step('web kassa: soliq xarajati va ta’minotchiga to‘lov');
     assert.deepEqual(errors,[]);
     console.log('admin-e2e: OK');
   }catch(e){try{const pg=browser.contexts()[0].pages()[0];console.error('toast:',await pg.evaluate(()=>[...document.querySelectorAll('.toast,#toasts *')].map(t=>t.textContent).join(' | ')));

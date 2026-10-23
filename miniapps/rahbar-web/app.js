@@ -1298,6 +1298,8 @@ function renderCashbook(el,d){
   var rows=d.journal.filter(function(x){return !CB.group||x.group===CB.group||(CB.group==='expense'&&x.group==='expense')});
   el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' Kassa hisoblari va jurnal</h3><div class="actions">'+
       (can.income?'<button class="btn sm pri" data-cb="client">'+ic('in','sm')+' Mijozdan to‘lov</button><button class="btn sm" data-cb="income">'+ic('in','sm')+' Boshqa kirim</button>':'')+
+      (can.expense?'<button class="btn sm danger" data-cb="expense">'+ic('out','sm')+' Xarajat</button>':'')+
+      (can.supplier?'<button class="btn sm" data-cb="supplier">'+ic('building','sm')+' Ta’minotchiga to‘lov</button>':'')+
       (can.transfer?'<button class="btn sm" data-cb="transfer">'+ic('swap','sm')+' O‘tkazma</button>':'')+
       (can.close?'<button class="btn sm" data-cb="close">'+ic('checkc','sm')+' Kunni yopish</button>':'')+'</div></div>'+
     '<div class="grid g3" style="margin-bottom:14px">'+d.pockets.map(function(p){return '<div class="card kpi">'+tone(p[0]==='cash'?'cash':p[0]==='card'?'card':'bank','blue')+'<div><small>'+esc(p[1])+'</small><b>'+uzs(b[p[0]+'_uzs'])+'</b><em>'+usd(b[p[0]+'_usd']/100)+'</em></div></div>'}).join('')+'</div>'+
@@ -1321,6 +1323,18 @@ function renderCashbook(el,d){
       if(!v)return;var c=d.debtors.find(function(x){return String(x.id)===v.clientId})||{},amt=v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,eq=v.currency==='USD'?amt:(d.rate?Math.round(amt*100/d.rate):0);
       if(await confirmBox('To‘lovni tasdiqlang','<p><b>'+cbMoney(amt,v.currency)+'</b> → '+esc((pockOpts.find(function(p){return p[0]===v.pocket})||['',''])[1])+'<br>Mijoz: <b>'+esc(c.name||'')+'</b><br>Qarz: '+usd((c.debtUsd||0)/100)+' → <b>'+usd(Math.max((c.debtUsd||0)-eq,0)/100)+'</b></p>','Tasdiqlash'))
         call(Object.assign({op:'income',category:d.clientPayment},v),'To‘lov saqlandi, mijoz qarzi kamaydi')}
+    else if(k==='expense'){
+      v=await formBox('Kassadan xarajat',[{name:'category',label:'Xarajat turi',options:d.expenseCategories.map(function(c){return [c,c]})},{name:'pocket',label:'Qayerdan',options:[['cash','Naqd'],['card','Karta']]},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'recipient',label:'Kimga / nima uchun',required:true},{name:'note',label:'Izoh (hujjat raqami)'}],'Davom etish','Soliq, kommunal, korxona xarajati, dividend — shu yerdan. Oylik/avans — Xodimlar bo‘limida, ta’minotchiga — «Ta’minotchiga to‘lov».'+(d.rate?' Kurs: 1 USD = '+num(d.rate,0)+' so‘m.':''));
+      if(!v)return;var amt=v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,have=b[v.pocket+'_'+v.currency.toLowerCase()];
+      if(await confirmBox('Xarajatni tasdiqlang','<p><b>'+cbMoney(amt,v.currency)+'</b> · '+esc(v.category)+'<br>'+(v.pocket==='card'?'Kartadan':'Naqddan')+' — qoldiq '+cbMoney(have,v.currency)+(amt>have?' <span class="bad">· yetarli emas</span>':'')+'<br>'+esc(v.recipient)+'</p>','Tasdiqlash',true))
+        call(Object.assign({op:'expense',expectedRate:d.rate},v),'Xarajat saqlandi')}
+    else if(k==='supplier'){
+      if(!d.suppliers.length){toast('Ta’minotchi yo‘q — Ombor → Ta’minot bo‘limida qo‘shing.',true);return}
+      v=await formBox('Ta’minotchiga to‘lov',[{name:'supplierId',label:'Ta’minotchi',options:d.suppliers.map(function(x){return [String(x.id),x.name+(x.debt>0?' — qarz '+usd(x.debt/100):'')]})},{name:'amount',label:'Summa (USD)',type:'number',step:'0.01',required:true},{name:'payFrom',label:'Qayerdan',options:[['cash','Naqd'],['card','Karta']]},{name:'note',label:'Izoh'}],'Davom etish','Ta’minotchi qarzi kamayadi, kassadan xarajat yoziladi.');
+      if(!v)return;var sp=d.suppliers.find(function(x){return String(x.id)===v.supplierId})||{};
+      if(await confirmBox('To‘lovni tasdiqlang','<p><b>'+usd(+v.amount)+'</b> → '+esc(sp.name||'')+'<br>Qarz: '+usd((sp.debt||0)/100)+' → <b>'+usd(Math.max((sp.debt||0)/100-v.amount,0))+'</b></p>','Tasdiqlash')){
+        var r=await run(function(){return api('supply',{op:'pay',supplierId:+v.supplierId,amount:v.amount,payFrom:v.payFrom,note:v.note,requestId:rid()})},'To‘lov saqlandi');
+        if(r){S.cache.supply=null;var r2=await run(function(){return api('cashbook',{op:'view'})});if(r2){CB.data=r2;S.dash=null;renderCashbook(el,r2)}}}}
     else if(k==='transfer'){v=await formBox('Hisoblar orasida o‘tkazma',[{name:'fromPocket',label:'Qayerdan',options:pockOpts},{name:'toPocket',label:'Qayerga',options:pockOpts,value:'bank'},{name:'currency',label:'Valyuta',options:[['UZS','So‘m'],['USD','Dollar']]},{name:'amount',label:'Summa',type:'number',step:'any',required:true},{name:'note',label:'Izoh'}],'O‘tkazish','Bir valyutada. Valyuta almashtirish — konvertatsiya (kassir ilovasida).');
       if(v&&await confirmBox('O‘tkazmani tasdiqlang','<p><b>'+cbMoney(v.currency==='USD'?Math.round(parseFloat(v.amount)*100):+v.amount,v.currency)+'</b>: '+esc((pockOpts.find(function(p){return p[0]===v.fromPocket})||['',''])[1])+' → '+esc((pockOpts.find(function(p){return p[0]===v.toPocket})||['',''])[1])+'</p>','Tasdiqlash'))call(Object.assign({op:'transfer'},v),'O‘tkazma saqlandi')}
     else{var f=[];pockOpts.forEach(function(p){['uzs','usd'].forEach(function(c){f.push({name:p[0]+'_'+c,label:p[1]+' '+(c==='uzs'?'so‘m':'dollar')+' — tizimda '+cbMoney(b[p[0]+'_'+c],c.toUpperCase()),type:'number',step:'any'})})});f.push({name:'note',label:'Izoh'});
