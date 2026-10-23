@@ -21,7 +21,13 @@ TABLES = (
     "client_visits", "collection_tasks", "delivery_edits", "processed", "meta",
     "products", "agent_features", "card_payments", "visit_stock", "orders", "order_items",
     "shop_staff", "shop_prices", "shop_client_prices", "shop_clients", "shop_sales", "shop_sale_lines",
+    "cash_closings", "cash_moves", "cashier_conversions", "client_blacklist_log", "data_changes",
+    "hr_attendance", "hr_pay", "hr_profiles", "hr_salary", "hr_w_attendance", "hr_w_pay", "hr_w_salary", "hr_workers",
+    "materials", "material_moves", "productions", "purchases", "purchase_lines", "suppliers", "supplier_payments",
+    "sale_orders", "sale_order_lines", "sale_order_log", "sale_order_payments",
+    "user_perms", "perm_audit", "warehouse_moves", "warehouse_requests",
 )
+# Not exported on purpose: web_accounts (password hashes), web_sessions, web_login_fails, photo_thumbs (derived).
 
 SECRET_NAMES = (
     "BOT_TOKEN", "ADMIN_IDS", "DATABASE_URL", "POSTGRES_PASSWORD",
@@ -76,7 +82,15 @@ def build_archives(db, photo_fetcher, photo_chunk_bytes=38_000_000):
     table_data = {}
 
     for table in TABLES:
-        rows = _safe_select_all(db, table)
+        try:
+            rows = _safe_select_all(db, table)
+        except Exception:
+            # Table not created yet on this install (module never used).
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            continue
         table_counts[table] = len(rows)
         table_data[table] = rows
 
