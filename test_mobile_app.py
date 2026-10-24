@@ -199,12 +199,13 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(code, 403)
         code, _ = self.post('/api/agent', token, origin='https://evil.example', action='snapshot')
         self.assertEqual(code, 403)
-        # A Rahbar web-panel token must not open the agent API from the app.
+        # Rahbar tokeni agent API'ni faqat admin rejimida ochadi (agentni tanlaydi), o'zi agent bo'lmaydi.
         code, data = self.post('/api/web', native=False, origin=sorted(bot.SELF_MINIAPP_ORIGINS)[0],
                                action='login', login='boss', password=self.admin_password)
         self.assertEqual(code, 200, data)
-        code, _ = self.post('/api/agent', data['token'], action='snapshot')
-        self.assertEqual(code, 403)
+        code, out = self.post('/api/agent', data['token'], action='snapshot')
+        self.assertEqual(code, 200, out)
+        self.assertTrue(out.get('adminMode'), out)
 
     def test_logout_ends_the_session(self):
         token = self.login('ali', self.agent_password)['token']
@@ -339,6 +340,10 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(boss['role'], 'admin')
         code, data = self.post('/api/manager', boss['token'], native=False, origin=site, action='dashboard')
         self.assertEqual(code, 200, data)
+        # Rahbar ilovada barcha panellarni ochadi: agent (admin rejimi), kassa, ombor, savdo.
+        for path in ('/api/agent', '/api/cashier', '/api/warehouse', '/api/shop'):
+            code, data = self.post(path, boss['token'], native=False, origin=site, action='dashboard')
+            self.assertEqual(code, 200, (path, data))
         db = self.db()
         try:
             db.execute("INSERT INTO users(id,role,name) VALUES(6,'disabled','Eski')")

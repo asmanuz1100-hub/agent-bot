@@ -3110,7 +3110,7 @@ def serve_webhook(db,base_url):
                     if not modules.enabled(local,'agents'):
                         answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
-                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES:
+                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES|{'admin'}:
                         answer_agent(403,{'error':'Mobil ilova faqat savdo agentlari uchun.'});return
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
