@@ -119,3 +119,40 @@ class PgAgentPaymentFlowTests(AgentPaymentFlowTests):
             os.environ.pop('DB_SCHEMA',None)
 
 if __name__=='__main__':unittest.main()
+
+
+class DuplicatePaymentGuardTests(unittest.TestCase):
+    setUp=fixture.UzsAndCardPaymentTests.setUp
+    tearDown=fixture.UzsAndCardPaymentTests.tearDown
+
+    def _pay(self,nonce,now,**extra):
+        p={'clientId':self.cid,'currency':'UZS','amount':'905000','usd':'76','method':'cash'}
+        p.update(extra)
+        return agent_api.mutate(self.db,2,'payment',p,nonce,now)
+
+    def count(self):
+        return self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0]
+
+    def test_same_payment_reentered_with_new_nonce_needs_confirmation(self):
+        self._pay('dup_guard_0001',self.now)
+        with self.assertRaises(agent_api.DuplicatePaymentError) as ctx:
+            self.db.execute('SAVEPOINT t')
+            try:self._pay('dup_guard_0002',self.now+60)
+            finally:self.db.execute('ROLLBACK TO SAVEPOINT t')
+        self.assertEqual(ctx.exception.code,'duplicate_payment')
+        self.assertEqual(self.count(),1)
+        self._pay('dup_guard_0002',self.now+60,confirmDuplicate=True)
+        self.assertEqual(self.count(),2)
+
+    def test_different_amount_or_old_payment_is_not_blocked(self):
+        self._pay('dup_guard_0003',self.now)
+        self.db.execute("UPDATE events SET ts=? WHERE kind='payment'",(self.now-agent_api.DUPLICATE_PAYMENT_WINDOW-1,))
+        self._pay('dup_guard_0004',self.now,amount='900000')
+        self._pay('dup_guard_0005',self.now)
+        self.assertEqual(self.count(),3)
+
+    def test_identical_parts_in_one_request_are_allowed(self):
+        p={'clientId':self.cid,'parts':[{'currency':'USD','amount':'50','method':'cash'},
+            {'currency':'USD','amount':'50','method':'cash'}]}
+        agent_api.mutate(self.db,2,'payment',p,'dup_guard_0006',self.now)
+        self.assertEqual(self.count(),2)

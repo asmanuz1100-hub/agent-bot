@@ -3232,7 +3232,9 @@ def serve_webhook(db,base_url):
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
-                    answer_agent(400,{'error':str(e)})
+                    err={'error':str(e)}
+                    if getattr(e,'code',None):err['code']=e.code
+                    answer_agent(400,err)
                 except Exception:
                     if local is not None:local.rollback()
                     logging.exception('Authenticated agent API request failed')
