@@ -41,6 +41,7 @@ def stop_signal(*_):
 
 
 TOKEN=os.getenv('BOT_TOKEN','')
+import receipt_public;receipt_public.configure(TOKEN)   # mijoz cheki QR havolasi imzosi
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 # Омбор (warehouse.py) ҳозирча фақат тест серверида ва фақат админга очиқ.
@@ -2609,6 +2610,30 @@ def serve_webhook(db,base_url):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
+            if path.startswith('/c/'):
+                # Mijoz cheki (chekdagi QR): imzolangan havola, login yo'q. Nomlar 'path' ni qayta yozmaydi.
+                rc_hit=receipt_public.parse(path)
+                if not rc_hit:
+                    self._reply(404,b'Chek topilmadi');return
+                rc_db=None
+                try:
+                    rc_db=request_db()
+                    if rc_hit[1]:
+                        rc_base=receipt_public.base_url() or 'https://'+(self.headers.get('Host') or 'localhost')
+                        rc_body=receipt_public.qr_svg(receipt_public.url(rc_hit[0],rc_base)).encode()
+                        self._reply(200,rc_body,'image/svg+xml',{'Cache-Control':'public, max-age=86400','Access-Control-Allow-Origin':'*'})
+                    else:
+                        rc_body=receipt_public.page(shop.receipt(rc_db,rc_hit[0]),branding.get(rc_db)).encode()
+                        self._reply(200,rc_body,'text/html; charset=utf-8')
+                except ValueError:
+                    self._reply(404,b'Chek topilmadi')
+                except Exception:
+                    logging.exception('Public receipt failed');self._reply(500,b'Xato')
+                finally:
+                    if rc_db is not None and postgres:
+                        try:rc_db.rollback();rc_db.close()
+                        except Exception:pass
+                return
             m=re.fullmatch(r'/tiles/(\d{1,2})/(\d{1,7})/(\d{1,7})\.png',path)
             if m:
                 try:
