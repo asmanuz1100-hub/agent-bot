@@ -3387,15 +3387,17 @@ def serve_webhook(db,base_url):
                         op=str(payload.get('op') or 'list')
                         if op=='cancel':
                             operations.cancel(local,actor,str(payload.get('kind') or ''),payload.get('ref'),payload.get('reason'))
+                        elif op=='form':
+                            fields=operations.form(local,actor,str(payload.get('kind') or ''),payload.get('ref'))
                         elif op=='edit':
-                            operations.edit(local,actor,str(payload.get('kind') or ''),payload.get('ref'),payload.get('amount'),
-                                            payload.get('note'),payload.get('reason'),warehouse_api._source(actor,payload))
+                            operations.edit(local,actor,str(payload.get('kind') or ''),payload.get('ref'),payload.get('values'),
+                                            payload.get('reason'),warehouse_api._source(actor,payload))
                         elif op!='list':
                             raise ValueError('Amal noto‘g‘ri.')
                         start,end,label=resolve_period(payload.get('period') or 'today',payload.get('from'),payload.get('to'))
                         src=payload.get('source') or None
                         if src is not None and src not in operations.SOURCES:raise ValueError('Bo‘lim noto‘g‘ri.')
-                        data=operations.journal(local,start,end,src,payload.get('q'))
+                        data={'fields':fields} if op=='form' else operations.journal(local,start,end,src,payload.get('q'))
                         data['periodLabel']=label
                     elif action=='cashbook':
                         # Kassa: qo'lda kirim, o'tkazma, bekor qilish, kun yopish va jurnal (ruxsat yuqorida tekshirildi).

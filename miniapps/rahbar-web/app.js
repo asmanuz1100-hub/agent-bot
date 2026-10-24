@@ -1208,12 +1208,12 @@ function renderClient(c,tab){
 var OP={p:'today',from:'',to:'',src:'',q:'',st:'',data:null};
 async function pageOps(page){
   if(OP.p==='custom'&&!OP.from)OP.p='today';
-  var srcs=[['','Hammasi'],['agent','Agent'],['sales','Savdo'],['cash','Kassa'],['warehouse','Ombor'],['supply','Ta’minot']];
+  var srcs=[['','Hammasi'],['agent','Agent'],['sales','Savdo'],['cash','Kassa'],['warehouse','Ombor'],['supply','Ta’minot'],['staff','Xodimlar']];
   page.innerHTML='<div class="toolbar">'+periodBar('opP',OP)+'<span class="muted small">'+esc(periodLabel(OP))+'</span></div>'+
     '<div class="card flush"><div class="card-h"><h3>'+ic('list')+' Kiritilgan amallar</h3><div class="acts"><div class="seg" id="opSrc">'+srcs.map(function(x){return '<button data-s="'+x[0]+'" class="'+(OP.src===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<div class="seg" id="opSt">'+[['','Barchasi'],['active','Faol'],['cancelled','Bekor qilingan']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(OP.st===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<input type="search" id="opQ" placeholder="Xodim, mijoz, izoh, #ID…" value="'+esc(OP.q)+'" style="width:220px;border-radius:999px"></div></div>'+
-    '<p class="hint" style="margin:6px 16px 0">Xato kiritilgan yozuvni (ikki marta to‘lov, test sotuv…) bekor qiling yoki summasini tuzating. Qoldiq, qarz va hisobotlar avtomatik qayta hisoblanadi; asl yozuv tarixda «bekor qilingan» bo‘lib qoladi.</p>'+
+    '<p class="hint" style="margin:6px 16px 0">Barcha xodimlar kiritgan har bir yozuv shu yerda. Xatoni (ikki marta to‘lov, test sotuv, noto‘g‘ri miqdor…) shu yerning o‘zida tahrirlang yoki o‘chiring. Qoldiq, qarz va hisobotlar avtomatik qayta hisoblanadi; asl yozuv tarixda «bekor qilingan» bo‘lib qoladi.</p>'+
     '<div class="tbl-wrap" id="opBody" style="margin-top:10px"><div class="skel" style="height:240px;margin:0 16px 16px"></div></div></div>';
   bindPeriod('opP',OP,function(){OP.data=null;pageOps(page)});
   $('opSrc').onclick=function(e){var b=e.target.closest('button');if(!b)return;OP.src=b.dataset.s;OP.data=null;pageOps(page)};
@@ -1233,19 +1233,21 @@ function opList(){
     return '<tr'+(off?' style="opacity:.6"':'')+'><td class="nowrap">'+dt(x.ts)+'</td><td><span class="pill">'+esc(x.sourceLabel)+'</span></td><td><b>'+esc(x.label)+'</b> <span class="muted small">#'+x.ref+'</span>'+(x.detail?'<br><small class="muted">'+esc(x.detail)+'</small>':'')+'</td>'+
       '<td>'+esc(x.who)+'</td><td>'+esc(x.party)+'</td><td class="right num">'+(off?'<s>'+opMoney(x)+'</s>':opMoney(x))+'</td>'+
       '<td>'+(off?'<span class="bad" title="'+esc((x.cancel&&x.cancel.reason)||'')+'">Bekor qilingan</span>'+(x.cancel&&x.cancel.who?'<br><small class="muted">'+esc(x.cancel.who)+' · '+esc(x.cancel.reason)+'</small>':''):'<span class="ok">Faol</span>')+'</td>'+
-      '<td class="right nowrap">'+(x.canEdit?'<button class="icon-btn ghost" data-e="'+i+'" aria-label="Tahrirlash" data-tip="Summani tuzatish">'+ic('edit','sm')+'</button>':'')+
+      '<td class="right nowrap">'+(x.canEdit?'<button class="icon-btn ghost" data-e="'+i+'" aria-label="Tahrirlash" data-tip="Tahrirlash">'+ic('edit','sm')+'</button>':'')+
       (x.canCancel?'<button class="icon-btn ghost" data-c="'+i+'" aria-label="Bekor qilish" data-tip="Bekor qilish (o‘chirish)">'+ic('trash','sm')+'</button>':'')+
-      (!off&&!x.canCancel&&x.hint?'<span class="muted small" title="'+esc(x.hint)+'">ⓘ</span>':'')+'</td></tr>'}).join('')+'</tbody></table>';
+'</td></tr>'}).join('')+'</tbody></table>';
   el.onclick=async function(e){var b=e.target.closest('button[data-c],button[data-e]');if(!b)return;var x=rows[+(b.dataset.c||b.dataset.e)];
-    var head='<p><b>'+esc(x.sourceLabel)+' · '+esc(x.label)+' #'+x.ref+'</b><br>'+dt(x.ts)+' · '+esc(x.who)+(x.party?' → '+esc(x.party):'')+(x.amount!=null?' · <b>'+opMoney(x)+'</b>':'')+'</p>'+(x.hint?'<p class="hint">'+esc(x.hint)+'</p>':'');
+    var head='<p><b>'+esc(x.sourceLabel)+' · '+esc(x.label)+' #'+x.ref+'</b><br>'+dt(x.ts)+' · '+esc(x.who)+(x.party?' → '+esc(x.party):'')+(x.amount!=null?' · <b>'+opMoney(x)+'</b>':'')+'</p>';
     var r;
     if(b.dataset.c!=null){
       var v=await modal('<form><h3>Yozuvni bekor qilish</h3>'+head+'<p class="muted">Bekor qilingach uning ta’siri (qarz, qoldiq, kassa, ombor) qaytariladi. Asl yozuv tarixda qoladi.</p><label>Sabab<input name="reason" maxlength="300" required placeholder="Masalan: ikki marta kiritilgan"></label><div class="foot"><button type="button" class="btn" data-m="cancel">Yopish</button><button class="btn danger">Bekor qilish</button></div></form>');
       if(!v)return;r=await run(function(){return opLoad({op:'cancel',kind:x.kind,ref:x.ref,reason:v.reason})},'Bekor qilindi');
     }else{
-      var w=await formBox('Summani tuzatish',[{name:'amount',label:'To‘g‘ri summa ('+(x.currency==='UZS'?'so‘m':'USD')+')',value:x.amount,required:true,type:'number',step:'any'},{name:'reason',label:'Sabab',value:'Summa xato kiritilgan',required:true}],'Saqlash',
-        head.replace(/<\/?p[^>]*>/g,' ')+'<br>Eski yozuv bekor qilinadi va to‘g‘ri summa bilan yangisi yoziladi.');
-      if(!w)return;r=await run(function(){return opLoad({op:'edit',kind:x.kind,ref:x.ref,amount:w.amount,reason:w.reason,requestId:rid()})},'Tuzatildi');
+      var f=await run(function(){return opLoad({op:'form',kind:x.kind,ref:x.ref})});if(!f)return;
+      var w=await formBox('Yozuvni tahrirlash',f.fields.concat([{name:'reason',label:'Tahrir sababi',value:'Xato kiritilgan',required:true}]),'Saqlash',
+        head.replace(/<\/?p[^>]*>/g,' ')+'<br>Eski yozuv bekor qilinadi va to‘g‘ri qiymatlar bilan yangisi yoziladi.');
+      if(!w)return;var vals={};f.fields.forEach(function(fd){vals[fd.name]=w[fd.name]});
+      r=await run(function(){return opLoad({op:'edit',kind:x.kind,ref:x.ref,values:vals,reason:w.reason,requestId:rid()})},'Saqlandi');
     }
     if(r){OP.data=r;S.dash=null;S.cache={};opList()}};
 }
