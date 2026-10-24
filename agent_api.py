@@ -78,6 +78,36 @@ def _coord(lat,lon):
     return lat,lon
 
 
+MOBILE_POINT_MIN_GAP=15
+MOBILE_POINT_MAX_ACCURACY=200
+
+
+def mobile_point(db,agent,payload,now=None):
+    """GPS point from the native mobile app, saved to the agent's open shift.
+
+    The shift may have been opened in Telegram or in the app. A shift with no
+    Telegram live location yet is claimed by the app with live_id=-shift_id
+    (negative ids never collide with Telegram message ids), so _live_ready lets
+    payments and returns through exactly as it does for Telegram live location."""
+    now=int(time.time() if now is None else now)
+    _require_agent(db,agent)
+    lat,lon=_coord(payload.get('lat'),payload.get('lon'))
+    try:accuracy=float(payload.get('accuracy'))
+    except (TypeError,ValueError):accuracy=-1
+    if lat is None or not (0<=accuracy<=MOBILE_POINT_MAX_ACCURACY):
+        raise ValueError('GPS aniqligi yetarli emas. Ochiq joyda qayta urinib ko‘ring.')
+    shift=db.execute('SELECT id,live_id FROM shifts WHERE agent=? AND end IS NULL ORDER BY id DESC LIMIT 1',(agent,)).fetchone()
+    if not shift:raise ValueError('Avval ish kunini boshlang.')
+    if shift['live_id'] is None:
+        db.execute('UPDATE shifts SET live_id=? WHERE id=?',(-int(shift['id']),shift['id']))
+    last=db.execute('SELECT MAX(ts) FROM points WHERE shift=?',(shift['id'],)).fetchone()[0]
+    if last is not None and now-int(last)<MOBILE_POINT_MIN_GAP:
+        return {'ok':True,'saved':False,'ts':int(last)}
+    db.execute('INSERT INTO points(shift,ts,lat,lon,accuracy) VALUES(?,?,?,?,?) ON CONFLICT(shift,ts) DO NOTHING',
+               (shift['id'],now,lat,lon,accuracy))
+    return {'ok':True,'saved':True,'ts':now}
+
+
 def _require_agent(db,agent):
     row=db.execute("SELECT id,name FROM users WHERE id=? AND role='agent'",(agent,)).fetchone()
     if not row:raise ValueError("Agent akkaunti faol emas.")
