@@ -1747,7 +1747,7 @@ def send_app_download(u,text=None):
     api('sendMessage',chat_id=u,text=text or ('📲 AIBI ilovasi (Android)\n\n'
         '1. Tugmani bosing va faylni yuklab oling.\n'
         '2. Faylni oching, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
-        '3. Login va parol olish: /mobilparol'),
+        '3. Login va parolni rahbaringiz beradi.'),
         reply_markup={'inline_keyboard':[[{'text':'📲 AIBI ilovasini yuklab olish','url':APP_DOWNLOAD_URL}]]})
 
 _APP_FILE={'key':None,'file_id':None}
@@ -1756,7 +1756,7 @@ _APP_FILE_LOCK=threading.Lock()
 def _app_file_worker(u):
     """APK ni chatga fayl qilib yuborish (Telegram'ning ichki brauzeri katta faylni oxirigacha yuklamasligi mumkin).
     Birinchi marta 45 MB yuklanadi, keyin Telegram file_id bilan darhol yuboriladi."""
-    caption='📲 AIBI ilovasi. Faylni bosing → «O‘rnatish». Login va parol: /mobilparol'
+    caption='📲 AIBI ilovasi. Faylni bosing → «O‘rnatish». Login va parolni rahbaringiz beradi.'
     try:
         st=APP_APK_FILE.stat();key=(st.st_size,int(st.st_mtime))
         with _APP_FILE_LOCK:
@@ -1948,10 +1948,13 @@ def handle(db,update):
         send(u,'⏳ Тўлиқ backup тайёрланяпти: база ва мижоз расмлари йиғилади. Бот ишлашда давом этади.')
         threading.Thread(target=_full_backup_worker,args=(u,),daemon=True,name='full-backup-export').start()
         return
-    if text=='/webparol' or text.startswith('/webparol ') or text=='/webyopish':
-        handle_web_password(db,u,r,text);return
-    if text=='/mobilparol' or text.startswith('/mobilparol ') or text=='/mobilyopish':
-        handle_mobile_password(db,u,r,text);return
+    # Login/parolni rahbar web panelda («Xodimlar») beradi. Bot faqat rahbarning o'ziga beradi —
+    # birinchi marta web panelga kirishi uchun.
+    if text in ('/webparol','/mobilparol','/webyopish','/mobilyopish') or text.startswith(('/webparol ','/mobilparol ')):
+        if r!='admin':
+            send(u,'🔐 Login va parolni rahbaringiz beradi (Rahbar web panel → Xodimlar).\n'
+                   'Shu login bilan AIBI ilovasiga istalgan telefondan kirasiz.');return
+        handle_web_password(db,u,r,text.replace('/mobilparol','/webparol').replace('/mobilyopish','/webyopish'));return
     if text in ('/ilova','📲 Ilova'):
         if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
         send_app_download(u);send_app_file(u);return

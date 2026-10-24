@@ -2350,7 +2350,7 @@ function renderStaff(page,s){
      var acts=x.active?
        act('rename',x.id,'edit','Nomini o‘zgartirish')+
        (!x.primary?act('perms',x.id,'sliders',x.role==='sales'?'Savdo ruxsatlari':x.role==='agent'?'Agent huquqlari':'Ruxsatlar'):'')+
-       (P&&x.webCapable&&!x.primary?act('login',x.id,'shield',x.webLogin?'Web: yangi parol berish':'Web: login va parol berish'):'')+
+       (P&&x.webCapable&&!x.primary?act('login',x.id,'shield',x.webLogin?'Yangi parol berish':'Login va parol berish'):'')+
        (P&&!x.primary?act('app',x.id,x.miniapp?'phone':'ban',x.miniapp?'Telegram Mini App: yoqiq — o‘chirish':'Telegram Mini App: o‘chiq — yoqish',x.miniapp?'':'danger'):'')+
        (P&&x.webLogin&&!x.primary?act('logout',x.id,'logout','Web kirishni o‘chirish'):'')+
        (P&&x.role!=='admin'?act('transfer',x.id,'swap','Akkauntni almashtirish'):'')+
@@ -2394,9 +2394,9 @@ function renderStaff(page,s){
     var canEdit=P&&editable&&x.active;
     openDrawer('<div data-scard="'+x.id+'"><div class="dh"><div class="tone t-'+t[1]+'" style="width:56px;height:56px">'+ic(t[0])+'</div><div><h2>'+esc(x.name)+'</h2><small class="muted">'+esc(x.roleLabel)+(x.primary?' · asosiy Admin':'')+' · Telegram ID <span class="num">'+x.id+'</span> · '+(x.active?'<span class="ok">faol</span>':'<span class="bad">yopilgan</span>')+'</small></div></div>'+
       '<div class="card" style="margin-top:14px"><div class="card-h"><h3>'+ic('shield')+' Kirish</h3></div><dl class="kv">'+
-        '<dt>Web panel</dt><dd>'+(x.webCapable||x.primary?(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">login berilmagan</span>'):'<span class="muted">bu rolda web panel yo‘q — Telegram ilovasi orqali ishlaydi</span>')+'</dd>'+
+        '<dt>Login (ilova/web)</dt><dd>'+(x.webCapable||x.primary?(x.webLogin?'<code>'+esc(x.webLogin)+'</code>':'<span class="muted">login berilmagan</span>'):'<span class="muted">—</span>')+'</dd>'+
         '<dt>Telegram Mini App</dt><dd>'+(x.miniapp===false?pill('O‘chiq','p-bad'):pill('Yoqiq','p-ok'))+'</dd></dl>'+
-        (P&&!x.primary&&x.active?'<div class="actions" style="margin-top:12px">'+(x.webCapable?btn('login','shield',x.webLogin?'Yangi parol berish':'Login va parol berish','pri')+(x.webLogin?btn('logout','logout','Web kirishni o‘chirish','danger'):''):'')+btn('app',x.miniapp===false?'checkc':'ban',x.miniapp===false?'Mini App kirishini yoqish':'Mini App kirishini o‘chirish',x.miniapp===false?'':'danger')+'</div>':'')+'</div>'+
+        (P&&!x.primary&&x.active?'<div class="actions" style="margin-top:12px">'+(x.webCapable?btn('login','shield',x.webLogin?'Yangi parol berish':'Login va parol berish','pri')+(x.webLogin?btn('logout','logout','Kirishni o‘chirish','danger'):''):'')+btn('app',x.miniapp===false?'checkc':'ban',x.miniapp===false?'Mini App kirishini yoqish':'Mini App kirishini o‘chirish',x.miniapp===false?'':'danger')+'</div>':'')+'</div>'+
       '<div class="card" style="margin-top:14px"><div class="card-h"><h3>'+ic('sliders')+' Ruxsatlar</h3>'+(pr&&!canEdit?'<span class="pill">Faqat ko‘rish</span>':'')+'</div>'+
         (x.primary?'<p class="muted">Asosiy Admin barcha huquqqa ega — o‘zgartirib bo‘lmaydi.</p>':
          x.role==='sales'?'<p class="muted">Sotuvchi funksiyalari (chakana, diller, chegirma, qarzga, qarz undirish…) Savdo jamoasi jadvalida.</p><div class="actions">'+btn('sales','cart','Savdo ruxsatlarini ochish')+'</div>':

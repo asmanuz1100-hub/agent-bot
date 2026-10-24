@@ -163,23 +163,27 @@ def activate(db, actor, uid):
     _audit(db, actor, None, uid, role + '_activated')
 
 
-# Web panel bor rollar: rahbar — Rahbar Web, sotuvchi — Savdo Web. Kassir, omborchi, agent — faqat Telegram ilovasi.
-WEB_ROLES = ('admin', 'sales')
+# Login/parolni rahbar web panelda beradi: hamma rol AIBI ilovasiga (istalgan telefondan) kiradi,
+# rahbar va sotuvchi esa web panelga ham. Bot endi login/parol bermaydi.
+WEB_ROLES = tuple(ROLES)
 
 
 def issue_login(db, actor, uid, login=None):
-    """Web panel login/parol: faol rahbar yoki savdo xodimiga."""
+    """Ilova va web panel uchun login/parol: istalgan faol xodimga."""
     core._require_admin(db, actor)
     uid = core._telegram_id(uid)
     row = _user(db, uid)
     if not row or row['role'] not in WEB_ROLES:
-        raise ValueError('Web panel faqat rahbar va savdo xodimi uchun. Kassir, omborchi va agent Telegram ilovasi orqali ishlaydi.')
-    return web_auth.issue_password(db, uid, (login or '').strip() or None)
+        raise ValueError('Login faqat faol xodimga beriladi.')
+    login = (login or '').strip() or None
+    if not login and not web_auth.account(db, uid):
+        login = f"{row['role']}{uid}"          # masalan warehouse704 — rolini ko'rsatadi
+    return web_auth.issue_password(db, uid, login)
 
 
 def revoke_login(db, actor, uid):
     core._require_admin(db, actor)
     uid = core._telegram_id(uid)
     if not web_auth.account(db, uid):
-        raise ValueError('Bu xodimning web logini yo‘q.')
+        raise ValueError('Bu xodimning logini yo‘q.')
     web_auth.revoke(db, uid)

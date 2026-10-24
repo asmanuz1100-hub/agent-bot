@@ -63,14 +63,15 @@ class PermUnitTests(unittest.TestCase):
         perms.set_perms(self.db, 1, 5, {'cash.view': True}, PRIMARY)
         self.assertTrue(perms.open_section(self.db, 5, 'cash', PRIMARY))
 
-    def test_web_login_for_rahbar_and_sales_only(self):
+    def test_login_issued_by_rahbar_for_every_role(self):
         import staff
-        login, pw = staff.issue_login(self.db, 1, 6)                 # sotuvchi — Savdo Web
+        login, pw = staff.issue_login(self.db, 1, 6)                 # sotuvchi
         self.assertTrue(login and pw)
-        with self.assertRaisesRegex(ValueError, 'Telegram ilovasi'):
-            staff.issue_login(self.db, 1, 3)                         # kassirda web panel yo'q
+        login3, pw3 = staff.issue_login(self.db, 1, 3)               # kassir ham — AIBI ilovasi uchun
+        self.assertTrue(login3 and pw3)
         rows = {x['id']: x for x in staff.staff_list(self.db, PRIMARY)['staff']}
-        self.assertEqual((rows[6]['webCapable'], rows[3]['webCapable'], rows[6]['webLogin']), (True, False, login))
+        self.assertEqual((rows[6]['webCapable'], rows[3]['webCapable'], rows[6]['webLogin'], rows[3]['webLogin']),
+                         (True, True, login, login3))
 
     def test_manager_perm_mapping(self):
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'bonus'), 'hr.calculate')

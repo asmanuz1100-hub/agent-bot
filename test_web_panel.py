@@ -342,7 +342,7 @@ class WebPanelHttpTests(unittest.TestCase):
             roles = {x['id']: x['role'] for x in d['staff']['staff']}
             self.assertEqual((roles[701], roles[703], roles[704], roles[705]), ('warehouse', 'sales', 'warehouse', 'admin'))
             code, d = self.post('/api/manager', token, action='staff_login_issue', id=704, confirm=True)
-            self.assertEqual(code, 400, d)   # web panel faqat admin uchun
+            self.assertEqual((code, d.get('login')), (200, 'warehouse704'), d)   # omborchiga ham — AIBI ilovasi uchun
             code, d = self.post('/api/manager', token, action='staff_login_issue', id=705, login='ikkinchi', confirm=True)
             self.assertEqual(code, 200, d)
             code, lg = self.post('/api/web', action='login', login='ikkinchi', password=d['password'])
