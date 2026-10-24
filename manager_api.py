@@ -634,7 +634,7 @@ def client_detail(db, client_id, limit=120):
         GROUP BY e.pack,p.name ORDER BY e.pack""",(client_id,)).fetchall()
     stocks=[{"pack":int(r["pack"]),"name":r["product_name"] or str(r["pack"]),
              "qty":int(r["qty"] or 0)} for r in stock_rows]
-    rows=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.note,e.ts,
+    rows=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.note,e.ts,e.agent,e.pay_method,
              COALESCE(u.name,CAST(e.actor AS TEXT),CAST(e.agent AS TEXT)) AS actor_name,
              COALESCE(p.name,CAST(e.pack AS TEXT)) AS product_name
         FROM events e
@@ -647,7 +647,9 @@ def client_detail(db, client_id, limit=120):
         "product":r["product_name"] if r["pack"] else "",
         "qty":int(r["qty"] or 0),"amountUzs":int(r["amount"] or 0),
         "amountUsd":_usd(r["amount_usd"]),"note":r["note"] or "",
-        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—"
+        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—",
+        # Agentning naqd to'lovini rahbar bekor qila oladi (corrections.cancel_payment).
+        "canCancel":r["kind"]=="payment" and r["agent"] is not None and (r["pay_method"] or "")!="card"
     } for r in rows]
     visits=db.execute("""SELECT v.id,v.actor,v.status,v.note,v.followup,v.ts,v.photo,
                COALESCE(u.name,CAST(v.actor AS TEXT)) AS actor_name

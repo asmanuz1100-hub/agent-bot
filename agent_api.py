@@ -233,6 +233,32 @@ def _parse_phones(value):
     return found
 
 
+class DuplicatePaymentError(ValueError):
+    code='duplicate_payment'
+
+
+DUPLICATE_PAYMENT_WINDOW=600
+
+
+def _check_recent_payment(db,agent,cid,note,method,op_ts,payload):
+    """Agent bir xil to‘lovni qayta kiritsa (yangi forma = yangi nonce), tasdiqsiz saqlanmaydi."""
+    if payload.get('confirmDuplicate'):return
+    lo=op_ts-DUPLICATE_PAYMENT_WINDOW
+    same_request=[int(x) for x in payload.get('_batchSources') or []] or [0]
+    marks=','.join('?'*len(same_request))
+    if method=='card':
+        row=db.execute(f"""SELECT ts FROM card_payments WHERE agent=? AND client=? AND note=?
+            AND status<>'rejected' AND ts>=? AND source NOT IN ({marks}) ORDER BY ts DESC LIMIT 1""",
+            (agent,cid,note,lo,*same_request)).fetchone()
+    else:
+        row=db.execute(f"""SELECT ts FROM events WHERE agent=? AND client=? AND kind='payment' AND note=?
+            AND ts>=? AND source NOT IN ({marks}) ORDER BY ts DESC LIMIT 1""",
+            (agent,cid,note,lo,*same_request)).fetchone()
+    if row:
+        mins=max(1,round(abs(op_ts-int(row[0]))/60))
+        raise DuplicatePaymentError(f"Xuddi shu to‘lov ({note.split(' · ',1)[-1]}) shu mijozga {mins} daqiqa oldin saqlangan. Ikkinchi marta kiritmoqchimisiz?")
+
+
 def _request_key(agent,request_id):
     request_id=str(request_id or '')
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,96}',request_id):
@@ -961,10 +987,13 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
         db.execute('SAVEPOINT mixed_payment')
         try:
             results=[]
+            # Bitta so‘rovdagi bir xil qismlar bir-biriga takror hisoblanmaydi.
+            batch=[_source(agent,str(_source(agent,request_id,j+1))) for j in range(len(parts))]
             for i,part in enumerate(parts):
                 if not isinstance(part,dict):raise ValueError('To‘lov qatori noto‘g‘ri.')
-                one={k:payload[k] for k in ('clientId','offlineTs','photoFileId') if k in payload}
+                one={k:payload[k] for k in ('clientId','offlineTs','photoFileId','confirmDuplicate') if k in payload}
                 one.update({k:part[k] for k in ('currency','method','amount','usd','rate','expectedRate','photoFileId') if k in part})
+                one['_batchSources']=batch
                 results.append(mutate(db,agent,'payment',one,str(_source(agent,request_id,i+1)),now,admin_override))
             db.execute('RELEASE SAVEPOINT mixed_payment')
         except Exception:
@@ -1235,6 +1264,7 @@ def mutate(db,agent,action,payload,request_id,now=None,admin_override=False):
             value=core.money(payload.get("amount"))
         label="Karta" if method=="card" else "Naqd"
         note=f"Mini App · {label} · "+((f"{value} UZS = {_usd(usd_in):.2f} USD · kurs {rate}" if usd_in else f"{value} UZS · 1 USD = {rate} UZS") if currency=="UZS" else "USD")
+        _check_recent_payment(db,agent,cid,note,method,op_ts,payload)
         if method=="card":
             # Card / bank transfer: the agent photographs the receipt (chek) so the cashier can check it.
             receipt=str(payload.get("photoFileId") or "").strip()
