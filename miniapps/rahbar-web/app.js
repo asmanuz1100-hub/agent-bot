@@ -1137,7 +1137,7 @@ function renderClient(c,tab){
   var t=c.totals;
   var tabs=[['events','Harakatlar',c.events.length],['debt','Qarz tarixi',''],['visits','Tashriflar',c.visits.length],['stock','Qoldiq',c.stocks.filter(function(s){return s.qty}).length],['edits','O‘zgarishlar',c.edits.length+(c.blacklistLog||[]).length]];
   var tabBody={
-    events:function(){return c.events.length?'<table><thead><tr><th>Sana</th><th>Amal</th><th>Tovar</th><th class="right">Miqdor</th><th class="right">Summa</th><th>Kim</th></tr></thead><tbody>'+c.events.map(function(e){return '<tr><td class="num">'+dt(e.ts)+'</td><td>'+(KIND[e.kind]||esc(e.kind))+'</td><td>'+esc(e.product||'—')+(e.note?'<br><small class="muted">'+esc(e.note)+'</small>':'')+'</td><td class="right num">'+(e.qty||'—')+'</td><td class="right num">'+(e.amountUsd?usd(e.amountUsd):e.amountUzs?uzs(e.amountUzs):'—')+'</td><td>'+esc(e.actor)+'</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">Harakat yo‘q</div>'},
+    events:function(){return c.events.length?'<table><thead><tr><th>Sana</th><th>Amal</th><th>Tovar</th><th class="right">Miqdor</th><th class="right">Summa</th><th>Kim</th></tr></thead><tbody>'+c.events.map(function(e){return '<tr><td class="num">'+dt(e.ts)+'</td><td>'+(KIND[e.kind]||esc(e.kind))+'</td><td>'+esc(e.product||'—')+(e.note?'<br><small class="muted">'+esc(e.note)+'</small>':'')+'</td><td class="right num">'+(e.qty||'—')+'</td><td class="right num">'+(e.amountUsd?usd(e.amountUsd):e.amountUzs?uzs(e.amountUzs):'—')+'</td><td>'+esc(e.actor)+(e.canCancel?' <button type="button" class="btn sm danger" data-cancel-pay="'+e.id+'" title="To‘lovni bekor qilish">'+ic('trash','sm')+'</button>':'')+'</td></tr>'}).join('')+'</tbody></table>':'<div class="empty">Harakat yo‘q</div>'},
     debt:function(){
       // Yurgan qoldiq: hozirgi qarzdan orqaga qarab (oxirgi 120 ta harakat) — qarz, avans va to'lovlarni bitta ketma-ketlikda ko'rsatadi.
       var fin=c.events.filter(function(e){return e.kind==='delivery'||e.kind==='payment'||e.kind==='return'});
@@ -1179,6 +1179,13 @@ function renderClient(c,tab){
    '<div class="tabs" id="cTabs">'+tabs.map(function(x){return '<button data-t="'+x[0]+'" class="'+(tab===x[0]?'on':'')+'">'+x[1]+' <span class="muted">'+x[2]+'</span></button>'}).join('')+'</div>'+
    '<div class="card flush"><div class="tbl-wrap" style="max-height:none">'+tabBody[tab]()+'</div></div>');
   $('cTabs').onclick=function(e){var b=e.target.closest('button');if(b)renderClient(c,b.dataset.t)};
+  document.querySelectorAll('[data-cancel-pay]').forEach(function(b){b.onclick=async function(){
+    var e=c.events.find(function(x){return x.id===Number(b.dataset.cancelPay)});if(!e)return;
+    var v=await formBox('To‘lovni bekor qilish',[{name:'reason',label:'Sabab',required:true,value:'Takror kiritilgan'}],'Bekor qilish',
+      dt(e.ts)+' · '+usd(e.amountUsd)+' · '+e.note+'. Mijoz qarzi '+usd(e.amountUsd)+' ga oshadi, agent qo‘lidagi pul shuncha kamayadi. Yozuv bazada «bekor qilingan» bo‘lib qoladi.');
+    if(!v)return;
+    var r=await run(function(){return api('payment_cancel',{eventId:e.id,reason:v.reason,confirm:true})},'To‘lov bekor qilindi');
+    if(r){S.dash=null;renderClient(r.client,tab)}}});
   var exp=function(fmt,btn){btn.disabled=true;run(function(){return api('client_export',{clientId:c.id,format:fmt})}).then(function(r){btn.disabled=false;if(r)download(r)})};
   $('cXlsx').onclick=function(){exp('xlsx',this)};$('cPdf').onclick=function(){exp('pdf',this)};
   $('cEdit').onclick=async function(){

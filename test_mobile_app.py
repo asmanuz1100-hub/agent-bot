@@ -63,11 +63,12 @@ class MobilePasswordCommandTests(unittest.TestCase):
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
                             [(1, 'admin', 'Rahbar'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (5, 'disabled', 'Eski')])
         self.sent = []
-        self.saved = bot.send
+        self.saved = bot.send, bot.api
         bot.send = lambda uid, text, keys=None: self.sent.append((uid, text))
+        bot.api = lambda *a, **k: {}
 
     def tearDown(self):
-        bot.send = self.saved
+        bot.send, bot.api = self.saved
         self.db.close()
         self.tmp.cleanup()
 
@@ -198,12 +199,13 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(code, 403)
         code, _ = self.post('/api/agent', token, origin='https://evil.example', action='snapshot')
         self.assertEqual(code, 403)
-        # A Rahbar web-panel token must not open the agent API from the app.
+        # Rahbar tokeni agent API'ni faqat admin rejimida ochadi (agentni tanlaydi), o'zi agent bo'lmaydi.
         code, data = self.post('/api/web', native=False, origin=sorted(bot.SELF_MINIAPP_ORIGINS)[0],
                                action='login', login='boss', password=self.admin_password)
         self.assertEqual(code, 200, data)
-        code, _ = self.post('/api/agent', data['token'], action='snapshot')
-        self.assertEqual(code, 403)
+        code, out = self.post('/api/agent', data['token'], action='snapshot')
+        self.assertEqual(code, 200, out)
+        self.assertTrue(out.get('adminMode'), out)
 
     def test_logout_ends_the_session(self):
         token = self.login('ali', self.agent_password)['token']
@@ -338,6 +340,10 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(boss['role'], 'admin')
         code, data = self.post('/api/manager', boss['token'], native=False, origin=site, action='dashboard')
         self.assertEqual(code, 200, data)
+        # Rahbar ilovada barcha panellarni ochadi: agent (admin rejimi), kassa, ombor, savdo.
+        for path in ('/api/agent', '/api/cashier', '/api/warehouse', '/api/shop'):
+            code, data = self.post(path, boss['token'], native=False, origin=site, action='dashboard')
+            self.assertEqual(code, 200, (path, data))
         db = self.db()
         try:
             db.execute("INSERT INTO users(id,role,name) VALUES(6,'disabled','Eski')")
@@ -347,6 +353,55 @@ class MobileHttpTests(unittest.TestCase):
             db.close()
         code, _ = self.post('/api/web', action='login', app='aibi', login='eski', password=old)
         self.assertEqual(code, 403)
+
+    def test_apk_download_and_bot_button(self):
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk')
+        with urllib.request.urlopen(req, timeout=30) as r:
+            self.assertEqual(r.headers['Content-Type'], 'application/vnd.android.package-archive')
+            head = r.read(4)
+            self.assertEqual(int(r.headers['Content-Length']), bot.APP_APK_FILE.stat().st_size)
+        self.assertEqual(head, b'PK\x03\x04')
+        size = bot.APP_APK_FILE.stat().st_size
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', method='HEAD')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual((r.status, int(r.headers['Content-Length']), r.headers['Accept-Ranges']), (200, size, 'bytes'))
+        # Uzilgan yuklash davom ettiriladi: oxirgi 10 bayt.
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', headers={'Range': f'bytes={size - 10}-'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 206)
+            self.assertEqual(r.headers['Content-Range'], f'bytes {size - 10}-{size - 1}/{size}')
+            self.assertEqual(r.read(), bot.APP_APK_FILE.read_bytes()[-10:])
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', headers={'Range': f'bytes={size}-'})
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(e.exception.code, 416)
+        calls = []
+        saved = bot.api
+        bot.api = lambda method, **k: calls.append((method, k)) or {}
+        files = []
+        saved_file = bot.send_app_file
+        bot.send_app_file = files.append
+        try:
+            db = self.db()
+            try:
+                bot.handle(db, {'update_id': 990001, 'message': {'chat': {'id': 3, 'type': 'private'}, 'from': {'id': 3}, 'text': '/ilova'}})
+            finally:
+                db.close()
+        finally:
+            bot.api, bot.send_app_file = saved, saved_file
+        self.assertEqual(files, [3])
+        msg = [k for m, k in calls if m == 'sendMessage' and 'reply_markup' in k]
+        self.assertTrue(msg, calls)
+        self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.APP_DOWNLOAD_URL)
+
+    def test_every_staff_menu_has_the_app_button(self):
+        db = self.db()
+        try:
+            db.executemany('INSERT OR IGNORE INTO users(id,role,name) VALUES(?,?,?)', [(7, 'warehouse', 'Omborchi'), (8, 'sales', 'Sotuvchi')])
+            for uid in (1, 2, 3, 7, 8):
+                self.assertIn(['📲 Ilova'], bot.menu(db, uid), uid)
+        finally:
+            db.close()
 
 
 if __name__ == '__main__':

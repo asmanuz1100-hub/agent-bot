@@ -19,7 +19,7 @@ SCHEMA='''
 CREATE TABLE IF NOT EXISTS voids(id INTEGER PRIMARY KEY, kind TEXT NOT NULL, ref INTEGER NOT NULL, actor INTEGER NOT NULL, reason TEXT NOT NULL, ts INTEGER NOT NULL, replaced_by INTEGER, UNIQUE(kind,ref));
 '''
 PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGSERIAL PRIMARY KEY').replace(' INTEGER',' BIGINT')
-KINDS=('purchase','sale')
+KINDS=('purchase','sale','payment')
 
 
 def init(db):
@@ -168,24 +168,24 @@ def cancel_sale(db,actor,sale_id,reason,now=None):
     return int(s['id'])
 
 
-# ---------- agent naqd to'lovi ----------
+# ---------- agent to'lovi (masalan, Mini App'da takror kiritilgan) ----------
 
 def cancel_payment(db,actor,event_id,reason,now=None):
-    """Agentning naqd to'lovi bekor: yozuv 'cancelled_payment' bo'ladi — mijoz qarzi qaytadi,
-    agent qo'lidagi pul kamayadi. Pul kassirga topshirilib bo'lgan bo'lsa bekor qilinmaydi."""
+    """Agentning naqd to'lovi bekor qilinadi: yozuv 'cancelled_payment' bo'ladi — mijoz qarzi qaytadi,
+    agent qo'lidagi pul kamayadi. Agent bu pulni kassaga topshirib bo'lgan bo'lsa — bekor qilinmaydi."""
     require_admin(db,actor)
     reason=_reason(reason)
     ev=db.execute("SELECT * FROM events WHERE id=?",(int(event_id),)).fetchone()
     if not ev or ev['kind']!='payment':raise ValueError('To‘lov topilmadi yoki allaqachon bekor qilingan.')
-    if ev['agent'] is None:raise ValueError('Bu to‘lov agentga tegishli emas.')
-    if (ev['pay_method'] or '')=='card':raise ValueError('Karta to‘lovini kassir bo‘limida bekor qiling.')
-    agent=int(ev['agent']);core.lock_agent(db,agent)
-    ts=int(time.time() if now is None else now)
-    _mark(db,'payment',ev['id'],actor,reason,ts)
-    usd=int(ev['amount_usd'] or 0);uzs=int(ev['paid_uzs'] or 0)
-    if uzs and core.cash(db,agent)<uzs*100:
-        raise ValueError('Agent bu so‘mni kassirga topshirib bo‘lgan — avval kassadan qaytarilsin.')
-    if not uzs and not int(ev['amount'] or 0) and core.cash_usd(db,agent)<usd:
-        raise ValueError('Agent bu dollarni kassirga topshirib bo‘lgan — avval kassadan qaytarilsin.')
+    if ev['agent'] is None:raise ValueError('Bu to‘lov kassa orqali kiritilgan — uni Kassa bo‘limida bekor qiling.')
+    if (ev['pay_method'] or '')=='card':raise ValueError('Karta to‘lovi kassir tasdig‘i orqali o‘tadi — bu yerda bekor qilinmaydi.')
+    agent=int(ev['agent'])
+    core.lock_agent(db,agent)
+    uzs=int(ev['paid_uzs'] or 0)*100+int(ev['amount'] or 0)
+    if uzs and core.cash(db,agent)<uzs:
+        raise ValueError('Agent bu so‘mni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
+    if not uzs and core.cash_usd(db,agent)<int(ev['amount_usd'] or 0):
+        raise ValueError('Agent bu dollarni kassaga topshirib bo‘lgan — avval kassadan qaytarilsin.')
+    _mark(db,'payment',ev['id'],actor,reason,int(time.time() if now is None else now))
     db.execute("UPDATE events SET kind='cancelled_payment' WHERE id=?",(int(ev['id']),))
     return int(ev['id'])

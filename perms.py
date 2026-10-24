@@ -220,6 +220,7 @@ def manager_perm(action,op=None,kind=None):
     if action=='hr':
         if op=='pay_add':return 'hr.calculate' if kind in ('bonus','penalty') else 'hr.pay'
         return {'overview':'hr.view','worker':'hr.view'}.get(op,'hr.edit')
+    if action=='payment_cancel':return 'cash.cancel'
     if action in ('period_report','insights','ai_ask'):return 'reports.view'
     if action in ('client_export','all_clients_export'):return 'reports.export'
     return None

@@ -16,7 +16,7 @@ class PaymentVoidTests(unittest.TestCase):
     def test_duplicate_som_payment_is_voided(self):
         corrections.init(self.db)
         self.pay('dup_pay_0001',currency='UZS',amount='120000',usd='10',method='cash')
-        self.pay('dup_pay_0002',currency='UZS',amount='120000',usd='10',method='cash')
+        self.pay('dup_pay_0002',currency='UZS',amount='120000',usd='10',method='cash',confirmDuplicate=True)
         self.assertEqual(core.client_debt_usd(self.db,self.cid),98000)
         eid=self.last_payment()
         with self.assertRaises(ValueError):corrections.cancel_payment(self.db,2,eid,'ikki marta')

@@ -271,7 +271,7 @@ async function request(action,extra){
   var base={initData:tg.initData,action:action};if(adminAgentId)base.agentId=adminAgentId;
   var r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",signal:controller.signal,body:JSON.stringify(Object.assign(base,extra||{}))});
   var body={};try{body=await r.json()}catch(_json){}
-  if(!r.ok){var serverError=Error(body.error||"Server xatosi ("+r.status+")");serverError.httpStatus=r.status;serverError.server=true;if(r.status===401){serverError.sessionExpired=true;markSessionExpired()}throw serverError}
+  if(!r.ok){var serverError=Error(body.error||"Server xatosi ("+r.status+")");serverError.httpStatus=r.status;serverError.code=body.code||"";serverError.server=true;if(r.status===401){serverError.sessionExpired=true;markSessionExpired()}throw serverError}
   return body
  }catch(e){
   if(e.name==="AbortError"){var timeout=Error("Server javob bermadi. Amal offline navbatga saqlanishi mumkin.");timeout.network=true;throw timeout}
@@ -1187,7 +1187,15 @@ async function saveForm(e){
    await ASMANOffline.saveSnapshot(data,telegramActorId());
    out={queued:true,clientId:tempId,message:"Offline saqlandi. Internet kelganda avtomatik sinxronlanadi."};queued=true;
   }else{
-   try{out=await request(formAction,Object.assign({},payload,{nonce:nonce}))}
+   try{
+    try{out=await request(formAction,Object.assign({},payload,{nonce:nonce}))}
+    catch(dupErr){
+     if(dupErr.code!=="duplicate_payment")throw dupErr;
+     if(!window.confirm("⚠️ "+dupErr.message+"\n\nOK — baribir saqlash, Bekor — saqlamaslik."))throw Error("Takroriy to‘lov saqlanmadi.");
+     payload.confirmDuplicate=true;
+     out=await request(formAction,Object.assign({},payload,{nonce:nonce}));
+    }
+   }
    catch(err){
     if(!isNetworkError(err))throw err;
     if(!window.ASMANOffline)throw err;

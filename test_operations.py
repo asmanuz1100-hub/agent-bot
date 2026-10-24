@@ -17,7 +17,7 @@ class OperationsJournalTests(unittest.TestCase):
     def test_agent_payment_listed_cancelled_and_edited(self):
         operations.init(self.db)
         self.pay('op_pay_0001',currency='USD',amount='50',method='cash')
-        self.pay('op_pay_0002',currency='USD',amount='50',method='cash')
+        self.pay('op_pay_0002',currency='USD',amount='50',method='cash',confirmDuplicate=True)
         pays=[r for r in self.rows('agent') if r['kind']=='payment']
         self.assertEqual(len(pays),2);self.assertTrue(all(r['canCancel'] and r['canEdit'] for r in pays))
         with self.assertRaises(ValueError):operations.cancel(self.db,2,'payment',pays[0]['ref'],'ikki marta')

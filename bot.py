@@ -14,6 +14,7 @@ import cashier_pending
 import cashier_daily
 import customer_status as cs
 import manager_api
+import corrections
 import web_auth
 import branding
 import staff
@@ -21,7 +22,6 @@ import ai_assistant
 import executive
 import sales
 import agent_api
-import corrections
 import operations
 import analytics
 import cashier_api
@@ -831,6 +831,9 @@ def menu(db,u):
             rows.insert(0,['📱 Омбор Mini App'])
         elif r=='agent':
             rows.append(['📦 Омбор сўрови'])
+    # AIBI ilovasi (APK) — har bir xodim botdan yuklab oladi.
+    if r in AIBI_APP_ROLES:
+        rows.append(['📲 Ilova'])
     return rows
 
 def show_cashier_menu(db,u):
@@ -1736,6 +1739,46 @@ MOBILE_ROLES={'agent'}
 # AIBI ilovasi (APK) — Telegram Mini App'larning o'zi, login/parol bilan.
 AIBI_APP_ROLES=('agent','cashier','warehouse','sales','admin')
 
+# AIBI ilovasi (Android APK) — botdan yuklab olinadi; fayl shu xizmatning o'zidan beriladi.
+APP_APK_FILE=Path(__file__).resolve().with_name('app-dist')/'AIBI.apk'
+APP_DOWNLOAD_URL=f'{PUBLIC_BASE_URL}/download/aibi.apk'
+
+def send_app_download(u,text=None):
+    api('sendMessage',chat_id=u,text=text or ('📲 AIBI ilovasi (Android)\n\n'
+        '1. Tugmani bosing va faylni yuklab oling.\n'
+        '2. Faylni oching, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
+        '3. Login va parol olish: /mobilparol'),
+        reply_markup={'inline_keyboard':[[{'text':'📲 AIBI ilovasini yuklab olish','url':APP_DOWNLOAD_URL}]]})
+
+_APP_FILE={'key':None,'file_id':None}
+_APP_FILE_LOCK=threading.Lock()
+
+def _app_file_worker(u):
+    """APK ni chatga fayl qilib yuborish (Telegram'ning ichki brauzeri katta faylni oxirigacha yuklamasligi mumkin).
+    Birinchi marta 45 MB yuklanadi, keyin Telegram file_id bilan darhol yuboriladi."""
+    caption='📲 AIBI ilovasi. Faylni bosing → «O‘rnatish». Login va parol: /mobilparol'
+    try:
+        st=APP_APK_FILE.stat();key=(st.st_size,int(st.st_mtime))
+        with _APP_FILE_LOCK:
+            if _APP_FILE['key']==key and _APP_FILE['file_id']:
+                api('sendDocument',chat_id=u,document=_APP_FILE['file_id'],caption=caption);return
+            boundary=uuid.uuid4().hex
+            head=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{u}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="AIBI.apk"\r\n'
+                  'Content-Type: application/vnd.android.package-archive\r\n\r\n').encode()
+            body=head+APP_APK_FILE.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
+            req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendDocument',data=body,
+                                       headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+            with urllib.request.urlopen(req,timeout=300) as res:out=json.load(res)
+            if not out.get('ok'):raise RuntimeError('APK send failed')
+            _APP_FILE.update(key=key,file_id=out['result']['document']['file_id'])
+    except Exception:
+        logging.exception('APK file send failed user=%s',u)
+
+def send_app_file(u):
+    threading.Thread(target=_app_file_worker,args=(u,),daemon=True,name='app-apk-send').start()
+
 def handle_mobile_password(db,u,r,text):
     """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
     if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
@@ -1750,6 +1793,8 @@ def handle_mobile_password(db,u,r,text):
     send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
            'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
            'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
+    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — yuklab oling 👇')
+    except Exception:logging.warning('App download button was not sent')
 
 def _wh_int(value,label):
     if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
@@ -1907,6 +1952,9 @@ def handle(db,update):
         handle_web_password(db,u,r,text);return
     if text=='/mobilparol' or text.startswith('/mobilparol ') or text=='/mobilyopish':
         handle_mobile_password(db,u,r,text);return
+    if text in ('/ilova','📲 Ilova'):
+        if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
+        send_app_download(u);send_app_file(u);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2506,6 +2554,42 @@ def serve_webhook(db,base_url):
         return pool.get() if postgres else connect(sqlite_path,initialize=False)
 
     class Handler(BaseHTTPRequestHandler):
+        def _send_apk(self,head):
+            """APK (45 MB): HEAD va Range — telefon yuklab olish menejeri uzilgan joyidan davom ettiradi.
+            Fayl xotiraga to'liq o'qilmaydi, bo'laklab yuboriladi."""
+            try:size=APP_APK_FILE.stat().st_size
+            except FileNotFoundError:
+                self._reply(404,b'Not found');return
+            start,end,code=0,size-1,200
+            m=re.fullmatch(r'bytes=(\d*)-(\d*)',(self.headers.get('Range') or '').strip())
+            if m and (m.group(1) or m.group(2)):
+                if m.group(1):
+                    start=int(m.group(1));end=min(int(m.group(2)),size-1) if m.group(2) else size-1
+                else:
+                    start=max(0,size-int(m.group(2)))
+                if start>end or start>=size:
+                    self.send_response(416);self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+                code=206
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type','application/vnd.android.package-archive')
+                self.send_header('Content-Length',str(end-start+1))
+                self.send_header('Accept-Ranges','bytes')
+                if code==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+                self.send_header('Content-Disposition','attachment; filename="AIBI.apk"')
+                self.send_header('Cache-Control','public, max-age=300')
+                self.send_header('X-Content-Type-Options','nosniff')
+                self.end_headers()
+                if head:return
+                left=end-start+1
+                with APP_APK_FILE.open('rb') as f:
+                    f.seek(start)
+                    while left>0:
+                        chunk=f.read(min(256*1024,left))
+                        if not chunk:break
+                        self.wfile.write(chunk);left-=len(chunk)
+            except (BrokenPipeError,ConnectionResetError):
+                pass
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
             try:
                 self.send_response(code)
@@ -2565,6 +2649,8 @@ def serve_webhook(db,base_url):
         def do_HEAD(self):
             # Render and browser clients may probe HEAD / before GET /health.
             head_path=urlparse(self.path).path
+            if head_path=='/download/aibi.apk':
+                self._send_apk(head=True);return
             code=200 if head_path in ('/','/health') else (miniapp_response(head_path)[0] if head_path.startswith('/app/') else 404)
             self.send_response(code)
             self.send_header('Content-Length','0')
@@ -2575,6 +2661,8 @@ def serve_webhook(db,base_url):
             if path=='/app' or path.startswith('/app/'):
                 code,body,ctype,headers=miniapp_response(path,urlparse(self.path).query)
                 self._reply(code,body,ctype,headers);return
+            if path=='/download/aibi.apk':
+                self._send_apk(head=False);return
             if path in ('/cashier','/cashier/'):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
@@ -3024,7 +3112,7 @@ def serve_webhook(db,base_url):
                     if not modules.enabled(local,'agents'):
                         answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
-                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES:
+                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES|{'admin'}:
                         answer_agent(403,{'error':'Mobil ilova faqat savdo agentlari uchun.'});return
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
@@ -3151,7 +3239,9 @@ def serve_webhook(db,base_url):
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
-                    answer_agent(400,{'error':str(e)})
+                    err={'error':str(e)}
+                    if getattr(e,'code',None):err['code']=e.code
+                    answer_agent(400,err)
                 except Exception:
                     if local is not None:local.rollback()
                     logging.exception('Authenticated agent API request failed')
@@ -3292,6 +3382,12 @@ def serve_webhook(db,base_url):
                         preview=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
                         edit_client(local,actor,preview['clientId'],preview['values'])
                         data={'ok':True,'client':manager_api.client_detail(local,preview['clientId'])}
+                    elif action=='payment_cancel':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Bekor qilishni tasdiqlang.')
+                        ev=local.execute('SELECT client FROM events WHERE id=?',(int(payload.get('eventId') or 0),)).fetchone()
+                        corrections.cancel_payment(local,actor,payload.get('eventId'),payload.get('reason'))
+                        data={'ok':True,'client':manager_api.client_detail(local,ev['client'])}
                     elif action=='client_delete_preview':
                         data=manager_api.client_delete_preview(local,payload.get('clientId'))
                     elif action=='client_delete_commit':
