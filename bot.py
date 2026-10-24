@@ -1745,6 +1745,35 @@ def send_app_download(u,text=None):
         '3. Login va parol olish: /mobilparol'),
         reply_markup={'inline_keyboard':[[{'text':'📲 AIBI ilovasini yuklab olish','url':APP_DOWNLOAD_URL}]]})
 
+_APP_FILE={'key':None,'file_id':None}
+_APP_FILE_LOCK=threading.Lock()
+
+def _app_file_worker(u):
+    """APK ni chatga fayl qilib yuborish (Telegram'ning ichki brauzeri katta faylni oxirigacha yuklamasligi mumkin).
+    Birinchi marta 45 MB yuklanadi, keyin Telegram file_id bilan darhol yuboriladi."""
+    caption='📲 AIBI ilovasi. Faylni bosing → «O‘rnatish». Login va parol: /mobilparol'
+    try:
+        st=APP_APK_FILE.stat();key=(st.st_size,int(st.st_mtime))
+        with _APP_FILE_LOCK:
+            if _APP_FILE['key']==key and _APP_FILE['file_id']:
+                api('sendDocument',chat_id=u,document=_APP_FILE['file_id'],caption=caption);return
+            boundary=uuid.uuid4().hex
+            head=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{u}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="AIBI.apk"\r\n'
+                  'Content-Type: application/vnd.android.package-archive\r\n\r\n').encode()
+            body=head+APP_APK_FILE.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
+            req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendDocument',data=body,
+                                       headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+            with urllib.request.urlopen(req,timeout=300) as res:out=json.load(res)
+            if not out.get('ok'):raise RuntimeError('APK send failed')
+            _APP_FILE.update(key=key,file_id=out['result']['document']['file_id'])
+    except Exception:
+        logging.exception('APK file send failed user=%s',u)
+
+def send_app_file(u):
+    threading.Thread(target=_app_file_worker,args=(u,),daemon=True,name='app-apk-send').start()
+
 def handle_mobile_password(db,u,r,text):
     """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
     if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
@@ -1920,7 +1949,7 @@ def handle(db,update):
         handle_mobile_password(db,u,r,text);return
     if text in ('/ilova','📲 Ilova'):
         if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
-        send_app_download(u);return
+        send_app_download(u);send_app_file(u);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2520,6 +2549,42 @@ def serve_webhook(db,base_url):
         return pool.get() if postgres else connect(sqlite_path,initialize=False)
 
     class Handler(BaseHTTPRequestHandler):
+        def _send_apk(self,head):
+            """APK (45 MB): HEAD va Range — telefon yuklab olish menejeri uzilgan joyidan davom ettiradi.
+            Fayl xotiraga to'liq o'qilmaydi, bo'laklab yuboriladi."""
+            try:size=APP_APK_FILE.stat().st_size
+            except FileNotFoundError:
+                self._reply(404,b'Not found');return
+            start,end,code=0,size-1,200
+            m=re.fullmatch(r'bytes=(\d*)-(\d*)',(self.headers.get('Range') or '').strip())
+            if m and (m.group(1) or m.group(2)):
+                if m.group(1):
+                    start=int(m.group(1));end=min(int(m.group(2)),size-1) if m.group(2) else size-1
+                else:
+                    start=max(0,size-int(m.group(2)))
+                if start>end or start>=size:
+                    self.send_response(416);self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+                code=206
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type','application/vnd.android.package-archive')
+                self.send_header('Content-Length',str(end-start+1))
+                self.send_header('Accept-Ranges','bytes')
+                if code==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+                self.send_header('Content-Disposition','attachment; filename="AIBI.apk"')
+                self.send_header('Cache-Control','public, max-age=300')
+                self.send_header('X-Content-Type-Options','nosniff')
+                self.end_headers()
+                if head:return
+                left=end-start+1
+                with APP_APK_FILE.open('rb') as f:
+                    f.seek(start)
+                    while left>0:
+                        chunk=f.read(min(256*1024,left))
+                        if not chunk:break
+                        self.wfile.write(chunk);left-=len(chunk)
+            except (BrokenPipeError,ConnectionResetError):
+                pass
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
             try:
                 self.send_response(code)
@@ -2579,6 +2644,8 @@ def serve_webhook(db,base_url):
         def do_HEAD(self):
             # Render and browser clients may probe HEAD / before GET /health.
             head_path=urlparse(self.path).path
+            if head_path=='/download/aibi.apk':
+                self._send_apk(head=True);return
             code=200 if head_path in ('/','/health') else (miniapp_response(head_path)[0] if head_path.startswith('/app/') else 404)
             self.send_response(code)
             self.send_header('Content-Length','0')
@@ -2590,22 +2657,7 @@ def serve_webhook(db,base_url):
                 code,body,ctype,headers=miniapp_response(path,urlparse(self.path).query)
                 self._reply(code,body,ctype,headers);return
             if path=='/download/aibi.apk':
-                # 45 MB: xotiraga to'liq o'qilmaydi, bo'laklab yuboriladi.
-                try:
-                    size=APP_APK_FILE.stat().st_size
-                    self.send_response(200)
-                    self.send_header('Content-Type','application/vnd.android.package-archive')
-                    self.send_header('Content-Length',str(size))
-                    self.send_header('Content-Disposition','attachment; filename="AIBI.apk"')
-                    self.send_header('Cache-Control','public, max-age=300')
-                    self.send_header('X-Content-Type-Options','nosniff')
-                    self.end_headers()
-                    with APP_APK_FILE.open('rb') as f:shutil.copyfileobj(f,self.wfile,256*1024)
-                except FileNotFoundError:
-                    self._reply(404,b'Not found')
-                except (BrokenPipeError,ConnectionResetError):
-                    pass
-                return
+                self._send_apk(head=False);return
             if path in ('/cashier','/cashier/'):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):

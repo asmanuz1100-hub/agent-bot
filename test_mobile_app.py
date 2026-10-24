@@ -356,9 +356,26 @@ class MobileHttpTests(unittest.TestCase):
             head = r.read(4)
             self.assertEqual(int(r.headers['Content-Length']), bot.APP_APK_FILE.stat().st_size)
         self.assertEqual(head, b'PK\x03\x04')
+        size = bot.APP_APK_FILE.stat().st_size
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', method='HEAD')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual((r.status, int(r.headers['Content-Length']), r.headers['Accept-Ranges']), (200, size, 'bytes'))
+        # Uzilgan yuklash davom ettiriladi: oxirgi 10 bayt.
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', headers={'Range': f'bytes={size - 10}-'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 206)
+            self.assertEqual(r.headers['Content-Range'], f'bytes {size - 10}-{size - 1}/{size}')
+            self.assertEqual(r.read(), bot.APP_APK_FILE.read_bytes()[-10:])
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk', headers={'Range': f'bytes={size}-'})
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(e.exception.code, 416)
         calls = []
         saved = bot.api
         bot.api = lambda method, **k: calls.append((method, k)) or {}
+        files = []
+        saved_file = bot.send_app_file
+        bot.send_app_file = files.append
         try:
             db = self.db()
             try:
@@ -366,7 +383,8 @@ class MobileHttpTests(unittest.TestCase):
             finally:
                 db.close()
         finally:
-            bot.api = saved
+            bot.api, bot.send_app_file = saved, saved_file
+        self.assertEqual(files, [3])
         msg = [k for m, k in calls if m == 'sendMessage' and 'reply_markup' in k]
         self.assertTrue(msg, calls)
         self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.APP_DOWNLOAD_URL)
