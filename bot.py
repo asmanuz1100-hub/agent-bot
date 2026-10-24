@@ -14,6 +14,7 @@ import cashier_pending
 import cashier_daily
 import customer_status as cs
 import manager_api
+import corrections
 import web_auth
 import branding
 import staff
@@ -3375,6 +3376,12 @@ def serve_webhook(db,base_url):
                         preview=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
                         edit_client(local,actor,preview['clientId'],preview['values'])
                         data={'ok':True,'client':manager_api.client_detail(local,preview['clientId'])}
+                    elif action=='payment_cancel':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Bekor qilishni tasdiqlang.')
+                        ev=local.execute('SELECT client FROM events WHERE id=?',(int(payload.get('eventId') or 0),)).fetchone()
+                        corrections.cancel_payment(local,actor,payload.get('eventId'),payload.get('reason'))
+                        data={'ok':True,'client':manager_api.client_detail(local,ev['client'])}
                     elif action=='client_delete_preview':
                         data=manager_api.client_delete_preview(local,payload.get('clientId'))
                     elif action=='client_delete_commit':
