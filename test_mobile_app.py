@@ -63,11 +63,12 @@ class MobilePasswordCommandTests(unittest.TestCase):
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
                             [(1, 'admin', 'Rahbar'), (2, 'agent', 'Ali'), (3, 'cashier', 'Kassir'), (5, 'disabled', 'Eski')])
         self.sent = []
-        self.saved = bot.send
+        self.saved = bot.send, bot.api
         bot.send = lambda uid, text, keys=None: self.sent.append((uid, text))
+        bot.api = lambda *a, **k: {}
 
     def tearDown(self):
-        bot.send = self.saved
+        bot.send, bot.api = self.saved
         self.db.close()
         self.tmp.cleanup()
 
@@ -347,6 +348,28 @@ class MobileHttpTests(unittest.TestCase):
             db.close()
         code, _ = self.post('/api/web', action='login', app='aibi', login='eski', password=old)
         self.assertEqual(code, 403)
+
+    def test_apk_download_and_bot_button(self):
+        req = urllib.request.Request(f'http://127.0.0.1:{self.port}/download/aibi.apk')
+        with urllib.request.urlopen(req, timeout=30) as r:
+            self.assertEqual(r.headers['Content-Type'], 'application/vnd.android.package-archive')
+            head = r.read(4)
+            self.assertEqual(int(r.headers['Content-Length']), bot.APP_APK_FILE.stat().st_size)
+        self.assertEqual(head, b'PK\x03\x04')
+        calls = []
+        saved = bot.api
+        bot.api = lambda method, **k: calls.append((method, k)) or {}
+        try:
+            db = self.db()
+            try:
+                bot.handle(db, {'update_id': 990001, 'message': {'chat': {'id': 3, 'type': 'private'}, 'from': {'id': 3}, 'text': '/ilova'}})
+            finally:
+                db.close()
+        finally:
+            bot.api = saved
+        msg = [k for m, k in calls if m == 'sendMessage' and 'reply_markup' in k]
+        self.assertTrue(msg, calls)
+        self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.APP_DOWNLOAD_URL)
 
 
 if __name__ == '__main__':

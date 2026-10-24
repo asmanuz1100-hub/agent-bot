@@ -1733,6 +1733,17 @@ MOBILE_ROLES={'agent'}
 # AIBI ilovasi (APK) — Telegram Mini App'larning o'zi, login/parol bilan.
 AIBI_APP_ROLES=('agent','cashier','warehouse','sales','admin')
 
+# AIBI ilovasi (Android APK) — botdan yuklab olinadi; fayl shu xizmatning o'zidan beriladi.
+APP_APK_FILE=Path(__file__).resolve().with_name('app-dist')/'AIBI.apk'
+APP_DOWNLOAD_URL=f'{PUBLIC_BASE_URL}/download/aibi.apk'
+
+def send_app_download(u,text=None):
+    api('sendMessage',chat_id=u,text=text or ('📲 AIBI ilovasi (Android)\n\n'
+        '1. Tugmani bosing va faylni yuklab oling.\n'
+        '2. Faylni oching, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
+        '3. Login va parol olish: /mobilparol'),
+        reply_markup={'inline_keyboard':[[{'text':'📲 AIBI ilovasini yuklab olish','url':APP_DOWNLOAD_URL}]]})
+
 def handle_mobile_password(db,u,r,text):
     """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
     if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
@@ -1747,6 +1758,8 @@ def handle_mobile_password(db,u,r,text):
     send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
            'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
            'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
+    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — yuklab oling 👇')
+    except Exception:logging.warning('App download button was not sent')
 
 def _wh_int(value,label):
     if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
@@ -1904,6 +1917,9 @@ def handle(db,update):
         handle_web_password(db,u,r,text);return
     if text=='/mobilparol' or text.startswith('/mobilparol ') or text=='/mobilyopish':
         handle_mobile_password(db,u,r,text);return
+    if text in ('/ilova','📲 Ilova'):
+        if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
+        send_app_download(u);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2572,6 +2588,23 @@ def serve_webhook(db,base_url):
             if path=='/app' or path.startswith('/app/'):
                 code,body,ctype,headers=miniapp_response(path,urlparse(self.path).query)
                 self._reply(code,body,ctype,headers);return
+            if path=='/download/aibi.apk':
+                # 45 MB: xotiraga to'liq o'qilmaydi, bo'laklab yuboriladi.
+                try:
+                    size=APP_APK_FILE.stat().st_size
+                    self.send_response(200)
+                    self.send_header('Content-Type','application/vnd.android.package-archive')
+                    self.send_header('Content-Length',str(size))
+                    self.send_header('Content-Disposition','attachment; filename="AIBI.apk"')
+                    self.send_header('Cache-Control','public, max-age=300')
+                    self.send_header('X-Content-Type-Options','nosniff')
+                    self.end_headers()
+                    with APP_APK_FILE.open('rb') as f:shutil.copyfileobj(f,self.wfile,256*1024)
+                except FileNotFoundError:
+                    self._reply(404,b'Not found')
+                except (BrokenPipeError,ConnectionResetError):
+                    pass
+                return
             if path in ('/cashier','/cashier/'):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
