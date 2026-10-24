@@ -829,6 +829,9 @@ def menu(db,u):
             rows.insert(0,['📱 Омбор Mini App'])
         elif r=='agent':
             rows.append(['📦 Омбор сўрови'])
+    # AIBI ilovasi (APK) — har bir xodim botdan yuklab oladi.
+    if r in AIBI_APP_ROLES:
+        rows.append(['📲 Ilova'])
     return rows
 
 def show_cashier_menu(db,u):

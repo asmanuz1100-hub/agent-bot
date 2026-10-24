@@ -389,6 +389,15 @@ class MobileHttpTests(unittest.TestCase):
         self.assertTrue(msg, calls)
         self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.APP_DOWNLOAD_URL)
 
+    def test_every_staff_menu_has_the_app_button(self):
+        db = self.db()
+        try:
+            db.executemany('INSERT OR IGNORE INTO users(id,role,name) VALUES(?,?,?)', [(7, 'warehouse', 'Omborchi'), (8, 'sales', 'Sotuvchi')])
+            for uid in (1, 2, 3, 7, 8):
+                self.assertIn(['📲 Ilova'], bot.menu(db, uid), uid)
+        finally:
+            db.close()
+
 
 if __name__ == '__main__':
     unittest.main()
