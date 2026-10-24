@@ -219,6 +219,7 @@ var PAGES=[
   ['staff','staff','Xodimlar','Tizim foydalanuvchilari, sex ishchilari, davomat va oylik',1],
   ['reports','report','Hisobot','Davr bo‘yicha natijalar',1],
   ['insights','analytics','Tahlil','Bugungi reja, mijozlar reytingi va hududlar',1],
+  ['ops','list','Amallar','Agent, savdo, kassa va ombor yozuvlari — xatoni bekor qilish yoki tuzatish',2],
   ['settings','settings','Sozlamalar','Korxona bo‘limlari, xodimlar va ruxsatlar, akkaunt',2]
 ];
 /* Guruhlar: barcha bo'limlar mavjud rahbar huquqlari doirasida (server /api/manager rolni tekshiradi). */
@@ -277,7 +278,7 @@ async function render(force){
     try{await loadDash()}catch(e){if(TOKEN){page.innerHTML=errState(e.message);page.querySelector('[data-retry]').onclick=function(){render(true)}}return}
     if(S.page!==p)return;
   }
-  ({home:pageHome,team:pageTeam,agents:pageAgents,clients:pageClients,cash:pageCash,sales:pageSales,reports:pageReports,insights:pageInsights,warehouse:pageWarehouse,supply:pageSupply,staff:pageStaff,settings:pageSettings})[p](page,force);
+  ({home:pageHome,team:pageTeam,agents:pageAgents,clients:pageClients,cash:pageCash,sales:pageSales,reports:pageReports,insights:pageInsights,warehouse:pageWarehouse,supply:pageSupply,staff:pageStaff,ops:pageOps,settings:pageSettings})[p](page,force);
 }
 async function loadDash(){S.dash=await api('dashboard');S.loadedTs=Date.now();stamp();renderNav();return S.dash}
 function stamp(){var u=$('updated');u.className='live';u.innerHTML=S.loadedTs?'<i></i>Jonli<span> · '+new Date(S.loadedTs).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span>':''}
@@ -1200,6 +1201,53 @@ function renderClient(c,tab){
     if(!await confirmBox('Mijozni o‘chirish','<p><b>'+esc(p.name)+'</b> · qarz '+usd(p.debtUsd)+' · '+p.eventCount+' harakat · '+p.visitCount+' tashrif'+(p.openTasks?' · '+p.openTasks+' ochiq vazifa':'')+'</p><p class="muted">'+esc(p.warning)+'</p>','O‘chirish',true))return;
     var r=await run(function(){return api('client_delete_commit',{clientId:c.id,confirm:true})},'Mijoz arxivga o‘tkazildi');
     if(r){closeDrawer();S.dash=null;render(true)}};
+}
+
+/* ----- Amallar: xodimlar kiritgan barcha yozuvlar (agent, savdo, kassa, ombor, ta'minot). Rahbar xatoni bekor qiladi yoki
+   summasini tuzatadi. Asl yozuv o'chmaydi: «Bekor qilingan» bo'lib tarixda qoladi (kim, qachon, sabab). ----- */
+var OP={p:'today',from:'',to:'',src:'',q:'',st:'',data:null};
+async function pageOps(page){
+  if(OP.p==='custom'&&!OP.from)OP.p='today';
+  var srcs=[['','Hammasi'],['agent','Agent'],['sales','Savdo'],['cash','Kassa'],['warehouse','Ombor'],['supply','Ta’minot']];
+  page.innerHTML='<div class="toolbar">'+periodBar('opP',OP)+'<span class="muted small">'+esc(periodLabel(OP))+'</span></div>'+
+    '<div class="card flush"><div class="card-h"><h3>'+ic('list')+' Kiritilgan amallar</h3><div class="acts"><div class="seg" id="opSrc">'+srcs.map(function(x){return '<button data-s="'+x[0]+'" class="'+(OP.src===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+    '<div class="seg" id="opSt">'+[['','Barchasi'],['active','Faol'],['cancelled','Bekor qilingan']].map(function(x){return '<button data-t="'+x[0]+'" class="'+(OP.st===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+    '<input type="search" id="opQ" placeholder="Xodim, mijoz, izoh, #ID…" value="'+esc(OP.q)+'" style="width:220px;border-radius:999px"></div></div>'+
+    '<p class="hint" style="margin:6px 16px 0">Xato kiritilgan yozuvni (ikki marta to‘lov, test sotuv…) bekor qiling yoki summasini tuzating. Qoldiq, qarz va hisobotlar avtomatik qayta hisoblanadi; asl yozuv tarixda «bekor qilingan» bo‘lib qoladi.</p>'+
+    '<div class="tbl-wrap" id="opBody" style="margin-top:10px"><div class="skel" style="height:240px;margin:0 16px 16px"></div></div></div>';
+  bindPeriod('opP',OP,function(){OP.data=null;pageOps(page)});
+  $('opSrc').onclick=function(e){var b=e.target.closest('button');if(!b)return;OP.src=b.dataset.s;OP.data=null;pageOps(page)};
+  $('opSt').onclick=function(e){var b=e.target.closest('button');if(!b)return;OP.st=b.dataset.t;$('opSt').querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b)});opList()};
+  $('opQ').oninput=debounce(function(){OP.q=this.value;opList()},150);
+  if(!OP.data){try{OP.data=await opLoad({op:'list'})}catch(e){if(S.page==='ops'&&$('opBody')){$('opBody').innerHTML=errState(e.message);$('opBody').querySelector('[data-retry]').onclick=function(){pageOps(page)}}return}}
+  if(S.page==='ops')opList();
+}
+function opLoad(args){return api('operations',Object.assign({period:OP.p,from:OP.from||undefined,to:OP.to||undefined,source:OP.src||undefined},args))}
+function opMoney(x){return x.amount==null?'':x.currency==='UZS'?uzs(x.amount):usd(x.amount)}
+function opList(){
+  var el=$('opBody');if(!el||!OP.data)return;var q=OP.q.trim().toLowerCase();
+  var rows=OP.data.items.filter(function(x){return (!OP.st||x.status===OP.st)&&(!q||[x.label,x.who,x.party,x.detail,x.sourceLabel,'#'+x.ref].join(' ').toLowerCase().indexOf(q)>=0)});
+  if(!rows.length){el.innerHTML=emptyState('Bu davrda yozuv yo‘q','list');return}
+  el.innerHTML='<table class="ops"><thead><tr><th>Sana</th><th>Bo‘lim</th><th>Amal</th><th>Kiritdi</th><th>Kimga / kimdan</th><th class="right">Summa</th><th>Holat</th><th></th></tr></thead><tbody>'+rows.map(function(x,i){
+    var off=x.status!=='active';
+    return '<tr'+(off?' style="opacity:.6"':'')+'><td class="nowrap">'+dt(x.ts)+'</td><td><span class="pill">'+esc(x.sourceLabel)+'</span></td><td><b>'+esc(x.label)+'</b> <span class="muted small">#'+x.ref+'</span>'+(x.detail?'<br><small class="muted">'+esc(x.detail)+'</small>':'')+'</td>'+
+      '<td>'+esc(x.who)+'</td><td>'+esc(x.party)+'</td><td class="right num">'+(off?'<s>'+opMoney(x)+'</s>':opMoney(x))+'</td>'+
+      '<td>'+(off?'<span class="bad" title="'+esc((x.cancel&&x.cancel.reason)||'')+'">Bekor qilingan</span>'+(x.cancel&&x.cancel.who?'<br><small class="muted">'+esc(x.cancel.who)+' · '+esc(x.cancel.reason)+'</small>':''):'<span class="ok">Faol</span>')+'</td>'+
+      '<td class="right nowrap">'+(x.canEdit?'<button class="icon-btn ghost" data-e="'+i+'" aria-label="Tahrirlash" data-tip="Summani tuzatish">'+ic('edit','sm')+'</button>':'')+
+      (x.canCancel?'<button class="icon-btn ghost" data-c="'+i+'" aria-label="Bekor qilish" data-tip="Bekor qilish (o‘chirish)">'+ic('trash','sm')+'</button>':'')+
+      (!off&&!x.canCancel&&x.hint?'<span class="muted small" title="'+esc(x.hint)+'">ⓘ</span>':'')+'</td></tr>'}).join('')+'</tbody></table>';
+  el.onclick=async function(e){var b=e.target.closest('button[data-c],button[data-e]');if(!b)return;var x=rows[+(b.dataset.c||b.dataset.e)];
+    var head='<p><b>'+esc(x.sourceLabel)+' · '+esc(x.label)+' #'+x.ref+'</b><br>'+dt(x.ts)+' · '+esc(x.who)+(x.party?' → '+esc(x.party):'')+(x.amount!=null?' · <b>'+opMoney(x)+'</b>':'')+'</p>'+(x.hint?'<p class="hint">'+esc(x.hint)+'</p>':'');
+    var r;
+    if(b.dataset.c!=null){
+      var v=await modal('<form><h3>Yozuvni bekor qilish</h3>'+head+'<p class="muted">Bekor qilingach uning ta’siri (qarz, qoldiq, kassa, ombor) qaytariladi. Asl yozuv tarixda qoladi.</p><label>Sabab<input name="reason" maxlength="300" required placeholder="Masalan: ikki marta kiritilgan"></label><div class="foot"><button type="button" class="btn" data-m="cancel">Yopish</button><button class="btn danger">Bekor qilish</button></div></form>');
+      if(!v)return;r=await run(function(){return opLoad({op:'cancel',kind:x.kind,ref:x.ref,reason:v.reason})},'Bekor qilindi');
+    }else{
+      var w=await formBox('Summani tuzatish',[{name:'amount',label:'To‘g‘ri summa ('+(x.currency==='UZS'?'so‘m':'USD')+')',value:x.amount,required:true,type:'number',step:'any'},{name:'reason',label:'Sabab',value:'Summa xato kiritilgan',required:true}],'Saqlash',
+        head.replace(/<\/?p[^>]*>/g,' ')+'<br>Eski yozuv bekor qilinadi va to‘g‘ri summa bilan yangisi yoziladi.');
+      if(!w)return;r=await run(function(){return opLoad({op:'edit',kind:x.kind,ref:x.ref,amount:w.amount,reason:w.reason,requestId:rid()})},'Tuzatildi');
+    }
+    if(r){OP.data=r;S.dash=null;S.cache={};opList()}};
 }
 
 /* ----- Kassa ----- */

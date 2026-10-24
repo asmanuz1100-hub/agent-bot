@@ -859,3 +859,4 @@ th{background:color-mix(in srgb,var(--card-hi) 92%,transparent)}
 .perm-form .perm-grp{margin:12px 0}.perm-form .perm-grp>b{display:block;margin-bottom:4px}
 .perm-form .switch input{width:20px;height:20px;flex:none}
 .perm-form .pill{font-size:10.5px;padding:1px 6px}
+.nowrap{white-space:nowrap}

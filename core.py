@@ -476,6 +476,7 @@ def connect(path,initialize=True):
         import sale_orders;sale_orders.init(db)
         import shop;shop.init(db)
         import corrections;corrections.init(db)
+        import operations;operations.init(db)
         import web_auth;web_auth.init(db)
         db.commit()
         try:
@@ -554,6 +555,7 @@ def connect(path,initialize=True):
     import sale_orders;sale_orders.init(db)
     import shop;shop.init(db)
     import corrections;corrections.init(db)
+    import operations;operations.init(db)
     import web_auth;web_auth.init(db)
     db.commit()
     db.execute('PRAGMA journal_mode=WAL')
