@@ -454,7 +454,7 @@ function renderDetail(){
     var names={delivery:"Tovar berildi",payment:"To‘lov olindi",return:"Tovar qaytdi",sold:"Sotildi",order:"Buyurtma",visit:"Tashrif"};
     var prod=(data.products||[]).find(function(p){return p.pack===ev.pack});
     var value=ev.kind==="payment"?payAmount(ev)+(ev.payMethod==="card"?" · karta":""):ev.amountUsd?fmt(ev.amountUsd)+" USD":ev.qty?(prod?prod.name:("SKU "+ev.pack))+" · "+ev.qty+" dona":"";
-    return '<div class="timeline-item"><small>'+date(ev.ts)+' · '+esc(ev.actor||"Agent")+'</small><b>'+esc((names[ev.kind]||ev.kind)+(value?" · "+value:""))+'</b></div>';
+    return '<div class="timeline-item"><small>'+date(ev.ts)+' · '+esc(ev.actor||"Agent")+'</small><b>'+esc((names[ev.kind]||ev.kind)+(value?" · "+value:""))+'</b>'+(data.adminMode&&ev.kind==="payment"&&ev.payMethod!=="card"&&ev.id?'<button type="button" class="secondary" data-payment-void="'+ev.id+'">✕ To‘lovni bekor qilish</button>':'')+'</div>';
   }).join(""):'<p class="muted">Operatsiyalar hali yo‘q.</p>')+'</div>';
  }
  if(!c.blacklisted)body+='<div class="card bl-box"><button type="button" class="secondary wide" id="blOpen">⛔ Qora ro‘yxatga qo‘shish</button><div id="blForm" class="hidden"><label for="blReason">Sabab (majburiy)</label><textarea id="blReason" rows="3" maxlength="300" placeholder="Masalan: qarzini to‘lamaydi, telefon ko‘tarmaydi"></textarea><div class="grid2"><button type="button" class="secondary" id="blCancel">Bekor qilish</button><button type="button" class="primary danger" id="blSave">⛔ Tasdiqlash</button></div><small class="muted">Mijoz o‘chirilmaydi: bazada va xaritada qoladi, lekin u bilan amallar bloklanadi.</small></div></div>';
@@ -1225,6 +1225,7 @@ async function deleteAdminClient(id){
 document.addEventListener("click",function(e){
  var b=e.target.closest("button");if(!b)return;
  if(b.dataset.page){if(!data){notify("Avval agentni tanlang yoki ma’lumot yuklanishini kuting.");return}go(b.dataset.page);return}
+ if(b.dataset.paymentVoid){if(busy)return;var why=window.prompt("To‘lovni bekor qilish sababi (masalan: ikki marta kiritilgan):");if(!why||!why.trim())return;if(!window.confirm("Bu to‘lov bekor qilinadi, mijoz qarzi qayta tiklanadi. Davom etasizmi?"))return;busy=true;b.disabled=true;request("payment_void",{eventId:Number(b.dataset.paymentVoid),reason:why.trim()}).then(async function(out){notify(out.message);await refreshAfterWrite();detailData=null;if(selected)await loadClientDetail(selected)}).catch(function(err){notify(err.message)}).finally(function(){busy=false;b.disabled=false});return}
  if(b.dataset.cardHandover){if(busy)return;if(!window.confirm("Karta pulini kassirga yuborasizmi?"))return;busy=true;b.disabled=true;request("card_handover",{paymentId:Number(b.dataset.cardHandover),nonce:crypto.randomUUID().replace(/-/g,"")}).then(async function(out){notify(out.message);data=await request("snapshot");fullDataLoaded=true;applySnapshotUi();go("cash")}).catch(function(err){notify(err.message)}).finally(function(){busy=false;b.disabled=false});return}
  if(b.id==="detailBack"){go(detailBackPage||"clients");return}
  if(b.id==="visitStart"){startVisit();return}

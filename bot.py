@@ -21,6 +21,7 @@ import ai_assistant
 import executive
 import sales
 import agent_api
+import corrections
 import analytics
 import cashier_api
 import warehouse_api
@@ -3045,6 +3046,11 @@ def serve_webhook(db,base_url):
                     if action=='location':
                         if admin_mode:raise ValueError('GPS faqat agentning o‘z telefonidan yuboriladi.')
                         data=agent_api.mobile_point(local,actor,payload)
+                        local.commit()
+                    elif action=='payment_void':
+                        if not admin_mode:raise ValueError('To‘lovni faqat rahbar bekor qiladi.')
+                        corrections.cancel_payment(local,actor,payload.get('eventId'),payload.get('reason'))
+                        data={'ok':True,'message':'To‘lov bekor qilindi. Mijoz qarzi qayta tiklandi.'}
                         local.commit()
                     elif action=='photo_upload':
                         image=decode_agent_camera_image(payload.get('imageData'))
