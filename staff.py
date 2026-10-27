@@ -168,7 +168,7 @@ def activate(db, actor, uid):
 WEB_ROLES = tuple(ROLES)
 
 
-def issue_login(db, actor, uid, login=None):
+def issue_login(db, actor, uid, login=None, password=None):
     """Ilova va web panel uchun login/parol: istalgan faol xodimga."""
     core._require_admin(db, actor)
     uid = core._telegram_id(uid)
@@ -178,7 +178,7 @@ def issue_login(db, actor, uid, login=None):
     login = (login or '').strip() or None
     if not login and not web_auth.account(db, uid):
         login = f"{row['role']}{uid}"          # masalan warehouse704 — rolini ko'rsatadi
-    return web_auth.issue_password(db, uid, login)
+    return web_auth.issue_password(db, uid, login, password=(password or '') or None)
 
 
 def revoke_login(db, actor, uid):

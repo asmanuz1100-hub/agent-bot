@@ -72,6 +72,11 @@ class PermUnitTests(unittest.TestCase):
         rows = {x['id']: x for x in staff.staff_list(self.db, PRIMARY)['staff']}
         self.assertEqual((rows[6]['webCapable'], rows[3]['webCapable'], rows[6]['webLogin'], rows[3]['webLogin']),
                          (True, True, login, login3))
+        import web_auth
+        self.assertEqual(staff.issue_login(self.db, 1, 3, 'aziz.kassir', 'Aziz2026!'), ('aziz.kassir', 'Aziz2026!'))
+        self.assertEqual(web_auth.login(self.db, 'aziz.kassir', 'Aziz2026!')[0], 3)
+        with self.assertRaisesRegex(ValueError, '8–128'):
+            staff.issue_login(self.db, 1, 3, None, 'qisqa')
 
     def test_manager_perm_mapping(self):
         self.assertEqual(perms.manager_perm('hr', 'pay_add', 'bonus'), 'hr.calculate')

@@ -77,7 +77,7 @@ def account(db,uid):
     return db.execute('SELECT user_id,login,updated_ts FROM web_accounts WHERE user_id=?',(int(uid),)).fetchone()
 
 
-def issue_password(db,uid,login=None,now=None):
+def issue_password(db,uid,login=None,now=None,password=None):
     """Create or reset the web account of `uid`. Returns (login, plain password).
 
     Every existing browser session of this user is signed out."""
@@ -89,7 +89,8 @@ def issue_password(db,uid,login=None,now=None):
     taken=db.execute('SELECT user_id FROM web_accounts WHERE login=?',(login,)).fetchone()
     if taken and int(taken['user_id'])!=int(uid):
         raise ValueError('Bu login band. Boshqasini tanlang.')
-    password=new_password()
+    if password:_validate_new(password)          # rahbar o'zi bergan parol
+    else:password=new_password()
     db.execute('''INSERT INTO web_accounts(user_id,login,pw_hash,updated_ts) VALUES(?,?,?,?)
         ON CONFLICT(user_id) DO UPDATE SET login=excluded.login,pw_hash=excluded.pw_hash,updated_ts=excluded.updated_ts''',
         (int(uid),login,hash_password(password),now))

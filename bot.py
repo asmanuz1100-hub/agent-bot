@@ -3647,9 +3647,9 @@ def serve_webhook(db,base_url):
                         elif action=='staff_deactivate':staff.deactivate(local,actor,uid,ADMINS)
                         elif action=='staff_activate':staff.activate(local,actor,uid)
                         elif action=='staff_login_issue':
-                            login,password=staff.issue_login(local,actor,uid,payload.get('login'))
+                            login,password=staff.issue_login(local,actor,uid,payload.get('login'),payload.get('password'))
                             web_role=role(local,int(uid))
-                            data.update({'login':login,'password':password,'url':SAVDO_WEB_URL if web_role=='sales' else WEB_PANEL_URL})
+                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL if web_role=='admin' else SAVDO_WEB_URL if web_role=='sales' else 'AIBI ilovasi (telefon)'})
                         else:staff.revoke_login(local,actor,uid)
                         data['staff']=manager_api.staff_list(local);data['staff'].update(staff.staff_list(local,ADMINS))
                     elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
