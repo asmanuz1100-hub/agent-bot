@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "notes": [
-    "Bitta umumiy ilova: login bo‘yicha o‘z bo‘limingiz ochiladi",
-    "Login va parolni rahbar beradi — istalgan telefondan kirish",
-    "Agent: «Ishni boshlash / tugatish» ilovada, GPS ilovadan avtomatik",
-    "Yangi dizayn va tezroq ishlash"
+    "Internet yo‘q bo‘lsa ham ilova ochiladi (oxirgi ma’lumotlar bilan)",
+    "Agent: offline kiritilganlar internet qaytganda yuboriladi",
+    "Ish boshlash/tugatish darhol ishlaydi",
+    "Agent, Kassir, Rahbar — Ombor uslubida"
   ]
 }
