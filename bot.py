@@ -1752,11 +1752,11 @@ def app_file_name():return 'AIBI-2.0.apk'
 APP_DOWNLOAD_URL=f'{PUBLIC_BASE_URL}/download/aibi.apk'
 
 def send_app_download(u,text=None):
+    # Havola Telegram ichida yuklanmaydi — fayl chatga yuboriladi (send_app_file).
     api('sendMessage',chat_id=u,text=text or ('📲 AIBI 2.0 ilovasi (Android)\n\n'
-        '1. Tugmani bosing va faylni yuklab oling.\n'
-        '2. Faylni oching, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
-        '3. Login va parolni rahbaringiz beradi.'),
-        reply_markup={'inline_keyboard':[[{'text':'📲 AIBI 2.0 ilovasini yuklab olish','url':app_download_url()}]]})
+        '1. Pastdagi faylni bosing → «O‘rnatish».\n'
+        '2. So‘rasa, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
+        '3. Login va parolni rahbaringiz beradi.'))
 
 _APP_FILE={'key':None,'file_id':None}
 _APP_FILE_LOCK=threading.Lock()
@@ -1800,19 +1800,22 @@ def notify_app_update(db):
     """Yangi ilova versiyasi deploy bo'lganda — ilovadan foydalanadigan barcha xodimlarga bir marta xabar."""
     version,notes=app_release()
     if not version or not APP_APK_FILE.exists():return
-    row=db.execute("SELECT value FROM meta WHERE key='app_notified_version'").fetchone()
+    # Kalit: fayl bilan yuboriladigan xabar (avval havola bilan edi — havola ishlamadi).
+    row=db.execute("SELECT value FROM meta WHERE key='app_notified_file'").fetchone()
     if row and row[0]==version:return
-    db.execute("INSERT INTO meta(key,value) VALUES('app_notified_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(version,))
+    db.execute("INSERT INTO meta(key,value) VALUES('app_notified_file',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(version,))
     db.commit()
     marks=','.join('?'*len(AIBI_APP_ROLES))
     users=[int(r[0]) for r in db.execute(f'SELECT id FROM users WHERE role IN ({marks})',AIBI_APP_ROLES).fetchall()]
     text=(f'🆕 AIBI {version} — yangi versiya chiqdi!\n\n'+''.join(f'• {n}\n' for n in notes)+
-          '\nYangilash: tugmani bosing va o‘rnating (eski ilova ustiga o‘rnatiladi, ma’lumotlar saqlanadi).')
-    markup={'inline_keyboard':[[{'text':f'📲 AIBI {version} ni yuklab olish','url':app_download_url()}]]}
+          '\nYangilash: pastdagi faylni bosing → «O‘rnatish» (eski ilova ustiga o‘rnatiladi, ma’lumotlar saqlanadi).')
     def run():
         sent=0
         for uid in users:
-            try:api('sendMessage',chat_id=uid,text=text,reply_markup=markup);sent+=1
+            try:
+                api('sendMessage',chat_id=uid,text=text)
+                _app_file_worker(uid)          # APK faylning o'zi; birinchi yuklashdan keyin file_id bilan darhol
+                sent+=1
             except Exception as e:logging.warning('App update notice failed user=%s: %r',uid,e)
             time.sleep(0.05)
         logging.info('App update %s notice sent to %s/%s users',version,sent,len(users))
@@ -1832,7 +1835,7 @@ def handle_mobile_password(db,u,r,text):
     send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
            'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
            'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
-    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — yuklab oling 👇')
+    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — pastdagi faylni o‘rnating 👇');send_app_file(u)
     except Exception:logging.warning('App download button was not sent')
 
 def _wh_int(value,label):

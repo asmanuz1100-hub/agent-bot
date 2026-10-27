@@ -390,9 +390,8 @@ class MobileHttpTests(unittest.TestCase):
         finally:
             bot.api, bot.send_app_file = saved, saved_file
         self.assertEqual(files, [3])
-        msg = [k for m, k in calls if m == 'sendMessage' and 'reply_markup' in k]
-        self.assertTrue(msg, calls)
-        self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.app_download_url())
+        msg = [k for m, k in calls if m == 'sendMessage' and 'AIBI 2.0' in k.get('text', '')]
+        self.assertTrue(msg, calls)                         # matn + fayl (havola yo'q)
 
     def test_every_staff_menu_has_the_app_button(self):
         db = self.db()
