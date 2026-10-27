@@ -1741,14 +1741,22 @@ AIBI_APP_ROLES=('agent','cashier','warehouse','sales','admin')
 
 # AIBI ilovasi (Android APK) — botdan yuklab olinadi; fayl shu xizmatning o'zidan beriladi.
 APP_APK_FILE=Path(__file__).resolve().with_name('app-dist')/'AIBI.apk'
+def _app_version():
+    """APK versiyasi (o'lcham+vaqt): havola va fayl nomida — telefon eski yuklanganini ochmasin."""
+    try:st=APP_APK_FILE.stat()
+    except FileNotFoundError:return '0'
+    return f"{datetime.fromtimestamp(st.st_mtime,TZ).strftime('%Y%m%d-%H%M')}"
+def app_download_url():return f'{PUBLIC_BASE_URL}/download/aibi.apk?v={_app_version()}'
+APP_NAME='AIBI 2.0'
+def app_file_name():return 'AIBI-2.0.apk'
 APP_DOWNLOAD_URL=f'{PUBLIC_BASE_URL}/download/aibi.apk'
 
 def send_app_download(u,text=None):
-    api('sendMessage',chat_id=u,text=text or ('📲 AIBI ilovasi (Android)\n\n'
+    api('sendMessage',chat_id=u,text=text or ('📲 AIBI 2.0 ilovasi (Android)\n\n'
         '1. Tugmani bosing va faylni yuklab oling.\n'
         '2. Faylni oching, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
         '3. Login va parolni rahbaringiz beradi.'),
-        reply_markup={'inline_keyboard':[[{'text':'📲 AIBI ilovasini yuklab olish','url':APP_DOWNLOAD_URL}]]})
+        reply_markup={'inline_keyboard':[[{'text':'📲 AIBI 2.0 ilovasini yuklab olish','url':app_download_url()}]]})
 
 _APP_FILE={'key':None,'file_id':None}
 _APP_FILE_LOCK=threading.Lock()
@@ -1756,7 +1764,7 @@ _APP_FILE_LOCK=threading.Lock()
 def _app_file_worker(u):
     """APK ni chatga fayl qilib yuborish (Telegram'ning ichki brauzeri katta faylni oxirigacha yuklamasligi mumkin).
     Birinchi marta 45 MB yuklanadi, keyin Telegram file_id bilan darhol yuboriladi."""
-    caption='📲 AIBI ilovasi. Faylni bosing → «O‘rnatish». Login va parolni rahbaringiz beradi.'
+    caption='📲 AIBI 2.0 ilovasi. Faylni bosing → «O‘rnatish». Login va parolni rahbaringiz beradi.'
     try:
         st=APP_APK_FILE.stat();key=(st.st_size,int(st.st_mtime))
         with _APP_FILE_LOCK:
@@ -1765,7 +1773,7 @@ def _app_file_worker(u):
             boundary=uuid.uuid4().hex
             head=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{u}\r\n'
                   f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
-                  f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="AIBI.apk"\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{app_file_name()}"\r\n'
                   'Content-Type: application/vnd.android.package-archive\r\n\r\n').encode()
             body=head+APP_APK_FILE.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
             req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendDocument',data=body,
@@ -2579,8 +2587,8 @@ def serve_webhook(db,base_url):
                 self.send_header('Content-Length',str(end-start+1))
                 self.send_header('Accept-Ranges','bytes')
                 if code==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
-                self.send_header('Content-Disposition','attachment; filename="AIBI.apk"')
-                self.send_header('Cache-Control','public, max-age=300')
+                self.send_header('Content-Disposition',f'attachment; filename="{app_file_name()}"')
+                self.send_header('Cache-Control','no-cache')
                 self.send_header('X-Content-Type-Options','nosniff')
                 self.end_headers()
                 if head:return

@@ -392,7 +392,7 @@ class MobileHttpTests(unittest.TestCase):
         self.assertEqual(files, [3])
         msg = [k for m, k in calls if m == 'sendMessage' and 'reply_markup' in k]
         self.assertTrue(msg, calls)
-        self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.APP_DOWNLOAD_URL)
+        self.assertEqual(msg[-1]['reply_markup']['inline_keyboard'][0][0]['url'], bot.app_download_url())
 
     def test_every_staff_menu_has_the_app_button(self):
         db = self.db()
