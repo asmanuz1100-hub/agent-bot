@@ -1787,6 +1787,37 @@ def _app_file_worker(u):
 def send_app_file(u):
     threading.Thread(target=_app_file_worker,args=(u,),daemon=True,name='app-apk-send').start()
 
+APP_VERSION_FILE=APP_APK_FILE.with_name('version.json')
+
+def app_release():
+    """app-dist/version.json: {"version": "2.0.1", "notes": [...]} — yangi APK bilan birga yangilanadi."""
+    try:
+        data=json.loads(APP_VERSION_FILE.read_text(encoding='utf-8'))
+        return str(data.get('version') or '').strip(),[str(x) for x in (data.get('notes') or [])][:8]
+    except (OSError,ValueError):return '',[]
+
+def notify_app_update(db):
+    """Yangi ilova versiyasi deploy bo'lganda — ilovadan foydalanadigan barcha xodimlarga bir marta xabar."""
+    version,notes=app_release()
+    if not version or not APP_APK_FILE.exists():return
+    row=db.execute("SELECT value FROM meta WHERE key='app_notified_version'").fetchone()
+    if row and row[0]==version:return
+    db.execute("INSERT INTO meta(key,value) VALUES('app_notified_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(version,))
+    db.commit()
+    marks=','.join('?'*len(AIBI_APP_ROLES))
+    users=[int(r[0]) for r in db.execute(f'SELECT id FROM users WHERE role IN ({marks})',AIBI_APP_ROLES).fetchall()]
+    text=(f'🆕 AIBI {version} — yangi versiya chiqdi!\n\n'+''.join(f'• {n}\n' for n in notes)+
+          '\nYangilash: tugmani bosing va o‘rnating (eski ilova ustiga o‘rnatiladi, ma’lumotlar saqlanadi).')
+    markup={'inline_keyboard':[[{'text':f'📲 AIBI {version} ni yuklab olish','url':app_download_url()}]]}
+    def run():
+        sent=0
+        for uid in users:
+            try:api('sendMessage',chat_id=uid,text=text,reply_markup=markup);sent+=1
+            except Exception as e:logging.warning('App update notice failed user=%s: %r',uid,e)
+            time.sleep(0.05)
+        logging.info('App update %s notice sent to %s/%s users',version,sent,len(users))
+    threading.Thread(target=run,daemon=True,name='app-update-notice').start()
+
 def handle_mobile_password(db,u,r,text):
     """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
     if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
@@ -2550,6 +2581,8 @@ def serve_webhook(db,base_url):
     webhook=base_url.rstrip('/')+path
     api('setWebhook',url=webhook,secret_token=secret,allowed_updates=['message','edited_message'],drop_pending_updates=False)
     threading.Thread(target=sync_menu_buttons,args=(menu_button_users(db),),daemon=True).start()
+    try:notify_app_update(db)
+    except Exception:logging.exception('App update notice failed')
     port=int(os.getenv('PORT','10000'))
     postgres=isinstance(db,PostgresDB)
     database_url=os.getenv('DATABASE_URL') or DB_PATH

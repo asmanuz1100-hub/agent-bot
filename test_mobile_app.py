@@ -406,3 +406,28 @@ class MobileHttpTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AppUpdateNoticeTests(unittest.TestCase):
+    def test_new_version_notifies_app_users_once(self):
+        db = core.connect(':memory:')
+        db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
+                       [(1, 'admin', 'R'), (2, 'agent', 'A'), (3, 'cashier', 'K'), (5, 'disabled', 'Eski')])
+        calls = []
+        saved = bot.api, bot.app_release, threading.Thread
+        bot.api = lambda method, **k: calls.append((method, k['chat_id'], k['text'])) or {}
+        bot.app_release = lambda: ('9.9', ['Yangi narsa'])
+
+        class Now:
+            def __init__(self, target, **k): self.t = target
+            def start(self): self.t()
+        threading.Thread = Now
+        try:
+            bot.notify_app_update(db)
+            self.assertEqual(sorted(c[1] for c in calls), [1, 2, 3])
+            self.assertIn('AIBI 9.9', calls[0][2])
+            bot.notify_app_update(db)                       # o'sha versiya — qayta yuborilmaydi
+            self.assertEqual(len(calls), 3)
+        finally:
+            bot.api, bot.app_release, threading.Thread = saved
+            db.close()

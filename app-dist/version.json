@@ -1,0 +1,9 @@
+{
+  "version": "2.0.1",
+  "notes": [
+    "Bitta umumiy ilova: login bo‘yicha o‘z bo‘limingiz ochiladi",
+    "Login va parolni rahbar beradi — istalgan telefondan kirish",
+    "Agent: «Ishni boshlash / tugatish» ilovada, GPS ilovadan avtomatik",
+    "Yangi dizayn va tezroq ishlash"
+  ]
+}
