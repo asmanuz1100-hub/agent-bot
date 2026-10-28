@@ -55,7 +55,8 @@ class WarehouseApiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'faqat omborchi'):self.call(1,action,**payload)
 
     def test_keeper_hands_order_to_another_agent(self):
-        cid=self.db.execute("INSERT INTO clients(agent,name,phone,created_ts) VALUES(2,'Baraka','+998900000077',1)").lastrowid
+        cid=7701
+        self.db.execute("INSERT INTO clients(id,agent,name,phone,created_ts) VALUES(?,2,'Baraka','+998900000077',1)",(cid,))
         oid,_=core.create_order(self.db,2,cid,[{'pack':self.plain,'qty':3}],'',source=777001)
         self.db.commit()
         self.call(5,'receive',pack=self.plain,qty=5,requestId='recv-ordag-1')
