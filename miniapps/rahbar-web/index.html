@@ -24,6 +24,7 @@
     <p class="muted">Savdo, mijozlar, agentlar va moliya — bitta joyda</p>
     <label>Login<input id="lgLogin" name="username" autocomplete="username" required autofocus spellcheck="false" autocapitalize="off"></label>
     <label>Parol<input id="lgPass" name="password" type="password" autocomplete="current-password" required></label>
+    <label id="lgCodeRow" hidden>Telegram’ga kelgan kod<input id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" spellcheck="false"></label>
     <div id="lgErr" class="form-err" role="alert"></div>
     <button class="btn pri block" id="lgBtn"><span>Kirish</span></button>
     <p class="hint">Login va parolni Telegram botdan oling: rahbar akkauntidan <code>/webparol</code> yozing.</p>

@@ -3334,12 +3334,28 @@ def serve_webhook(db,base_url):
                     # Chiqish faqat shu tokenni yopadi — ilova qaysi rejimda bo'lmasin ruxsat.
                     if native and not (savdo_panel or mobile or aibi or action=='logout'):
                         answer_web(403,{'error':'Ruxsat yo‘q.'});return
+                    # Rahbar paneli: yangi qurilmada parol to'g'ri bo'lsa ham Telegram'ga kelgan kod so'raladi.
+                    two_step=not (savdo_panel or mobile or aibi)
                     if action=='login':
-                        uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
+                        uid=web_auth.check_login(local,payload.get('login'),payload.get('password'))
                         if role(local,uid) not in web_roles:
-                            web_auth.logout(local,token);local.commit()
-                            answer_web(403,{'error':web_denied});return
-                        data={'ok':True,'token':token,'role':role(local,uid)}
+                            local.commit();answer_web(403,{'error':web_denied});return
+                        if two_step and not web_auth.device_trusted(local,uid,payload.get('device')):
+                            challenge,code=web_auth.start_otp(local,uid)
+                            try:send(uid,f'🔐 AIBI web panelga kirish kodi: {code}\n\n5 daqiqa amal qiladi. Siz kirmayotgan bo‘lsangiz — kodni hech kimga bermang va /webparol bilan parolni almashtiring.')
+                            except Exception:
+                                local.rollback();logging.warning('Web OTP send failed')
+                                answer_web(502,{'error':'Kodni Telegram’ga yuborib bo‘lmadi. Botni bloklamaganingizni tekshiring.'});return
+                            data={'ok':True,'otp':True,'challenge':challenge}
+                        else:
+                            token=web_auth.open_session(local,uid,self.headers.get('User-Agent',''))
+                            data={'ok':True,'token':token,'role':role(local,uid)}
+                    elif action=='verify_otp' and two_step:
+                        uid=web_auth.verify_otp(local,payload.get('challenge'),payload.get('code'))
+                        if role(local,uid) not in web_roles:
+                            local.commit();answer_web(403,{'error':web_denied});return
+                        token=web_auth.open_session(local,uid,self.headers.get('User-Agent',''))
+                        data={'ok':True,'token':token,'role':role(local,uid),'device':web_auth.trust_device(local,uid)}
                     elif action=='logout':
                         web_auth.logout(local,token);data={'ok':True}
                     elif action in ('me','change_password'):

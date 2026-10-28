@@ -200,8 +200,14 @@ class MobileHttpTests(unittest.TestCase):
         code, _ = self.post('/api/agent', token, origin='https://evil.example', action='snapshot')
         self.assertEqual(code, 403)
         # Rahbar tokeni agent API'ni faqat admin rejimida ochadi (agentni tanlaydi), o'zi agent bo'lmaydi.
-        code, data = self.post('/api/web', native=False, origin=sorted(bot.SELF_MINIAPP_ORIGINS)[0],
+        origin = sorted(bot.SELF_MINIAPP_ORIGINS)[0]
+        sent = []
+        bot.api = lambda method, **k: sent.append(k) or {}
+        code, data = self.post('/api/web', native=False, origin=origin,
                                action='login', login='boss', password=self.admin_password)
+        self.assertEqual(code, 200, data)
+        code, data = self.post('/api/web', native=False, origin=origin, action='verify_otp',
+                               challenge=data['challenge'], code=sent[-1]['text'].split(': ', 1)[1][:6])
         self.assertEqual(code, 200, data)
         code, out = self.post('/api/agent', data['token'], action='snapshot')
         self.assertEqual(code, 200, out)

@@ -214,7 +214,8 @@ class WebPanelHttpTests(unittest.TestCase):
             cls.port = s.getsockname()[1]
         cls.saved = (bot.TOKEN, bot.api, os.environ.get('PORT'), os.environ.get('WEBHOOK_SECRET'))
         bot.TOKEN = '123:TEST'
-        bot.api = lambda *a, **k: {}
+        cls.sent = []
+        bot.api = lambda method, **k: cls.sent.append(k) or {}
         os.environ['PORT'] = str(cls.port)
         os.environ['WEBHOOK_SECRET'] = 'test-secret'
         base = f'http://127.0.0.1:{cls.port}'
@@ -251,8 +252,44 @@ class WebPanelHttpTests(unittest.TestCase):
             except ValueError:
                 return e.code, {'raw': raw.decode('utf-8', 'replace')}
 
-    def login(self, name='boss', password=None):
-        return self.post('/api/web', action='login', login=name, password=password or self.password)
+    def login(self, name='boss', password=None, device=None):
+        """Kirish; rahbarga kod so'ralsa — Telegram'ga ketgan koddan foydalanadi."""
+        code, data = self.post('/api/web', action='login', login=name, password=password or self.password, device=device)
+        if code == 200 and data.get('otp'):
+            otp = self.sent[-1]['text'].split(': ', 1)[1][:6]
+            code, data = self.post('/api/web', action='verify_otp', challenge=data['challenge'], code=otp)
+        return code, data
+
+    def test_new_device_needs_telegram_code(self):
+        code, first = self.post('/api/web', action='login', login='boss', password=self.password)
+        self.assertEqual(code, 200, first)
+        self.assertTrue(first['otp'])
+        self.assertNotIn('token', first)
+        msg = self.sent[-1]
+        self.assertEqual(msg['chat_id'], 1)
+        otp = msg['text'].split(': ', 1)[1][:6]
+        wrong = '000000' if otp != '000000' else '111111'
+        code, bad = self.post('/api/web', action='verify_otp', challenge=first['challenge'], code=wrong)
+        self.assertEqual(code, 400, bad)
+        code, ok = self.post('/api/web', action='verify_otp', challenge=first['challenge'], code=otp)
+        self.assertEqual(code, 200, ok)
+        self.assertTrue(ok['token'] and ok['device'])
+        code, again = self.post('/api/web', action='verify_otp', challenge=first['challenge'], code=otp)
+        self.assertEqual(code, 400, again)       # kod bir martalik
+        sent_before = len(self.sent)
+        code, trusted = self.post('/api/web', action='login', login='boss', password=self.password, device=ok['device'])
+        self.assertEqual(code, 200, trusted)
+        self.assertIn('token', trusted)          # ishonchli qurilmada kod so'ralmaydi
+        self.assertEqual(len(self.sent), sent_before)
+
+    def test_otp_locks_after_too_many_tries(self):
+        code, first = self.post('/api/web', action='login', login='boss', password=self.password)
+        otp = self.sent[-1]['text'].split(': ', 1)[1][:6]
+        wrong = '000000' if otp != '000000' else '111111'
+        for _ in range(web_auth.OTP_TRIES):
+            self.post('/api/web', action='verify_otp', challenge=first['challenge'], code=wrong)
+        code, late = self.post('/api/web', action='verify_otp', challenge=first['challenge'], code=otp)
+        self.assertEqual(code, 400, late)
 
     def test_panel_page_is_served(self):
         with urllib.request.urlopen(f'http://127.0.0.1:{self.port}/app/rahbar-web/', timeout=10) as r:
@@ -345,7 +382,7 @@ class WebPanelHttpTests(unittest.TestCase):
             self.assertEqual((code, d.get('login')), (200, 'warehouse704'), d)   # omborchiga ham — AIBI ilovasi uchun
             code, d = self.post('/api/manager', token, action='staff_login_issue', id=705, login='ikkinchi', confirm=True)
             self.assertEqual(code, 200, d)
-            code, lg = self.post('/api/web', action='login', login='ikkinchi', password=d['password'])
+            code, lg = self.login('ikkinchi', d['password'])
             self.assertEqual(code, 200, lg)
             code, d = self.post('/api/manager', token, action='staff_deactivate', id=705, confirm=True)
             self.assertEqual(code, 200, d)
