@@ -1835,7 +1835,7 @@ def handle_mobile_password(db,u,r,text):
     send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
            'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
            'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
-    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — pastdagi faylni o‘rnating 👇');send_app_file(u)
+    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — /ilova yuboring, bot faylni yuboradi.')
     except Exception:logging.warning('App download button was not sent')
 
 def _wh_int(value,label):
@@ -2584,8 +2584,6 @@ def serve_webhook(db,base_url):
     webhook=base_url.rstrip('/')+path
     api('setWebhook',url=webhook,secret_token=secret,allowed_updates=['message','edited_message'],drop_pending_updates=False)
     threading.Thread(target=sync_menu_buttons,args=(menu_button_users(db),),daemon=True).start()
-    try:notify_app_update(db)
-    except Exception:logging.exception('App update notice failed')
     port=int(os.getenv('PORT','10000'))
     postgres=isinstance(db,PostgresDB)
     database_url=os.getenv('DATABASE_URL') or DB_PATH
@@ -3848,6 +3846,9 @@ def run():
     signal.signal(signal.SIGINT,stop_signal)
     try:
         base=os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL')
+        # Yangi ilova versiyasi haqida xabar — faqat haqiqiy ishga tushishda (testlar serve_webhook'ni o'zi chaqiradi).
+        try:notify_app_update(db)
+        except Exception:logging.exception('App update notice failed')
         if base:serve_webhook(db,base)
         else:run_polling(db)
     finally:db.close()

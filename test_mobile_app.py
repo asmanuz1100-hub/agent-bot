@@ -416,7 +416,7 @@ class AppUpdateNoticeTests(unittest.TestCase):
         saved = bot.api, bot.app_release, threading.Thread, bot._app_file_worker
         files = []
         bot._app_file_worker = files.append
-        bot.api = lambda method, **k: calls.append((method, k['chat_id'], k['text'])) or {}
+        bot.api = lambda method, **k: calls.append((method, k.get('chat_id'), k.get('text', ''))) if 'AIBI 9.9' in str(k.get('text', '')) else {}
         bot.app_release = lambda: ('9.9', ['Yangi narsa'])
 
         class Now:
