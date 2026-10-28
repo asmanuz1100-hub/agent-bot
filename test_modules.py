@@ -106,7 +106,8 @@ class HttpBase(unittest.TestCase):
             cls.port = s.getsockname()[1]
         cls.saved = (bot.TOKEN, bot.api, os.environ.get('PORT'), os.environ.get('WEBHOOK_SECRET'), set(bot.ADMINS))
         bot.TOKEN = TOKEN
-        bot.api = lambda *a, **k: {}
+        cls.sent = []
+        bot.api = lambda method, **k: cls.sent.append(k) or {}
         bot.ADMINS.clear()
         bot.ADMINS.add(1)
         os.environ['PORT'] = str(cls.port)
@@ -145,6 +146,10 @@ class HttpBase(unittest.TestCase):
     def token(self, login='boss', password=None):
         code, d = self.post('/api/web', action='login', login=login, password=password or self.password)
         self.assertEqual(code, 200, d)
+        if d.get('otp'):      # rahbar paneli: Telegram'ga ketgan kod bilan tasdiqlash
+            otp = self.sent[-1]['text'].split(': ', 1)[1][:6]
+            code, d = self.post('/api/web', action='verify_otp', challenge=d['challenge'], code=otp)
+            self.assertEqual(code, 200, d)
         return d['token']
 
 
