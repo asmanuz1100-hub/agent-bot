@@ -177,9 +177,20 @@ def handle(db,actor,action,payload):
     notify=[]
     orders=[]
     if action=='receive':
-        pack=_pack(payload);qty=_qty(payload,pack)
-        move=wh.receive(db,actor,pack,qty,_note(payload),source=source)
-        result={'move':move}
+        items=payload.get('items')
+        if items is None:items=[payload]
+        if not isinstance(items,list) or not 1<=len(items)<=30:raise ValueError('Mahsulotlar ro‘yxati noto‘g‘ri (1–30 ta).')
+        lines=[]
+        for item in items:
+            if not isinstance(item,dict):raise ValueError('Mahsulot noto‘g‘ri.')
+            pack=_pack(item);lines.append((pack,_qty(item,pack)))
+        note=_note(payload);rid=payload.get('requestId')
+        moves=[]
+        for i,(pack,qty) in enumerate(lines):
+            # Har bir qator o'z idempotentlik kalitiga ega: bitta qayta yuborishda ham ikki marta yozilmaydi.
+            src=source if len(lines)==1 or rid is None else _source(actor,{'requestId':f'{rid}-{i}'})
+            moves.append(wh.receive(db,actor,pack,qty,note,source=src))
+        result={'move':moves[0],'moves':moves}
     elif action=='writeoff':
         pack=_pack(payload);qty=_qty(payload,pack)
         move=wh.write_off(db,actor,pack,qty,_note(payload,required=True,label='Brak sababi'),source=source)
