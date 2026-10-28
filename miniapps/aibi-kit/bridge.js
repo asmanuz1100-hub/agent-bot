@@ -1,5 +1,5 @@
 /* AIBI ilovasi ko'prigi — Telegram'siz.
-   AIBI ilovasi (Android) sahifani /app/aibi-*/#aibi=<token> bilan ochadi. Token telefonda saqlanadi,
+   AIBI ilovasi (Android) sahifani /app/aibi-NOM/ sahifasini #aibi=TOKEN bilan ochadi. Token telefonda saqlanadi,
    API so'rovlariga «Authorization: Bearer» bo'lib qo'shiladi. Telegram Mini App'lar bu fayldan foydalanmaydi.
    window.AIBI.WebApp — sahifa kodi kutadigan interfeys (ready, MainButton, BackButton, HapticFeedback, ...). */
 (function () {

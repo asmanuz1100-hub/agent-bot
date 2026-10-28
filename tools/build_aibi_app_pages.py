@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MINI = ROOT / 'miniapps'
 TG_SCRIPT = re.compile(r'<script[^>]*src="https://telegram\.org/js/telegram-web-app\.js[^"]*"[^>]*>\s*</script>')
-BRIDGE = '<script src="/app/aibi-kit/bridge.js?v=1"></script>'
+BRIDGE = '<script src="/app/aibi-kit/bridge.js?v=2"></script>'
 BANNER = '<!-- AVTOMATIK: tools/build_aibi_app_pages.py — qo\'lda tahrirlamang (manba: {src}) -->\n'
 
 # Ombor/Savdo palitrasi (miniapps/ombor :root).
@@ -62,6 +62,8 @@ def convert_html(text, src, kind):
     if not n:  # Telegram skripti yo'q sahifa — ko'prik <head> boshida
         text = re.sub(r'<head(\s[^>]*)?>', lambda m: m.group(0) + BRIDGE, text, count=1)
     text = detelegram_js(text)
+    if kind == 'agent':  # smena tugmasi va GPS — faqat ilovada
+        text = text.replace(BRIDGE, BRIDGE + '<script src="/app/aibi-kit/agent-shift.js?v=1"></script>', 1)
     if kind:
         text = re.sub(r'</head>', theme_css(kind) + '</head>', text, count=1, flags=re.I)
     # Izoh <!doctype> dan keyin — oldida bo'lsa ba'zi WebView'lar quirks rejimiga o'tadi.
