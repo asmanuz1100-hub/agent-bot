@@ -97,9 +97,9 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
 .stock-item .prod-thumb{width:34px;height:34px;flex-basis:34px;margin-right:8px}.stock-item>div{display:flex;align-items:center;min-width:0}
 .prod-full{position:fixed;inset:0;z-index:9999;background:#000d;display:flex;align-items:center;justify-content:center;padding:16px}.prod-full img{max-width:100%;max-height:100%;border-radius:14px}
 </style><link rel="icon" href="/app/premium-kit/aibi/apps/agent.ico?v=2" sizes="any"><link rel="icon" type="image/png" sizes="192x192" href="/app/premium-kit/aibi/apps/agent-192.png?v=2"><link rel="apple-touch-icon" href="/app/premium-kit/aibi/apps/agent-180.png?v=2"><link rel="stylesheet" href="/app/premium-kit/aibi/aibi.css?v=1">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap"><style id="aibi-app-theme">@media (prefers-color-scheme: light){html:root,html:root body{--tg-bg:#f1f2f6;--paper:#f1f2f6;--tg-text:#17212b;--navy:#17212b;--tg-header:#17212b;--tg-section:#fff;--tg-hint:#7b8794;--muted:#7b8794;--line:#e7e9ef;--blue:#2a8bf2;--green:#16b364;--mp:#16b364;--red:#f0384f;--amber:#f59e0b;--purple:#1f6fd1;}html:root body{background:#f1f2f6;color:#17212b}}html:root body,html:root body button,html:root body input,html:root body select,html:root body textarea{font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif}</style></head>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap"><style id="aibi-app-theme">@media (prefers-color-scheme: light){html:root,html:root body{--tg-bg:#f1f2f6;--paper:#f1f2f6;--tg-text:#17212b;--navy:#17212b;--tg-header:#17212b;--tg-section:#fff;--tg-hint:#7b8794;--muted:#7b8794;--line:#e7e9ef;--blue:#2a8bf2;--green:#16b364;--mp:#16b364;--red:#f0384f;--amber:#f59e0b;--purple:#1f6fd1;}html:root body{background:#f1f2f6;color:#17212b}}html:root body,html:root body button,html:root body input,html:root body select,html:root body textarea{font-family:Manrope,Inter,-apple-system,"Segoe UI",Roboto,sans-serif}</style><style id="aibi-toast-fix">#ts:not(.on){visibility:hidden;opacity:0}</style></head>
 <body>
-<div id="gate"><div class="card"><h1><span class="aibi-wm lg" role="img" aria-label="AIBI"><img src="/app/premium-kit/aibi/aibi-mark.svg?v=3" alt="">AIBI</span></h1><h2>AIBI Agent</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ochish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki admin Telegram akkauntidan ochiladi.</p></div></div>
+<div id="gate"><div class="card"><h1><span class="aibi-wm lg" role="img" aria-label="AIBI"><img src="/app/premium-kit/aibi/aibi-mark.svg?v=3" alt="">AIBI</span></h1><h2>AIBI Agent</h2><p id="gateMessage">Telegram akkaunti tekshirilmoqda…</p><div id="adminPicker" class="picker"><select id="gateAgent"></select><button class="primary" id="openAgent" type="button">Agentni ochish</button></div><button class="primary" id="retry" type="button">Qayta urinish</button><p class="muted">Haqiqiy ma’lumotlar faqat tasdiqlangan agent yoki rahbar loginidan ochiladi.</p></div></div>
 <div class="app"><header><div class="top"><span class="logo"><span class="aibi-wm" role="img" aria-label="AIBI"><img src="/app/premium-kit/aibi/aibi-mark.svg?v=3" alt="">AIBI</span></span><span class="tag">AGENT PANELI · REAL</span></div><div class="greet" id="greet">Assalomu alaykum!</div><div class="sub" id="headerDesc">Bot ma’lumotlari yuklanmoqda…</div></header>
 <div id="offlineBar" class="offlinebar" role="status"><span id="offlineText">Offline holati tekshirilmoqda…</span><button id="offlineSync" type="button">Sync</button></div>
 <div class="adminbar" id="adminBar"><b>ADMIN · TO‘LIQ REJIM</b><select id="adminAgent"></select></div>
@@ -117,7 +117,7 @@ nav{display:grid!important;visibility:visible!important;opacity:1!important;z-in
   <button type="button" id="homeNextClient" class="home-next" style="display:none">Keyingi muhim mijozni ochish →</button>
  </div>
  <div class="title">Ish kunini boshqarish</div>
- <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">Ishni botdan boshlang va jonli lokatsiyani Telegram chatida ulashing.</p><p class="tiny">Ishni tugatishni ham botdan bajaring. Bot koordinata qabul qilishni to‘xtatadi; Telegramdagi jonli lokatsiyani o‘zingiz to‘xtating.</p></div>
+ <div class="card"><div class="flex between"><b id="shiftLabel">Smena tekshirilmoqda</b><span id="shiftStatus" class="pill">—</span></div><p class="muted" id="shiftHint">«Ishni boshlash» tugmasini bosing.</p><p class="tiny">Ishni tugatishni ham botdan bajaring. Bot koordinata qabul qilishni to‘xtatadi; Telegramdagi jonli lokatsiyani o‘zingiz to‘xtating.</p></div>
  <div class="title">Tezkor amallar</div><div class="quick-grid"><button type="button" class="primary quick-tile" data-action="client"><b>＋ Yangi mijoz</b><small>Lokatsiya → foto → telefon → mahsulot</small></button><button type="button" class="secondary quick-tile" data-page="clients"><b>▦ Mijozlar</b><small>Qarz va tashriflar</small></button><button type="button" class="secondary quick-tile" data-page="map"><b>⌖ Xarita</b><small>Yaqin va kechikkan nuqtalar</small></button><button type="button" class="secondary quick-tile" data-page="cash"><b>💼 Pul</b><small>Kassa va xarajat</small></button></div>
  <div id="collectionTaskSection" style="display:none"><div class="title">📌 Kassir topshiriqlari</div><div id="collectionTaskList" class="collection-tasks"></div></div>
  <div class="title">Xarajat hisobim</div><div class="card"><div class="flex between"><div><small class="muted">Kassirdan ajratilgan mablag‘ qoldig‘i</small><b id="homeExpenseBalance" style="display:block;font-size:20px;margin-top:5px">—</b></div><span class="pill">UZS</span></div></div>
@@ -187,7 +187,7 @@ function markSessionExpired(){
  if(sessionExpired)return;sessionExpired=true;
  var bar=document.createElement("div");bar.id="sessionExpired";bar.setAttribute("role","alert");
  bar.style.cssText="position:fixed;left:10px;right:10px;top:10px;z-index:9999;background:#e55265;color:#fff;border-radius:14px;padding:12px 14px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(16,30,57,.25);display:flex;gap:10px;align-items:center";
- var txt=document.createElement("div");txt.style.flex="1";txt.textContent="Telegram sessiyasi tugadi. Kiritgan ma’lumotlaringiz telefonda saqlanadi. Mini App’ni yopib, botdan qayta oching — ular avtomatik yuboriladi.";
+ var txt=document.createElement("div");txt.style.flex="1";txt.textContent="Kirish muddati tugadi. Kiritgan ma’lumotlaringiz telefonda saqlanadi. Ilovadan chiqib qayta kiring — ular avtomatik yuboriladi.";
  var btn=document.createElement("button");btn.type="button";btn.textContent="Yopish";btn.style.cssText="border:0;border-radius:10px;padding:8px 12px;background:#fff;color:#e55265;font-weight:700";
  btn.addEventListener("click",function(){try{tg&&tg.close?tg.close():null}catch(_e){}});
  bar.appendChild(txt);bar.appendChild(btn);document.body.appendChild(bar);
@@ -265,7 +265,7 @@ async function loadCustomReport(){
  finally{customBusy=false;renderReports()}
 }
 async function request(action,extra){
- if(!tg||!tg.initData){var auth=Error("Telegram sessiyasi hozir mavjud emas.");auth.authUnavailable=true;throw auth}
+ if(!tg||!tg.initData){var auth=Error("Kirish muddati tugagan. Qayta kiring.");auth.authUnavailable=true;throw auth}
  var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},60000);
  try{
   var base={initData:tg.initData,action:action};if(adminAgentId)base.agentId=adminAgentId;
@@ -292,7 +292,7 @@ function applySnapshotUi(){
  $("homeExpenseBalance").textContent=fmtSom((data.expenseWallet||{}).balanceUzs||0)+" UZS";
  $("shiftLabel").textContent=data.me.shiftOpen?"Ish kuni boshlandi: "+date(data.me.shiftStart):"Ish kuni yopiq";
  $("shiftStatus").textContent=data.me.shiftOpen?"Ishda":"Yopiq";$("shiftStatus").className="pill "+(data.me.shiftOpen?"green":"");
- $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Bot chatida jonli lokatsiyani ulashing."):"Ishni Telegram botidagi «▶ Ishni boshlash» tugmasi bilan boshlang.";
+ $("shiftHint").textContent=data.me.shiftOpen?(data.me.liveAttached?"Telegram jonli lokatsiyasi ulangan. Oxirgi GPS: "+date(data.me.gps.ts):"Bot chatida jonli lokatsiyani ulashing."):"«Ishni boshlash» tugmasini bosing.";
  renderHome();
  if(current==="clients")renderClients();
  if(current==="detail")renderDetail();
@@ -1412,7 +1412,7 @@ if(window.ASMANOffline){
 if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})}
 window.addEventListener("online",function(){
  if((!tg||!tg.initData)&&data&&data._offlineCached){
-  notify("Internet qaytdi · Telegram sessiyasi tiklanmoqda…");
+  notify("Internet qaytdi · ma’lumotlar yangilanmoqda…");
   setTimeout(function(){location.reload()},350);
  }
 });

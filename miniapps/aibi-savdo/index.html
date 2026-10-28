@@ -158,7 +158,7 @@ nav button i{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;hei
 .pact{display:flex;gap:8px;margin:6px 0 10px}.pact label,.pact button{flex:1;text-align:center}.pact input{display:none}
 </style>
 <link rel="icon" href="/app/premium-kit/aibi/favicon.ico?v=3" sizes="any"><link rel="icon" type="image/svg+xml" href="/app/premium-kit/aibi/aibi-icon-dark.svg?v=3"><link rel="apple-touch-icon" href="/app/premium-kit/aibi/aibi-icon-dark-180.png?v=3"><link rel="stylesheet" href="/app/premium-kit/aibi/aibi.css?v=1">
-</head>
+<style id="aibi-toast-fix">#ts:not(.on){visibility:hidden;opacity:0}</style></head>
 <body>
 <div class="app" id="app"></div>
 <nav id="nav" aria-label="Bo‘limlar"><i id="ni"></i></nav>
@@ -599,7 +599,7 @@ function start(){load(true).then(splashDone).catch(e=>splashFail(e.message,true)
 if(tg){tg.ready();tg.expand();try{tg.setHeaderColor(isDark()?'#0e1621':'#f1f2f6');}catch(e){}
   try{tg.BackButton.onClick(closeSheet);}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S&&!busy&&!$('sh').classList.contains('on'))load(true).catch(()=>{});});
-if(!tg||!tg.initData)splashFail('Ilovani Telegram botdagi «🛒 Savdo Mini App» tugmasidan oching.',false);
+if(!tg||!tg.initData)splashFail('Kirish muddati tugagan. AIBI ilovasidan chiqib, qayta kiring.',false);
 else start();
 </script>
 </body>
