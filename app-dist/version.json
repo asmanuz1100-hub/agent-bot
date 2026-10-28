@@ -1,9 +1,9 @@
 {
-  "version": "2.0.2",
+  "version": "2.1.0",
   "notes": [
-    "Internet yo‘q bo‘lsa ham ilova ochiladi (oxirgi ma’lumotlar bilan)",
-    "Agent: offline kiritilganlar internet qaytganda yuboriladi",
-    "Ish boshlash/tugatish darhol ishlaydi",
-    "Agent, Kassir, Rahbar — Ombor uslubida"
+    "Ilova botdan mustaqil: o‘z sahifalari, faqat login/parol bilan",
+    "Ombor va Savdo ilovada ochiladi (avval «Telegram’dan oching» chiqardi)",
+    "Agent, Kassa, Rahbar — Ombor uslubida",
+    "Agent: «Ishni boshlash / tugatish» va GPS ilovadan"
   ]
 }
