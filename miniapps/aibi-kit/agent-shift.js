@@ -9,6 +9,8 @@ function isOpen(){var s=document.getElementById('shiftStatus');return !!s&&/Ishd
 function known(){var s=document.getElementById('shiftStatus');return !!s&&/Ishda|Yopiq/.test(s.textContent)}
 function paint(){
  var hint=document.getElementById('shiftHint');if(!hint)return;
+ // Rahbar agentni ko'rib turibdi (admin to'liq rejim): smena va GPS agentning o'zi uchun — tugma yo'q.
+ if(document.body&&document.body.classList.contains('admin-full')){var x=document.getElementById('aibiShiftBtn');if(x)x.remove();return}
  var b=document.getElementById('aibiShiftBtn');
  if(!b){b=document.createElement('button');b.type='button';b.id='aibiShiftBtn';
   b.style.cssText='width:100%;margin-top:10px;padding:14px;border:0;border-radius:14px;font:inherit;font-weight:800;font-size:15px;color:#fff;cursor:pointer';
