@@ -67,6 +67,19 @@ class WarehouseApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):core.mark_order_delivered_by_agent(self.db,2,cid,oid)
         core.mark_order_delivered_by_agent(self.db,6,cid,oid)
 
+    def test_receive_many_products_at_once(self):
+        block=core.block_units(self.block)
+        items=[{'pack':self.plain,'qty':4},{'pack':self.block,'qty':2,'unit':'Блок'}]
+        d=self.call(5,'receive',items=items,note='Partiya',requestId='recv-multi-01')
+        self.assertEqual(len(d['moves']),2)
+        self.call(5,'receive',items=items,requestId='recv-multi-01')  # double tap
+        self.assertEqual((warehouse.stock(self.db,self.plain),warehouse.stock(self.db,self.block)),(4,2*block))
+        # Bitta qator xato bo'lsa, hech narsa yozilmaydi.
+        with self.assertRaises(ValueError):
+            self.call(5,'receive',items=[{'pack':self.plain,'qty':1},{'pack':self.plain,'qty':0}],requestId='recv-multi-02')
+        self.assertEqual(warehouse.stock(self.db,self.plain),4)
+        with self.assertRaises(ValueError):self.call(5,'receive',items=[],requestId='recv-multi-03')
+
     def test_receive_issue_writeoff_with_blocks_and_idempotency(self):
         block=core.block_units(self.block)
         self.call(5,'receive',pack=self.block,qty=3,unit='Блок',requestId='recv-block-01')

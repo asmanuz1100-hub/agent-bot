@@ -471,7 +471,12 @@ def connect(path,initialize=True):
         import warehouse;warehouse.init(db)
         import purchases;purchases.init(db)
         import hr;hr.init(db)
+        import perms;perms.init(db)
+        import cashbook;cashbook.init(db)
+        import sale_orders;sale_orders.init(db)
         import shop;shop.init(db)
+        import corrections;corrections.init(db)
+        import operations;operations.init(db)
         import web_auth;web_auth.init(db)
         db.commit()
         try:
@@ -545,7 +550,12 @@ def connect(path,initialize=True):
     import warehouse;warehouse.init(db)
     import purchases;purchases.init(db)
     import hr;hr.init(db)
+    import perms;perms.init(db)
+    import cashbook;cashbook.init(db)
+    import sale_orders;sale_orders.init(db)
     import shop;shop.init(db)
+    import corrections;corrections.init(db)
+    import operations;operations.init(db)
     import web_auth;web_auth.init(db)
     db.commit()
     db.execute('PRAGMA journal_mode=WAL')
@@ -1243,7 +1253,8 @@ def cashier_balance_usd(db):
     spent=db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses').fetchone()[0]
     funded=db.execute("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'").fetchone()[0]
     converted=int(db.execute('SELECT COALESCE(SUM(usd_delta),0) FROM cashier_conversions').fetchone()[0] or 0)
-    return int(accepted or 0)-int(spent or 0)-int(funded or 0)+converted
+    import cashbook  # qo'lda kirim/o'tkazma (naqd hisob) — yangi yozuv bo'lmasa 0
+    return int(accepted or 0)-int(spent or 0)-int(funded or 0)+converted+cashbook.legacy_usd(db,'cash')
 
 
 def cashier_source_balance_usd(db,pay_from):
@@ -1259,7 +1270,8 @@ def cashier_source_balance_usd(db,pay_from):
     if pay_from=='cash':
         return cashier_balance_usd(db)+card_spent-card_delta
     card_received=int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
-    return card_received-card_spent+card_delta
+    import cashbook
+    return card_received-card_spent+card_delta+cashbook.legacy_usd(db,'card')
 
 
 PERIOD_NAMES={'today':'Bugun','week':'7 kun','month':'Shu oy','custom':'Davr'}
@@ -1352,10 +1364,13 @@ def cashier_flows(db,start=None,end=None):
     out['cash_usd']=out['in_cash_usd']-out['out_expense_usd']-out['out_fund_usd']+out['conversion_cash_usd']
     out['card_uzs']=out['in_card_uzs']-out['out_card_uzs']+out['conversion_card_uzs']
     out['card_usd']=out['in_card_usd']-out['out_card_usd']+out['conversion_card_usd']
+    import cashbook
+    cashbook.flows_add(db,out,start,end)   # qo'lda kirim, o'tkazma, bank hisobi
     if balance:
         moved=(one("SELECT COALESCE(SUM(amount_usd),0) FROM handovers WHERE status='accepted'"+hw,args)
                -one("SELECT COALESCE(SUM(amount_usd),0) FROM cashier_expenses WHERE pay_from<>'card'"+ew,args)
-               -one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'"+fw,args))
+               -one("SELECT COALESCE(SUM(amount_usd),0) FROM agent_funds WHERE kind='topup'"+fw,args)
+               +cashbook.legacy_usd(db,'cash',start,end))
         out['since']=since
         out['opening_usd']=cashier_source_balance_usd(db,'cash')-moved-one("SELECT COALESCE(SUM(usd_delta),0) FROM cashier_conversions WHERE pay_from='cash'",()) if since else 0
     return out
@@ -1531,9 +1546,13 @@ CASHIER_EXPENSE_CATEGORIES=(
 )
 
 
+# Korxona xarajatlari (Bito kabi): web kassada ham, kassir Mini App'ida ham.
+WEB_EXPENSE_CATEGORIES=('🧾 Солиқ ва мажбурий тўловлар','💡 Коммунал хизматлар','🏭 Корхона харажати','💰 Дивиденд')
+
+
 def cashier_expense_categories():
-    # Dividend is a cashier category, not an agent expense category.
-    return CASHIER_EXPENSE_CATEGORIES + ('💰 Дивиденд',)
+    # Dividend and company expenses are cashier categories, not agent expense categories.
+    return CASHIER_EXPENSE_CATEGORIES + WEB_EXPENSE_CATEGORIES
 
 
 def add_cashier_income(db,actor,amount_usd,category,source_name,note,source):
@@ -1894,6 +1913,7 @@ def payment_label(row):
     if rate:parts.append(f"курс {rate:,}".replace(',',' '))
     if method=='card':parts.append('карта')
     elif method=='cash':parts.append('нақд')
+    elif method=='cashbox':parts.append('кассага тўғридан')
     return ' · '.join(parts)
 
 

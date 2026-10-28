@@ -20,8 +20,10 @@ Sotuvchi qo'lidagi pul `core.cash_usd`/`core.cash` bilan hisoblanadi va `core.ha
 import hashlib
 import time
 
+import branding
 import core
 import warehouse as wh
+import receipt_public
 
 LEVELS = ('seller', 'head')
 # Rahbar har bir savdo xodimi uchun alohida yoqadigan funksiyalar.
@@ -40,6 +42,7 @@ PERMS = {
 SELLER_PERMS = ('retail', 'discount', 'credit', 'collect', 'clients')
 PRICE_TYPES = ('retail', 'dealer')
 METHODS = ('cash_usd', 'cash_uzs', 'card')
+NOT_VOID = "NOT EXISTS(SELECT 1 FROM voids v WHERE v.kind='sale' AND v.ref=shop_sales.id)"
 DEFAULT_MAX_DISCOUNT_PCT = 5
 WALKIN_NAME = 'Chakana xaridor'
 
@@ -356,6 +359,8 @@ def _seller(db, actor, payload):
     if raw in (None, '', 0, '0'):
         raise ValueError('Sotuv qaysi savdo xodimi nomidan ekanini tanlang.')
     sid = _int(raw, 'Savdo xodimi', 1)
+    if sid == actor:
+        return actor   # rahbar o'z nomidan sotadi: pul to'g'ridan kassaga (_insert_payment)
     r = db.execute('SELECT role FROM users WHERE id=?', (sid,)).fetchone()
     if not r or r[0] != 'sales':
         raise ValueError('Faol savdo xodimini tanlang.')
@@ -363,6 +368,14 @@ def _seller(db, actor, payload):
 
 
 def _insert_payment(db, actor, agent, client, cents, method, uzs, rate, note, source, ts):
+    row = db.execute('SELECT role FROM users WHERE id=?', (agent,)).fetchone()
+    if row and row[0] == 'admin':
+        # Rahbar o'zi sotgan: pul hech kimning qo'lida qolmaydi — kassa kirimi va mijoz to'lovi bitta yozuvda
+        # (cashbook «Mijozdan to'lov» bilan bir xil: events agent bo'sh, cash_moves bog'langan).
+        import cashbook
+        cashbook.record_client_payment(db, actor, client, 'card' if method == 'card' else 'cash',
+                                       'UZS' if uzs else 'USD', uzs or cents, cents, rate, note, source, ts)
+        return
     db.execute("""INSERT INTO events(actor,agent,client,kind,pack,qty,amount,amount_usd,note,ts,source,pay_method,paid_uzs,fx_rate)
         VALUES(?,?,?,'payment',0,0,0,?,?,?,?,?,?,?)""",
                (actor, agent, client, cents, note, ts, source, 'card' if method == 'card' else 'cash', uzs, rate))
@@ -440,8 +453,10 @@ def quote(db, actor, payload):
         l['discount'] = d
         l['total'] = l['gross'] - d
         left -= d
-    stock = {p: wh.stock(db, p) for p in need}
-    short = [f'{core.product_name(p)}: omborda {stock[p]} dona' for p, q in need.items() if stock[p] < q]
+    # Mavjud = ombor qoldig'i − ochiq buyurtmalarda band (sale_orders). Buyurtma bo'lmasa — avvalgidek.
+    import sale_orders
+    stock = {p: sale_orders.available(db, p) for p in need}
+    short = [f'{core.product_name(p)}: mavjud {stock[p]} dona' for p, q in need.items() if stock[p] < q]
     debt = core.client_debt_usd(db, cid) if client else 0
     return {'client': client, 'walkin': walkin, 'priceType': ptype, 'lines': lines, 'subtotal': subtotal,
             'discount': discount, 'total': total, 'discountPct': round(eff_pct, 2), 'stockShort': short,
@@ -449,11 +464,20 @@ def quote(db, actor, payload):
 
 
 def sell(db, actor, payload):
-    """Sotuvni saqlash. Qaytaradi: sotuv kartasi (receipt)."""
+    """Sotuvni saqlash. Qaytaradi: sotuv kartasi (receipt).
+
+    replaceSaleId — rahbar tahriri: eski sotuv bekor qilinadi (tovar/pul/qarz qaytadi) va shu tranzaksiyada yangisi yoziladi."""
     src = _source(actor, payload.get('requestId'))
     old = db.execute('SELECT id FROM shop_sales WHERE source=?', (src,)).fetchone()
     if old:
         return receipt(db, int(old[0]))
+    replace = payload.get('replaceSaleId')
+    if replace not in (None, '', 0, '0'):
+        import corrections
+        replace = _int(replace, 'Sotuv', 1)
+        corrections.cancel_sale(db, actor, replace, payload.get('reason') or 'Tahrirlandi')
+    else:
+        replace = None
     who = _seller(db, actor, payload)
     core.lock_agent(db, who)
     wh._lock_warehouse(db)
@@ -489,6 +513,9 @@ def sell(db, actor, payload):
                                                      _source(actor, payload.get('requestId'), 300 + i)))
     if paid:
         _insert_payment(db, actor, who, cid, paid, method, uzs, rate, tag, _source(actor, payload.get('requestId'), 1), ts)
+    if replace:
+        import corrections
+        corrections.link_replacement(db, 'sale', replace, sale)
     return receipt(db, sale)
 
 
@@ -526,7 +553,17 @@ def receipt(db, sale):
             'clientId': int(h['client']), 'client': (h['shop_name'] or h['client_name'] or '').strip(), 'phone': h['phone'] or '',
             'priceType': h['price_type'], 'subtotalUsd': int(h['subtotal']) / 100, 'discountUsd': int(h['discount']) / 100,
             'totalUsd': total / 100, 'paidUsd': paid / 100, 'debtUsd': (total - paid) / 100, 'method': h['pay_method'],
-            'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines}
+            'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines,
+            'cancelled': _void_info(db, int(h['id'])), 'publicUrl': receipt_public.url(int(h['id']))}
+
+
+def _void_info(db, sale):
+    r = db.execute('''SELECT v.*,u.name AS who FROM voids v LEFT JOIN users u ON u.id=v.actor WHERE v.kind='sale' AND v.ref=?''',
+                   (sale,)).fetchone()
+    if not r:
+        return None
+    return {'reason': r['reason'], 'who': r['who'] or '', 'ts': int(r['ts']),
+            'replacedBy': int(r['replaced_by']) if r['replaced_by'] is not None else None}
 
 
 def handover(db, actor, payload):
@@ -556,12 +593,17 @@ def dashboard(db, actor, now=None):
     day0 = wh.day_start(now)
     table = prices(db)
     stock = wh.stock_all(db)
+    import sale_orders
+    held = sale_orders.reserved_all(db)
+    # stock — sotish mumkin (ochiq buyurtmalarda band qilingani ayirilgan); onHand — ombordagi jismoniy qoldiq.
     products = [{'pack': p, 'name': core.product_name(p), 'retailUsd': table[p]['retail'] / 100,
-                 'dealerUsd': table[p]['dealer'] / 100, 'stock': stock.get(p, 0)}
+                 'dealerUsd': table[p]['dealer'] / 100, 'stock': stock.get(p, 0) - held.get(p, 0),
+                 'onHand': stock.get(p, 0), 'reserved': held.get(p, 0)}
                 for p in core.PRODUCTS if p not in core.INACTIVE_PRODUCTS]
     products.sort(key=lambda x: (x['stock'] <= 0, x['name']))
     mine = not can(s, 'all_sales')
     where, args = ('WHERE ts>=?', [day0]) if not mine else ('WHERE ts>=? AND seller=?', [day0, actor])
+    where += ' AND ' + NOT_VOID   # bekor qilingan sotuv bugungi jamiga kirmaydi
     rows = db.execute(f'SELECT id,total,paid FROM shop_sales {where} ORDER BY ts DESC,id DESC', args).fetchall()
     today = {'count': len(rows), 'totalUsd': sum(int(r['total']) for r in rows) / 100,
              'paidUsd': sum(int(r['paid']) for r in rows) / 100,
@@ -576,11 +618,14 @@ def dashboard(db, actor, now=None):
         cash = {'usd': core.cash_usd(db, actor) / 100, 'uzs': int(core.cash(db, actor)) // 100,
                 'pendingUsd': int(pend_usd or 0) / 100, 'pendingUzs': int(pend_uzs or 0) // 100}
     team = None
+    sellers = None
+    if s['role'] == 'admin':
+        sellers = [{'id': actor, 'name': f"{s['name']} (o‘zim) — pul to‘g‘ridan kassaga", 'self': True}]
     if can(s, 'all_sales'):
         team = []
         for u in db.execute("SELECT id,name FROM users WHERE role='sales' ORDER BY name,id").fetchall():
             st = staff(db, int(u['id']))
-            r = db.execute('SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(paid),0) FROM shop_sales WHERE seller=? AND ts>=?',
+            r = db.execute('SELECT COUNT(*),COALESCE(SUM(total),0),COALESCE(SUM(paid),0) FROM shop_sales WHERE seller=? AND ts>=? AND ' + NOT_VOID,
                            (int(u['id']), day0)).fetchone()
             team.append({'id': int(u['id']), 'name': u['name'] or str(u['id']), 'level': st['level'], 'perms': st['perms'],
                          'maxDiscountPct': st['maxDiscountPct'], 'allowCredit': st['allowCredit'],
@@ -589,7 +634,8 @@ def dashboard(db, actor, now=None):
     return {'me': {k: s[k] for k in ('id', 'name', 'role', 'level', 'perms', 'maxDiscountPct', 'allowCredit')},
             'permLabels': PERMS,
             'rate': core.cashier_rate(db), 'products': products, 'today': today, 'recent': recent,
-            'cash': cash, 'team': team, 'generatedTs': now}
+            'cash': cash, 'team': team, 'sellers': (sellers or []) + [{'id': u['id'], 'name': u['name']} for u in (team or [])],
+            'brand': branding.get(db), 'generatedTs': now}
 
 
 def client_card(db, actor, client):
@@ -606,7 +652,7 @@ def client_card(db, actor, client):
 # ---------- Mini App API ----------
 
 ACTIONS = ('dashboard', 'quote', 'sell', 'collect', 'clients', 'client', 'add_client', 'handover',
-           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt')
+           'set_price', 'set_client_price', 'set_client_type', 'set_staff', 'receipt', 'orders', 'sale_cancel')
 
 
 def handle(db, actor, action, payload):
@@ -622,6 +668,17 @@ def handle(db, actor, action, payload):
                           'totalUsd': q['total'] / 100, 'clientDebtUsd': q['clientDebt'] / 100,
                           'lines': [{**l, 'listPriceUsd': l['listPrice'] / 100, 'priceUsd': l['price'] / 100,
                                      'discountUsd': l['discount'] / 100, 'totalUsd': l['total'] / 100} for l in q['lines']]}}
+    if action == 'sale_cancel':
+        import corrections
+        sid = _int(payload.get('saleId'), 'Sotuv', 1)
+        corrections.cancel_sale(db, actor, sid, payload.get('reason'))
+        out['receipt'] = receipt(db, sid)
+        out.update(dashboard(db, actor))
+        return out
+    if action == 'orders':
+        # Ombordan buyurtma: band qilish, qisman yetkazish/to'lov, qaytarish (sale_orders.py)
+        import sale_orders
+        return sale_orders.handle(db, actor, payload.get('orderOp') or 'list', payload)
     if action == 'sell':
         out['receipt'] = sell(db, actor, payload)
     elif action == 'collect':

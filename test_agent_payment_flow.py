@@ -119,3 +119,78 @@ class PgAgentPaymentFlowTests(AgentPaymentFlowTests):
             os.environ.pop('DB_SCHEMA',None)
 
 if __name__=='__main__':unittest.main()
+
+
+class DuplicatePaymentGuardTests(unittest.TestCase):
+    setUp=fixture.UzsAndCardPaymentTests.setUp
+    tearDown=fixture.UzsAndCardPaymentTests.tearDown
+
+    def _pay(self,nonce,now,**extra):
+        p={'clientId':self.cid,'currency':'UZS','amount':'905000','usd':'76','method':'cash'}
+        p.update(extra)
+        return agent_api.mutate(self.db,2,'payment',p,nonce,now)
+
+    def count(self):
+        return self.db.execute("SELECT COUNT(*) FROM events WHERE kind='payment'").fetchone()[0]
+
+    def test_same_payment_reentered_with_new_nonce_needs_confirmation(self):
+        self._pay('dup_guard_0001',self.now)
+        with self.assertRaises(agent_api.DuplicatePaymentError) as ctx:
+            self.db.execute('SAVEPOINT t')
+            try:self._pay('dup_guard_0002',self.now+60)
+            finally:self.db.execute('ROLLBACK TO SAVEPOINT t')
+        self.assertEqual(ctx.exception.code,'duplicate_payment')
+        self.assertEqual(self.count(),1)
+        self._pay('dup_guard_0002',self.now+60,confirmDuplicate=True)
+        self.assertEqual(self.count(),2)
+
+    def test_different_amount_or_old_payment_is_not_blocked(self):
+        self._pay('dup_guard_0003',self.now)
+        self.db.execute("UPDATE events SET ts=? WHERE kind='payment'",(self.now-agent_api.DUPLICATE_PAYMENT_WINDOW-1,))
+        self._pay('dup_guard_0004',self.now,amount='900000')
+        self._pay('dup_guard_0005',self.now)
+        self.assertEqual(self.count(),3)
+
+    def test_identical_parts_in_one_request_are_allowed(self):
+        p={'clientId':self.cid,'parts':[{'currency':'USD','amount':'50','method':'cash'},
+            {'currency':'USD','amount':'50','method':'cash'}]}
+        agent_api.mutate(self.db,2,'payment',p,'dup_guard_0006',self.now)
+        self.assertEqual(self.count(),2)
+
+
+class AdminPaymentCancelTests(unittest.TestCase):
+    setUp=fixture.UzsAndCardPaymentTests.setUp
+    tearDown=fixture.UzsAndCardPaymentTests.tearDown
+
+    def _pay(self,nonce,**extra):
+        p={'clientId':self.cid,'currency':'UZS','amount':'905000','usd':'76','method':'cash','confirmDuplicate':True}
+        p.update(extra)
+        agent_api.mutate(self.db,2,'payment',p,nonce,self.now)
+        return self.db.execute("SELECT MAX(id) FROM events WHERE kind='payment'").fetchone()[0]
+
+    def test_duplicate_cash_payment_is_cancelled_with_trace(self):
+        import corrections,manager_api
+        self._pay('cancel_pay_0001');dup=self._pay('cancel_pay_0002')
+        self.assertEqual(core.client_debt_usd(self.db,self.cid),100000-2*7600)
+        self.assertEqual(core.cash_som(self.db,2),2*905000)
+        detail=manager_api.client_detail(self.db,self.cid)
+        self.assertTrue(all(e['canCancel'] for e in detail['events'] if e['kind']=='payment'))
+        with self.assertRaises(ValueError):corrections.cancel_payment(self.db,2,dup,'agent o‘zi')
+        corrections.cancel_payment(self.db,1,dup,'Takror kiritilgan')
+        self.assertEqual(core.client_debt_usd(self.db,self.cid),100000-7600)
+        self.assertEqual(core.cash_som(self.db,2),905000)
+        self.assertEqual(self.db.execute("SELECT kind FROM events WHERE id=?",(dup,)).fetchone()[0],'cancelled_payment')
+        self.assertTrue(corrections.is_voided(self.db,'payment',dup))
+        with self.assertRaises(ValueError):corrections.cancel_payment(self.db,1,dup,'yana')
+        self.assertNotIn(dup,[e['id'] for e in manager_api.client_detail(self.db,self.cid)['events']])
+
+    def test_cannot_cancel_money_already_handed_to_cashier(self):
+        import corrections
+        eid=self._pay('cancel_pay_0003')
+        self.db.execute("INSERT INTO handovers(agent,amount,amount_usd,status,source,ts) VALUES(2,?,0,'accepted',424242,?)",(905000*100,self.now))
+        with self.assertRaises(ValueError):corrections.cancel_payment(self.db,1,eid,'Takror')
+        self.assertEqual(self.db.execute("SELECT kind FROM events WHERE id=?",(eid,)).fetchone()[0],'payment')
+
+    def test_manager_permission_for_payment_cancel(self):
+        import perms
+        self.assertEqual(perms.manager_perm('payment_cancel'),'cash.cancel')

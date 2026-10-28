@@ -1,6 +1,6 @@
 """Internal sales-agent test bot. Python 3.11+, standard library only."""
 import os, json, time, base64, re, urllib.request, urllib.error, io, csv, uuid, logging, signal, hashlib, hmac
-import threading
+import threading, shutil
 import gzip
 from collections import OrderedDict
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -14,6 +14,7 @@ import cashier_pending
 import cashier_daily
 import customer_status as cs
 import manager_api
+import corrections
 import web_auth
 import branding
 import staff
@@ -21,6 +22,7 @@ import ai_assistant
 import executive
 import sales
 import agent_api
+import operations
 import analytics
 import cashier_api
 import warehouse_api
@@ -30,6 +32,9 @@ import profiles
 import warehouse
 import purchases
 import hr
+import modules
+import perms
+import cashbook
 from pathlib import Path
 STOP=False
 def stop_signal(*_):
@@ -38,6 +43,7 @@ def stop_signal(*_):
 
 
 TOKEN=os.getenv('BOT_TOKEN','')
+import receipt_public;receipt_public.configure(TOKEN)   # mijoz cheki QR havolasi imzosi
 ADMINS={int(x) for x in os.getenv('ADMIN_IDS','').split(',') if x.strip()}
 TEST_AGENTS={int(x) for x in os.getenv('TEST_AGENT_IDS','').split(',') if x.strip()}
 # Омбор (warehouse.py) ҳозирча фақат тест серверида ва фақат админга очиқ.
@@ -331,6 +337,39 @@ _PHOTO_CACHE_MAX_BYTES=24_000_000
 _PHOTO_CACHE_TTL=1800
 _PHOTO_CACHE_SIZE=0
 _FULL_BACKUP_LOCK=threading.Lock()
+# Web panel backup: oxirgi tayyorlangan arxiv (bitta, 1 soat saqlanadi) va holati.
+_WEB_BACKUP={'status':'idle'}
+_WEB_BACKUP_TTL=3600
+
+def _web_backup_drop():
+    path=_WEB_BACKUP.get('path')
+    if path:
+        try:full_backup.cleanup([path])
+        except Exception:logging.exception('Web backup cleanup failed')
+    _WEB_BACKUP.clear();_WEB_BACKUP['status']='idle'
+
+def _web_backup_worker(uid,open_db):
+    # open_db: Postgres pool connection, or a fresh SQLite connection (SQLite objects are per-thread).
+    local=None
+    try:
+        local=open_db()
+        path,summary=full_backup.build_single_archive(local,customer_photo_bytes)  # read-only; close() rolls back
+        _WEB_BACKUP.update(status='ready',path=path,name=Path(path).name,size=summary['bytes'],
+                           clients=summary['clients'],photosOk=summary['photos_ok'],
+                           photosFailed=summary['photos_failed'],ts=int(time.time()))
+    except Exception:
+        logging.exception('Web full backup failed user=%s',uid)
+        _WEB_BACKUP.clear();_WEB_BACKUP.update(status='error',ts=int(time.time()))
+    finally:
+        if local is not None:
+            try:local.close()
+            except Exception:pass
+        _FULL_BACKUP_LOCK.release()
+
+def web_backup_state():
+    if _WEB_BACKUP.get('status')=='ready' and time.time()-_WEB_BACKUP.get('ts',0)>_WEB_BACKUP_TTL:
+        _web_backup_drop()
+    return {k:v for k,v in _WEB_BACKUP.items() if k!='path'}
 
 def photo_content_type(content):
     """Return the actual safe image MIME type, not one inferred from a filename."""
@@ -783,15 +822,18 @@ def menu(db,u):
         # launches can have empty initData, so the button asks the bot to send
         # a private inline WebApp launcher instead.
         rows.insert(0,['📱 Agent Mini App'])
-    if r in ('admin','cashier') and CASHIER_MINIAPP_URL:
+    if CASHIER_MINIAPP_URL and (r in ('admin','cashier') or perms.open_section(db,u,'cash',ADMINS)):
         rows.insert(0,['📱 Кассир Mini App'])
     if SHOP_MINIAPP_URL and r in ('admin','sales'):
         rows.insert(0,['🛒 Savdo Mini App'])
     if WAREHOUSE_MINIAPP_URL:
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             rows.insert(0,['📱 Омбор Mini App'])
         elif r=='agent':
             rows.append(['📦 Омбор сўрови'])
+    # AIBI ilovasi (APK) — har bir xodim botdan yuklab oladi.
+    if r in AIBI_APP_ROLES:
+        rows.append(['📲 Ilova'])
     return rows
 
 def show_cashier_menu(db,u):
@@ -1692,6 +1734,110 @@ def handle_web_password(db,u,r,text):
            'Kirgach, «Sozlamalar»da parolni o‘zingiznikiga almashtiring. Bu xabarni hech kimga yubormang.\n'
            'Avvalgi kirishlar yopildi. Loginni o‘zgartirish: /webparol yangi_login · O‘chirish: /webyopish')
 
+# Mobil ilova faqat savdo uchun: Kassir va Rahbar Telegram Mini App / web panelda ishlaydi.
+MOBILE_ROLES={'agent'}
+# AIBI ilovasi (APK) — Telegram Mini App'larning o'zi, login/parol bilan.
+AIBI_APP_ROLES=('agent','cashier','warehouse','sales','admin')
+
+# AIBI ilovasi (Android APK) — botdan yuklab olinadi; fayl shu xizmatning o'zidan beriladi.
+APP_APK_FILE=Path(__file__).resolve().with_name('app-dist')/'AIBI.apk'
+def _app_version():
+    """APK versiyasi (o'lcham+vaqt): havola va fayl nomida — telefon eski yuklanganini ochmasin."""
+    try:st=APP_APK_FILE.stat()
+    except FileNotFoundError:return '0'
+    return f"{datetime.fromtimestamp(st.st_mtime,TZ).strftime('%Y%m%d-%H%M')}"
+def app_download_url():return f'{PUBLIC_BASE_URL}/download/aibi.apk?v={_app_version()}'
+APP_NAME='AIBI 2.0'
+def app_file_name():return 'AIBI-2.0.apk'
+APP_DOWNLOAD_URL=f'{PUBLIC_BASE_URL}/download/aibi.apk'
+
+def send_app_download(u,text=None):
+    # Havola Telegram ichida yuklanmaydi — fayl chatga yuboriladi (send_app_file).
+    api('sendMessage',chat_id=u,text=text or ('📲 AIBI 2.0 ilovasi (Android)\n\n'
+        '1. Pastdagi faylni bosing → «O‘rnatish».\n'
+        '2. So‘rasa, «Noma’lum manbalardan o‘rnatish»ga ruxsat bering.\n'
+        '3. Login va parolni rahbaringiz beradi.'))
+
+_APP_FILE={'key':None,'file_id':None}
+_APP_FILE_LOCK=threading.Lock()
+
+def _app_file_worker(u):
+    """APK ni chatga fayl qilib yuborish (Telegram'ning ichki brauzeri katta faylni oxirigacha yuklamasligi mumkin).
+    Birinchi marta 45 MB yuklanadi, keyin Telegram file_id bilan darhol yuboriladi."""
+    caption='📲 AIBI 2.0 ilovasi. Faylni bosing → «O‘rnatish». Login va parolni rahbaringiz beradi.'
+    try:
+        st=APP_APK_FILE.stat();key=(st.st_size,int(st.st_mtime))
+        with _APP_FILE_LOCK:
+            if _APP_FILE['key']==key and _APP_FILE['file_id']:
+                api('sendDocument',chat_id=u,document=_APP_FILE['file_id'],caption=caption);return
+            boundary=uuid.uuid4().hex
+            head=(f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{u}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{app_file_name()}"\r\n'
+                  'Content-Type: application/vnd.android.package-archive\r\n\r\n').encode()
+            body=head+APP_APK_FILE.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
+            req=urllib.request.Request(f'https://api.telegram.org/bot{TOKEN}/sendDocument',data=body,
+                                       headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+            with urllib.request.urlopen(req,timeout=300) as res:out=json.load(res)
+            if not out.get('ok'):raise RuntimeError('APK send failed')
+            _APP_FILE.update(key=key,file_id=out['result']['document']['file_id'])
+    except Exception:
+        logging.exception('APK file send failed user=%s',u)
+
+def send_app_file(u):
+    threading.Thread(target=_app_file_worker,args=(u,),daemon=True,name='app-apk-send').start()
+
+APP_VERSION_FILE=APP_APK_FILE.with_name('version.json')
+
+def app_release():
+    """app-dist/version.json: {"version": "2.0.1", "notes": [...]} — yangi APK bilan birga yangilanadi."""
+    try:
+        data=json.loads(APP_VERSION_FILE.read_text(encoding='utf-8'))
+        return str(data.get('version') or '').strip(),[str(x) for x in (data.get('notes') or [])][:8]
+    except (OSError,ValueError):return '',[]
+
+def notify_app_update(db):
+    """Yangi ilova versiyasi deploy bo'lganda — ilovadan foydalanadigan barcha xodimlarga bir marta xabar."""
+    version,notes=app_release()
+    if not version or not APP_APK_FILE.exists():return
+    # Kalit: fayl bilan yuboriladigan xabar (avval havola bilan edi — havola ishlamadi).
+    row=db.execute("SELECT value FROM meta WHERE key='app_notified_file'").fetchone()
+    if row and row[0]==version:return
+    db.execute("INSERT INTO meta(key,value) VALUES('app_notified_file',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(version,))
+    db.commit()
+    marks=','.join('?'*len(AIBI_APP_ROLES))
+    users=[int(r[0]) for r in db.execute(f'SELECT id FROM users WHERE role IN ({marks})',AIBI_APP_ROLES).fetchall()]
+    text=(f'🆕 AIBI {version} — yangi versiya chiqdi!\n\n'+''.join(f'• {n}\n' for n in notes)+
+          '\nYangilash: pastdagi faylni bosing → «O‘rnatish» (eski ilova ustiga o‘rnatiladi, ma’lumotlar saqlanadi).')
+    def run():
+        sent=0
+        for uid in users:
+            try:
+                api('sendMessage',chat_id=uid,text=text)
+                _app_file_worker(uid)          # APK faylning o'zi; birinchi yuklashdan keyin file_id bilan darhol
+                sent+=1
+            except Exception as e:logging.warning('App update notice failed user=%s: %r',uid,e)
+            time.sleep(0.05)
+        logging.info('App update %s notice sent to %s/%s users',version,sent,len(users))
+    threading.Thread(target=run,daemon=True,name='app-update-notice').start()
+
+def handle_mobile_password(db,u,r,text):
+    """ASMAN Agent mobil ilovasi (Android/iOS): savdo agentiga login va bir martalik parol."""
+    if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
+    if text=='/mobilyopish':
+        web_auth.revoke(db,u)
+        send(u,'🔒 Mobil ilova akkaunti o‘chirildi, barcha telefonlardan chiqildi.\nQayta ochish: /mobilparol');return
+    parts=text.split()
+    if len(parts)>2:raise ValueError('Format: /mobilparol yoki /mobilparol LOGIN')
+    current=web_auth.account(db,u)
+    login=parts[1] if len(parts)==2 else (current['login'] if current else f'{r}{u}')
+    login,password=web_auth.issue_password(db,u,login)
+    send(u,f'📱 AIBI ILOVASI\n\nServer: {PUBLIC_BASE_URL}\nLogin: {login}\nParol: {password}\n\n'
+           'Bu xabarni hech kimga yubormang. Avvalgi kirishlar yopildi.\n'
+           'Loginni o‘zgartirish: /mobilparol yangi_login · O‘chirish: /mobilyopish')
+    try:send_app_download(u,'Ilova telefoningizda yo‘q bo‘lsa — /ilova yuboring, bot faylni yuboradi.')
+    except Exception:logging.warning('App download button was not sent')
+
 def _wh_int(value,label):
     if not re.fullmatch(r'[1-9][0-9]*',value or ''):raise ValueError(f'{label} нотўғри.')
     return int(value)
@@ -1746,6 +1892,11 @@ def handle(db,update):
     if not r:
         if 'edited_message' not in update:send(u,f'Сизнинг Telegram ID: {u}\nАдминга шу рақамни юборинг. Кириш ҳали очилмаган.')
         return
+    # Korxonada o'chirilgan bo'lim xodimi botdan ham foydalana olmaydi (rahbar — doim ochiq).
+    closed=modules.ROLE_MODULE.get(r)
+    if closed and not modules.enabled(db,closed):
+        if 'edited_message' not in update:send(u,modules.closed_message(closed))
+        return
     if 'edited_message' in update:
         if r=='agent' and 'location' in m:
             ok=point(db,u,m,True)
@@ -1769,7 +1920,7 @@ def handle(db,update):
         return
     if text in ('📱 Омбор Mini App','📦 Омбор сўрови'):
         if not WAREHOUSE_MINIAPP_URL:raise ValueError('Омбор Mini App манзили созланмаган.')
-        if r in ('admin','warehouse'):
+        if r in ('admin','warehouse') or perms.open_section(db,u,'warehouse',ADMINS):
             api('sendMessage',chat_id=u,text='🏬 Омбор панели · буюртмалар, кирим, агентга бериш, сўровлар ва брак. Қуйидаги тугмадан очинг.',
                 reply_markup={'inline_keyboard':[[{'text':'🏬 Омбор панелини очиш','web_app':{'url':WAREHOUSE_MINIAPP_URL}}]]})
         elif r=='agent':
@@ -1839,8 +1990,16 @@ def handle(db,update):
         send(u,'⏳ Тўлиқ backup тайёрланяпти: база ва мижоз расмлари йиғилади. Бот ишлашда давом этади.')
         threading.Thread(target=_full_backup_worker,args=(u,),daemon=True,name='full-backup-export').start()
         return
-    if text=='/webparol' or text.startswith('/webparol ') or text=='/webyopish':
-        handle_web_password(db,u,r,text);return
+    # Login/parolni rahbar web panelda («Xodimlar») beradi. Bot faqat rahbarning o'ziga beradi —
+    # birinchi marta web panelga kirishi uchun.
+    if text in ('/webparol','/mobilparol','/webyopish','/mobilyopish') or text.startswith(('/webparol ','/mobilparol ')):
+        if r!='admin':
+            send(u,'🔐 Login va parolni rahbaringiz beradi (Rahbar web panel → Xodimlar).\n'
+                   'Shu login bilan AIBI ilovasiga istalgan telefondan kirasiz.');return
+        handle_web_password(db,u,r,text.replace('/mobilparol','/webparol').replace('/mobilyopish','/webyopish'));return
+    if text in ('/ilova','📲 Ilova'):
+        if r not in AIBI_APP_ROLES:raise ValueError('AIBI ilovasi sizning rolingiz uchun ochilmagan.')
+        send_app_download(u);send_app_file(u);return
     if text=='🏬 Омбор (ТЕСТ)' or text=='/wh' or text.startswith('/wh_'):
         handle_warehouse(db,u,r,text);return
     if text=='/failed':
@@ -2435,7 +2594,47 @@ def serve_webhook(db,base_url):
         # Connections come from a bounded pool; close() rolls back and returns them.
         return pool.get() if postgres else db
 
+    sqlite_path=None if postgres else (db.execute('PRAGMA database_list').fetchone()[2] or DB_PATH)
+    def backup_db():
+        return pool.get() if postgres else connect(sqlite_path,initialize=False)
+
     class Handler(BaseHTTPRequestHandler):
+        def _send_apk(self,head):
+            """APK (45 MB): HEAD va Range — telefon yuklab olish menejeri uzilgan joyidan davom ettiradi.
+            Fayl xotiraga to'liq o'qilmaydi, bo'laklab yuboriladi."""
+            try:size=APP_APK_FILE.stat().st_size
+            except FileNotFoundError:
+                self._reply(404,b'Not found');return
+            start,end,code=0,size-1,200
+            m=re.fullmatch(r'bytes=(\d*)-(\d*)',(self.headers.get('Range') or '').strip())
+            if m and (m.group(1) or m.group(2)):
+                if m.group(1):
+                    start=int(m.group(1));end=min(int(m.group(2)),size-1) if m.group(2) else size-1
+                else:
+                    start=max(0,size-int(m.group(2)))
+                if start>end or start>=size:
+                    self.send_response(416);self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+                code=206
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type','application/vnd.android.package-archive')
+                self.send_header('Content-Length',str(end-start+1))
+                self.send_header('Accept-Ranges','bytes')
+                if code==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+                self.send_header('Content-Disposition',f'attachment; filename="{app_file_name()}"')
+                self.send_header('Cache-Control','no-cache')
+                self.send_header('X-Content-Type-Options','nosniff')
+                self.end_headers()
+                if head:return
+                left=end-start+1
+                with APP_APK_FILE.open('rb') as f:
+                    f.seek(start)
+                    while left>0:
+                        chunk=f.read(min(256*1024,left))
+                        if not chunk:break
+                        self.wfile.write(chunk);left-=len(chunk)
+            except (BrokenPipeError,ConnectionResetError):
+                pass
         def _reply(self,code,body=b'OK',ctype='text/plain; charset=utf-8',extra_headers=None):
             try:
                 self.send_response(code)
@@ -2495,6 +2694,8 @@ def serve_webhook(db,base_url):
         def do_HEAD(self):
             # Render and browser clients may probe HEAD / before GET /health.
             head_path=urlparse(self.path).path
+            if head_path=='/download/aibi.apk':
+                self._send_apk(head=True);return
             code=200 if head_path in ('/','/health') else (miniapp_response(head_path)[0] if head_path.startswith('/app/') else 404)
             self.send_response(code)
             self.send_header('Content-Length','0')
@@ -2505,10 +2706,36 @@ def serve_webhook(db,base_url):
             if path=='/app' or path.startswith('/app/'):
                 code,body,ctype,headers=miniapp_response(path,urlparse(self.path).query)
                 self._reply(code,body,ctype,headers);return
+            if path=='/download/aibi.apk':
+                self._send_apk(head=False);return
             if path in ('/cashier','/cashier/'):
                 self._reply(200,Path(__file__).with_name('cashier-miniapp.html').read_bytes(),'text/html; charset=utf-8',{'Cache-Control':'no-store, max-age=0, must-revalidate'});return
             if path in ('/','/health'):
                 self._reply(200,b'Internal Agent Bot OK');return
+            if path.startswith('/c/'):
+                # Mijoz cheki (chekdagi QR): imzolangan havola, login yo'q. Nomlar 'path' ni qayta yozmaydi.
+                rc_hit=receipt_public.parse(path)
+                if not rc_hit:
+                    self._reply(404,b'Chek topilmadi');return
+                rc_db=None
+                try:
+                    rc_db=request_db()
+                    if rc_hit[1]:
+                        rc_base=receipt_public.base_url() or 'https://'+(self.headers.get('Host') or 'localhost')
+                        rc_body=receipt_public.qr_svg(receipt_public.url(rc_hit[0],rc_base)).encode()
+                        self._reply(200,rc_body,'image/svg+xml',{'Cache-Control':'public, max-age=86400','Access-Control-Allow-Origin':'*'})
+                    else:
+                        rc_body=receipt_public.page(shop.receipt(rc_db,rc_hit[0]),branding.get(rc_db)).encode()
+                        self._reply(200,rc_body,'text/html; charset=utf-8')
+                except ValueError:
+                    self._reply(404,b'Chek topilmadi')
+                except Exception:
+                    logging.exception('Public receipt failed');self._reply(500,b'Xato')
+                finally:
+                    if rc_db is not None and postgres:
+                        try:rc_db.rollback();rc_db.close()
+                        except Exception:pass
+                return
             m=re.fullmatch(r'/tiles/(\d{1,2})/(\d{1,7})/(\d{1,7})\.png',path)
             if m:
                 try:
@@ -2742,23 +2969,37 @@ def serve_webhook(db,base_url):
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
                     if length>20000 and payload.get('action')!='profile_save':raise ValueError('Invalid length')
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # AIBI ilovasi (APK) Telegram imzosi o'rniga login sessiyasi tokenini yuboradi.
+                    bearer=self._bearer_token()
+                    actor=None if bearer and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_cashier(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor) not in ('cashier','admin'):
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,bearer)
+                        except ValueError as e:
+                            local.commit();answer_cashier(401,{'error':str(e),'relogin':True});return
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_cashier(403,{'error':perms.MINIAPP_OFF});return
+                    if not modules.enabled(local,'cash'):
+                        answer_cashier(403,{'error':modules.closed_message('cash')});return
+                    if role(local,actor) not in ('cashier','admin') and not perms.open_section(local,actor,'cash',ADMINS):
                         answer_cashier(403,{'error':'Бу бўлим фақат кассир ёки админ учун.'});return
                     action=payload.get('action','dashboard')
                     if action in ('profile','profile_save'):
                         answer_cashier(200,profile_action(local,actor,action,payload));return
+                    try:perms.require(local,actor,perms.CASHIER_ACTION.get(str(action)),ADMINS)
+                    except perms.Denied as e:
+                        answer_cashier(403,{'error':str(e)});return
                     if action=='dashboard':data=cashier_api.dashboard(local,actor)
                     elif action=='review':data=cashier_api.review(local,actor,payload.get('handoverId'))
                     elif action=='handover_detail':data=cashier_api.handover_detail(local,actor,payload.get('handoverId'))
                     elif action=='report':data=cashier_api.period_report(local,actor,payload)
                     else:data=cashier_api.mutate(local,actor,action,payload)
                     notify=data.pop('_notify',None)
+                    if isinstance(data,dict):data['myPerms']=sorted(perms.effective(local,actor,ADMINS))
                     local.commit()
                     attach_card_photo_urls(data)
                     if notify:
@@ -2794,6 +3035,10 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if actor is not None and payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_shop(403,{'error':perms.MINIAPP_OFF});return
+                    if not modules.enabled(local,'sales'):
+                        answer_shop(403,{'error':modules.closed_message('sales')});return
                     if actor is None:
                         # savdo-web (kompyuter): login/parol sessiyasi.
                         try:actor=web_auth.session_user(local,bearer)
@@ -2828,14 +3073,29 @@ def serve_webhook(db,base_url):
                     payload=json.loads(self.rfile.read(length))
                     if not isinstance(payload,dict):raise ValueError('Invalid payload')
                     if length>20000 and payload.get('action')!='product_photo':raise ValueError('Invalid length')
-                    actor=manager_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # AIBI ilovasi (APK) Telegram imzosi o'rniga login sessiyasi tokenini yuboradi.
+                    bearer=self._bearer_token()
+                    actor=None if bearer and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError):
                     answer_wh(401,{'error':'Telegram сессияси яроқсиз. Ботдан қайта очинг.'});return
                 local=None
                 try:
                     local=request_db()
-                    if role(local,actor) not in ('warehouse','admin','agent'):
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,bearer)
+                        except ValueError as e:
+                            local.commit();answer_wh(401,{'error':str(e),'relogin':True});return
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_wh(403,{'error':perms.MINIAPP_OFF});return
+                    if not modules.enabled(local,'warehouse'):
+                        answer_wh(403,{'error':modules.closed_message('warehouse')});return
+                    if role(local,actor) not in ('warehouse','admin','agent') and not perms.open_section(local,actor,'warehouse',ADMINS):
                         answer_wh(403,{'error':'Омбор бўлимига рухсат йўқ.'});return
+                    if role(local,actor)!='agent':
+                        need='warehouse.catalog' if payload.get('action')=='product_photo' else perms.WAREHOUSE_ACTION.get(str(payload.get('action') or 'dashboard'))
+                        try:perms.require(local,actor,need,ADMINS)
+                        except perms.Denied as e:
+                            answer_wh(403,{'error':str(e)});return
                     if payload.get('action')=='product_photo':
                         product_photo_action(local,actor,payload)
                         data=warehouse_api.handle(local,actor,'dashboard',payload)
@@ -2863,7 +3123,8 @@ def serve_webhook(db,base_url):
                     if local is not None and postgres:local.close()
                 return
             if urlparse(self.path).path=='/api/agent':
-                headers=self._agent_headers()
+                native=self._native_app()
+                headers={} if native else self._agent_headers()
                 if headers is None or self.path!='/api/agent':
                     self._reply(403,b'Forbidden');return
                 def answer_agent(code,obj):
@@ -2879,13 +3140,25 @@ def serve_webhook(db,base_url):
                     action=str(payload.get('action') or 'dashboard')
                     if action not in ('photo_upload','profile_save') and length>100_000:
                         answer_agent(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
-                    actor=agent_api.verify_init_data(payload.get('initData'),TOKEN)
+                    # Telegram Mini App sends initData; the mobile app sends its login session token.
+                    web_token=self._bearer_token()
+                    actor=None if web_token and not payload.get('initData') else agent_api.verify_init_data(payload.get('initData'),TOKEN)
                 except (ValueError,TypeError,json.JSONDecodeError):
                     answer_agent(401,{'error':'Telegram sessiyasi yaroqsiz yoki muddati tugagan. Botdan qayta oching.'});return
                 local=None
                 try:
                     local=request_db()
+                    if actor is None:
+                        try:actor=web_auth.session_user(local,web_token)
+                        except ValueError as e:
+                            local.commit();answer_agent(401,{'error':str(e),'relogin':True});return
+                    if payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer_agent(403,{'error':perms.MINIAPP_OFF});return
+                    if not modules.enabled(local,'agents'):
+                        answer_agent(403,{'error':modules.closed_message('agents')});return
                     actor_role=role(local,actor)
+                    if web_token and not payload.get('initData') and actor_role not in MOBILE_ROLES|{'admin'}:
+                        answer_agent(403,{'error':'Mobil ilova faqat savdo agentlari uchun.'});return
                     if actor_role not in ('agent','admin'):
                         answer_agent(403,{'error':'Bu panelga faqat faol agent yoki admin kira oladi.'});return
                     action=payload.get('action','dashboard')
@@ -2904,7 +3177,16 @@ def serve_webhook(db,base_url):
                                 answer_agent(200,{'adminMode':True,'readOnly':False,'agents':admin_agents,
                                     'selectedAgentId':None,'message':'Ishlash uchun agentni tanlang.'});return
                             answer_agent(400,{'error':'Ishlash uchun faol agentni tanlang.'});return
-                    if action=='photo_upload':
+                    if action=='location':
+                        if admin_mode:raise ValueError('GPS faqat agentning o‘z telefonidan yuboriladi.')
+                        data=agent_api.mobile_point(local,actor,payload)
+                        local.commit()
+                    elif action=='payment_void':
+                        if not admin_mode:raise ValueError('To‘lovni faqat rahbar bekor qiladi.')
+                        corrections.cancel_payment(local,actor,payload.get('eventId'),payload.get('reason'))
+                        data={'ok':True,'message':'To‘lov bekor qilindi. Mijoz qarzi qayta tiklandi.'}
+                        local.commit()
+                    elif action=='photo_upload':
                         image=decode_agent_camera_image(payload.get('imageData'))
                         data={'ok':True,'photoFileId':upload_agent_camera_photo(actor,image),
                               'message':'Foto tayyor.'}
@@ -3002,7 +3284,9 @@ def serve_webhook(db,base_url):
                     answer_agent(200,data)
                 except ValueError as e:
                     if local is not None:local.rollback()
-                    answer_agent(400,{'error':str(e)})
+                    err={'error':str(e)}
+                    if getattr(e,'code',None):err['code']=e.code
+                    answer_agent(400,err)
                 except Exception:
                     if local is not None:local.rollback()
                     logging.exception('Authenticated agent API request failed')
@@ -3032,11 +3316,22 @@ def serve_webhook(db,base_url):
                     local=request_db()
                     action=payload.get('action')
                     token=self._bearer_token()
-                    # panel='savdo' — savdo-web: savdo xodimi va rahbar; aks holda faqat rahbar.
+                    # panel='savdo' — savdo-web: savdo xodimi va rahbar; app='mobile' — AIBI Agent ilovasi;
+                    # aks holda faqat rahbar.
                     savdo_panel=payload.get('panel')=='savdo'
-                    web_roles=('sales','admin') if savdo_panel else ('admin',)
-                    web_denied='Bu panelga faqat savdo xodimi kira oladi.' if savdo_panel else 'Bu panelga faqat rahbar kira oladi.'
-                    if native and not savdo_panel:
+                    mobile=payload.get('app')=='mobile'
+                    aibi=payload.get('app')=='aibi'
+                    if aibi:
+                        # AIBI ilovasi (APK): har bir xodim o'z rolidagi Mini App'ni ochadi.
+                        web_roles=AIBI_APP_ROLES;web_denied='Bu ilovaga sizning rolingiz uchun kirish yo‘q.'
+                    elif mobile:
+                        web_roles=tuple(MOBILE_ROLES);web_denied='Mobil ilova faqat savdo agentlari uchun.'
+                    elif savdo_panel:
+                        web_roles=('sales','admin');web_denied='Bu panelga faqat savdo xodimi kira oladi.'
+                    else:
+                        web_roles=('admin',);web_denied='Bu panelga faqat rahbar kira oladi.'
+                    # Chiqish faqat shu tokenni yopadi — ilova qaysi rejimda bo'lmasin ruxsat.
+                    if native and not (savdo_panel or mobile or aibi or action=='logout'):
                         answer_web(403,{'error':'Ruxsat yo‘q.'});return
                     if action=='login':
                         uid,token=web_auth.login(local,payload.get('login'),payload.get('password'),self.headers.get('User-Agent',''))
@@ -3062,7 +3357,7 @@ def serve_webhook(db,base_url):
                         except Exception:
                             logging.warning('Own photo lookup failed')
                         data={'ok':True,'me':me,'login':acc['login'] if acc else '','primaryAdmin':uid in ADMINS,
-                              'brand':branding.get(local)}
+                              'brand':branding.get(local),'role':role(local,uid)}
                     else:
                         answer_web(400,{'error':'Amal noto‘g‘ri.'});return
                     local.commit()
@@ -3102,6 +3397,8 @@ def serve_webhook(db,base_url):
                 local=None
                 try:
                     local=request_db()
+                    if actor is not None and payload.get('initData') and not perms.miniapp_allowed(local,actor):
+                        answer(403,{'error':perms.MINIAPP_OFF});return
                     if actor is None:
                         try:actor=web_auth.session_user(local,web_token)
                         except ValueError as e:
@@ -3109,6 +3406,13 @@ def serve_webhook(db,base_url):
                     if role(local,actor)!='admin':
                         answer(403,{'error':'Bu panelga faqat rahbar kira oladi.'});return
                     action=payload.get('action','dashboard')
+                    try:modules.require_action(local,action,payload.get('op'))
+                    except modules.ModuleClosed as e:
+                        answer(403,{'error':str(e),'moduleClosed':True});return
+                    # Ruxsat har so'rovda bazadan: o'zgarish ochiq sessiyada ham darhol kuchga kiradi.
+                    try:perms.require(local,actor,perms.manager_perm(action,payload.get('op'),payload.get('kind')),ADMINS)
+                    except perms.Denied as e:
+                        answer(403,{'error':str(e),'denied':True});return
                     if action=='dashboard':
                         data=manager_api.dashboard(local)
                     elif action=='route':
@@ -3123,6 +3427,12 @@ def serve_webhook(db,base_url):
                         preview=manager_api.client_edit_preview(local,payload.get('clientId'),payload.get('values'))
                         edit_client(local,actor,preview['clientId'],preview['values'])
                         data={'ok':True,'client':manager_api.client_detail(local,preview['clientId'])}
+                    elif action=='payment_cancel':
+                        if payload.get('confirm') is not True:
+                            raise ValueError('Bekor qilishni tasdiqlang.')
+                        ev=local.execute('SELECT client FROM events WHERE id=?',(int(payload.get('eventId') or 0),)).fetchone()
+                        corrections.cancel_payment(local,actor,payload.get('eventId'),payload.get('reason'))
+                        data={'ok':True,'client':manager_api.client_detail(local,ev['client'])}
                     elif action=='client_delete_preview':
                         data=manager_api.client_delete_preview(local,payload.get('clientId'))
                     elif action=='client_delete_commit':
@@ -3189,27 +3499,122 @@ def serve_webhook(db,base_url):
                         op=str(payload.get('op') or 'dashboard')
                         if op not in ('dashboard','receive','issue','writeoff','take_back','decide','moves'):
                             raise ValueError('Ombor amali noto‘g‘ri.')
-                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if actor in ADMINS else None)
+                        # Ruxsat yuqorida tekshirildi: web paneldan kirgan rahbar shu so'rov davomida ombor operatori.
+                        wh_tok=warehouse.WEB_PRIMARY_OPERATOR.set(actor if op not in ('dashboard','moves') else None)
                         try:data=warehouse_api.handle(local,actor,op,payload)
                         finally:warehouse.WEB_PRIMARY_OPERATOR.reset(wh_tok)
-                        data['canOperate']=actor in ADMINS
+                        data['canOperate']=bool({'warehouse.receive','warehouse.issue','warehouse.writeoff'}&perms.effective(local,actor,ADMINS))
                         wh_notify=data.pop('_notify',None);data.pop('_orders',None)
                     elif action=='supply':
                         # Ta'minot (ta'minotchi, xarid, xom ashyo, ishlab chiqarish) faqat web paneldan.
                         # Ko'rish — barcha rahbarlar, yozish — faqat asosiy rahbar (ombor amallari kabi).
                         op=str(payload.get('op') or 'dashboard')
-                        if op in purchases.WRITE_OPS and actor not in ADMINS:
-                            raise ValueError('Ta’minot amallarini faqat asosiy rahbar kiritadi.')
                         data=purchases.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canOperate']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canOperate']='warehouse.supply' in eff
+                        data['canPaySupplier']='warehouse.supply_pay' in eff
                     elif action=='hr':
                         # Sex ishchilari (tizimdan foydalanmaydi): kartochka va davomat — har qanday rahbar;
                         # pul (avans, oylik, bonus, jarima) — faqat asosiy rahbar.
                         op=str(payload.get('op') or 'overview')
-                        if op in hr.PRIMARY_OPS and actor not in ADMINS:
-                            raise ValueError('Oylik va avans amallarini faqat asosiy rahbar kiritadi.')
                         data=hr.handle(local,actor,op,payload,source=warehouse_api._source(actor,payload))
-                        data['canPay']=actor in ADMINS
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['canPay']='hr.pay' in eff
+                        data['canCalc']='hr.calculate' in eff
+                        data['canEdit']='hr.edit' in eff
+                        if 'hr.salary_view' not in eff:perms.strip_salary(data)
+                    elif action=='operations':
+                        # Amallar jurnali: xodimlar kiritgan barcha yozuvlar; rahbar bekor qiladi yoki tahrirlaydi.
+                        op=str(payload.get('op') or 'list')
+                        if op=='cancel':
+                            operations.cancel(local,actor,str(payload.get('kind') or ''),payload.get('ref'),payload.get('reason'))
+                        elif op=='form':
+                            fields=operations.form(local,actor,str(payload.get('kind') or ''),payload.get('ref'))
+                        elif op=='edit':
+                            operations.edit(local,actor,str(payload.get('kind') or ''),payload.get('ref'),payload.get('values'),
+                                            payload.get('reason'),warehouse_api._source(actor,payload))
+                        elif op!='list':
+                            raise ValueError('Amal noto‘g‘ri.')
+                        start,end,label=resolve_period(payload.get('period') or 'today',payload.get('from'),payload.get('to'))
+                        src=payload.get('source') or None
+                        if src is not None and src not in operations.SOURCES:raise ValueError('Bo‘lim noto‘g‘ri.')
+                        data={'fields':fields} if op=='form' else operations.journal(local,start,end,src,payload.get('q'))
+                        data['periodLabel']=label
+                    elif action=='cashbook':
+                        # Kassa: qo'lda kirim, o'tkazma, bekor qilish, kun yopish va jurnal (ruxsat yuqorida tekshirildi).
+                        op=str(payload.get('op') or 'view')
+                        src=warehouse_api._source(actor,payload)
+                        if op=='income':
+                            cashbook.add_income(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
+                                                payload.get('category'),payload.get('counterparty'),payload.get('note'),src,
+                                                client=payload.get('clientId'))
+                        elif op=='expense':
+                            rate=payload.get('expectedRate')
+                            cashbook.add_expense(local,actor,payload.get('pocket'),payload.get('currency'),payload.get('amount'),
+                                                 payload.get('category'),payload.get('recipient'),payload.get('note'),src,
+                                                 expected_rate=int(rate) if str(rate or '').isdecimal() else None)
+                        elif op=='transfer':
+                            cashbook.add_transfer(local,actor,payload.get('fromPocket'),payload.get('toPocket'),payload.get('currency'),
+                                                  payload.get('amount'),payload.get('note'),src)
+                        elif op=='cancel':
+                            cashbook.cancel(local,actor,payload.get('id') or 0,payload.get('reason'))
+                        elif op=='close':
+                            cashbook.close_day(local,actor,payload.get('counted'),payload.get('note'))
+                        elif op!='view':
+                            raise ValueError('Kassa amali noto‘g‘ri.')
+                        start=end=None
+                        if payload.get('period'):
+                            start,end,_=resolve_period(payload.get('period'),payload.get('from'),payload.get('to'))
+                        data=cashbook.view(local,start,end)
+                        eff=perms.effective(local,actor,ADMINS)
+                        data['can']={k:('cash.'+k) in eff for k in ('income','expense','transfer','cancel','close')}
+                        data['can']['supplier']='warehouse.supply_pay' in eff and modules.enabled(local,'warehouse')
+                    elif action=='access_set':
+                        perms.set_miniapp(local,actor,payload.get('id'),payload.get('miniapp') is True,ADMINS)
+                        data=manager_api.staff_list(local);data.update(staff.staff_list(local,ADMINS))
+                    elif action=='perms_staff':
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
+                    elif action=='perms_set':
+                        perms.set_perms(local,actor,payload.get('id'),payload.get('changes'),ADMINS)
+                        data={'staff':perms.staff_view(local,payload.get('id'),ADMINS)}
+                    elif action=='modules':
+                        data=modules.view(local)
+                    elif action=='module_set':
+                        if actor not in ADMINS:
+                            answer(403,{'error':'Korxona bo‘limlarini faqat asosiy rahbar yoqadi yoki o‘chiradi.'});return
+                        modules.set_enabled(local,actor,str(payload.get('module') or ''),payload.get('enabled') is True)
+                        data=modules.view(local)
+                    elif action=='full_backup':
+                        # Sozlamalar → To'liq backup: server arxivni tayyorlaydi, panel uni to'g'ridan-to'g'ri yuklab oladi.
+                        if actor not in ADMINS:
+                            answer(403,{'error':'To‘liq backup faqat asosiy rahbar uchun.'});return
+                        op=str(payload.get('op') or 'status')
+                        if op=='start':
+                            if _FULL_BACKUP_LOCK.acquire(blocking=False):
+                                _web_backup_drop();_WEB_BACKUP['status']='running';_WEB_BACKUP['ts']=int(time.time())
+                                threading.Thread(target=_web_backup_worker,args=(actor,backup_db),daemon=True,name='web-full-backup').start()
+                        elif op=='download':
+                            state=web_backup_state()
+                            if state.get('status')!='ready':
+                                answer(404,{'error':'Backup tayyor emas yoki muddati tugadi. Qaytadan tayyorlang.'});return
+                            bk_path=_WEB_BACKUP['path']   # 'path' nomi do_POST ichida webhook uchun band — boshqa nom
+                            try:
+                                self.send_response(200)
+                                self.send_header('Content-Type','application/zip')
+                                self.send_header('Content-Length',str(os.path.getsize(bk_path)))
+                                self.send_header('Content-Disposition',f'attachment; filename="{state["name"]}"')
+                                self.send_header('Cache-Control','no-store')
+                                self.send_header('X-Content-Type-Options','nosniff')
+                                for k,v in headers.items():self.send_header(k,v)
+                                self.end_headers()
+                                with open(bk_path,'rb') as fh:shutil.copyfileobj(fh,self.wfile,1024*1024)
+                            except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):
+                                self.close_connection=True
+                            logging.info('Web full backup downloaded user=%s',actor)
+                            return
+                        elif op!='status':
+                            raise ValueError('Backup amali noto‘g‘ri.')
+                        data=web_backup_state()
                     elif action=='branding_save':
                         if actor not in ADMINS:
                             answer(403,{'error':'Brendni faqat asosiy rahbar o‘zgartira oladi.'});return
@@ -3284,8 +3689,9 @@ def serve_webhook(db,base_url):
                         elif action=='staff_deactivate':staff.deactivate(local,actor,uid,ADMINS)
                         elif action=='staff_activate':staff.activate(local,actor,uid)
                         elif action=='staff_login_issue':
-                            login,password=staff.issue_login(local,actor,uid,payload.get('login'))
-                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL})
+                            login,password=staff.issue_login(local,actor,uid,payload.get('login'),payload.get('password'))
+                            web_role=role(local,int(uid))
+                            data.update({'login':login,'password':password,'url':WEB_PANEL_URL if web_role=='admin' else SAVDO_WEB_URL if web_role=='sales' else 'AIBI ilovasi (telefon)'})
                         else:staff.revoke_login(local,actor,uid)
                         data['staff']=manager_api.staff_list(local);data['staff'].update(staff.staff_list(local,ADMINS))
                     elif action in ('cashier_add','cashier_rename','cashier_transfer','cashier_deactivate','cashier_activate'):
@@ -3330,6 +3736,8 @@ def serve_webhook(db,base_url):
                         except Exception:logging.exception('Web warehouse notification failed')
                     if isinstance(data,dict):
                         data.setdefault('primaryAdmin',actor in ADMINS)
+                        data.setdefault('modules',modules.state(local))
+                        data.setdefault('myPerms',sorted(perms.effective(local,actor,ADMINS)))
                     attach_client_photo_urls(data)
                     attach_staff_photos(local,data)
                     attach_product_photo_urls(local,data)
@@ -3438,6 +3846,9 @@ def run():
     signal.signal(signal.SIGINT,stop_signal)
     try:
         base=os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL')
+        # Yangi ilova versiyasi haqida xabar — faqat haqiqiy ishga tushishda (testlar serve_webhook'ni o'zi chaqiradi).
+        try:notify_app_update(db)
+        except Exception:logging.exception('App update notice failed')
         if base:serve_webhook(db,base)
         else:run_polling(db)
     finally:db.close()

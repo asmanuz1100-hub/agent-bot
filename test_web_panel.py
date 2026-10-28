@@ -342,7 +342,7 @@ class WebPanelHttpTests(unittest.TestCase):
             roles = {x['id']: x['role'] for x in d['staff']['staff']}
             self.assertEqual((roles[701], roles[703], roles[704], roles[705]), ('warehouse', 'sales', 'warehouse', 'admin'))
             code, d = self.post('/api/manager', token, action='staff_login_issue', id=704, confirm=True)
-            self.assertEqual(code, 400, d)   # web panel faqat admin uchun
+            self.assertEqual((code, d.get('login')), (200, 'warehouse704'), d)   # omborchiga ham — AIBI ilovasi uchun
             code, d = self.post('/api/manager', token, action='staff_login_issue', id=705, login='ikkinchi', confirm=True)
             self.assertEqual(code, 200, d)
             code, lg = self.post('/api/web', action='login', login='ikkinchi', password=d['password'])
@@ -376,7 +376,7 @@ class WebPanelHttpTests(unittest.TestCase):
             wid = d['worker']['id']
             self.assertEqual(d['worker']['salary'], 2500000)
             code, d = self.post('/api/manager', token, action='hr', op='pay_add', id=wid, kind='bonus', amount='1000', requestId='hrweb0002')
-            self.assertEqual(code, 400, d)
+            self.assertEqual(code, 403, d)
             bot.ADMINS.add(1)
             code, d = self.post('/api/manager', token, action='hr', op='pay_add', id=wid, kind='bonus', amount='1000', requestId='hrweb0003')
             self.assertEqual(code, 200, d)
@@ -398,7 +398,7 @@ class WebPanelHttpTests(unittest.TestCase):
             self.assertEqual(code, 200, d)
             self.assertFalse(d['canOperate'])
             code, d = self.post('/api/manager', token, action='supply', op='supplier_add', name='Web zavod', requestId='supweb0001')
-            self.assertEqual(code, 400, d)
+            self.assertEqual(code, 403, d)
             bot.ADMINS.add(1)
             code, d = self.post('/api/manager', token, action='supply', op='supplier_add', name='Web zavod', requestId='supweb0002')
             self.assertEqual(code, 200, d)
@@ -436,7 +436,7 @@ class WebPanelHttpTests(unittest.TestCase):
             self.assertEqual(code, 200, d)
             self.assertFalse(d['canOperate'])
             code, d = self.post('/api/manager', token, action='stock', op='receive', pack=1, qty=5, unit='Дона', requestId='rcvtest001')
-            self.assertEqual(code, 400, d)
+            self.assertEqual(code, 403, d)
             bot.ADMINS.add(1)
             code, d = self.post('/api/manager', token, action='stock', op='receive', pack=1, qty=5, unit='Дона', requestId='rcvtest002')
             self.assertEqual(code, 200, d)

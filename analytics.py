@@ -353,7 +353,7 @@ def insights(db, period='month', date_from=None, date_to=None, agent=None, now=N
     for aid in sorted(set(by_agent) | set(ops)):
         members = by_agent.get(aid, [])
         debt, adv = _money_block(members)
-        agents.append({'agentId': aid, 'agent': agent_names.get(aid) or str(aid), 'clients': len(members),
+        agents.append({'agentId': aid, 'agent': agent_names.get(aid) or ('Kassaga to‘g‘ridan' if not aid else str(aid)), 'clients': len(members),
                        'debtCents': debt, 'advanceCents': adv,
                        'operations': ops.get(aid, {'deliveredCents': 0, 'returnedCents': 0, 'paidCents': 0})})
     agents.sort(key=lambda a: (-a['operations']['deliveredCents'], a['agentId']))

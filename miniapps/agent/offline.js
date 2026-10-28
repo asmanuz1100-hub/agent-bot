@@ -159,7 +159,8 @@ async function sync(){
           row.lastError="";
           await storePut("queue",row);
         }
-        var outgoing=Object.assign({},payload,{nonce:row.nonce});
+        // Navbatdagi amal nonce bilan himoyalangan; takror-tekshiruv navbatni tiqib qo‘ymasin.
+        var outgoing=Object.assign({},payload,{nonce:row.nonce},row.action==="payment"?{confirmDuplicate:true}:{});
         var result=await cfg.request(row.action,outgoing);
         if(row.tempClientId!=null&&result&&result.clientId){
           await remapQueuedClient(row.tempClientId,result.clientId);

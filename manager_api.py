@@ -221,7 +221,7 @@ def _period_report(db, start, end, staff, clients, recent_visits, now):
     delivered_qty=sold_qty=returned_qty=0
     per_agent={}
     for row in event_rows:
-        aid=int(row["agent"]);kind=row["kind"]
+        aid=int(row["agent"] or 0);kind=row["kind"]   # 0 — kassaga to'g'ridan (agentsiz) to'lov
         cents=int(row["amount_usd"] or 0);qty=int(row["qty"] or 0)
         acc=per_agent.setdefault(aid,{"delivery":[0,0],"return":[0,0],"payment":[0,0],"sold":[0,0]})
         acc[kind][0]+=cents;acc[kind][1]+=qty
@@ -338,6 +338,7 @@ def _flows_json(f):
             "outCardUzs":f.get("out_card_uzs",0),"outCardUsd":_usd(f.get("out_card_usd",0)),
             # One general cashbox: an older pre-split balance is shown inside the dollar pocket.
             "cashUzs":f["cash_uzs"],"cashUsd":_usd(f["cash_usd"]+f.get("opening_usd",0)),"cardUzs":f["card_uzs"],"cardUsd":_usd(f["card_usd"]),
+            "bankUzs":f.get("bank_uzs",0),"bankUsd":_usd(f.get("bank_usd",0)),
             "openingUsd":0,"since":0}
 
 
@@ -564,7 +565,9 @@ def dashboard(db, now=None):
         WHERE status='pending'""").fetchone()[0]
     pending_count = db.execute("SELECT COUNT(*) FROM handovers WHERE status='pending'").fetchone()[0]
     # Same "umumiy kassa" as the Kassir app: cash (so'm + dollar) plus card/bank receipts, USD equivalent.
-    cash_balance=core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+    import cashbook
+    cash_balance=(core.cashier_balance_usd(db)+int(db.execute('SELECT COALESCE(SUM(amount_usd),0) FROM cashier_incomes').fetchone()[0] or 0)
+                  +cashbook.legacy_usd(db,'card')+cashbook.legacy_usd(db,'bank'))
     new_today = db.execute("""SELECT COUNT(*) FROM clients WHERE created_ts>=?
         AND created_ts<=?""",(today,now)).fetchone()[0]
     report_today=_enrich_period_analysis(db,_period_report(db,today,now+1,staff,clients,recent_visits,now),86400)
@@ -631,7 +634,7 @@ def client_detail(db, client_id, limit=120):
         GROUP BY e.pack,p.name ORDER BY e.pack""",(client_id,)).fetchall()
     stocks=[{"pack":int(r["pack"]),"name":r["product_name"] or str(r["pack"]),
              "qty":int(r["qty"] or 0)} for r in stock_rows]
-    rows=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.note,e.ts,
+    rows=db.execute("""SELECT e.id,e.kind,e.pack,e.qty,e.amount,e.amount_usd,e.note,e.ts,e.agent,e.pay_method,
              COALESCE(u.name,CAST(e.actor AS TEXT),CAST(e.agent AS TEXT)) AS actor_name,
              COALESCE(p.name,CAST(e.pack AS TEXT)) AS product_name
         FROM events e
@@ -644,7 +647,9 @@ def client_detail(db, client_id, limit=120):
         "product":r["product_name"] if r["pack"] else "",
         "qty":int(r["qty"] or 0),"amountUzs":int(r["amount"] or 0),
         "amountUsd":_usd(r["amount_usd"]),"note":r["note"] or "",
-        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—"
+        "ts":int(r["ts"] or 0),"actor":r["actor_name"] or "—",
+        # Agentning naqd to'lovini rahbar bekor qila oladi (corrections.cancel_payment).
+        "canCancel":r["kind"]=="payment" and r["agent"] is not None and (r["pay_method"] or "")!="card"
     } for r in rows]
     visits=db.execute("""SELECT v.id,v.actor,v.status,v.note,v.followup,v.ts,v.photo,
                COALESCE(u.name,CAST(v.actor AS TEXT)) AS actor_name

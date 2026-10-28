@@ -24,6 +24,9 @@ MOVE_LABELS={
     'agent_return':'↩️ Агентдан қабул',
     'writeoff':'🗑 Брак / ҳисобдан чиқариш',
     'shop_sale':'🛒 Савдо бўлими сотуви',
+    'correction_in':'↩️ Бекор қилинган сотув қайтди',
+    'correction_out':'↪️ Бекор қилинган харид чиқди',
+    'cancelled_shop_sale':'🚫 Бекор қилинган сотув (ҳисобланмайди)',
 }
 REQUEST_LABELS={'need':'📥 Товар сўрови','return':'↩️ Омборга қайтариш'}
 STATUS_LABELS={'pending':'⏳ Кутилмоқда','accepted':'✅ Қабул қилинди','rejected':'❌ Рад этилди'}
@@ -71,7 +74,8 @@ def _role(db,uid):
     return row[0] if row else None
 
 def _require_keeper(db,actor):
-    if _role(db,actor) not in KEEPER_ROLES:
+    import perms
+    if _role(db,actor) not in KEEPER_ROLES and not perms.open_section(db,actor,'warehouse'):
         raise ValueError('Bu bo‘lim faqat omborchi yoki rahbar uchun.')
 
 def _require_operator(db,actor):
@@ -100,8 +104,8 @@ def to_units(pack,qty,unit='Дона'):
     return qty*(units_per_block(pack) if unit=='Блок' else 1)
 
 def stock(db,pack):
-    row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind IN ('in','agent_return') THEN qty
-        WHEN kind IN ('issue','writeoff','shop_sale') THEN -qty ELSE 0 END),0)
+    row=db.execute("""SELECT COALESCE(SUM(CASE WHEN kind IN ('in','agent_return','correction_in') THEN qty
+        WHEN kind IN ('issue','writeoff','shop_sale','correction_out') THEN -qty ELSE 0 END),0)
         FROM warehouse_moves WHERE pack=?""",(pack,)).fetchone()
     return int(row[0] or 0)
 
