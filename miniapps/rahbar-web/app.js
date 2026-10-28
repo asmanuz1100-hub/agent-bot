@@ -163,16 +163,16 @@ function showLogin(msg){
    30 kun «ishonchli» bo'ladi (rw-device) va kod qayta so'ralmaydi. */
 var OTP=null;
 function otpStep(on){
-  OTP=on||null;$('lgCodeRow').hidden=!on;$('lgCode').required=!!on;$('lgCode').value='';
+  OTP=on||null;$('lgCodeRow').hidden=!on;if(!on)$('lgErr').classList.remove('info');$('lgCode').required=!!on;$('lgCode').value='';
   $('lgLogin').disabled=$('lgPass').disabled=!!on;$('lgBtn').firstChild.textContent=on?'Tasdiqlash':'Kirish';
   if(on)setTimeout(function(){$('lgCode').focus()},30);
 }
 $('loginForm').addEventListener('submit',async function(e){
-  e.preventDefault();var b=$('lgBtn');b.disabled=true;$('lgErr').textContent='';
+  e.preventDefault();var b=$('lgBtn');b.disabled=true;$('lgErr').textContent='';$('lgErr').classList.remove('info');
   try{
     var d=OTP?await auth('verify_otp',{challenge:OTP,code:$('lgCode').value.trim()})
              :await auth('login',{login:$('lgLogin').value.trim(),password:$('lgPass').value,device:store('rw-device')||''});
-    if(d.otp){otpStep(d.challenge);$('lgErr').textContent='Kod Telegram’dagi rahbar akkauntingizga yuborildi.';return}
+    if(d.otp){otpStep(d.challenge);$('lgErr').textContent='Kod Telegram’dagi rahbar akkauntingizga yuborildi.';$('lgErr').classList.add('info');return}
     if(d.device)store('rw-device',d.device);
     TOKEN=d.token;store('rw-token',TOKEN);store('rw-login',$('lgLogin').value.trim());otpStep(null);await boot();
   }catch(err){

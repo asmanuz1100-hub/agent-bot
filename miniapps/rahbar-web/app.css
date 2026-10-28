@@ -97,7 +97,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;min-height:0;accen
 input:hover,select:hover,textarea:hover{border-color:color-mix(in srgb,var(--mu) 45%,var(--line2))}
 input:focus,select:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0 3px color-mix(in srgb,var(--pri) 20%,transparent)}
 input:disabled,select:disabled,textarea:disabled{opacity:.6;cursor:not-allowed;background:var(--soft)}
-.form-err{color:var(--bad);font-weight:500;font-size:13px;display:flex;gap:6px;align-items:center}.form-err:empty{display:none}
+.form-err{color:var(--bad);font-weight:500;font-size:13px;display:flex;gap:6px;align-items:center}.form-err:empty{display:none}.form-err.info{color:var(--tx2)}
 .hint{font-size:12px;color:var(--mu);margin:0}
 
 /* ---------- Tugmalar ---------- */
