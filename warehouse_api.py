@@ -198,8 +198,12 @@ def handle(db,actor,action,payload):
         if to not in ('preparing','loaded','rejected','new'):raise ValueError('Buyurtma holati noto‘g‘ri.')
         note=str(payload.get('note') or '').strip()
         if len(note)>300:raise ValueError('Izoh 300 belgidan oshmasin.')
-        core.set_order_status(db,actor,oid,to,note)
+        agent=None if payload.get('agent') in (None,'') else _int(payload.get('agent'),'Agent')
+        old=db.execute('SELECT agent FROM orders WHERE id=?',(oid,)).fetchone()
+        core.set_order_status(db,actor,oid,to,note,agent=agent)
         result={'order':oid}
+        if old and agent is not None and int(old[0])!=agent:
+            notify.append(({int(old[0])},f"🔁 Буюртма #{oid} бошқа агентга берилди: {_name(db,agent)}.\nМижозга у топширади."))
         orders.append(oid)
     elif action=='issue':
         agent=_int(payload.get('agent'),'Агент')

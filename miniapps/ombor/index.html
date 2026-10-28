@@ -407,11 +407,12 @@ function orderAction(id,to){
     return;}
   openSheet(`<h2>${box('truck',C.blue)}Agentga berish · #${id}</h2><div class="sub">${esc(o.agent_name)} · ${esc(o.client_name)}</div>
     ${o.items.map(i=>`<div class="tl"><span class="tx">${esc(i.name)}</span><b>${units(i.qty,i.block)}</b></div>`).join('')}
-    <div class="hint">Tovar ombor qoldig‘idan ayriladi va agent qoldig‘iga qo‘shiladi. Agentga xabar boradi.</div>
+    <label class="f" for="oa">Qaysi agentga beriladi</label><select class="inp" id="oa">${(S.agents||[]).some(a=>a.id===o.agent)?'':`<option value="${o.agent}" selected>${esc(o.agent_name)}</option>`}${(S.agents||[]).map(a=>`<option value="${a.id}" ${a.id===o.agent?'selected':''}>${esc(a.name)}${a.id===o.agent?' (buyurtma bergan)':''}</option>`).join('')}</select>
+    <div class="hint">Tovar ombor qoldig‘idan ayriladi va tanlangan agent qoldig‘iga qo‘shiladi. Buyurtma mijoz kartasida shu agent nomi bilan ko‘rinadi, mijozga u topshiradi.</div>
     ${o.ready?'':'<div class="note bad">Omborda yetarli emas — server berishni to‘xtatadi.</div>'}
     <div class="acts"><button class="btn g" id="cn">Bekor</button><button class="btn ok" id="ok">${I('check')}Berildi</button></div>`,s=>{
     s.querySelector('#cn').onclick=closeSheet;
-    s.querySelector('#ok').onclick=()=>act('order_status',{id,to:'loaded'},'Buyurtma agentga berildi',closeSheet);});
+    s.querySelector('#ok').onclick=()=>act('order_status',{id,to:'loaded',agent:+s.querySelector('#oa').value},'Buyurtma agentga berildi',closeSheet);});
 }
 
 /* ---------- keeper: requests ---------- */

@@ -812,8 +812,8 @@ def client_detail(db,agent,cid,now=None):
                  "distanceM":(int(v['distance_m']) if v['distance_m'] is not None else None),
                  "hasPhoto":bool(v['photo']),"stock":stock_by.get(int(v['id']),[])} for v in visits],
       "visitRadiusM":visit_radius_m(),
-      "orders":[core.order_view(db,o) for o in db.execute(
-          "SELECT * FROM orders WHERE client=? ORDER BY ts DESC,id DESC LIMIT 10",(c['id'],)).fetchall()],
+      "orders":[{**core.order_view(db,o),"agentName":o['agent_name'] or ""} for o in db.execute(
+          "SELECT o.*,u.name AS agent_name FROM orders o LEFT JOIN users u ON u.id=o.agent WHERE o.client=? ORDER BY o.ts DESC,o.id DESC LIMIT 10",(c['id'],)).fetchall()],
       "events":[{"id":int(e['id']),"kind":e['kind'],"pack":int(e['pack'] or 0),
                  "qty":int(e['qty'] or 0),"amountUsd":_usd(e['amount_usd']),
                  "payMethod":e['pay_method'] or "","paidUzs":int(e['paid_uzs'] or 0),
