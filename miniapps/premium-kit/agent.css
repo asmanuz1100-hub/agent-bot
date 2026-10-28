@@ -155,3 +155,9 @@ html.pm[data-pmt="dark"] .leaflet-control-zoom a,html.pm[data-pmt="dark"] .leafl
 html.pm body:has(#gate:not(.hidden)) nav:not(.tabs){display:none!important}
 html.pm[data-pmt="dark"] #gate{background:var(--bg)!important}html.pm[data-pmt="dark"] #gate .card{background:var(--card)!important;color:var(--tx)!important}
 html.pm .quick-tile small{white-space:normal!important;overflow-wrap:anywhere}
+/* Tungi rejim: "Muhim" tugmasi kunduzgidek ko'k; xarita va oynachalar qorong'i (Rahbar bilan bir xil). */
+html.pm[data-pmt="dark"] .home-next{background:var(--gl)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 12px 24px -12px #1f6fd1cc!important}
+html.pm[data-pmt="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.7)}
+html.pm[data-pmt="dark"] .leaflet-container{background:var(--bg)!important}
+html.pm[data-pmt="dark"] .leaflet-popup-content-wrapper,html.pm[data-pmt="dark"] .leaflet-popup-tip{background:var(--card)!important;color:var(--tx)!important}
+html.pm[data-pmt="dark"] .leaflet-popup-content-wrapper *:not(button):not(.primary){color:inherit}

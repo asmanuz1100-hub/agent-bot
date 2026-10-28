@@ -1,6 +1,6 @@
 <!doctype html>
 <html class="aibi" lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4f7fd">
-<title>AIBI Agent</title><script src="/app/aibi-kit/bridge.js?v=2"></script><script src="/app/aibi-kit/agent-shift.js?v=2"></script><script src="./offline.js"></script><script src="/app/premium-kit/insights-ui.js?v=20261016-v7"></script><script>(function(){try{if(/[?&]theme=classic(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261020-aibi-v3');css('/app/premium-kit/agent.css?v=20261010-v6');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261028-aibi-v4';j.defer=true;document.head.appendChild(j)}catch(e){}})()</script>
+<title>AIBI Agent</title><script src="/app/aibi-kit/bridge.js?v=2"></script><script src="/app/aibi-kit/agent-shift.js?v=2"></script><script src="./offline.js"></script><script src="/app/premium-kit/insights-ui.js?v=20261016-v7"></script><script>(function(){try{if(/[?&]theme=classic(&|$)/.test(location.search))return;var d=document.documentElement;d.classList.add('pm','pm-boot');var bs=document.createElement('style');bs.textContent='html.pm-boot body>*{visibility:hidden}html.pm-boot body{background:#17212b}';document.head.appendChild(bs);setTimeout(function(){d.classList.remove('pm-boot')},4000);d.setAttribute('data-pm-app','agent');function css(h){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l)}css('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');css('/app/premium-kit/premium.css?v=20261020-aibi-v3');css('/app/premium-kit/agent.css?v=20261028-v7');var j=document.createElement('script');j.src='/app/premium-kit/premium.js?v=20261028-aibi-v4';j.defer=true;document.head.appendChild(j)}catch(e){}})()</script>
 <style>
 :root{color-scheme:light}
 :root{--tg-bg:#f4f7fd;--tg-text:#101e39;--tg-header:#101e39;--tg-header-text:#fff;--tg-section:#fff;--tg-hint:#8190a7;--navy:#101e39;--blue:#2367f5;--green:#0daf79;--red:#e55265;--amber:#e89d2c;--purple:#7e61dd;--paper:#f4f7fd;--muted:#8190a7;--line:#e5ecf5}
@@ -416,7 +416,7 @@ function renderClients(){
  if(!data)return;filterButtons("clientFilters",filter);renderRegionSelects();
  var q=$("search").value.trim().toLowerCase(),list=data.clients.filter(function(c){return ageFilterMatch(c,filter)&&regionMatches(c)&&(!q||(c.name+" "+c.person+" "+c.address+" "+c.phone).toLowerCase().includes(q))});
  $("clientCount").textContent=list.length+" mijoz";
- $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8,i<8)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
+ $("clientList").innerHTML=list.map(function(c,i){return shopRow(c,i<8,true)}).join("")||'<div class="card muted">Mijoz topilmadi.</div>';
 }
 function detailLine(name,value){return '<div class="line"><small>'+esc(name)+'</small><b>'+esc(value==null?"—":value)+'</b></div>'}
 function dialPhone(c){
@@ -668,7 +668,7 @@ async function renderMap(){
  if(!data||current!=="map")return;filterButtons("mapFilters",mapFilter);renderRegionSelects();
  var list=data.clients.filter(function(c){return ageFilterMatch(c,mapFilter)&&regionMatches(c)&&Number.isFinite(c.lat)&&Number.isFinite(c.lon)});
  $("mapNote").textContent=list.length+" ta mijozning real koordinatasi. Nuqtani bosib kartochkasini oching.";
- $("mapList").innerHTML=list.slice(0,50).map(function(c){return shopRow(c,false,false)}).join("");
+ $("mapList").innerHTML=list.slice(0,50).map(function(c){return shopRow(c,false,true)}).join("");
  try{
   var L=await loadLeaflet();if(current!=="map")return;
   if(!map){
