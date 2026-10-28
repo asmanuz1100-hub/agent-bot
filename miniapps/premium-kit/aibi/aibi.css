@@ -19,3 +19,10 @@
 html.aibi{--pri:#3882F6;--grad:var(--aibi-aurora);--k:#6366F1}
 @media (prefers-color-scheme:dark){html.aibi:not([data-theme="light"]){--k:#A5B4FC}}
 html.aibi[data-theme="dark"]{--k:#A5B4FC}
+
+/* Kompyuterda qizib ketmaslik uchun: cheksiz animatsiya va blur yengillashtirildi */
+#sp.x,#sp.x *{animation:none!important}
+.live,span.live,.my-track-dot{animation-iteration-count:3!important}
+@media (hover:hover) and (pointer:fine){
+  *,*:before,*:after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+}
