@@ -54,6 +54,20 @@ class WarehouseApiTests(unittest.TestCase):
                                ('writeoff',{'pack':self.plain,'qty':1,'note':'x'}),('take_back',{'agent':2,'pack':self.plain,'qty':1})):
             with self.assertRaisesRegex(ValueError,'faqat omborchi'):self.call(1,action,**payload)
 
+    def test_keeper_hands_order_to_another_agent(self):
+        cid=7701
+        self.db.execute("INSERT INTO clients(id,agent,name,phone,created_ts) VALUES(?,2,'Baraka','+998900000077',1)",(cid,))
+        oid,_=core.create_order(self.db,2,cid,[{'pack':self.plain,'qty':3}],'',source=777001)
+        self.db.commit()
+        self.call(5,'receive',pack=self.plain,qty=5,requestId='recv-ordag-1')
+        with self.assertRaises(ValueError):self.call(5,'order_status',id=oid,to='loaded',agent=3)  # kassir agent emas
+        d=self.call(5,'order_status',id=oid,to='loaded',agent=6)
+        self.assertEqual(self.db.execute('SELECT agent,status FROM orders WHERE id=?',(oid,)).fetchone()[:],(6,'loaded'))
+        self.assertEqual((core.agent_stock(self.db,6,self.plain),core.agent_stock(self.db,2,self.plain)),(3,0))
+        self.assertEqual([r for r,_ in d['_notify']],[{2}])   # buyurtma bergan agentga xabar
+        with self.assertRaises(ValueError):core.mark_order_delivered_by_agent(self.db,2,cid,oid)
+        core.mark_order_delivered_by_agent(self.db,6,cid,oid)
+
     def test_receive_many_products_at_once(self):
         block=core.block_units(self.block)
         items=[{'pack':self.plain,'qty':4},{'pack':self.block,'qty':2,'unit':'Блок'}]

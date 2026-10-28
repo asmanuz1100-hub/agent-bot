@@ -2123,7 +2123,7 @@ def order_view(db,row):
             'totalCents':sum(i['priceCents']*i['qty'] for i in items if not i['custom'])}
 
 
-def set_order_status(db,actor,oid,status,admin_note=''):
+def set_order_status(db,actor,oid,status,admin_note='',agent=None):
     r=db.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
     if not r or r[0] not in ('admin','warehouse'):
         raise ValueError('Buyurtma holatini faqat rahbar yoki omborchi o‘zgartiradi.')
@@ -2142,7 +2142,15 @@ def set_order_status(db,actor,oid,status,admin_note=''):
         raise ValueError(f"«{ORDER_STATUS_LABELS[cur]}» holatidan «{ORDER_STATUS_LABELS[status]}» ga o‘tib bo‘lmaydi.")
     note=str(admin_note or '').strip()[:500]
     if status=='rejected' and not note:raise ValueError('Rad etish sababini yozing.')
+    if agent is not None and status!='loaded':raise ValueError('Agentni faqat tovar berishda tanlash mumkin.')
     if status=='loaded':
+        if agent is not None and int(agent)!=int(row['agent']):
+            # Omborchi buyurtmani boshqa agent orqali yuboradi: buyurtma (va yetkazish) shu agentga o'tadi.
+            a=db.execute('SELECT role FROM users WHERE id=?',(int(agent),)).fetchone()
+            if not a or a[0]!='agent':raise ValueError('Agent topilmadi.')
+            lock_agent(db,int(agent))
+            db.execute('UPDATE orders SET agent=? WHERE id=?',(int(agent),oid))
+            row=db.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
         items=order_items(db,oid)
         if any(i['custom'] for i in items):
             raise ValueError('Avval katalogda yo‘q mahsulotlarni katalogga qo‘shing yoki bog‘lang.')
