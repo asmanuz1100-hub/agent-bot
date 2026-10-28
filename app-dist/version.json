@@ -1,9 +1,8 @@
 {
-  "version": "2.1.0",
+  "version": "2.1.1",
   "notes": [
-    "Ilova botdan mustaqil: o‘z sahifalari, faqat login/parol bilan",
-    "Ombor va Savdo ilovada ochiladi (avval «Telegram’dan oching» chiqardi)",
-    "Agent, Kassa, Rahbar — Ombor uslubida",
-    "Agent: «Ishni boshlash / tugatish» va GPS ilovadan"
+    "Rahbar, Kassa, Agent — Ombor uslubida (Aurora)",
+    "Rahbar agentni ko‘rganda smena tugmasi chiqmaydi",
+    "Login ekrani yangilandi"
   ]
 }
