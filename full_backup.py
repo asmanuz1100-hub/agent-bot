@@ -129,7 +129,7 @@ def build_archives(db, photo_fetcher, photo_chunk_bytes=38_000_000):
         zf.writestr("customers/clients.csv", _clients_csv(clients))
     paths.append(str(data_path))
 
-    photo_rows = [row for row in clients if row.get("photo")]
+    photo_rows = [row for row in clients if row.get("photo")] if photo_fetcher else []   # None — faqat ma'lumotlar
     photo_manifest = []
     photo_paths = []
     current_zip = None
