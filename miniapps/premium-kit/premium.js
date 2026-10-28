@@ -85,7 +85,7 @@ function split2(e){if(!e||e.children.length||e.textContent.indexOf(' · ')<0)ret
 function watch2(e){if(!e)return;split2(e);new MutationObserver(function(){split2(e)}).observe(e,{childList:true,characterData:true,subtree:true})}
 var SKEL='<div class="pm-skel" aria-hidden="true"><i></i><div class="two"><i></i><i></i></div><div class="two"><i></i><i></i></div><i></i></div>';
 function el(h){var t=D.createElement('template');t.innerHTML=h.trim();return t.content.firstChild}
-var tg=window.Telegram&&window.Telegram.WebApp;
+var tg=(window.Telegram&&window.Telegram.WebApp)||(window.AIBI&&window.AIBI.WebApp);
 /* Theme: light / dark like Rahbar Premium (toggle in the header). */
 function savedTheme(){try{return localStorage.getItem('pmTheme')}catch(e){return null}}
 function applyTheme(t){H.setAttribute('data-pmt',t);try{tg&&tg.setHeaderColor&&tg.setHeaderColor('#030b24');tg&&tg.setBackgroundColor&&tg.setBackgroundColor(t==='dark'?'#0a1226':'#eef3fb')}catch(e){}var b=D.getElementById('pmTheme');if(b)b.innerHTML=svg(t==='dark'?'sun':'moon')}
