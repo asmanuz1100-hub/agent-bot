@@ -514,7 +514,7 @@ function opSheet(kind,pre={}){
   const agentMode=!keeper();
   if(!agentMode&&!canOp())return;
   const ops=agentMode?['need','return']:['receive','issue','take_back','writeoff'];
-  const st={kind,unit:'Дона',rid:newRid(),pack:pre.pack?+pre.pack:null,agent:pre.agent?+pre.agent:null};
+  const st={kind,items:[],unit:'Дона',rid:newRid(),pack:pre.pack?+pre.pack:null,agent:pre.agent?+pre.agent:null};
   const draw=()=>{
     const list=agentMode?(st.kind==='return'?(S.products||[]).filter(p=>p.free>0):(S.products||[]))
       :(st.kind==='take_back'&&st.agent?activeProducts().filter(p=>(agentOf(st.agent).stock[p.pack]||0)>0):activeProducts());
@@ -538,6 +538,8 @@ function opSheet(kind,pre={}){
       <label class="f" for="fq">Miqdor</label><div class="qty"><button id="qm" aria-label="Kamaytirish">−</button><input class="inp" id="fq" type="number" min="1" inputmode="numeric" placeholder="0" value="${esc(st.qty||'')}"><button id="qp" aria-label="Ko‘paytirish">+</button></div>
       ${p&&p.block?`<div class="seg" id="fu" style="margin-top:8px"><button data-u="Дона" class="${st.unit==='Дона'?'on':''}">Dona</button><button data-u="Блок" class="${st.unit==='Блок'?'on':''}">Blok (${p.block} dona)</button></div>`:''}
       <div class="hint" id="tot"></div>
+      ${st.kind==='receive'&&list.length?`${st.items.length?`<div class="c" style="margin:10px 0 0;padding:6px 12px">${st.items.map((it,i)=>{const x=product(it.pack)||{};return `<div class="tl"><span class="tx">${esc(x.name||'')}</span><b>${num(it.qty)} ${it.unit==='Блок'?'blok':'dona'}</b><button class="btn g" data-rm="${i}" aria-label="O‘chirish" style="width:auto;padding:4px 10px">×</button></div>`;}).join('')}</div>`:''}
+      <button class="btn g" id="add" style="margin-top:10px">+ Yana mahsulot qo‘shish</button>`:''}
       <label class="f" for="fn">${st.kind==='writeoff'?'Brak sababi (majburiy)':'Izoh (ixtiyoriy)'}</label><textarea class="inp" id="fn" maxlength="300">${esc(st.note||'')}</textarea>
       <div class="acts"><button class="btn g" id="cn">Bekor</button><button class="btn" id="go" ${list.length&&(!needAgent||st.agent)?'':'disabled'}>${agentMode?I('send')+'Yuborish':I('check')+'Saqlash'}</button></div>`;
     const q=s.querySelector('#fq'),tot=()=>{const n=+q.value||0;s.querySelector('#tot').innerHTML=st.unit==='Блок'&&p&&n?`Jami: <b>${num(n*p.block)} dona</b>`:'';};
@@ -550,12 +552,21 @@ function opSheet(kind,pre={}){
     s.querySelector('#qp').onclick=()=>{q.value=(+q.value||0)+1;tot();};
     q.oninput=tot;tot();
     s.querySelector('#cn').onclick=closeSheet;
+    const ad=s.querySelector('#add');if(ad)ad.onclick=()=>{keep();const qty=Number(st.qty);
+      if(!Number.isInteger(qty)||qty<1){toast('Miqdorni kiriting (butun son).',false);return;}
+      st.items.push({pack:st.pack,qty,unit:st.unit});st.qty='';st.unit='Дона';draw();};
+    s.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{keep();st.items.splice(+b.dataset.rm,1);draw();});
     s.querySelector('#go').onclick=()=>{keep();
-      const qty=Number(st.qty);if(!Number.isInteger(qty)||qty<1){toast('Miqdorni kiriting (butun son).',false);return;}
+      const qty=Number(st.qty);
+      if(st.kind==='receive'&&st.items.length&&!String(st.qty||'').trim()){
+        act('receive',{items:st.items,note:(st.note||'').trim(),requestId:st.rid},`Kirim saqlandi (${st.items.length} ta mahsulot)`,closeSheet);return;}
+      if(!Number.isInteger(qty)||qty<1){toast('Miqdorni kiriting (butun son).',false);return;}
       const note=(st.note||'').trim();if(st.kind==='writeoff'&&!note){toast('Brak sababini yozing.',false);return;}
       const payload={pack:st.pack,qty,unit:st.unit,note,requestId:st.rid};
       if(agentMode){act('request',{...payload,kind:st.kind},'So‘rov omborchiga yuborildi',closeSheet);return;}
       if(needAgent)payload.agent=st.agent;
+      if(st.kind==='receive'&&st.items.length){const items=st.items.concat([{pack:st.pack,qty,unit:st.unit}]);
+        act('receive',{items,note,requestId:st.rid},`Kirim saqlandi (${items.length} ta mahsulot)`,closeSheet);return;}
       act(st.kind,payload,{receive:'Kirim saqlandi',issue:'Agentga berildi',take_back:'Omborga qabul qilindi',writeoff:'Hisobdan chiqarildi'}[st.kind],closeSheet);};
   };
   showSheet();draw();
