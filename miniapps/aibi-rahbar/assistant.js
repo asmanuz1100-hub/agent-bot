@@ -227,8 +227,14 @@
     }).catch(function () { fallback('Labbay', done); });
   }
 
+  var voiceNote = '';
   window.AIBIAssistant = {
     open: open, close: close, ask: ask,
+    // Ilova «AIBI» ni eshita olmasa sababini aytadi (ruxsat yo'q, til yo'q, internet yo'q).
+    status: function (msg) {
+      voiceNote = String(msg || '');
+      if (orbState === 'idle' && !busy) cap('', esc(voiceNote || '«AIBI» deb chaqiring yoki savolni yozing'), voiceNote ? 'e' : 'hint');
+    },
     // Ilova «AIBI» so'zini eshitdi.
     wake: function () {
       if (busy) return;
