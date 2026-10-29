@@ -24,56 +24,59 @@
     '#aiBtn.on{background:var(--aibi-aurora,linear-gradient(135deg,#3882F6,#6366F1))!important;color:#fff!important}' +
     '#aiBtnOrb{width:28px;height:28px;display:block;border-radius:50%;background:radial-gradient(circle,#1a1c3d,#07080f)}' +
     '@media(max-width:420px){#aiBtn .t{display:none}#aiBtn{padding:0!important;width:40px!important;justify-content:center}}' +
+    // Yarim ekranli qorong'i oyna: pastdan chiqadi, orqada ilova xira ko'rinadi.
     '#aiSh{--a-tx:#eef0fb;--a-mu:#8d92b3;--a-line:#232638;--a-soft:#151726;--a-pri:#6366F1;--a-pri2:#8B5CF6;' +
-    'position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;color:var(--a-tx);font-family:inherit;' +
-    'background:radial-gradient(120% 70% at 50% 34%,#16183a 0%,#0a0b16 55%,#05060c 100%);' +
-    'padding:calc(12px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));' +
-    'transform:translateY(102%);transition:transform .42s cubic-bezier(.2,.9,.25,1);visibility:hidden}' +
-    '#aiSh.on{transform:none;visibility:visible}#aiOv{display:none}' +
-    '#aiTop{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}' +
-    '#aiTop b{font-weight:800;font-size:16px;letter-spacing:.02em}#aiTop small{display:block;color:var(--a-mu);font-size:11px;font-weight:600}' +
-    '.aiIc{width:44px;height:44px;border-radius:50%;border:1px solid var(--a-line);background:#ffffff0d;color:var(--a-tx);display:grid;place-items:center;font-size:18px;cursor:pointer;flex:0 0 auto}' +
-    '.aiIc:focus-visible,#aiMic:focus-visible{outline:2px solid var(--a-pri);outline-offset:2px}.aiIc.on{background:#6366F133;border-color:#6366F1}' +
-    '#aiOrbBox{position:relative;flex:1 1 0;min-height:210px}#aiOrb{position:absolute;inset:0;width:100%;height:100%}' +
-    '#aiSt{position:absolute;left:0;right:0;bottom:4px;display:flex;justify-content:center}' +
-    '#aiSt span{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;border:1px solid var(--a-line);background:#0e0f19cc;color:var(--a-mu);font-size:12px;font-weight:700}' +
+    'position:fixed;left:50%;bottom:0;z-index:40;width:min(480px,100%);height:min(62vh,600px);display:flex;flex-direction:column;color:var(--a-tx);font-family:inherit;' +
+    'background:radial-gradient(120% 80% at 50% 30%,#17193c 0%,#0b0c18 60%,#07080f 100%);border:1px solid #1d2036;border-bottom:0;border-radius:28px 28px 0 0;' +
+    'box-shadow:0 -24px 60px -20px #000c;padding:8px max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));' +
+    'transform:translate(-50%,104%);transition:transform .4s cubic-bezier(.2,.9,.25,1);visibility:hidden}' +
+    '#aiSh.on{transform:translate(-50%,0);visibility:visible}' +
+    '#aiOv{position:fixed;inset:0;z-index:39;background:#05060c8c;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .3s}#aiOv.on{opacity:1;pointer-events:auto}' +
+    '#aiGrab{width:40px;height:5px;border-radius:5px;background:#2b2f47;margin:0 auto 6px;flex:0 0 auto}' +
+    '#aiTop{display:flex;align-items:center;gap:10px;min-height:44px}#aiTop>div{flex:1;min-width:0}' +
+    '#aiTop b{font-weight:800;font-size:16px;letter-spacing:.02em}#aiTop small{display:block;color:var(--a-mu);font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.aiIc{width:40px;height:40px;border-radius:50%;border:1px solid var(--a-line);background:#ffffff0d;color:var(--a-tx);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;padding:0}' +
+    '.aiIc svg,#aiF .go svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}' +
+    '.aiIc:focus-visible,#aiF .go:focus-visible{outline:2px solid var(--a-pri);outline-offset:2px}.aiIc.on{background:#6366F133;border-color:#6366F1;color:#c7c9ff}' +
+    '#aiOrbBox{position:relative;flex:1 1 0;min-height:150px}#aiOrb{position:absolute;inset:0;width:100%;height:100%}' +
+    '#aiSt{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center}' +
+    '#aiSt span{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;border:1px solid var(--a-line);background:#0e0f19cc;color:var(--a-mu);font-size:12px;font-weight:700}' +
     '#aiSt i{width:6px;height:6px;border-radius:50%;background:#2a2d3c;transition:background .3s}#aiSt i.on{background:var(--a-pri)}' +
-    '#aiCap{flex:0 1 auto;max-height:30vh;overflow:auto;text-align:center;padding:14px 6px 4px;scrollbar-width:none}' +
-    '#aiCapQ{color:var(--a-mu);font-size:14px;font-weight:600;margin:0 auto 8px;max-width:34ch;min-height:1em}' +
-    '#aiCapA{font-size:19px;font-weight:700;line-height:1.42;margin:0 auto;max-width:30ch;white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty}' +
-    '#aiCapA.e{color:#ff7a8a}#aiCapA.hint{color:var(--a-mu);font-weight:600;font-size:16px}' +
-    '#aiLog{display:none;flex:1 1 auto;overflow:auto;flex-direction:column;gap:8px;padding:8px 2px}#aiSh.hist #aiLog{display:flex}#aiSh.hist #aiOrbBox,#aiSh.hist #aiCap{display:none}' +
+    '#aiCap{flex:0 1 auto;max-height:22vh;overflow:auto;text-align:center;padding:12px 6px 2px;scrollbar-width:none}' +
+    '#aiCapQ{color:var(--a-mu);font-size:13px;font-weight:600;margin:0 auto 6px;max-width:36ch}#aiCapQ:empty{display:none}' +
+    '#aiCapA{font-size:17px;font-weight:700;line-height:1.42;margin:0 auto;max-width:32ch;white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty}' +
+    '#aiCapA.e{color:#ff7a8a}#aiCapA.hint{color:var(--a-mu);font-weight:600;font-size:15px}' +
+    '#aiLog{display:none;flex:1 1 auto;overflow:auto;flex-direction:column;gap:8px;padding:6px 2px}#aiSh.hist #aiLog{display:flex}#aiSh.hist #aiOrbBox,#aiSh.hist #aiCap{display:none}' +
     '.aiM{max-width:86%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}' +
     '.aiM.u{align-self:flex-end;background:linear-gradient(135deg,var(--a-pri),var(--a-pri2));color:#fff;border-bottom-right-radius:6px}' +
     '.aiM.a{align-self:flex-start;background:var(--a-soft);color:var(--a-tx);border:1px solid var(--a-line);border-bottom-left-radius:6px}.aiM.e{color:#ff7a8a}' +
     '.aiDots i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--a-mu);margin:0 3px;animation:aiB 1s infinite}' +
     '.aiDots i:nth-child(2){animation-delay:.15s}.aiDots i:nth-child(3){animation-delay:.3s}@keyframes aiB{0%,80%,100%{opacity:.25}40%{opacity:1}}' +
-    '#aiF{display:none;gap:8px;margin-top:12px}#aiSh.kb #aiF{display:flex}' +
+    '#aiF{display:flex;gap:8px;margin-top:12px;flex:0 0 auto}' +
     '#aiQ{flex:1;min-width:0;border:1px solid var(--a-line);background:var(--a-soft);color:var(--a-tx);border-radius:16px;padding:13px 14px;font:inherit;font-size:15px}' +
-    '#aiQ::placeholder{color:var(--a-mu)}#aiF .go{border:0;border-radius:16px;min-width:50px;font-size:18px;background:linear-gradient(135deg,var(--a-pri),var(--a-pri2));color:#fff;cursor:pointer}' +
-    '#aiCtl{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:14px}' +
-    '#aiMic{width:74px;height:74px;border-radius:50%;border:0;cursor:pointer;color:#fff;font-size:26px;' +
-    'background:linear-gradient(140deg,#3882F6,#6366F1 55%,#8B5CF6);box-shadow:0 14px 30px -12px #6366F1cc,inset 0 1px 0 #ffffff40}' +
-    '#aiMic.rec{background:linear-gradient(140deg,#ff4f7a,#e5469a);animation:aiP 1.2s infinite}@keyframes aiP{50%{box-shadow:0 0 0 12px #e5469a2e}}' +
-    '.aiHint{color:var(--a-mu);font-size:12px;text-align:center;margin:10px 0 0}' +
-    '@media (prefers-reduced-motion:reduce){#aiSh{transition:none}#aiMic.rec{animation:none}}';
+    '#aiQ::placeholder{color:var(--a-mu)}#aiQ:focus{outline:none;border-color:var(--a-pri)}' +
+    '#aiF .go{border:0;border-radius:16px;width:50px;flex:0 0 50px;display:grid;place-items:center;background:linear-gradient(135deg,var(--a-pri),var(--a-pri2));color:#fff;cursor:pointer;padding:0}' +
+    '@media (prefers-reduced-motion:reduce){#aiSh,#aiOv{transition:none}}';
   D.head.appendChild(css);
 
+  var IC = {
+    x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    hist: '<svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4"/><path d="M12 7.5V12l3 2"/></svg>',
+    send: '<svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>'
+  };
   var ov = D.createElement('div'); ov.id = 'aiOv';
   var sh = D.createElement('div'); sh.id = 'aiSh'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'AIBI yordamchi');
-  if (!native) sh.classList.add('kb');
-  sh.innerHTML = '<div id="aiTop"><div><b>AIBI</b><small>Savdo, qarz, kassa, agentlar, ombor</small></div>' +
-    '<button type="button" class="aiIc" id="aiX" aria-label="Yopish">✕</button></div>' +
+  sh.innerHTML = '<div id="aiGrab" aria-hidden="true"></div>' +
+    '<div id="aiTop"><div><b>AIBI</b><small>Savdo, qarz, kassa, agentlar, ombor</small></div>' +
+    '<button type="button" class="aiIc" id="aiHist" aria-label="Suhbat tarixi">' + IC.hist + '</button>' +
+    '<button type="button" class="aiIc" id="aiX" aria-label="Yopish">' + IC.x + '</button></div>' +
     '<div id="aiOrbBox"><canvas id="aiOrb" aria-hidden="true"></canvas>' +
     '<div id="aiSt"><span><i></i><i></i><i></i><i></i><i></i><b id="aiStL">Kutish</b></span></div></div>' +
     '<div id="aiCap" aria-live="polite"><p id="aiCapQ"></p><p id="aiCapA" class="hint">' +
-    (native ? '«AIBI» deb chaqiring yoki 🎤 ni bosing' : 'Savolingizni yozing') + '</p></div>' +
+    (native ? '«AIBI» deb chaqiring yoki savolni yozing' : 'Savolingizni yozing') + '</p></div>' +
     '<div id="aiLog"></div>' +
     '<form id="aiF"><input id="aiQ" placeholder="Masalan: bugun qancha sotildi?" maxlength="600" autocomplete="off">' +
-    '<button type="submit" class="go" aria-label="Yuborish">➤</button></form>' +
-    '<div id="aiCtl">' + (native ? '<button type="button" class="aiIc" id="aiKb" aria-label="Yozib so‘rash">⌨️</button>' +
-    '<button type="button" id="aiMic" aria-label="Ovoz bilan so‘rash">🎤</button>' : '') +
-    '<button type="button" class="aiIc" id="aiHist" aria-label="Suhbat tarixi">🕘</button></div>';
+    '<button type="submit" class="go" aria-label="Yuborish">' + IC.send + '</button></form>';
   function mount() { D.body.append(ov, sh); }
   if (D.body) mount(); else D.addEventListener('DOMContentLoaded', mount);
   var log = sh.querySelector('#aiLog'), q = sh.querySelector('#aiQ');
@@ -137,7 +140,7 @@
     ring += ((orbState === 'think' ? 1 : 0) - ring) * .05;
     spin += dt * (orbState === 'think' ? 1.6 : orbState === 'idle' ? .25 : .6 + .8 * lv);
     if (!D.hidden) {
-      if (sh.classList.contains('on')) drawOrb(sh.querySelector('#aiOrb'), bigP, .34, 1.25);
+      if (sh.classList.contains('on')) drawOrb(sh.querySelector('#aiOrb'), bigP, .36, 1.1);
       drawOrb(D.getElementById('aiBtnOrb'), smallP, .36, 1.05);
     }
     if (!reduce) requestAnimationFrame(frame);
@@ -154,8 +157,6 @@
   function cap(qText, aHtml, cls) { capQ.textContent = qText || ''; capA.className = cls || ''; capA.innerHTML = aHtml; sh.querySelector('#aiCap').scrollTop = 0; }
   sh.querySelector('#aiX').onclick = close;
   sh.querySelector('#aiHist').onclick = function () { var on = sh.classList.toggle('hist'); this.classList.toggle('on', on); if (on) log.scrollTop = log.scrollHeight; };
-  var kb = sh.querySelector('#aiKb');
-  if (kb) kb.onclick = function () { var on = sh.classList.toggle('kb'); this.classList.toggle('on', on); if (on) setTimeout(function () { q.focus(); }, 50); };
   D.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sh.classList.contains('on')) close(); });
   function syncBtn() { var b = D.getElementById('aiBtn'); if (b) b.classList.toggle('on', sh.classList.contains('on')); }
   function setBusy(v) { busy = v; post({ t: 'voice', busy: v }); }
@@ -245,7 +246,7 @@
   function addBtn() {
     var rt = D.querySelector('.br .rt'); if (!rt || D.getElementById('aiBtn')) return;
     var b = D.createElement('i'); b.id = 'aiBtn'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'AIBI yordamchi');
-    b.innerHTML = '<canvas id="aiBtnOrb" aria-hidden="true"></canvas><span class="t">AIBI</span>'; b.onclick = function () { sh.classList.contains('on') ? close() : (open(), sh.classList.contains('kb') && setTimeout(function () { q.focus(); }, 350)); };
+    b.innerHTML = '<canvas id="aiBtnOrb" aria-hidden="true"></canvas><span class="t">AIBI</span>'; b.onclick = function () { sh.classList.contains('on') ? close() : (open(), !native && setTimeout(function () { q.focus(); }, 350)); };
     rt.insertBefore(b, rt.firstChild); syncBtn();
   }
   new MutationObserver(addBtn).observe(D.documentElement, { childList: true, subtree: true });
