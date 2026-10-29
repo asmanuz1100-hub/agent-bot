@@ -84,7 +84,7 @@ def set_enabled(db,actor,key,on,now=None):
 
 def history(db,limit=30):
     rows=db.execute("""SELECT ra.action,ra.ts,COALESCE(u.name,CAST(ra.actor AS TEXT)) AS who FROM role_audit ra
-        LEFT JOIN users u ON u.id=ra.actor WHERE ra.action LIKE 'module_%' ORDER BY ra.ts DESC,ra.id DESC LIMIT ?""",(limit,)).fetchall()
+        LEFT JOIN users u ON u.id=ra.actor WHERE ra.action LIKE ? ORDER BY ra.ts DESC,ra.id DESC LIMIT ?""",('module_%',limit)).fetchall()
     out=[]
     for r in rows:
         act,_,key=str(r['action']).partition(':')

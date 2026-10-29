@@ -31,6 +31,18 @@ def signed_init_data(user_id):
 
 
 class ModuleUnitTests(unittest.TestCase):
+    def test_history_sql_has_no_literal_percent_for_postgres(self):
+        # psycopg treats a bare % in the SQL text as a placeholder: LIKE patterns must be parameters.
+        seen, db = [], self.db
+
+        class Spy:
+            def execute(self, sql, *a):
+                seen.append(sql)
+                return db.execute(sql, *a)
+        modules.history(Spy())
+        sql = core._pg_sql(seen[0])
+        self.assertNotRegex(sql.replace('%s', ''), '%')
+
     def setUp(self):
         self.db = core.connect(':memory:')
         self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)',
