@@ -1,8 +1,8 @@
 {
-  "version": "2.1.1",
+  "version": "2.1.2",
   "notes": [
-    "Rahbar, Kassa, Agent — Ombor uslubida (Aurora)",
-    "Rahbar agentni ko‘rganda smena tugmasi chiqmaydi",
-    "Login ekrani yangilandi"
+    "Tungi rejim hamma bo'limda to'g'ri ishlaydi (Rahbar'da 🌙 tugmasi)",
+    "Agent: xarita tungi rejimda, mijoz rasmlari hamma qatorda",
+    "Tepadagi soat va batareya tungi rejimda ko'rinadi"
   ]
 }
