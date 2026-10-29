@@ -2,17 +2,21 @@
 
 Server joriy holatdan ixcham hisobot (bugun, 7 kun, 30 kun, agentlar, ombor, qarz) yig'adi va
 uni savol bilan birga Claude'ga yuboradi. Model faqat shu ma'lumotga tayanadi — raqam to'qimaydi.
-Kalit: ANTHROPIC_API_KEY (server muhitida). Kalit bo'lmasa — aniq xato qaytariladi.
+Kalit (server muhitida): GEMINI_API_KEY (Google Gemini) yoki ANTHROPIC_API_KEY (Claude); ikkalasi bo'lsa — Gemini.
+Kalit bo'lmasa — aniq xato qaytariladi.
 """
 import json
 import logging
 import os
 import time
+import urllib.error
+import urllib.request
 
 import executive
 import manager_api
 
 MODEL = os.getenv('AI_MODEL', 'claude-opus-5-5')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
 MAX_QUESTION = 600
 MAX_HISTORY = 8
 
@@ -86,9 +90,12 @@ def ask(db, question, history=None, client=None):
         raise ValueError('Savolni yozing yoki ayting.')
     if len(question) > MAX_QUESTION:
         raise ValueError(f'Savol {MAX_QUESTION} belgidan oshmasin.')
+    if client is None and os.getenv('GEMINI_API_KEY'):
+        data = json.dumps(snapshot(db), ensure_ascii=False, default=float)
+        return _ask_gemini(_history(history) + [{'role': 'user', 'content': f'<data>\n{data}\n</data>\n\nSavol: {question}'}])
     if client is None:
         if not os.getenv('ANTHROPIC_API_KEY'):
-            raise ValueError('Yordamchi sozlanmagan: serverga ANTHROPIC_API_KEY qo‘shilishi kerak.')
+            raise ValueError('Yordamchi sozlanmagan: serverga GEMINI_API_KEY yoki ANTHROPIC_API_KEY qo‘shilishi kerak.')
         import anthropic
         client = anthropic.Anthropic(max_retries=2, timeout=50.0)
     data = json.dumps(snapshot(db), ensure_ascii=False, default=float)
@@ -109,4 +116,34 @@ def ask(db, question, history=None, client=None):
     if resp.stop_reason == 'refusal':
         return {'answer': OFF_TOPIC, 'offTopic': True}
     text = '\n'.join(b.text for b in resp.content if b.type == 'text').strip()
+    return {'answer': text or 'Javob bo‘sh qaytdi.', 'offTopic': text == OFF_TOPIC}
+
+
+def _ask_gemini(messages):
+    """Google Gemini (generateContent REST): same system prompt and data as Claude."""
+    body = {'systemInstruction': {'parts': [{'text': SYSTEM}]},
+            'contents': [{'role': 'model' if m['role'] == 'assistant' else 'user', 'parts': [{'text': m['content']}]}
+                         for m in messages],
+            'generationConfig': {'maxOutputTokens': 2000, 'temperature': 0.3}}
+    req = urllib.request.Request(
+        f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent',
+        data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'x-goog-api-key': os.environ['GEMINI_API_KEY']})
+    try:
+        with urllib.request.urlopen(req, timeout=50) as res:
+            out = json.loads(res.read())
+    except urllib.error.HTTPError as e:
+        logging.warning('Gemini request failed: %s %s', e.code, e.read()[:300])
+        if e.code == 429:
+            raise ValueError('Yordamchi hozir band (bepul limit). Bir daqiqadan keyin qayta urinib ko‘ring.')
+        if e.code in (400, 401, 403):
+            raise ValueError('Yordamchi kaliti noto‘g‘ri. Server sozlamasini tekshiring.')
+        raise ValueError('Yordamchi xizmatiga ulanib bo‘lmadi. Qayta urinib ko‘ring.')
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        logging.warning('Gemini request failed: %r', e)
+        raise ValueError('Yordamchi xizmatiga ulanib bo‘lmadi. Qayta urinib ko‘ring.')
+    cand = (out.get('candidates') or [{}])[0]
+    if cand.get('finishReason') in ('SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST'):
+        return {'answer': OFF_TOPIC, 'offTopic': True}
+    text = '\n'.join(p.get('text', '') for p in (cand.get('content') or {}).get('parts') or []).strip()
     return {'answer': text or 'Javob bo‘sh qaytdi.', 'offTopic': text == OFF_TOPIC}

@@ -19,6 +19,7 @@ import web_auth
 import branding
 import staff
 import ai_assistant
+import voice
 import executive
 import sales
 import agent_api
@@ -3388,7 +3389,7 @@ def serve_webhook(db,base_url):
                     if not isinstance(payload,dict):
                         answer(400,{'error':'So‘rov noto‘g‘ri.'});return
                     # Faqat mahsulot rasmi katta bo'ladi; qolgan so'rovlar 10 KB dan oshmaydi.
-                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save','ai_ask'):
+                    if length>10_000 and payload.get('action') not in ('product_photo','branding_save','ai_ask','ai_speak'):
                         answer(400,{'error':'So‘rov hajmi noto‘g‘ri.'});return
                     web_token=self._bearer_token()
                     actor=None if web_token and not payload.get('initData') else manager_api.verify_init_data(payload.get('initData'),TOKEN)
@@ -3494,6 +3495,8 @@ def serve_webhook(db,base_url):
                         data={'ok':True,'warehouse':manager_api.warehouse(local,payload.get('status'))}
                     elif action=='ai_ask':
                         data=ai_assistant.ask(local,payload.get('question'),payload.get('history'))
+                    elif action=='ai_speak':
+                        data=voice.speak(payload.get('text'))
                     elif action=='stock':
                         # Ombor amallari web paneldan: Ombor Mini App bilan bir xil funksiya va tekshiruvlar (rahbar — KEEPER_ROLES ichida).
                         op=str(payload.get('op') or 'dashboard')

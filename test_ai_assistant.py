@@ -61,9 +61,30 @@ class AiAssistantTests(unittest.TestCase):
     def test_errors(self):
         with self.assertRaises(ValueError):
             ai_assistant.ask(self.db, '  ')
-        with unittest.mock.patch.dict(os.environ, {'ANTHROPIC_API_KEY': ''}):
+        with unittest.mock.patch.dict(os.environ, {'ANTHROPIC_API_KEY': '', 'GEMINI_API_KEY': ''}):
             with self.assertRaisesRegex(ValueError, 'ANTHROPIC_API_KEY'):
                 ai_assistant.ask(self.db, 'salom')
+
+    def test_gemini_is_used_when_its_key_is_set(self):
+        sent = {}
+
+        class Res:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return json.dumps({'candidates': [{'content': {'parts': [{'text': 'Bugun 16 dona.'}]}}]}).encode()
+
+        def urlopen(req, timeout):
+            sent['url'], sent['key'], sent['body'] = req.full_url, req.get_header('X-goog-api-key'), json.loads(req.data)
+            return Res()
+        with unittest.mock.patch.dict(os.environ, {'GEMINI_API_KEY': 'g-test'}), \
+                unittest.mock.patch.object(ai_assistant.urllib.request, 'urlopen', urlopen):
+            out = ai_assistant.ask(self.db, 'Bugun qancha sotildi?', [{'role': 'assistant', 'text': 'Salom'}, {'role': 'user', 'text': 'x'}])
+        self.assertEqual(out['answer'], 'Bugun 16 dona.')
+        self.assertIn(':generateContent', sent['url'])
+        self.assertEqual(sent['key'], 'g-test')
+        self.assertIn('Faqat shu tizim', sent['body']['systemInstruction']['parts'][0]['text'])
+        self.assertEqual([c['role'] for c in sent['body']['contents']], ['user', 'user'])
+        self.assertIn('<data>', sent['body']['contents'][-1]['parts'][0]['text'])
 
 
 if __name__ == '__main__':

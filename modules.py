@@ -35,7 +35,7 @@ ACTION_MODULE={
     'agent_transfer_preview':'agents','agent_transfer_commit':'agents','agent_deactivate_preview':'agents',
     'agent_deactivate_commit':'agents','route':'agents',
     'hr':'hr',
-    'period_report':'reports','insights':'reports','ai_ask':'reports',
+    'period_report':'reports','insights':'reports','ai_ask':'reports','ai_speak':'reports',
 }
 ENDPOINT_MODULE={'/api/shop':'sales','/api/cashier':'cash','/api/warehouse':'warehouse','/api/agent':'agents'}
 ROLE_MODULE={'sales':'sales','cashier':'cash','warehouse':'warehouse','agent':'agents'}
