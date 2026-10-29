@@ -81,6 +81,20 @@ class WarehouseApiTests(unittest.TestCase):
         self.assertEqual(warehouse.stock(self.db,self.plain),4)
         with self.assertRaises(ValueError):self.call(5,'receive',items=[],requestId='recv-multi-03')
 
+    def test_issue_many_products_at_once(self):
+        block=core.block_units(self.block)
+        self.call(5,'receive',items=[{'pack':self.plain,'qty':10},{'pack':self.block,'qty':3,'unit':'Блок'}],requestId='recv-iss-m-01')
+        items=[{'pack':self.plain,'qty':4},{'pack':self.block,'qty':1,'unit':'Блок'}]
+        d=self.call(5,'issue',agent=2,items=items,requestId='issue-multi-01')
+        self.assertEqual(len(d['moves']),2)
+        self.assertEqual([r for r,_ in d['_notify']],[{2}])   # bitta xabar, ikki mahsulot
+        self.call(5,'issue',agent=2,items=items,requestId='issue-multi-01')  # double tap
+        self.assertEqual((core.agent_stock(self.db,2,self.plain),core.agent_stock(self.db,2,self.block)),(4,block))
+        # Ikkinchi qatorga yetmasa — birinchisi ham berilmaydi.
+        with self.assertRaises(ValueError):
+            self.call(5,'issue',agent=2,items=[{'pack':self.plain,'qty':1},{'pack':self.block,'qty':10**5}],requestId='issue-multi-02')
+        self.assertEqual(core.agent_stock(self.db,2,self.plain),4)
+
     def test_receive_issue_writeoff_with_blocks_and_idempotency(self):
         block=core.block_units(self.block)
         self.call(5,'receive',pack=self.block,qty=3,unit='Блок',requestId='recv-block-01')

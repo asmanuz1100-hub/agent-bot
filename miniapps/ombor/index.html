@@ -539,13 +539,13 @@ function opSheet(kind,pre={}){
       <label class="f" for="fq">Miqdor</label><div class="qty"><button id="qm" aria-label="Kamaytirish">−</button><input class="inp" id="fq" type="number" min="1" inputmode="numeric" placeholder="0" value="${esc(st.qty||'')}"><button id="qp" aria-label="Ko‘paytirish">+</button></div>
       ${p&&p.block?`<div class="seg" id="fu" style="margin-top:8px"><button data-u="Дона" class="${st.unit==='Дона'?'on':''}">Dona</button><button data-u="Блок" class="${st.unit==='Блок'?'on':''}">Blok (${p.block} dona)</button></div>`:''}
       <div class="hint" id="tot"></div>
-      ${st.kind==='receive'&&list.length?`${st.items.length?`<div class="c" style="margin:10px 0 0;padding:6px 12px">${st.items.map((it,i)=>{const x=product(it.pack)||{};return `<div class="tl"><span class="tx">${esc(x.name||'')}</span><b>${num(it.qty)} ${it.unit==='Блок'?'blok':'dona'}</b><button class="btn g" data-rm="${i}" aria-label="O‘chirish" style="width:auto;padding:4px 10px">×</button></div>`;}).join('')}</div>`:''}
+      ${(st.kind==='receive'||st.kind==='issue')&&list.length?`${st.items.length?`<div class="c" style="margin:10px 0 0;padding:6px 12px">${st.items.map((it,i)=>{const x=product(it.pack)||{};return `<div class="tl"><span class="tx">${esc(x.name||'')}</span><b>${num(it.qty)} ${it.unit==='Блок'?'blok':'dona'}</b><button class="btn g" data-rm="${i}" aria-label="O‘chirish" style="flex:0 0 auto;min-height:32px;padding:4px 12px">×</button></div>`;}).join('')}</div>`:''}
       <button class="btn g" id="add" style="margin-top:10px">+ Yana mahsulot qo‘shish</button>`:''}
       <label class="f" for="fn">${st.kind==='writeoff'?'Brak sababi (majburiy)':'Izoh (ixtiyoriy)'}</label><textarea class="inp" id="fn" maxlength="300">${esc(st.note||'')}</textarea>
       <div class="acts"><button class="btn g" id="cn">Bekor</button><button class="btn" id="go" ${list.length&&(!needAgent||st.agent)?'':'disabled'}>${agentMode?I('send')+'Yuborish':I('check')+'Saqlash'}</button></div>`;
     const q=s.querySelector('#fq'),tot=()=>{const n=+q.value||0;s.querySelector('#tot').innerHTML=st.unit==='Блок'&&p&&n?`Jami: <b>${num(n*p.block)} dona</b>`:'';};
     const keep=()=>{st.qty=q.value;st.note=s.querySelector('#fn').value;};
-    s.querySelectorAll('#fk button').forEach(b=>b.onclick=()=>{keep();st.kind=b.dataset.k;st.rid=newRid();draw();});
+    s.querySelectorAll('#fk button').forEach(b=>b.onclick=()=>{keep();st.kind=b.dataset.k;st.items=[];st.rid=newRid();draw();});
     s.querySelectorAll('#fu button').forEach(b=>b.onclick=()=>{keep();st.unit=b.dataset.u;draw();});
     const fa=s.querySelector('#fa');if(fa)fa.onchange=()=>{keep();st.agent=+fa.value;draw();};
     const fp=s.querySelector('#fp');if(fp)fp.onchange=()=>{keep();st.pack=+fp.value;draw();};
@@ -559,15 +559,18 @@ function opSheet(kind,pre={}){
     s.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{keep();st.items.splice(+b.dataset.rm,1);draw();});
     s.querySelector('#go').onclick=()=>{keep();
       const qty=Number(st.qty);
-      if(st.kind==='receive'&&st.items.length&&!String(st.qty||'').trim()){
-        act('receive',{items:st.items,note:(st.note||'').trim(),requestId:st.rid},`Kirim saqlandi (${st.items.length} ta mahsulot)`,closeSheet);return;}
+      // Kirim va Berish: bir nechta mahsulot bitta so'rovda (oxirgi qator bo'sh bo'lsa ham).
+      const many=n=>`${st.kind==='issue'?'Agentga berildi':'Kirim saqlandi'} (${n} ta mahsulot)`;
+      const multi=(st.kind==='receive'||st.kind==='issue')&&st.items.length;
+      if(multi&&!String(st.qty||'').trim()){
+        act(st.kind,{items:st.items,note:(st.note||'').trim(),requestId:st.rid,...(needAgent?{agent:st.agent}:{})},many(st.items.length),closeSheet);return;}
       if(!Number.isInteger(qty)||qty<1){toast('Miqdorni kiriting (butun son).',false);return;}
       const note=(st.note||'').trim();if(st.kind==='writeoff'&&!note){toast('Brak sababini yozing.',false);return;}
       const payload={pack:st.pack,qty,unit:st.unit,note,requestId:st.rid};
       if(agentMode){act('request',{...payload,kind:st.kind},'So‘rov omborchiga yuborildi',closeSheet);return;}
       if(needAgent)payload.agent=st.agent;
-      if(st.kind==='receive'&&st.items.length){const items=st.items.concat([{pack:st.pack,qty,unit:st.unit}]);
-        act('receive',{items,note,requestId:st.rid},`Kirim saqlandi (${items.length} ta mahsulot)`,closeSheet);return;}
+      if(multi){const items=st.items.concat([{pack:st.pack,qty,unit:st.unit}]);
+        act(st.kind,{items,note,requestId:st.rid,...(needAgent?{agent:st.agent}:{})},many(items.length),closeSheet);return;}
       act(st.kind,payload,{receive:'Kirim saqlandi',issue:'Agentga berildi',take_back:'Omborga qabul qilindi',writeoff:'Hisobdan chiqarildi'}[st.kind],closeSheet);};
   };
   showSheet();draw();

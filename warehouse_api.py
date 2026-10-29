@@ -177,7 +177,8 @@ def handle(db,actor,action,payload):
     source=_source(actor,payload)
     notify=[]
     orders=[]
-    if action=='receive':
+    if action in ('receive','issue'):
+        agent=_int(payload.get('agent'),'Агент') if action=='issue' else None
         items=payload.get('items')
         if items is None:items=[payload]
         if not isinstance(items,list) or not 1<=len(items)<=30:raise ValueError('Mahsulotlar ro‘yxati noto‘g‘ri (1–30 ta).')
@@ -190,8 +191,13 @@ def handle(db,actor,action,payload):
         for i,(pack,qty) in enumerate(lines):
             # Har bir qator o'z idempotentlik kalitiga ega: bitta qayta yuborishda ham ikki marta yozilmaydi.
             src=source if len(lines)==1 or rid is None else _source(actor,{'requestId':f'{rid}-{i}'})
-            moves.append(wh.receive(db,actor,pack,qty,note,source=src))
+            moves.append(wh.receive(db,actor,pack,qty,note,source=src) if agent is None
+                         else wh.issue(db,actor,agent,pack,qty,note,source=src))
         result={'move':moves[0],'moves':moves}
+        sent=[(pack,qty) for (pack,qty),m in zip(lines,moves) if m]
+        if agent is not None and sent:
+            notify.append(({agent},"🚚 Омбордан товар берилди #"+', #'.join(str(m) for m in moves if m)+"\n"+
+                           ''.join(f"📦 {core.product_name(p)} · {_units_text(p,q)} · қолдиғингиз {core.agent_stock(db,agent,p)} дона\n" for p,q in sent).rstrip()))
     elif action=='writeoff':
         pack=_pack(payload);qty=_qty(payload,pack)
         move=wh.write_off(db,actor,pack,qty,_note(payload,required=True,label='Brak sababi'),source=source)
@@ -217,14 +223,6 @@ def handle(db,actor,action,payload):
         if old and agent is not None and int(old[0])!=agent:
             notify.append(({int(old[0])},f"🔁 Буюртма #{oid} бошқа агентга берилди: {_name(db,agent)}.\nМижозга у топширади."))
         orders.append(oid)
-    elif action=='issue':
-        agent=_int(payload.get('agent'),'Агент')
-        pack=_pack(payload);qty=_qty(payload,pack)
-        move=wh.issue(db,actor,agent,pack,qty,_note(payload),source=source)
-        result={'move':move}
-        if move:
-            notify.append(({agent},f"🚚 Омбордан товар берилди #{move}\n📦 {core.product_name(pack)} · {_units_text(pack,qty)}\n"
-                                   f"Сизнинг қолдиғингиз: {core.agent_stock(db,agent,pack)} дона."))
     else:  # decide
         rid=_int(payload.get('id'),'So‘rov raqami')
         accepted=payload.get('accepted') is True
