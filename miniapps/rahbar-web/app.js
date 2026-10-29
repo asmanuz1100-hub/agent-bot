@@ -1,6 +1,8 @@
 /* Boshqaruv paneli (web). Telegram'siz: login + parol, so'ng /api/manager bilan bir xil amallar. */
 (function(){'use strict';
 var API='/api/manager',AUTH='/api/web';
+// Yangi AIBI yordamchisi (Rahbar ilovasidagi bilan bir xil): o'z API'mizdan foydalanadi, tugmasi — «Yordamchi».
+window.AIBIAssistantNoBtn=true;window.AIBIAssistantReq=function(a,b){return api(a,b)};
 var TOKEN=store('rw-token')||'';
 var S={dash:null,me:null,primary:false,page:'',loadedTs:0,maps:{},timer:0,cache:{},modules:null};
 /* Sahifa -> korxona bo'limi (server modules.py). Ro'yxatda yo'q sahifa doim ochiq. */
@@ -361,7 +363,7 @@ $('aiHints').innerHTML=AI_HINTS.map(function(h){return '<button type="button" cl
 function aiState(st,txt){var p=$('asPanel');['listening','thinking','speaking'].forEach(function(k){p.classList.toggle(k,st===k)});
   $('asEdge').classList.toggle('on',st==='listening'||st==='thinking');$('asEdge').classList.toggle('think',st==='thinking');
   $('aiBtn').classList.toggle('busy',!!st);$('asState').textContent=txt||'Savdo, agentlar, ombor va kassa bo‘yicha'}
-function openAi(){if(AI.open)return closeAi();AI.open=true;var p=$('asPanel');p.hidden=false;p.classList.remove('closing');$('aiBtn').setAttribute('aria-expanded','true');aiRender();setTimeout(function(){$('aiQ').focus()},80)}
+function openAi(){if(window.AIBIAssistant){var ns=document.getElementById('aibiSh');if(ns&&ns.classList.contains('on'))AIBIAssistant.close();else AIBIAssistant.open();return}if(AI.open)return closeAi();AI.open=true;var p=$('asPanel');p.hidden=false;p.classList.remove('closing');$('aiBtn').setAttribute('aria-expanded','true');aiRender();setTimeout(function(){$('aiQ').focus()},80)}
 function closeAi(){if(!AI.open)return;AI.open=false;if(AI.rec)AI.rec.abort();if(window.speechSynthesis)speechSynthesis.cancel();aiState('');var p=$('asPanel');p.classList.add('closing');$('aiBtn').setAttribute('aria-expanded','false');
   setTimeout(function(){if(!AI.open){p.hidden=true;p.classList.remove('closing')}},matchMedia('(prefers-reduced-motion: reduce)').matches?0:220)}
 $('aiBtn').onclick=openAi;$('asClose').onclick=closeAi;
