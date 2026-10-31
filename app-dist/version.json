@@ -1,8 +1,7 @@
 {
-  "version": "2.1.2",
+  "version": "2.1.4",
   "notes": [
-    "Tungi rejim hamma bo'limda to'g'ri ishlaydi (Rahbar'da 🌙 tugmasi)",
-    "Agent: xarita tungi rejimda, mijoz rasmlari hamma qatorda",
-    "Tepadagi soat va batareya tungi rejimda ko'rinadi"
+    "Agent: GPS ekran o'chiq yoki ilova yopiq bo'lsa ham uzilmay yuboriladi",
+    "Agent: do'konda turganda ham yo'l har daqiqada yoziladi"
   ]
 }
