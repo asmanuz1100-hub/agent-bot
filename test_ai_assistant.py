@@ -18,6 +18,7 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(ai_assistant.detect('haftalik tolovlar')[:2], ('payments', 'd7'))
         self.assertEqual(ai_assistant.detect('kecha qancha sotdik')[:2], ('sales', 'yesterday'))
         self.assertEqual(ai_assistant.detect('qarz qancha')[0], 'debt')
+        self.assertEqual(ai_assistant.detect('bugun realizadilar')[:2], ('sales', 'today'))   # telefon shunday yozib oladi
         self.assertEqual(ai_assistant.detect('ombor qoldig‘i')[0], 'stock')
 
     def test_sales_growth_yes_or_no_with_numbers(self):
@@ -34,6 +35,18 @@ class AssistantTests(unittest.TestCase):
         self.assertIn('Umumiy qarz: 80 $', self.ask('qarz qancha?'))
         self.assertIn('Agentlardagi pul', self.ask('agentlardagi pul'))
         self.assertIn('Ali', self.ask('bugun eng yaxshi agent kim?'))
+
+    def test_kassa_is_cashbox_not_agents(self):
+        self.seed()
+        self.assertTrue(self.ask('kassa qancha').startswith('Kassa qoldig‘i:'))
+        self.assertTrue(self.ask('agentlardagi pul').startswith('Agentlardagi pul'))
+
+    def test_yesterday_products_use_yesterday(self):
+        self.seed()
+        self.db.execute("UPDATE events SET pack=1, qty=4 WHERE kind='delivery'")
+        a = self.ask('kecha eng kop sotilgan mahsulot')
+        self.assertTrue(a.startswith('Kecha eng ko‘p sotilgan:'), a)
+        self.assertIn('100 $', a)   # kecha 100$ tovar berilgan
 
     def test_off_topic_and_errors(self):
         out = ai_assistant.ask(self.db, 'menga she’r yoz', now=self.now)
