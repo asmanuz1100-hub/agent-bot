@@ -29,6 +29,7 @@ import cashier_api
 import warehouse_api
 import shop
 import full_backup
+import email_backup
 import profiles
 import warehouse
 import purchases
@@ -3762,6 +3763,8 @@ def run():
     print('Internal Agent test bot started',flush=True)
     signal.signal(signal.SIGTERM,stop_signal)
     signal.signal(signal.SIGINT,stop_signal)
+    try:email_backup.start(lambda:connect(dsn,initialize=False))   # har kuni Gmail'ga ma'lumotlar backup'i
+    except Exception:logging.exception('Email backup start failed')
     try:
         base=os.getenv('WEBHOOK_BASE_URL') or os.getenv('RENDER_EXTERNAL_URL')
         # Yangi ilova versiyasi haqida xabar — faqat haqiqiy ishga tushishda (testlar serve_webhook'ni o'zi chaqiradi).
