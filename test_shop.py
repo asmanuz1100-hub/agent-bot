@@ -4,6 +4,7 @@ import unittest
 
 import core
 import executive
+import receipt_public
 import shop
 import warehouse as wh
 
@@ -61,6 +62,12 @@ class ShopTests(unittest.TestCase):
         self.assertEqual(core.client_debt_usd(self.db, self.client), 3451)
         q = shop.quote(self.db, S1, {'clientId': self.client, 'items': [{'pack': self.p1, 'qty': 1}], 'discountPct': '5', 'extra': '100'})
         self.assertEqual(q['discountPct'], 5)                        # xarajat chegirma limitini yashirmaydi
+        r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 1}], extra='4', extraName='Yuk tushirish', extraPayer='company')
+        self.assertEqual((r['totalUsd'], r['extraUsd'], r['extraPayer'], r['debtUsd']), (10, 4, 'company', 10))   # mijozga qo'shilmadi
+        self.assertEqual(core.client_debt_usd(self.db, self.client), 3451 + 1000)
+        self.assertNotIn('Yuk tushirish', receipt_public.page(r, {}))               # mijoz chekida ko'rinmaydi
+        with self.assertRaises(ValueError):
+            shop.quote(self.db, S1, {'clientId': self.client, 'items': [{'pack': self.p1, 'qty': 1}], 'extra': '1', 'extraPayer': 'x'})
 
     def test_seller_limits(self):
         with self.assertRaisesRegex(ValueError, 'limitingiz 5%'):

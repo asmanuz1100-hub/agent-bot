@@ -108,7 +108,7 @@ td small{{display:block;color:#666;font-size:12.5px}}.r{{text-align:right;white-
 <div>Mijoz: <b>{e(r["client"])}</b></div><div class="m">Sotuvchi: {e(r["seller"])}</div><hr>
 <table>{lines}</table><hr><table>
 {f'<tr><td>Jami narx</td><td class="r">{_usd(r["subtotalUsd"])}</td></tr><tr><td>Chegirma</td><td class="r">−{_usd(r["discountUsd"])}</td></tr>' if r["discountUsd"] else ""}
-{f'<tr><td>{e(r.get("extraName") or "Qo‘shimcha xarajat")}</td><td class="r">+{_usd(r["extraUsd"])}</td></tr>' if r.get("extraUsd") else ""}
+{f'<tr><td>{e(r.get("extraName") or "Qo‘shimcha xarajat")}</td><td class="r">+{_usd(r["extraUsd"])}</td></tr>' if r.get("extraUsd") and r.get("extraPayer") != "company" else ""}
 <tr class="b"><td>Jami</td><td class="r">{_usd(r["totalUsd"])}</td></tr>
 <tr><td>To‘langan{" (" + method + ")" if method else ""}</td><td class="r">{_usd(r["paidUsd"])}{paid_uzs}</td></tr>
 {f'<tr class="b bad"><td>Qoldiq (qarz)</td><td class="r">{_usd(r["debtUsd"])}</td></tr>' if r["debtUsd"] > 0 else ""}
