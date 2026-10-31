@@ -79,7 +79,8 @@ if E2E:
 PASSWORD = 'test-' + str(random.randint(100000, 999999))
 web_auth.issue_password(db, 1, 'qa-rahbar')
 db.execute("UPDATE web_accounts SET pw_hash=? WHERE user_id=1", (web_auth.hash_password(PASSWORD),))
+DEVICE = web_auth.trust_device(db, 1)   # 2-bosqich kodi (Telegram) so'ralmasin
 db.commit()
 db.close()
-print(json.dumps({'url': f'http://127.0.0.1:{PORT}/app/rahbar-web/', 'login': 'qa-rahbar', 'password': PASSWORD}), flush=True)
+print(json.dumps({'url': f'http://127.0.0.1:{PORT}/app/rahbar-web/', 'login': 'qa-rahbar', 'password': PASSWORD, 'device': DEVICE}), flush=True)
 bot.serve_webhook(core.connect(DB, initialize=False), f'http://127.0.0.1:{PORT}')

@@ -1469,7 +1469,7 @@ function cashList(){
 
 /* ----- Savdo: hisobot + kompyuterdan sotuv (shop.py) ----- */
 var SH={tab:'report',d:null,cart:null,q:null,qErr:'',pq:'',seller:''};
-function shNewCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',rid:'web'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}}
+function shNewCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',ddate:'',addr:'',rid:'web'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}}
 function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
 async function shLoad(){SH.d=await shApi('dashboard');var sl=SH.d.sellers||[];if(!SH.seller||!sl.some(function(u){return String(u.id)===SH.seller})){SH.seller=sl[0]?String(sl[0].id):''}return SH.d}
 async function pageSales(page,force){
@@ -1488,31 +1488,43 @@ function shPayload(){var c=SH.cart,p={clientId:c.client?c.client.id:null,note:c.
 var shQT=0;
 function shRequote(){clearTimeout(shQT);if(!SH.cart.items.length){SH.q=null;SH.qErr='';shTotals();return}
   shQT=setTimeout(async function(){try{SH.q=(await shApi('quote',shPayload())).quote;SH.qErr=''}catch(e){SH.qErr=e.message}shCart();shTotals()},250)}
+var SH_STEPS=['Asosiy ma’lumot','Mahsulotlar','Chegirma','To‘lov'];
 function shPos(el){
-  var team=SH.d.sellers||[],c=SH.cart;
+  var team=SH.d.sellers||[],c=SH.cart,st=SH.step||0;
   if(!team.length){el.innerHTML='<div class="card">'+emptyState('Sotuvchi yo‘q.','users')+'</div>';return}
   if(!c.rate&&SH.d.rate)c.rate=String(SH.d.rate);
-  el.innerHTML='<div class="grid g2" style="align-items:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))">'+
-    '<div class="card flush" style="min-width:0"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3><input id="shPq" type="search" placeholder="Qidirish…" value="'+esc(SH.pq)+'" style="width:220px;max-width:100%"></div><div class="tbl-wrap" style="margin-top:12px;max-height:620px" id="shProds"></div></div>'+
-    '<div style="min-width:0"><div class="card" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('users')+' Sotuvchi va mijoz</h3></div>'+
-      '<label class="small muted">Sotuv kimning nomidan (o‘zingiz — pul to‘g‘ridan kassaga; savdo xodimi — pul uning hisobiga tushadi)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select>'+
-      '<div id="shClient" style="margin-top:12px"></div></div>'+
-    (c.replace?'<div class="card" style="margin-bottom:16px;border-color:var(--amber,#d97706)"><b>'+ic('edit','sm')+' Sotuv № '+c.replace+' tahrirlanmoqda</b><p class="small muted" style="margin:6px 0">Saqlaganda eski chek bekor qilinadi va o‘rniga shu yangi chek yoziladi.</p><button class="btn sm" id="shEditX">Tahrirni bekor qilish</button></div>':'')+
-    '<div class="card flush" style="margin-bottom:16px"><div class="card-h"><h3>'+ic('cart')+' Savatcha</h3>'+(c.items.length?'<button class="btn" id="shClr">Tozalash</button>':'')+'</div><div id="shCart" class="tbl-wrap" style="padding:0 20px 16px"></div></div>'+
-    '<div class="card" id="shPay"></div></div></div>';
-  $('shSeller').onchange=function(){SH.seller=this.value};
-  $('shPq').oninput=function(){SH.pq=this.value;shProds()};
-  if($('shClr'))$('shClr').onclick=function(){c.items=[];SH.q=null;shPos(el)};
-  if($('shEditX'))$('shEditX').onclick=function(){SH.cart=shNewCart();SH.q=null;shPos(el)};
-  shProds();shClient();shCart();shTotals();
+  if(st>1&&!c.items.length)st=SH.step=1;
+  var head='<div class="card" style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between" id="shSteps">'+SH_STEPS.map(function(t,i){
+    return '<button class="btn'+(i===st?' pri':'')+'" data-st="'+i+'" style="flex:1;min-width:120px"'+(i>1&&!c.items.length?' disabled':'')+'>'+(i<st?ic('check','sm'):(i+1)+'.')+' '+t+'</button>'}).join('')+'</div>';
+  var body=st===0?'<div class="card"><div class="grid g2" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))">'+
+      '<div><label class="small muted">Mas’ul shaxs (o‘zingiz — pul to‘g‘ridan kassaga; savdo xodimi — pul uning hisobiga)</label><select id="shSeller">'+team.map(function(u){return '<option value="'+u.id+'"'+(String(u.id)===SH.seller?' selected':'')+'>'+esc(u.name)+'</option>'}).join('')+'</select></div>'+
+      '<div><label class="small muted">Mijoz</label><div id="shClient"></div></div>'+
+      '<div><label class="small muted">Yetkazish sanasi (faqat buyurtma uchun)</label><input type="date" id="shDd" value="'+esc(c.ddate)+'"></div>'+
+      '<div><label class="small muted">Yetkazib berish manzili (faqat buyurtma uchun)</label><input id="shAd" maxlength="300" value="'+esc(c.addr)+'"></div></div>'+
+      '<label class="small muted" style="display:block;margin-top:12px">Izoh</label><input id="shNt" maxlength="300" value="'+esc(c.note)+'"></div>'
+    :st===1?'<div class="grid g2" style="align-items:start;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))">'+
+      '<div class="card flush" style="min-width:0"><div class="card-h"><h3>'+ic('box')+' Mahsulotlar</h3><input id="shPq" type="search" placeholder="Qidirish…" value="'+esc(SH.pq)+'" style="width:220px;max-width:100%"></div><div class="tbl-wrap" style="margin-top:12px;max-height:620px" id="shProds"></div></div>'+
+      '<div class="card flush" style="min-width:0"><div class="card-h"><h3>'+ic('cart')+' Savatcha</h3>'+(c.items.length?'<button class="btn" id="shClr">Tozalash</button>':'')+'</div><div id="shCart" class="tbl-wrap" style="padding:0 20px 16px"></div></div></div>'
+    :'<div class="card" id="shPay"></div>';
+  el.innerHTML=head+(c.replace?'<div class="card" style="margin-bottom:16px;border-color:var(--amber,#d97706)"><b>'+ic('edit','sm')+' Sotuv № '+c.replace+' tahrirlanmoqda</b><p class="small muted" style="margin:6px 0">Saqlaganda eski chek bekor qilinadi va o‘rniga shu yangi chek yoziladi.</p><button class="btn sm" id="shEditX">Tahrirni bekor qilish</button></div>':'')+body+
+    '<div class="actions" style="justify-content:flex-end;margin-top:16px">'+(st?'<button class="btn" id="shBack">‹ Orqaga</button>':'')+(st<3?'<button class="btn pri" id="shNext"'+(st===1&&!c.items.length?' disabled':'')+'>Keyingisi ›</button>':'')+'</div>';
+  var go=function(i){SH.step=i;shPos(el)};
+  $('shSteps').onclick=function(e){var b=e.target.closest('button');if(b&&!b.disabled)go(+b.dataset.st)};
+  if($('shBack'))$('shBack').onclick=function(){go(st-1)};
+  if($('shNext'))$('shNext').onclick=function(){go(st+1)};
+  if($('shEditX'))$('shEditX').onclick=function(){SH.cart=shNewCart();SH.q=null;SH.step=0;shPos(el)};
+  if(st===0){$('shSeller').onchange=function(){SH.seller=this.value};$('shDd').onchange=function(){c.ddate=this.value};$('shAd').onchange=function(){c.addr=this.value};$('shNt').onchange=function(){c.note=this.value};shClient()}
+  if(st===1){$('shPq').oninput=function(){SH.pq=this.value;shProds()};if($('shClr'))$('shClr').onclick=function(){c.items=[];SH.q=null;shPos(el)};shProds();shCart()}
+  if(st>1)shTotals();
 }
 function shProds(){
+  if(!$('shProds'))return;
   var c=SH.cart,pt=c.client?c.client.priceType:'retail',q=SH.pq.trim().toLowerCase();
   var ps=(SH.d.products||[]).filter(function(p){return !q||p.name.toLowerCase().indexOf(q)>=0});
   $('shProds').innerHTML='<table><thead><tr><th>Mahsulot</th><th class="right">Omborda</th><th class="right">'+(pt==='dealer'?'Diller':'Chakana')+'</th><th></th></tr></thead><tbody>'+ps.map(function(p){var pr=pt==='dealer'?p.dealerUsd:p.retailUsd,inC=c.items.find(function(i){return i.pack===p.pack});
     return '<tr><td>'+esc(p.name)+'</td><td class="right num '+(p.stock>0?'':'bad')+'">'+num(p.stock)+(p.reserved?'<br><small class="muted" title="Ochiq buyurtmalarda band">band '+num(p.reserved)+'</small>':'')+'</td><td class="right num">'+(pr>0?usd(pr):'<span class="bad">—</span>')+'</td><td class="right"><button class="btn'+(inC?' pri':'')+'" data-add="'+p.pack+'"'+(p.stock>0?'':' disabled')+'>'+(inC?inC.qty+' ta':ic('plus','sm'))+'</button></td></tr>'}).join('')+'</tbody></table>';
   $('shProds').querySelectorAll('[data-add]').forEach(function(b){b.onclick=function(){var p=+b.dataset.add,pr=shProduct(p),it=c.items.find(function(i){return i.pack===p});
-    if(it)it.qty=Math.min(it.qty+1,pr.stock);else c.items.push({pack:p,qty:1,price:null});shProds();shCart();shRequote()}});
+    if(it)it.qty=Math.min(it.qty+1,pr.stock);else c.items.push({pack:p,qty:1,price:null});if(c.items.length===1)return shPos($('shBody'));shProds();shCart();shRequote()}});
 }
 function shClient(){
   var c=SH.cart,el=$('shClient'),k=c.client;
@@ -1539,39 +1551,39 @@ function shCart(){
   // qayta chizish keyingi tikda: blur paytida fokusdagi input olib tashlanmasin (DOM xatosi)
   el.querySelectorAll('[data-q]').forEach(function(x){x.onchange=function(){var k=+x.dataset.q,p=shProduct(c.items[k].pack),n=Math.max(0,Math.min(parseInt(x.value,10)||0,p?p.stock:0));if(!n)c.items.splice(k,1);else c.items[k].qty=n;setTimeout(function(){shProds();shCart();shRequote()},0)}});
   el.querySelectorAll('[data-pr]').forEach(function(x){x.onchange=function(){c.items[+x.dataset.pr].price=x.value.trim().replace(',','.')||null;shRequote()}});
-  el.querySelectorAll('[data-del]').forEach(function(x){x.onclick=function(){c.items.splice(+x.dataset.del,1);shProds();shCart();shRequote()}});
+  el.querySelectorAll('[data-del]').forEach(function(x){x.onclick=function(){c.items.splice(+x.dataset.del,1);if(!c.items.length)return shPos($('shBody'));shProds();shCart();shRequote()}});
 }
 function shTotals(){
   var el=$('shPay');if(!el)return;var c=SH.cart,q=SH.q;
   if(!c.items.length){el.hidden=true;return}el.hidden=false;
   var tot=q?q.totalUsd:0,paid=c.method==='cash_uzs'?(Number(c.paidUzs)>0&&Number(c.rate)>0?Math.round(Number(c.paidUzs)/Number(c.rate)*100)/100:0):Number(String(c.paid).replace(',','.'))||0,debt=Math.max(0,Math.round((tot-paid)*100)/100);
-  el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' Chegirma va to‘lov</h3></div>'+
-    '<div style="display:flex;gap:8px;align-items:center"><div class="seg" id="shDm"><button data-d="pct" class="'+(c.dmode==='pct'?'on':'')+'">%</button><button data-d="usd" class="'+(c.dmode==='usd'?'on':'')+'">$</button></div><input id="shDisc" placeholder="Chegirma" value="'+esc(c.discount)+'" inputmode="decimal" style="flex:1"></div>'+
+  var pay=SH.step===3;
+  el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' '+(pay?'To‘lov':'Chegirma')+'</h3></div>'+
+    (pay?'':'<table style="margin-bottom:12px"><thead><tr><th>Mahsulot</th><th class="right">Miqdor</th><th class="right">Jami</th></tr></thead><tbody>'+c.items.map(function(i,k){var p=shProduct(i.pack)||{name:'#'+i.pack},l=q&&q.lines[k];return '<tr><td>'+esc(p.name)+'</td><td class="right num">'+num(i.qty)+'</td><td class="right num">'+(l?usd(l.priceUsd*i.qty):'…')+'</td></tr>'}).join('')+'</tbody></table>'+
+    '<div style="display:flex;gap:8px;align-items:center"><div class="seg" id="shDm"><button data-d="pct" class="'+(c.dmode==='pct'?'on':'')+'">%</button><button data-d="usd" class="'+(c.dmode==='usd'?'on':'')+'">$</button></div><input id="shDisc" placeholder="Chegirma" value="'+esc(c.discount)+'" inputmode="decimal" style="flex:1"></div>')+
     '<dl class="kv" style="margin-top:12px"><dt>Jami narx</dt><dd class="num">'+(q?usd(q.subtotalUsd):'…')+'</dd><dt>Jami chegirma</dt><dd class="num">'+(q?'−'+usd(q.discountUsd)+(q.discountPct?' ('+q.discountPct+'%)':''):'…')+'</dd><dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+(q?usd(tot):'…')+'</b></dd></dl>'+
     (SH.qErr?'<div class="bad small" style="margin-top:8px">'+esc(SH.qErr)+'</div>':'')+(q&&q.stockShort.length?'<div class="bad small" style="margin-top:8px">'+esc(q.stockShort.join('; '))+'</div>':'')+
-    '<div style="margin-top:12px" class="seg" id="shPm">'+[['cash_usd','Naqd $'],['cash_uzs','Naqd so‘m'],['card','Karta']].map(function(x){return '<button data-m="'+x[0]+'" class="'+(c.method===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
+    (pay?'<div style="margin-top:12px" class="seg" id="shPm">'+[['cash_usd','Naqd $'],['cash_uzs','Naqd so‘m'],['card','Karta']].map(function(x){return '<button data-m="'+x[0]+'" class="'+(c.method===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<div style="display:flex;gap:8px;margin-top:8px">'+(c.method==='cash_uzs'?'<input id="shUz" placeholder="So‘m" value="'+esc(c.paidUzs)+'" inputmode="numeric" style="flex:1"><input id="shRt" placeholder="Kurs" value="'+esc(c.rate)+'" inputmode="numeric" style="width:110px">':'<input id="shPd" placeholder="To‘landi, $" value="'+esc(c.paid)+'" inputmode="decimal" style="flex:1">')+
       '<button class="btn" id="shFull">To‘liq</button><button class="btn" id="shNone">Qarzga</button></div>'+
     '<dl class="kv" style="margin-top:12px"><dt>To‘landi</dt><dd class="num ok">'+usd(paid)+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(debt>0?'bad':'ok')+'"><b>'+usd(debt)+'</b></dd></dl>'+
     (debt>0&&!c.client?'<div class="bad small">Chakana xaridorga qarzga berilmaydi — mijozni tanlang.</div>':'')+
-    '<input id="shNt" placeholder="Izoh (ixtiyoriy)" maxlength="300" value="'+esc(c.note)+'" style="margin-top:10px">'+
     '<button class="btn pri" id="shSave" style="width:100%;margin-top:12px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('check','sm')+' Sotuvni saqlash · '+(q?usd(tot):'')+'</button>'+
-    (c.client?'<button class="btn" id="shOrder" style="width:100%;margin-top:8px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('orders','sm')+' Buyurtma qilish — omborda band qilinadi, keyin yetkaziladi</button>':'');
-  $('shDm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.dmode=b.dataset.d;c.discount='';shTotals();shRequote()};
-  $('shDisc').onchange=function(){c.discount=this.value.trim().replace(',','.');shRequote()};
+    (c.client?'<button class="btn" id="shOrder" style="width:100%;margin-top:8px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('orders','sm')+' Buyurtma qilish — omborda band qilinadi, keyin yetkaziladi</button>':''):'');
+  if(!pay){$('shDm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.dmode=b.dataset.d;c.discount='';shTotals();shRequote()};
+  $('shDisc').onchange=function(){c.discount=this.value.trim().replace(',','.');shRequote()};return}
   $('shPm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.method=b.dataset.m;shTotals()};
   [['shPd','paid'],['shUz','paidUzs'],['shRt','rate']].forEach(function(x){var i=$(x[0]);if(i)i.onchange=function(){c[x[1]]=this.value.trim();shTotals()}});
-  $('shNt').onchange=function(){c.note=this.value};
   $('shFull').onclick=function(){if(!q)return;if(c.method==='cash_uzs'){var r=Number(c.rate||SH.d.rate);if(!r)return toast('Kursni kiriting',true);c.rate=String(r);c.paidUzs=String(Math.round(tot*r))}else c.paid=String(tot);shTotals()};
   $('shNone').onclick=function(){c.paid='';c.paidUzs='';shTotals()};
   $('shSave').onclick=shSave;
   if($('shOrder'))$('shOrder').onclick=shOrderCreate;
 }
 async function shOrderCreate(){
-  var c=SH.cart,p=Object.assign(shPayload(),{requestId:c.rid,sellerId:SH.seller,orderOp:'create'});
+  var c=SH.cart,p=Object.assign(shPayload(),{requestId:c.rid,sellerId:SH.seller,orderOp:'create',deliveryDate:c.ddate,address:c.addr});
   if(!await confirmBox('Buyurtmani tasdiqlang','<p>Mijoz: <b>'+esc(c.client.name)+'</b><br>Jami: <b>'+usd(SH.q.totalUsd)+'</b></p><p class="hint">Tovar omborda band qilinadi. Ombordan chiqim va mijoz qarzi faqat yetkazilganda yoziladi, to‘lov alohida qabul qilinadi.</p>','Buyurtma qilish'))return;
   var r=await run(function(){return api('shop',Object.assign({op:'orders'},p))},'Buyurtma yaratildi');
-  if(!r)return;SH.cart=shNewCart();SH.q=null;S.cache={};SH.tab='orders';await pageSales($('page'),true);shOrderOpen(r.order.id);
+  if(!r)return;SH.cart=shNewCart();SH.q=null;SH.step=0;S.cache={};SH.tab='orders';await pageSales($('page'),true);shOrderOpen(r.order.id);
 }
 /* ----- Buyurtmalar: band qilish, qisman yetkazish, aralash to'lov, qaytarish ----- */
 var SO={status:'open',q:'',page:0,from:'',to:''};
@@ -1640,7 +1652,7 @@ async function shSave(){
   var b=$('shSave');b.disabled=true;
   var r=await run(function(){return shApi('sell',p)},c.replace?'Sotuv tahrirlandi':'Sotuv saqlandi');
   if(!r){b.disabled=false;return}
-  SH.d=r;SH.cart=shNewCart();SH.q=null;S.cache={};shReceipt(r.receipt);shPos($('shBody'));
+  SH.d=r;SH.cart=shNewCart();SH.q=null;SH.step=0;S.cache={};shReceipt(r.receipt);shPos($('shBody'));
 }
 function shCancelNote(x,what){return x?'<div class="bad small" style="margin:8px 0">'+ic('ban','sm')+' Bekor qilingan '+dt(x.ts)+' · '+esc(x.who)+' · «'+esc(x.reason)+'»'+(x.replacedBy?' — o‘rniga '+what+' № '+x.replacedBy:'')+'</div>':''}
 // 80 mm termo-printer uchun chek; kompaniya nomi/logotipi/rekvizitlari brending sozlamasidan
@@ -1695,7 +1707,7 @@ function shEditSale(r){
   if(!walk)c.client={id:r.clientId,name:r.client,phone:r.phone,priceType:r.priceType,debtUsd:0};
   if(r.method)c.method=r.method==='cash_uzs'?'cash_uzs':r.method==='card'?'card':'cash_usd';
   if(r.paidUzs){c.paidUzs=String(r.paidUzs);c.rate=String(r.rate||'')}else if(r.paidUsd)c.paid=String(r.paidUsd);
-  SH.cart=c;SH.seller=String(r.sellerId);SH.q=null;SH.tab='pos';pageSales($('page')).then(function(){shRequote();toast('Sotuv № '+r.id+' tahrirlanmoqda — o‘zgartirib, «Saqlash»ni bosing')});
+  SH.cart=c;SH.seller=String(r.sellerId);SH.q=null;SH.step=1;SH.tab='pos';pageSales($('page')).then(function(){shRequote();toast('Sotuv № '+r.id+' tahrirlanmoqda — o‘zgartirib, «Saqlash»ni bosing')});
 }
 function shChecks(el){
   var rows=SH.d.recent||[];
