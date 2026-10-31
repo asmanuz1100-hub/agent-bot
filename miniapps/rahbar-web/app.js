@@ -1469,7 +1469,7 @@ function cashList(){
 
 /* ----- Savdo: hisobot + kompyuterdan sotuv (shop.py) ----- */
 var SH={tab:'report',d:null,cart:null,q:null,qErr:'',pq:'',seller:''};
-function shNewCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',ddate:'',addr:'',rid:'web'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}}
+function shNewCart(){return {client:null,items:[],dmode:'pct',discount:'',method:'cash_usd',paid:'',paidUzs:'',rate:'',note:'',ddate:'',addr:'',extra:'',extraName:'',rid:'web'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}}
 function shApi(op,args){return api('shop',Object.assign({op:op},args||{}))}
 async function shLoad(){SH.d=await shApi('dashboard');var sl=SH.d.sellers||[];if(!SH.seller||!sl.some(function(u){return String(u.id)===SH.seller})){SH.seller=sl[0]?String(sl[0].id):''}return SH.d}
 async function pageSales(page,force){
@@ -1484,11 +1484,11 @@ async function pageSales(page,force){
 }
 function shProduct(p){return (SH.d.products||[]).find(function(x){return x.pack===p})}
 function shPayload(){var c=SH.cart,p={clientId:c.client?c.client.id:null,note:c.note,items:c.items.map(function(i){var o={pack:i.pack,qty:i.qty};if(i.price!=null&&i.price!=='')o.price=i.price;return o})};
-  if(c.discount!==''&&Number(c.discount)>0)p[c.dmode==='pct'?'discountPct':'discount']=c.discount;return p}
+  if(c.discount!==''&&Number(c.discount)>0)p[c.dmode==='pct'?'discountPct':'discount']=c.discount;if(Number(c.extra)>0){p.extra=c.extra;p.extraName=c.extraName}return p}
 var shQT=0;
 function shRequote(){clearTimeout(shQT);if(!SH.cart.items.length){SH.q=null;SH.qErr='';shTotals();return}
   shQT=setTimeout(async function(){try{SH.q=(await shApi('quote',shPayload())).quote;SH.qErr=''}catch(e){SH.qErr=e.message}shCart();shTotals()},250)}
-var SH_STEPS=['Asosiy ma’lumot','Mahsulotlar','Chegirma','To‘lov'];
+var SH_STEPS=['Asosiy ma’lumot','Mahsulotlar','Xarajat va chegirma','To‘lov'];
 function shPos(el){
   var team=SH.d.sellers||[],c=SH.cart,st=SH.step||0;
   if(!team.length){el.innerHTML='<div class="card">'+emptyState('Sotuvchi yo‘q.','users')+'</div>';return}
@@ -1558,10 +1558,11 @@ function shTotals(){
   if(!c.items.length){el.hidden=true;return}el.hidden=false;
   var tot=q?q.totalUsd:0,paid=c.method==='cash_uzs'?(Number(c.paidUzs)>0&&Number(c.rate)>0?Math.round(Number(c.paidUzs)/Number(c.rate)*100)/100:0):Number(String(c.paid).replace(',','.'))||0,debt=Math.max(0,Math.round((tot-paid)*100)/100);
   var pay=SH.step===3;
-  el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' '+(pay?'To‘lov':'Chegirma')+'</h3></div>'+
+  el.innerHTML='<div class="card-h"><h3>'+ic('wallet')+' '+(pay?'To‘lov':'Qo‘shimcha xarajat va chegirma')+'</h3></div>'+
     (pay?'':'<table style="margin-bottom:12px"><thead><tr><th>Mahsulot</th><th class="right">Miqdor</th><th class="right">Jami</th></tr></thead><tbody>'+c.items.map(function(i,k){var p=shProduct(i.pack)||{name:'#'+i.pack},l=q&&q.lines[k];return '<tr><td>'+esc(p.name)+'</td><td class="right num">'+num(i.qty)+'</td><td class="right num">'+(l?usd(l.priceUsd*i.qty):'…')+'</td></tr>'}).join('')+'</tbody></table>'+
-    '<div style="display:flex;gap:8px;align-items:center"><div class="seg" id="shDm"><button data-d="pct" class="'+(c.dmode==='pct'?'on':'')+'">%</button><button data-d="usd" class="'+(c.dmode==='usd'?'on':'')+'">$</button></div><input id="shDisc" placeholder="Chegirma" value="'+esc(c.discount)+'" inputmode="decimal" style="flex:1"></div>')+
-    '<dl class="kv" style="margin-top:12px"><dt>Jami narx</dt><dd class="num">'+(q?usd(q.subtotalUsd):'…')+'</dd><dt>Jami chegirma</dt><dd class="num">'+(q?'−'+usd(q.discountUsd)+(q.discountPct?' ('+q.discountPct+'%)':''):'…')+'</dd><dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+(q?usd(tot):'…')+'</b></dd></dl>'+
+    '<label class="small muted">Qo‘shimcha xarajat (yetkazish va h.k.) — mijoz to‘laydi, jami summaga qo‘shiladi</label><div style="display:flex;gap:8px;margin-bottom:12px"><input id="shXn" placeholder="Nomi, masalan Yetkazish" maxlength="100" value="'+esc(c.extraName)+'" style="flex:1"><input id="shXa" placeholder="Summa, $" inputmode="decimal" value="'+esc(c.extra)+'" style="width:120px"></div>'+
+    '<label class="small muted">Chegirma</label><div style="display:flex;gap:8px;align-items:center"><div class="seg" id="shDm"><button data-d="pct" class="'+(c.dmode==='pct'?'on':'')+'">%</button><button data-d="usd" class="'+(c.dmode==='usd'?'on':'')+'">$</button></div><input id="shDisc" placeholder="Chegirma" value="'+esc(c.discount)+'" inputmode="decimal" style="flex:1"></div>')+
+    '<dl class="kv" style="margin-top:12px"><dt>Jami narx</dt><dd class="num">'+(q?usd(q.subtotalUsd):'…')+'</dd><dt>Jami chegirma</dt><dd class="num">'+(q?'−'+usd(q.discountUsd)+(q.discountPct?' ('+q.discountPct+'%)':''):'…')+'</dd>'+(q&&q.extraUsd?'<dt>'+esc(c.extraName||'Qo‘shimcha xarajat')+'</dt><dd class="num">+'+usd(q.extraUsd)+'</dd>':'')+'<dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+(q?usd(tot):'…')+'</b></dd></dl>'+
     (SH.qErr?'<div class="bad small" style="margin-top:8px">'+esc(SH.qErr)+'</div>':'')+(q&&q.stockShort.length?'<div class="bad small" style="margin-top:8px">'+esc(q.stockShort.join('; '))+'</div>':'')+
     (pay?'<div style="margin-top:12px" class="seg" id="shPm">'+[['cash_usd','Naqd $'],['cash_uzs','Naqd so‘m'],['card','Karta']].map(function(x){return '<button data-m="'+x[0]+'" class="'+(c.method===x[0]?'on':'')+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<div style="display:flex;gap:8px;margin-top:8px">'+(c.method==='cash_uzs'?'<input id="shUz" placeholder="So‘m" value="'+esc(c.paidUzs)+'" inputmode="numeric" style="flex:1"><input id="shRt" placeholder="Kurs" value="'+esc(c.rate)+'" inputmode="numeric" style="width:110px">':'<input id="shPd" placeholder="To‘landi, $" value="'+esc(c.paid)+'" inputmode="decimal" style="flex:1">')+
@@ -1571,7 +1572,8 @@ function shTotals(){
     '<button class="btn pri" id="shSave" style="width:100%;margin-top:12px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('check','sm')+' Sotuvni saqlash · '+(q?usd(tot):'')+'</button>'+
     (c.client?'<button class="btn" id="shOrder" style="width:100%;margin-top:8px"'+(!q||SH.qErr||q.stockShort.length?' disabled':'')+'>'+ic('orders','sm')+' Buyurtma qilish — omborda band qilinadi, keyin yetkaziladi</button>':''):'');
   if(!pay){$('shDm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.dmode=b.dataset.d;c.discount='';shTotals();shRequote()};
-  $('shDisc').onchange=function(){c.discount=this.value.trim().replace(',','.');shRequote()};return}
+  $('shDisc').onchange=function(){c.discount=this.value.trim().replace(',','.');shRequote()};
+  $('shXn').onchange=function(){c.extraName=this.value.trim();shTotals()};$('shXa').onchange=function(){c.extra=this.value.trim().replace(',','.');shRequote()};return}
   $('shPm').onclick=function(e){var b=e.target.closest('button');if(!b)return;c.method=b.dataset.m;shTotals()};
   [['shPd','paid'],['shUz','paidUzs'],['shRt','rate']].forEach(function(x){var i=$(x[0]);if(i)i.onchange=function(){c[x[1]]=this.value.trim();shTotals()}});
   $('shFull').onclick=function(){if(!q)return;if(c.method==='cash_uzs'){var r=Number(c.rate||SH.d.rate);if(!r)return toast('Kursni kiriting',true);c.rate=String(r);c.paidUzs=String(Math.round(tot*r))}else c.paid=String(tot);shTotals()};
@@ -1670,7 +1672,7 @@ function shPrintReceipt(r){
     '<h1>CHEK № '+r.id+'</h1><div class="c">'+dt(r.ts)+'</div><hr>'+
     '<div>Mijoz: <b>'+esc(r.client)+'</b>'+(r.phone?'<br>Tel: '+esc(r.phone):'')+'</div><div>Sotuvchi: '+esc(r.seller)+'</div><hr>'+
     '<table>'+r.lines.map(function(l){return row(esc(l.name)+'<div class="s">'+num(l.qty)+' × '+usd(l.priceUsd)+(l.discountUsd?' · −'+usd(l.discountUsd):'')+'</div>',usd(l.totalUsd))}).join('')+'</table><hr>'+
-    '<table>'+(r.discountUsd?row('Jami narx',usd(r.subtotalUsd))+row('Chegirma','−'+usd(r.discountUsd)):'')+row('JAMI',usd(r.totalUsd),'b')+
+    '<table>'+(r.discountUsd?row('Jami narx',usd(r.subtotalUsd))+row('Chegirma','−'+usd(r.discountUsd)):'')+(r.extraUsd?row(esc(r.extraName||'Qo‘shimcha xarajat'),'+'+usd(r.extraUsd)):'')+row('JAMI',usd(r.totalUsd),'b')+
     row('To‘langan'+(r.method&&PMN[r.method]?' ('+PMN[r.method]+')':''),usd(r.paidUsd)+(r.paidUzs?'<br>'+uzs(r.paidUzs):''))+
     (r.debtUsd>0?row('Qoldiq (qarz)',usd(r.debtUsd),'b'):'')+'</table>'+
     (r.note?'<hr><div>Izoh: '+esc(r.note)+'</div>':'')+(r.cancelled?'<hr><div class="c"><b>BEKOR QILINGAN</b></div>':'')+
@@ -1685,7 +1687,7 @@ function shReceipt(r){
   var p=modal('<form><h3>Sotuv № '+r.id+(live?'':' '+pill('Bekor qilingan','p-bad'))+'</h3><div class="muted small">'+dt(r.ts)+' · '+esc(r.seller)+' · '+esc(r.client)+(r.phone?' · '+esc(r.phone):'')+'</div>'+shCancelNote(r.cancelled,'sotuv')+
     '<div class="tbl-wrap" style="margin:12px 0"><table><thead><tr><th>Mahsulot</th><th class="right">Miqdor</th><th class="right">Narx</th><th class="right">Chegirma</th><th class="right">Jami</th></tr></thead><tbody>'+
     r.lines.map(function(l){return '<tr><td>'+esc(l.name)+'</td><td class="right num">'+num(l.qty)+'</td><td class="right num">'+usd(l.priceUsd)+'</td><td class="right num">'+(l.discountUsd?usd(l.discountUsd):'—')+'</td><td class="right num">'+usd(l.totalUsd)+'</td></tr>'}).join('')+'</tbody></table></div>'+
-    '<dl class="kv"><dt>Jami narx</dt><dd class="num">'+usd(r.subtotalUsd)+'</dd><dt>Jami chegirma</dt><dd class="num">−'+usd(r.discountUsd)+'</dd><dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+usd(r.totalUsd)+'</b></dd><dt>To‘langan</dt><dd class="num ok">'+usd(r.paidUsd)+(r.paidUzs?' · '+uzs(r.paidUzs):'')+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(r.debtUsd>0?'bad':'ok')+'"><b>'+usd(r.debtUsd)+'</b></dd></dl>'+
+    '<dl class="kv"><dt>Jami narx</dt><dd class="num">'+usd(r.subtotalUsd)+'</dd><dt>Jami chegirma</dt><dd class="num">−'+usd(r.discountUsd)+'</dd>'+(r.extraUsd?'<dt>'+esc(r.extraName||'Qo‘shimcha xarajat')+'</dt><dd class="num">+'+usd(r.extraUsd)+'</dd>':'')+'<dt><b>To‘lanishi kerak</b></dt><dd class="num"><b>'+usd(r.totalUsd)+'</b></dd><dt>To‘langan</dt><dd class="num ok">'+usd(r.paidUsd)+(r.paidUzs?' · '+uzs(r.paidUzs):'')+'</dd><dt><b>Qoldiq (qarz)</b></dt><dd class="num '+(r.debtUsd>0?'bad':'ok')+'"><b>'+usd(r.debtUsd)+'</b></dd></dl>'+
     '<div class="foot">'+(live?'<button type="button" class="btn danger" id="rcDel">'+ic('trash','sm')+' O‘chirish</button><button type="button" class="btn" id="rcEdit">'+ic('edit','sm')+' Tahrirlash</button>':'')+
     '<button type="button" class="btn" id="rcPrint">'+ic('download','sm')+' Chop etish</button><button type="button" class="btn pri" data-m="cancel">Yopish</button></div></form>');
   $('rcPrint').onclick=function(){shPrintReceipt(r)};
@@ -1703,6 +1705,7 @@ function shEditSale(r){
   var c=shNewCart();c.replace=r.id;c.note=r.note||'';
   c.items=r.lines.map(function(l){return {pack:l.pack,qty:l.qty,price:Math.abs(l.priceUsd-l.listPriceUsd)>0.001?String(l.priceUsd):null}});
   if(r.discountUsd>0&&!r.lines.some(function(l){return l.discountUsd>0&&Math.abs(l.priceUsd-l.listPriceUsd)>0.001})){c.dmode='usd';c.discount=String(r.discountUsd)}
+  if(r.extraUsd){c.extra=String(r.extraUsd);c.extraName=r.extraName||''}
   var walk=/chakana xaridor/i.test(r.client||'');
   if(!walk)c.client={id:r.clientId,name:r.client,phone:r.phone,priceType:r.priceType,debtUsd:0};
   if(r.method)c.method=r.method==='cash_uzs'?'cash_uzs':r.method==='card'?'card':'cash_usd';
