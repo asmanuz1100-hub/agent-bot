@@ -2860,7 +2860,7 @@ def serve_webhook(db,base_url):
         def do_POST(self):
             if urlparse(self.path).path=='/api/cashier':
                 def answer_cashier(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8')
                 try:
                     length=int(self.headers.get('Content-Length','0'))
@@ -2920,7 +2920,7 @@ def serve_webhook(db,base_url):
                 return
             if urlparse(self.path).path=='/api/shop':
                 def answer_shop(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8')
                 try:
                     length=int(self.headers.get('Content-Length','0'))
@@ -2964,7 +2964,7 @@ def serve_webhook(db,base_url):
                 return
             if urlparse(self.path).path=='/api/warehouse':
                 def answer_wh(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8')
                 try:
                     length=int(self.headers.get('Content-Length','0'))
@@ -3027,7 +3027,7 @@ def serve_webhook(db,base_url):
                 if headers is None or self.path!='/api/agent':
                     self._reply(403,b'Forbidden');return
                 def answer_agent(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8',headers)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
@@ -3200,7 +3200,7 @@ def serve_webhook(db,base_url):
                 if headers is None or self.path!='/api/web':
                     self._reply(403,b'Forbidden');return
                 def answer_web(code,obj):
-                    self._reply(code,json.dumps(obj,ensure_ascii=False).encode('utf-8'),
+                    self._reply(code,json.dumps(obj,ensure_ascii=False,default=_json_number).encode('utf-8'),
                                 'application/json; charset=utf-8',headers)
                 try:
                     length=int(self.headers.get('Content-Length','0'))
