@@ -154,6 +154,29 @@ class SavdoWebHttpTests(unittest.TestCase):
         self.assertEqual(code, 200, data)
         self.assertIn('token', data)
 
+    def test_new_aibi_app_admin_needs_code(self):
+        # Yangi AIBI ilovasi otp:true yuboradi — rahbarga yangi telefonda kod so'raladi.
+        code, data = self.post('/api/web', native=True, action='login', login='boss', password=self.admin_pw, app='aibi', otp=True)
+        self.assertEqual(code, 200, data)
+        self.assertTrue(data['otp'])
+        self.assertNotIn('token', data)
+        otp = self.sent[-1]['text'].split(': ', 1)[1][:6]
+        code, data = self.post('/api/web', native=True, action='verify_otp', challenge=data['challenge'], code=otp, app='aibi', otp=True)
+        self.assertEqual(code, 200, data)
+        self.assertEqual(data['role'], 'admin')
+        code, again = self.post('/api/web', native=True, action='login', login='boss', password=self.admin_pw, app='aibi', otp=True, device=data['device'])
+        self.assertIn('token', again)            # ishonchli telefonda kod qayta so'ralmaydi
+
+    def test_old_aibi_app_admin_still_logs_in(self):
+        code, data = self.post('/api/web', native=True, action='login', login='boss', password=self.admin_pw, app='aibi')
+        self.assertEqual(code, 200, data)
+        self.assertIn('token', data)
+
+    def test_new_aibi_app_sales_gets_no_code(self):
+        code, data = self.post('/api/web', native=True, action='login', login='sotuv', password=self.sales_pw, app='aibi', otp=True)
+        self.assertEqual(code, 200, data)
+        self.assertIn('token', data)
+
     def test_phone_app_logs_in_as_sales_only(self):
         code, data = self.post('/api/web', native=True, action='login', login='sotuv', password=self.sales_pw, panel='savdo')
         self.assertEqual(code, 200, data)

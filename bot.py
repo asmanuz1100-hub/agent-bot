@@ -3231,14 +3231,15 @@ def serve_webhook(db,base_url):
                     # Chiqish faqat shu tokenni yopadi — ilova qaysi rejimda bo'lmasin ruxsat.
                     if native and not (savdo_panel or mobile or aibi or action=='logout'):
                         answer_web(403,{'error':'Ruxsat yo‘q.'});return
-                    # Rahbar paneli va savdo-web'dagi rahbar: yangi qurilmada parol to'g'ri bo'lsa ham Telegram'ga kelgan kod so'raladi.
-                    # APK/mobil ilova (native) hali kod oynasini bilmaydi — ular yangilangach shu yerga qo'shiladi.
-                    two_step=not (mobile or aibi)
+                    # Rahbar paneli, savdo-web va AIBI ilovasidagi rahbar: yangi qurilmada parol to'g'ri bo'lsa ham Telegram'ga kelgan kod so'raladi.
+                    # AIBI ilovasi kod oynasini bilsa otp:true yuboradi; eski APK va mobil ilova hali kodsiz kiradi.
+                    aibi_otp=aibi and payload.get('otp') is True
+                    two_step=not (mobile or aibi) or aibi_otp
                     if action=='login':
                         uid=web_auth.check_login(local,payload.get('login'),payload.get('password'))
                         if role(local,uid) not in web_roles:
                             local.commit();answer_web(403,{'error':web_denied});return
-                        if two_step and (not savdo_panel or (role(local,uid)=='admin' and not native)) and not web_auth.device_trusted(local,uid,payload.get('device')):
+                        if two_step and (not (savdo_panel or aibi) or (role(local,uid)=='admin' and (aibi or not native))) and not web_auth.device_trusted(local,uid,payload.get('device')):
                             challenge,code=web_auth.start_otp(local,uid)
                             try:send(uid,f'🔐 AIBI web panelga kirish kodi: {code}\n\n5 daqiqa amal qiladi. Siz kirmayotgan bo‘lsangiz — kodni hech kimga bermang va /webparol bilan parolni almashtiring.')
                             except Exception:
