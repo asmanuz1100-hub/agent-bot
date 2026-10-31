@@ -213,6 +213,14 @@ class ExecutiveTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             json.dumps({'x': object()}, default=bot._json_number)
 
+    def test_every_api_reply_handles_decimal(self):
+        # PostgreSQL SUM() Decimal qaytaradi; SQLite testlari buni ko'rmaydi — har bir API javobi _json_number bilan.
+        import re
+        src = open('bot.py', encoding='utf-8').read()
+        replies = re.findall(r'json\.dumps\(obj,[^)]*\)', src)
+        self.assertGreaterEqual(len(replies), 6)
+        self.assertEqual([r for r in replies if 'default=_json_number' not in r], [])
+
     def test_read_only(self):
         self.seed()
         before = self.db.total_changes
