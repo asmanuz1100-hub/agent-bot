@@ -630,12 +630,21 @@ function showLogin(msg){
     <h2>Savdo paneli</h2><p>Login va parolni Telegram botdan oling: savdo akkauntidan <b>/webparol</b> yozing.</p>
     <label class="f" for="lgL">Login</label><input class="inp" id="lgL" autocomplete="username" required>
     <label class="f" for="lgP">Parol</label><input class="inp" id="lgP" type="password" autocomplete="current-password" required>
+    <div id="lgK" hidden><label class="f" for="lgC">Telegram’ga kelgan 6 xonali kod</label><input class="inp" id="lgC" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
     <div class="er" id="lgE"></div><button class="btn" id="lgB">Kirish</button></form>`;
   $('lgE').textContent=msg||'';$('lgL').focus();
+  // Rahbar yangi qurilmadan kirsa server Telegram'ga kod yuboradi (otp); to'g'ri koddan keyin brauzer 30 kun eslab qolinadi.
+  let otp=null;
   $('lgf').onsubmit=async e=>{e.preventDefault();const b=$('lgB');b.disabled=true;$('lgE').textContent='';
-    try{const j=await webApi({action:'login',login:$('lgL').value.trim().toLowerCase(),password:$('lgP').value});setToken(j.token);
-      sp.className='';sp.innerHTML=SPLASH;start();}
-    catch(x){$('lgE').textContent=x.message;b.disabled=false;}};
+    try{let device='';try{device=localStorage.getItem('savdoWebDevice')||'';}catch(x){}
+      const j=otp?await webApi({action:'verify_otp',challenge:otp,code:$('lgC').value.trim()})
+                 :await webApi({action:'login',login:$('lgL').value.trim().toLowerCase(),password:$('lgP').value,device});
+      if(j.otp){otp=j.challenge;$('lgK').hidden=false;$('lgL').disabled=$('lgP').disabled=true;$('lgC').focus();
+        $('lgE').textContent='Kod Telegram’dagi akkauntingizga yuborildi.';b.disabled=false;return;}
+      if(j.device)try{localStorage.setItem('savdoWebDevice',j.device);}catch(x){}
+      setToken(j.token);sp.className='';sp.innerHTML=SPLASH;start();}
+    catch(x){$('lgE').textContent=x.message;b.disabled=false;
+      if(otp&&/muddati/.test(x.message)){otp=null;$('lgK').hidden=true;$('lgL').disabled=$('lgP').disabled=false;$('lgP').value='';}}};
 }
 async function logout(){try{await webApi({action:'logout'});}catch(e){}setToken('');S=null;cart=newCart();$('app').innerHTML='';$('nav').querySelectorAll('button').forEach(b=>b.remove());showLogin('');}
 function splashDone(){const sp=$('sp');if(!sp)return;sp.classList.add('x');setTimeout(()=>sp.remove(),500);}

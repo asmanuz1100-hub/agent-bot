@@ -15,6 +15,9 @@ SESSION_DAYS=30
 MAX_FAILS=5
 LOCK_SECONDS=15*60
 TOUCH_SECONDS=300
+OTP_SECONDS=5*60
+OTP_TRIES=5
+DEVICE_DAYS=30
 _LOGIN=re.compile(r'[a-z0-9][a-z0-9._-]{2,31}')
 _ALPHABET='abcdefghjkmnpqrstuvwxyz23456789'
 
@@ -23,8 +26,11 @@ CREATE TABLE IF NOT EXISTS web_accounts(user_id INTEGER PRIMARY KEY, login TEXT 
 CREATE TABLE IF NOT EXISTS web_sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_ts INTEGER NOT NULL, expires_ts INTEGER NOT NULL, last_ts INTEGER NOT NULL DEFAULT 0, agent TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS idx_web_sessions_user ON web_sessions(user_id);
 CREATE TABLE IF NOT EXISTS web_login_fails(login TEXT PRIMARY KEY, fails INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS web_otp(challenge_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, code_hash TEXT NOT NULL, expires_ts INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS web_devices(device_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_web_devices_user ON web_devices(user_id);
 '''
-PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGINT PRIMARY KEY').replace('user_id INTEGER','user_id BIGINT').replace('_ts INTEGER','_ts BIGINT').replace('locked_until INTEGER','locked_until BIGINT').replace(' ts INTEGER',' ts BIGINT')
+PG_SCHEMA=SCHEMA.replace('INTEGER PRIMARY KEY','BIGINT PRIMARY KEY').replace('user_id INTEGER','user_id BIGINT').replace('_ts INTEGER','_ts BIGINT').replace('locked_until INTEGER','locked_until BIGINT').replace('expires_ts INTEGER','expires_ts BIGINT').replace(' ts INTEGER',' ts BIGINT')
 
 
 def init(db):
@@ -95,6 +101,7 @@ def issue_password(db,uid,login=None,now=None,password=None):
         ON CONFLICT(user_id) DO UPDATE SET login=excluded.login,pw_hash=excluded.pw_hash,updated_ts=excluded.updated_ts''',
         (int(uid),login,hash_password(password),now))
     db.execute('DELETE FROM web_sessions WHERE user_id=?',(int(uid),))
+    db.execute('DELETE FROM web_devices WHERE user_id=?',(int(uid),))
     db.execute('DELETE FROM web_login_fails WHERE login=?',(login,))
     return login,password
 
@@ -102,11 +109,18 @@ def issue_password(db,uid,login=None,now=None,password=None):
 def revoke(db,uid):
     """Remove the web account and sign out every browser of `uid`."""
     db.execute('DELETE FROM web_sessions WHERE user_id=?',(int(uid),))
+    db.execute('DELETE FROM web_devices WHERE user_id=?',(int(uid),))
     return db.execute('DELETE FROM web_accounts WHERE user_id=?',(int(uid),)).rowcount
 
 
 def login(db,login_name,password,agent='',now=None):
     """Check login/password and return (user_id, session token). Raises ValueError."""
+    uid=check_login(db,login_name,password,now)
+    return uid,open_session(db,uid,agent,now)
+
+
+def check_login(db,login_name,password,now=None):
+    """Check login/password (with lockout) and return the user id. Raises ValueError."""
     now=_now(now)
     key=str(login_name or '').strip().lower()[:64]
     if not key or not isinstance(password,str) or not password or len(password)>128:
@@ -124,11 +138,16 @@ def login(db,login_name,password,agent='',now=None):
             (key,0 if locked else fails,locked,now))
         raise ValueError('Login yoki parol noto‘g‘ri.')
     db.execute('DELETE FROM web_login_fails WHERE login=?',(key,))
+    return int(row['user_id'])
+
+
+def open_session(db,uid,agent='',now=None):
+    now=_now(now)
     db.execute('DELETE FROM web_sessions WHERE expires_ts<?',(now,))
     token=secrets.token_urlsafe(32)
     db.execute('INSERT INTO web_sessions(token_hash,user_id,created_ts,expires_ts,last_ts,agent) VALUES(?,?,?,?,?,?)',
-               (_token_hash(token),int(row['user_id']),now,now+SESSION_DAYS*86400,now,str(agent or '')[:200]))
-    return int(row['user_id']),token
+               (_token_hash(token),int(uid),now,now+SESSION_DAYS*86400,now,str(agent or '')[:200]))
+    return token
 
 
 def session_user(db,token,now=None):
@@ -161,3 +180,52 @@ def change_password(db,uid,old,new,keep_token=None,now=None):
     db.execute('UPDATE web_accounts SET pw_hash=?,updated_ts=? WHERE user_id=?',(hash_password(new),now,int(uid)))
     keep=_token_hash(keep_token) if keep_token else ''
     db.execute('DELETE FROM web_sessions WHERE user_id=? AND token_hash<>?',(int(uid),keep))
+    db.execute('DELETE FROM web_devices WHERE user_id=?',(int(uid),))
+
+
+# --- Rahbar uchun 2-bosqich: yangi qurilmada Telegram'ga 6 xonali kod ---
+
+def device_trusted(db,uid,device,now=None):
+    if not isinstance(device,str) or not 20<=len(device)<=100:return False
+    row=db.execute('SELECT user_id,expires_ts FROM web_devices WHERE device_hash=?',(_token_hash(device),)).fetchone()
+    return bool(row) and int(row['user_id'])==int(uid) and int(row['expires_ts'])>=_now(now)
+
+
+def trust_device(db,uid,now=None):
+    """Remember this browser for DEVICE_DAYS; returns the device token to keep in the browser."""
+    now=_now(now)
+    db.execute('DELETE FROM web_devices WHERE expires_ts<?',(now,))
+    device=secrets.token_urlsafe(32)
+    db.execute('INSERT INTO web_devices(device_hash,user_id,expires_ts) VALUES(?,?,?)',
+               (_token_hash(device),int(uid),now+DEVICE_DAYS*86400))
+    return device
+
+
+def start_otp(db,uid,now=None):
+    """Returns (challenge, code). Only hashes are stored; an older pending code of uid is dropped."""
+    now=_now(now)
+    db.execute('DELETE FROM web_otp WHERE user_id=? OR expires_ts<?',(int(uid),now))
+    challenge=secrets.token_urlsafe(24)
+    code=f'{secrets.randbelow(1_000_000):06d}'
+    db.execute('INSERT INTO web_otp(challenge_hash,user_id,code_hash,expires_ts,tries) VALUES(?,?,?,?,0)',
+               (_token_hash(challenge),int(uid),_token_hash(challenge+':'+code),now+OTP_SECONDS))
+    return challenge,code
+
+
+def verify_otp(db,challenge,code,now=None):
+    """Check the code for a challenge and return the user id. Raises ValueError."""
+    now=_now(now)
+    if not isinstance(challenge,str) or not challenge or len(challenge)>100:
+        raise ValueError('Kod muddati tugagan. Qaytadan kiring.')
+    th=_token_hash(challenge)
+    row=db.execute('SELECT user_id,code_hash,expires_ts,tries FROM web_otp WHERE challenge_hash=?',(th,)).fetchone()
+    if not row or int(row['expires_ts'])<now or int(row['tries'])>=OTP_TRIES:
+        db.execute('DELETE FROM web_otp WHERE challenge_hash=?',(th,))
+        raise ValueError('Kod muddati tugagan. Qaytadan kiring.')
+    code=str(code or '').strip()
+    if not re.fullmatch(r'\d{6}',code) or not hmac.compare_digest(_token_hash(challenge+':'+code),row['code_hash']):
+        db.execute('UPDATE web_otp SET tries=tries+1 WHERE challenge_hash=?',(th,))
+        left=OTP_TRIES-int(row['tries'])-1
+        raise ValueError(f'Kod noto‘g‘ri. Yana {left} ta urinish qoldi.' if left>0 else 'Kod muddati tugagan. Qaytadan kiring.')
+    db.execute('DELETE FROM web_otp WHERE challenge_hash=?',(th,))
+    return int(row['user_id'])
