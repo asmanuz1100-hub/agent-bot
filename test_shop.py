@@ -51,6 +51,17 @@ class ShopTests(unittest.TestCase):
         self.assertEqual(core.client_stock_total(self.db, self.client, self.p1), 0)   # sotilgan, mijozda konsignatsiya yo'q
         self.assertEqual(core.cash_usd(self.db, S1), 2000)
 
+    def test_extra_cost_added_to_total_and_debt(self):
+        r = self.sell(S1, self.client, [{'pack': self.p1, 'qty': 3}, {'pack': self.p2, 'qty': 4}],
+                      discount='2.5', extra='7.01', extraName='Yetkazish', paid='20', method='cash_usd')
+        self.assertEqual((r['subtotalUsd'], r['discountUsd'], r['extraUsd'], r['extraName']), (50, 2.5, 7.01, 'Yetkazish'))
+        self.assertEqual(r['totalUsd'], 54.51)                       # 50 − 2.5 + 7.01
+        self.assertEqual(sum(l['totalUsd'] for l in r['lines']), 47.5)   # chekda qator = miqdor×narx − chegirma, xarajat alohida
+        self.assertEqual(sum(x[0] for x in self.db.execute('SELECT total FROM shop_sale_lines')), 5451)   # bazada qatorlarga to'liq taqsimlangan
+        self.assertEqual(core.client_debt_usd(self.db, self.client), 3451)
+        q = shop.quote(self.db, S1, {'clientId': self.client, 'items': [{'pack': self.p1, 'qty': 1}], 'discountPct': '5', 'extra': '100'})
+        self.assertEqual(q['discountPct'], 5)                        # xarajat chegirma limitini yashirmaydi
+
     def test_seller_limits(self):
         with self.assertRaisesRegex(ValueError, 'limitingiz 5%'):
             self.sell(S1, self.client, [{'pack': self.p1, 'qty': 10}], discountPct='6', paid='94', method='cash_usd')

@@ -63,6 +63,15 @@ class SaleOrderTests(unittest.TestCase):
         self.assertEqual((o['payment'], o['due'], o['status']), ('paid', 0, 'closed'))   # to'liq yetkazildi + to'landi → yopildi
         self.assertEqual([x['action'] for x in o['log']][::-1], ['create', 'deliver', 'pay', 'deliver', 'return', 'pay', 'close'])
 
+    def test_list_date_range(self):
+        a, b = self.order(qty1=1, qty2=1), self.order(qty1=1, qty2=1)
+        for o, ts in ((a, 1000), (b, 5000)):
+            self.db.execute('UPDATE sale_orders SET ts=? WHERE id=?', (ts, o['id']))
+        ids = lambda **kw: [x['id'] for x in self.op(S1, 'list', **kw)['orders']]
+        self.assertEqual(ids(**{'from': 2000}), [b['id']])
+        self.assertEqual(ids(to=5000), [a['id']])                             # to — chegara kirmaydi
+        self.assertEqual(ids(**{'from': '', 'to': ''}), [b['id'], a['id']])
+
     def test_closed_orders_leave_open_list_and_can_still_be_returned(self):
         o = self.order(qty1=2, qty2=1)
         self.op(S1, 'pay', orderId=o['id'], payments=[{'method': 'cash_usd', 'amount': '25'}])

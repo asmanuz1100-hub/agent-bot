@@ -294,11 +294,13 @@ def view(db,oid):
                 (o['id'],)).fetchall()]}
 
 
-def listing(db,actor,status='open',limit=100):
+def listing(db,actor,status='open',limit=100,ts_from=None,ts_to=None):
     import shop
     s=shop._require(db,actor)
     where=["o.status=?"] if status in STATUS else []
     args=[status] if where else []
+    for op,v in (('>=',ts_from),('<',ts_to)):   # sana oralig'i: [from, to)
+        if v not in (None,''):where.append('o.ts'+op+'?');args.append(int(v))
     if s['role']=='sales' and not shop.can(s,'all_sales'):
         where.append('o.seller=?');args.append(actor)   # doira: o'z buyurtmalari
     rows=db.execute('SELECT o.id FROM sale_orders o'+(' WHERE '+' AND '.join(where) if where else '')+' ORDER BY o.id DESC LIMIT ?',(*args,limit)).fetchall()
@@ -315,7 +317,7 @@ def handle(db,actor,op,payload,now=None):
         o=_order(db,oid)
         if s['role']=='sales' and int(o['seller'])!=actor and not shop.can(s,'all_sales'):
             raise ValueError('Bu buyurtma sizniki emas.')
-    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open'),'labels':{'delivery':DELIVERY,'payment':PAYMENT,'status':STATUS}}
+    if op=='list':return {'orders':listing(db,actor,payload.get('status') or 'open',ts_from=payload.get('from'),ts_to=payload.get('to')),'labels':{'delivery':DELIVERY,'payment':PAYMENT,'status':STATUS}}
     if op=='view':return {'order':view(db,oid)}
     def need(perm):
         if not shop.can(s,perm):raise ValueError(f'Sizda «{shop.PERMS[perm]}» ruxsati yo‘q. Rahbarga murojaat qiling.')
