@@ -73,7 +73,7 @@ def init(db):
     elif 'perms' not in [r[1] for r in db.execute('PRAGMA table_info(shop_staff)').fetchall()]:
         db.execute('ALTER TABLE shop_staff ADD COLUMN perms TEXT')
     # Qo'shimcha xarajat (yetkazish va h.k.) — mijozga qo'shiladi, qatorlarga taqsimlanadi.
-    for col, typ in (('extra', 'INTEGER NOT NULL DEFAULT 0'), ('extra_name', "TEXT NOT NULL DEFAULT ''")):
+    for col, typ in (('extra', 'INTEGER NOT NULL DEFAULT 0'), ('extra_name', "TEXT NOT NULL DEFAULT ''"), ('extra_payer', "TEXT NOT NULL DEFAULT 'client'")):
         if isinstance(db, core.PostgresDB):
             db.execute(f'ALTER TABLE shop_sales ADD COLUMN IF NOT EXISTS {col} {typ.replace("INTEGER", "BIGINT")}')
         elif col not in [r[1] for r in db.execute('PRAGMA table_info(shop_sales)').fetchall()]:
@@ -462,19 +462,23 @@ def quote(db, actor, payload):
     # Qo'shimcha xarajat: mijoz to'laydi; qatorlarga summasi bo'yicha taqsimlanadi, shuning uchun qarz/hisobot o'zgarmasdan to'g'ri.
     extra = _cents(payload.get('extra'), 'Qo‘shimcha xarajat', allow_zero=True)
     extra_name = str(payload.get('extraName') or '').strip()[:100]
-    left = extra
+    payer = payload.get('extraPayer') or 'client'
+    if payer not in ('client', 'company'):
+        raise ValueError('Xarajat kimga yozilishi noto‘g‘ri.')
+    # Korxona xarajati mijoz summasiga qo'shilmaydi — faqat sotuvda qayd etiladi (pulni kassa alohida chiqim qiladi).
+    left = extra if payer == 'client' else 0
     for i, l in enumerate(lines):
         e = left if i == len(lines) - 1 else l['gross'] * extra // subtotal
         l['total'] += e
         left -= e
-    total += extra
+    total += extra if payer == 'client' else 0
     # Mavjud = ombor qoldig'i − ochiq buyurtmalarda band (sale_orders). Buyurtma bo'lmasa — avvalgidek.
     import sale_orders
     stock = {p: sale_orders.available(db, p) for p in need}
     short = [f'{core.product_name(p)}: mavjud {stock[p]} dona' for p, q in need.items() if stock[p] < q]
     debt = core.client_debt_usd(db, cid) if client else 0
     return {'client': client, 'walkin': walkin, 'priceType': ptype, 'lines': lines, 'subtotal': subtotal,
-            'discount': discount, 'extra': extra, 'extraName': extra_name, 'total': total, 'discountPct': round(eff_pct, 2), 'stockShort': short,
+            'discount': discount, 'extra': extra, 'extraName': extra_name, 'extraPayer': payer, 'total': total, 'discountPct': round(eff_pct, 2), 'stockShort': short,
             'clientDebt': debt, 'staff': s}
 
 
@@ -511,9 +515,9 @@ def sell(db, actor, payload):
         raise ValueError('Izoh 300 belgidan oshmasin.')
     cid = walkin_client(db, who) if q['walkin'] else q['client']['id']
     ts = int(time.time())
-    cur = db.execute('''INSERT INTO shop_sales(seller,client,price_type,subtotal,discount,extra,extra_name,total,paid,pay_method,paid_uzs,fx_rate,note,ts,source)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',
-                     (who, cid, q['priceType'], q['subtotal'], q['discount'], q['extra'], q['extraName'], q['total'], paid, method, uzs, rate, note, ts, src))
+    cur = db.execute('''INSERT INTO shop_sales(seller,client,price_type,subtotal,discount,extra,extra_name,extra_payer,total,paid,pay_method,paid_uzs,fx_rate,note,ts,source)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id''',
+                     (who, cid, q['priceType'], q['subtotal'], q['discount'], q['extra'], q['extraName'], q['extraPayer'], q['total'], paid, method, uzs, rate, note, ts, src))
     sale = int(cur.fetchone()[0])
     tag = f'Savdo #{sale}' + (f' | {note}' if note else '')
     for i, l in enumerate(q['lines'], 1):
@@ -568,7 +572,7 @@ def receipt(db, sale):
     return {'id': int(h['id']), 'ts': int(h['ts']), 'sellerId': int(h['seller']), 'seller': h['seller_name'] or '',
             'clientId': int(h['client']), 'client': (h['shop_name'] or h['client_name'] or '').strip(), 'phone': h['phone'] or '',
             'priceType': h['price_type'], 'subtotalUsd': int(h['subtotal']) / 100, 'discountUsd': int(h['discount']) / 100,
-            'extraUsd': int(h['extra'] or 0) / 100, 'extraName': h['extra_name'] or '', 'totalUsd': total / 100, 'paidUsd': paid / 100, 'debtUsd': (total - paid) / 100, 'method': h['pay_method'],
+            'extraUsd': int(h['extra'] or 0) / 100, 'extraName': h['extra_name'] or '', 'extraPayer': h['extra_payer'] or 'client', 'totalUsd': total / 100, 'paidUsd': paid / 100, 'debtUsd': (total - paid) / 100, 'method': h['pay_method'],
             'paidUzs': int(h['paid_uzs'] or 0), 'rate': int(h['fx_rate'] or 0), 'note': h['note'] or '', 'lines': lines,
             'cancelled': _void_info(db, int(h['id'])), 'publicUrl': receipt_public.url(int(h['id']))}
 
