@@ -4,11 +4,15 @@ Tashqi sun'iy intellekt yo'q — javob bir zumda, raqamlar to'g'ridan-to'g'ri hi
 Masalan: "bugun sotuv o'sdimi?" → "Ha, bugun realizatsiya 1 250 $ — kechaga nisbatan +27.6% (980 $)."
 """
 import re
+import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import executive
 import manager_api
 
 MAX_QUESTION = 600
+TZ = ZoneInfo('Asia/Tashkent')
 
 HELP = ('Men tizim ma’lumotlari bo‘yicha javob beraman. Masalan so‘rang: «bugun sotuv o‘sdimi?», '
         '«haftalik to‘lovlar», «qarz qancha?», «agentlardagi pul», «eng yaxshi agent», '
@@ -28,7 +32,8 @@ PERIODS = {
 
 # Mavzu → kalit so'z ildizlari (lotin, kichik harf). Tartib muhim: aniqrog'i oldin.
 TOPICS = (
-    ('cash', ('kassa', 'agentlardagi pul', 'qolida', 'naqd', 'topshir')),
+    ('cash', ('agentlarda', 'agentdagi', 'qolida', 'naqd', 'topshir')),
+    ('cashbox', ('kassa', 'pul qancha', 'balans')),
     ('debt', ('qarz', 'nasiya')),
     ('stock', ('ombor', 'qoldiq', 'zaxira', 'sklad')),
     ('orders', ('buyurtma', 'zakaz')),
@@ -37,7 +42,7 @@ TOPICS = (
     ('payments', ('tolov', 'tushum', 'yigil', 'yigdi', 'inkassa')),
     ('visits', ('tashrif', 'vizit')),
     ('clients', ('yangi mijoz', 'mijoz qoshil')),
-    ('sales', ('sotuv', 'savdo', 'realizatsiya', 'sotil', 'sotdi', 'osdi', 'osish', 'kamaydi', 'tushdi')),
+    ('sales', ('sotuv', 'savdo', 'realiza', 'sotil', 'sotdi', 'osdi', 'osish', 'kamaydi', 'tushdi')),
 )
 
 
@@ -119,6 +124,14 @@ def answer(db, topic, period, q, now=None):
         tail = ''.join(f' {b["label"]} kunlik qarz: {_money(b["usd"])}.' for b in old)
         return f'Umumiy qarz: {_money(debt)}.' + tail
 
+    if topic == 'cashbox':
+        c = manager_api.dashboard(db, now=now)['cash']
+        text = (f'Kassa qoldig‘i: {_money(c["balanceUsd"])}. Bugun kirim {_money(c["acceptedTodayUsd"])}, '
+                f'chiqim {_money(c["expensesTodayUsd"])}.')
+        if c.get('pendingUsd'):
+            text += f' Kassir tasdig‘ida: {_money(c["pendingUsd"])}.'
+        return text
+
     if topic == 'cash':
         c = executive.executive(db, 'today', now=now)['agentsCash']
         text = f'Agentlardagi pul: {_money(c["cashUsd"])} va {_num(c["cashUzs"])} so‘m.'
@@ -136,9 +149,14 @@ def answer(db, topic, period, q, now=None):
         return text + (f' Keyingilar: {rest}.' if rest else '')
 
     if topic == 'product':
-        r = manager_api.period_report(db, report_period or 'today', None, None, now=now)
+        if report_period:
+            r = manager_api.period_report(db, report_period, None, None, now=now)
+        else:   # kecha: aniq sana bilan
+            day = (datetime.fromtimestamp(now or time.time(), TZ) - timedelta(days=1)).strftime('%Y-%m-%d')
+            r = manager_api.period_report(db, 'custom', day, day, now=now)
         products = [p for p in r.get('products') or [] if p.get('deliveredUsd')]
-        when = (r.get('label') or when).lower()   # mahsulot hisoboti o'z davri bilan (masalan "shu oy")
+        if report_period:
+            when = (r.get('label') or when).lower()   # mahsulot hisoboti o'z davri bilan (masalan "shu oy")
         if not products:
             return f'{when.capitalize()} mahsulot sotilmagan.'
         top = products[:3]
