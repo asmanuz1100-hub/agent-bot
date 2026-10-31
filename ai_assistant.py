@@ -23,7 +23,7 @@ PERIODS = {
     'today': ('today', 'today', 'bugun', 'kechaga'),
     'yesterday': ('yesterday', None, 'kecha', 'undan oldingi kunga'),
     'd7': ('d7', 'week', 'oxirgi 7 kunda', 'oldingi 7 kunga'),
-    'month': ('month', 'month', 'shu oyda', 'o‘tgan oyning shu kunlariga'),
+    'month': ('d30', 'month', 'oxirgi 30 kunda', 'oldingi 30 kunga'),
 }
 
 # Mavzu → kalit so'z ildizlari (lotin, kichik harf). Tartib muhim: aniqrog'i oldin.
@@ -116,7 +116,7 @@ def answer(db, topic, period, q, now=None):
         ex = executive.executive(db, 'today', now=now)
         debt = _kpi(ex, 'debt')['value']
         old = [b for b in ex.get('debtAging') or [] if (b.get('minDays') or 0) >= 30 and b.get('usd')]
-        tail = ''.join(f' {b["label"]}: {_money(b["usd"])}.' for b in old)
+        tail = ''.join(f' {b["label"]} kunlik qarz: {_money(b["usd"])}.' for b in old)
         return f'Umumiy qarz: {_money(debt)}.' + tail
 
     if topic == 'cash':
@@ -138,6 +138,7 @@ def answer(db, topic, period, q, now=None):
     if topic == 'product':
         r = manager_api.period_report(db, report_period or 'today', None, None, now=now)
         products = [p for p in r.get('products') or [] if p.get('deliveredUsd')]
+        when = (r.get('label') or when).lower()   # mahsulot hisoboti o'z davri bilan (masalan "shu oy")
         if not products:
             return f'{when.capitalize()} mahsulot sotilmagan.'
         top = products[:3]
