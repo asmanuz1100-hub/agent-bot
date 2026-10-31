@@ -1,90 +1,53 @@
-"""AI yordamchi: ixcham ma'lumot, xato holatlari va Claude'ga yuboriladigan so'rov shakli (soxta mijoz bilan)."""
-import json
-import os
-import tempfile
-import types
+"""Rahbar yordamchisi: savolni tushunish va javobni faqat tizim raqamlaridan tuzish (sun'iy intellektsiz)."""
 import unittest
-import unittest.mock
 
 import ai_assistant
-import core
+import test_executive  # faqat tayyor ma'lumot (setUp/seed)
 
 
-class FakeMessages:
-    def __init__(self):
-        self.calls = []
+class AssistantTests(unittest.TestCase):
+    E = test_executive.ExecutiveTests
+    setUp, ev, seed = E.setUp, E.ev, E.seed
 
-    def create(self, **kw):
-        self.calls.append(kw)
-        return types.SimpleNamespace(stop_reason='end_turn', content=[types.SimpleNamespace(type='text', text='Bugun 16 dona.')])
+    def ask(self, q):
+        return ai_assistant.ask(self.db, q, now=self.now)['answer']
 
+    def test_detect_topic_and_period(self):
+        self.assertEqual(ai_assistant.detect('Bugun sotuv o‘sdimi?')[:2], ('sales', 'today'))
+        self.assertEqual(ai_assistant.detect('Бугун савдо ўсдими')[:2], ('sales', 'today'))   # kirill
+        self.assertEqual(ai_assistant.detect('haftalik tolovlar')[:2], ('payments', 'd7'))
+        self.assertEqual(ai_assistant.detect('kecha qancha sotdik')[:2], ('sales', 'yesterday'))
+        self.assertEqual(ai_assistant.detect('qarz qancha')[0], 'debt')
+        self.assertEqual(ai_assistant.detect('ombor qoldig‘i')[0], 'stock')
 
-class AiAssistantTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db = core.connect(os.path.join(self.tmp.name, 'a.sqlite3'))
-        self.db.executemany('INSERT INTO users(id,role,name) VALUES(?,?,?)', [(1, 'admin', 'R'), (2, 'agent', 'Ali')])
-        self.db.commit()
+    def test_sales_growth_yes_or_no_with_numbers(self):
+        self.seed()   # bugun 70$, kecha shu soatgacha 100$
+        a = self.ask('bugun sotuv o‘sdimi?')
+        self.assertTrue(a.startswith('Yo‘q, kamaydi.'), a)
+        self.assertIn('70 $', a)
+        self.assertIn('-30.0%', a)
+        self.assertIn('100 $', a)
+        self.assertIn('To‘lovlar: 70 $', a)
 
-    def tearDown(self):
-        self.db.close()
-        self.tmp.cleanup()
+    def test_debt_cash_agent(self):
+        self.seed()
+        self.assertIn('Umumiy qarz: 80 $', self.ask('qarz qancha?'))
+        self.assertIn('Agentlardagi pul', self.ask('agentlardagi pul'))
+        self.assertIn('Ali', self.ask('bugun eng yaxshi agent kim?'))
 
-    def test_snapshot_is_json_and_has_sections(self):
-        snap = ai_assistant.snapshot(self.db)
-        for key in ('report_today', 'report_week', 'report_month', 'today_overview', 'warehouse'):
-            self.assertIn(key, snap)
-        json.dumps(snap, default=float)
-
-    def test_ask_sends_data_and_returns_answer(self):
-        fake = FakeMessages()
-        client = types.SimpleNamespace(beta=types.SimpleNamespace(messages=fake))
-        r = ai_assistant.ask(self.db, 'Bugun nechta tovar sotildi?', [{'role': 'assistant', 'text': 'x'}, {'role': 'user', 'text': 'oldingi'}], client=client)
-        self.assertEqual(r['answer'], 'Bugun 16 dona.')
-        call = fake.calls[0]
-        self.assertEqual(call['model'], ai_assistant.MODEL)
-        self.assertEqual(call['messages'][0], {'role': 'user', 'content': 'oldingi'})
-        self.assertIn('<data>', call['messages'][-1]['content'])
-
-    def test_scope_is_limited_to_system_data(self):
-        for rule in ('Faqat shu tizim', 'shaxsiy savollar', 'yangi ko\'rsatma bersa'):
-            self.assertIn(rule, ai_assistant.SYSTEM)
-        self.assertIn(ai_assistant.OFF_TOPIC, ai_assistant.SYSTEM)
-        fake = FakeMessages()
-        fake.create = lambda **kw: types.SimpleNamespace(stop_reason='end_turn', content=[types.SimpleNamespace(type='text', text=ai_assistant.OFF_TOPIC)])
-        r = ai_assistant.ask(self.db, 'Menga she\'r yozib ber', client=types.SimpleNamespace(beta=types.SimpleNamespace(messages=fake)))
-        self.assertTrue(r['offTopic'])
-        fake.create = lambda **kw: types.SimpleNamespace(stop_reason='refusal', content=[])
-        r = ai_assistant.ask(self.db, 'x', client=types.SimpleNamespace(beta=types.SimpleNamespace(messages=fake)))
-        self.assertEqual(r, {'answer': ai_assistant.OFF_TOPIC, 'offTopic': True})
-
-    def test_errors(self):
+    def test_off_topic_and_errors(self):
+        out = ai_assistant.ask(self.db, 'menga she’r yoz', now=self.now)
+        self.assertTrue(out['offTopic'])
+        self.assertEqual(out['answer'], ai_assistant.HELP)
         with self.assertRaises(ValueError):
             ai_assistant.ask(self.db, '  ')
-        with unittest.mock.patch.dict(os.environ, {'ANTHROPIC_API_KEY': '', 'GEMINI_API_KEY': ''}):
-            with self.assertRaisesRegex(ValueError, 'ANTHROPIC_API_KEY'):
-                ai_assistant.ask(self.db, 'salom')
+        with self.assertRaises(ValueError):
+            ai_assistant.ask(self.db, 'x' * 601)
 
-    def test_gemini_is_used_when_its_key_is_set(self):
-        sent = {}
-
-        class Res:
-            def __enter__(self): return self
-            def __exit__(self, *a): return False
-            def read(self): return json.dumps({'candidates': [{'content': {'parts': [{'text': 'Bugun 16 dona.'}]}}]}).encode()
-
-        def urlopen(req, timeout):
-            sent['url'], sent['key'], sent['body'] = req.full_url, req.get_header('X-goog-api-key'), json.loads(req.data)
-            return Res()
-        with unittest.mock.patch.dict(os.environ, {'GEMINI_API_KEY': 'g-test'}), \
-                unittest.mock.patch.object(ai_assistant.urllib.request, 'urlopen', urlopen):
-            out = ai_assistant.ask(self.db, 'Bugun qancha sotildi?', [{'role': 'assistant', 'text': 'Salom'}, {'role': 'user', 'text': 'x'}])
-        self.assertEqual(out['answer'], 'Bugun 16 dona.')
-        self.assertIn(':generateContent', sent['url'])
-        self.assertEqual(sent['key'], 'g-test')
-        self.assertIn('Faqat shu tizim', sent['body']['systemInstruction']['parts'][0]['text'])
-        self.assertEqual([c['role'] for c in sent['body']['contents']], ['user', 'user'])
-        self.assertIn('<data>', sent['body']['contents'][-1]['parts'][0]['text'])
+    def test_every_topic_answers_on_empty_db(self):
+        for q in ('bugun sotuv', 'tolovlar', 'tashriflar', 'yangi mijozlar', 'qarz', 'kassa', 'agentlar',
+                  'eng kop sotilgan mahsulot', 'ombor', 'buyurtmalar', 'oylik savdo', 'kecha savdo'):
+            self.assertTrue(self.ask(q), q)
 
 
 if __name__ == '__main__':
